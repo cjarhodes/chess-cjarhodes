@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chess Opening Library — Alex Rhodes</title>
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard.js/1.0.0/chessboard-1.0.0.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #111110;
+      --surface: #1a1916;
+      --surface2: #21201d;
+      --text: #e8e5de;
+      --muted: #6b6860;
+      --border: #2a2825;
+      --accent: #c9a96e;
+      --accent-dim: rgba(201,169,110,0.15);
+      --success: #4a7c59;
+      --success-bg: rgba(74,124,89,0.15);
+      --error: #8a3a3a;
+      --error-bg: rgba(138,58,58,0.15);
+      --white-cat: #f0d9b5;
+      --black-cat: #b58863;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 300;
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ── HEADER ── */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 1.5rem 2rem;
+      display: flex;
+      align-items: baseline;
+      gap: 1.5rem;
+    }
+    header a.back {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.8rem;
+      letter-spacing: 0.05em;
+      transition: color 0.2s;
+    }
+    header a.back:hover { color: var(--text); }
+    header h1 {
+      font-family: 'EB Garamond', serif;
+      font-size: 1.5rem;
+      font-weight: 400;
+      letter-spacing: 0.01em;
+    }
+    header .subtitle {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-left: auto;
+    }
+
+    /* ── LAYOUT ── */
+    .app {
+      display: grid;
+      grid-template-columns: 240px 1fr 300px;
+      grid-template-rows: 1fr;
+      min-height: calc(100vh - 65px);
+    }
+
+    /* ── LIBRARY SIDEBAR ── */
+    .library {
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 1.5rem 0;
+    }
+    .library-section { margin-bottom: 1.5rem; }
+    .library-label {
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 0 1.25rem 0.5rem;
+    }
+    .opening-btn {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.5rem 1.25rem;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 300;
+      font-size: 0.85rem;
+      color: var(--muted);
+      transition: color 0.15s, background 0.15s;
+      border-left: 2px solid transparent;
+    }
+    .opening-btn:hover { color: var(--text); background: var(--surface); }
+    .opening-btn.active {
+      color: var(--accent);
+      background: var(--accent-dim);
+      border-left-color: var(--accent);
+    }
+    .opening-btn .eco {
+      font-size: 0.7rem;
+      opacity: 0.6;
+      margin-left: 0.5rem;
+    }
+
+    /* ── BOARD AREA ── */
+    .board-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      gap: 1.25rem;
+    }
+
+    .mode-toggle {
+      display: flex;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .mode-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.8rem;
+      font-weight: 400;
+      padding: 0.4rem 1rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      letter-spacing: 0.03em;
+    }
+    .mode-btn.active { background: var(--surface2); color: var(--text); }
+    .mode-btn:not(.active):hover { color: var(--text); }
+
+    #board-wrap {
+      position: relative;
+    }
+
+    #myBoard {
+      width: 440px;
+    }
+
+    /* chessboard.js overrides */
+    .board-b72b1 { border: 1px solid var(--border) !important; border-radius: 4px; overflow: hidden; }
+
+    .feedback-bar {
+      width: 440px;
+      min-height: 44px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      padding: 0.6rem 1rem;
+      font-size: 0.85rem;
+      opacity: 0;
+      transition: opacity 0.2s;
+      gap: 0.5rem;
+    }
+    .feedback-bar.show { opacity: 1; }
+    .feedback-bar.correct { background: var(--success-bg); color: #6dbd8a; border: 1px solid rgba(74,124,89,0.3); }
+    .feedback-bar.incorrect { background: var(--error-bg); color: #cd7b7b; border: 1px solid rgba(138,58,58,0.3); }
+    .feedback-bar.hint { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(201,169,110,0.3); }
+
+    .board-controls {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    .ctrl-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.8rem;
+      padding: 0.4rem 0.9rem;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .ctrl-btn:hover { background: var(--surface2); border-color: var(--muted); }
+    .ctrl-btn:disabled { opacity: 0.3; cursor: default; }
+    .ctrl-btn.flip { font-size: 1rem; padding: 0.4rem 0.7rem; }
+
+    .progress-bar {
+      width: 440px;
+      height: 2px;
+      background: var(--border);
+      border-radius: 1px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 1px;
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+
+    /* ── INFO PANEL ── */
+    .info-panel {
+      border-left: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .opening-title {
+      font-family: 'EB Garamond', serif;
+      font-size: 1.3rem;
+      font-weight: 400;
+      color: var(--text);
+      line-height: 1.3;
+    }
+    .opening-tagline {
+      font-size: 0.8rem;
+      color: var(--accent);
+      margin-top: 0.2rem;
+      font-style: italic;
+    }
+    .opening-desc {
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .section-label {
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+
+    /* Move list */
+    .move-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+    }
+    .move-pair {
+      display: flex;
+      align-items: center;
+      gap: 0.2rem;
+    }
+    .move-num {
+      font-size: 0.7rem;
+      color: var(--muted);
+      min-width: 1.2rem;
+    }
+    .move-chip {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.2rem 0.5rem;
+      font-size: 0.8rem;
+      cursor: pointer;
+      color: var(--muted);
+      font-family: 'DM Sans', sans-serif;
+      transition: all 0.15s;
+      user-select: none;
+    }
+    .move-chip:hover { background: var(--surface2); color: var(--text); }
+    .move-chip.current {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .move-chip.played {
+      color: var(--text);
+    }
+
+    /* Explanation box */
+    .explanation-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      font-size: 0.82rem;
+      line-height: 1.65;
+      color: var(--muted);
+      min-height: 80px;
+      transition: all 0.2s;
+    }
+    .explanation-box .move-label {
+      font-size: 0.75rem;
+      color: var(--accent);
+      font-weight: 500;
+      margin-bottom: 0.4rem;
+      display: block;
+    }
+    .explanation-box p { color: var(--text); }
+
+    /* Key ideas */
+    .key-ideas { display: flex; flex-direction: column; gap: 0.4rem; }
+    .key-idea {
+      font-size: 0.78rem;
+      color: var(--muted);
+      padding-left: 0.8rem;
+      border-left: 1px solid var(--border);
+      line-height: 1.4;
+    }
+
+    /* Empty state */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 0.75rem;
+      opacity: 0.4;
+      text-align: center;
+    }
+    .empty-state .icon { font-size: 2.5rem; }
+    .empty-state p { font-size: 0.85rem; color: var(--muted); }
+
+    .board-empty-state {
+      width: 440px;
+      height: 440px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 0.75rem;
+      opacity: 0.35;
+    }
+    .board-empty-state .icon { font-size: 3rem; }
+    .board-empty-state p { font-size: 0.85rem; color: var(--muted); }
+
+    /* Quiz mode badge */
+    .quiz-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: var(--accent-dim);
+      color: var(--accent);
+      border: 1px solid rgba(201,169,110,0.3);
+      border-radius: 4px;
+      font-size: 0.75rem;
+      padding: 0.2rem 0.6rem;
+      font-weight: 400;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .app { grid-template-columns: 1fr; grid-template-rows: auto; }
+      .library { border-right: none; border-bottom: 1px solid var(--border); padding: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+      .library-section { margin-bottom: 0; }
+      .library-label { display: none; }
+      .opening-btn { border-radius: 4px; border-left: none; border: 1px solid var(--border); padding: 0.35rem 0.75rem; width: auto; display: inline-block; }
+      .info-panel { border-left: none; border-top: 1px solid var(--border); }
+      #myBoard { width: 90vw; max-width: 440px; }
+      .feedback-bar, .progress-bar { width: 90vw; max-width: 440px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="back" href="https://cjarhodes.com">← cjarhodes.com</a>
+  <h1>Chess Opening Library</h1>
+  <span class="subtitle">Study · Drill · Master</span>
+</header>
+
+<div class="app">
+
+  <!-- ── LIBRARY SIDEBAR ── -->
+  <aside class="library" id="library">
+    <div class="library-section">
+      <div class="library-label">White Openings</div>
+      <button class="opening-btn" data-id="italian">Italian Game <span class="eco">C50</span></button>
+      <button class="opening-btn" data-id="ruy-lopez">Ruy López <span class="eco">C60</span></button>
+      <button class="opening-btn" data-id="queens-gambit">Queen's Gambit <span class="eco">D06</span></button>
+      <button class="opening-btn" data-id="london">London System <span class="eco">D02</span></button>
+    </div>
+    <div class="library-section">
+      <div class="library-label">Black Defenses</div>
+      <button class="opening-btn" data-id="sicilian">Sicilian Defense <span class="eco">B20</span></button>
+      <button class="opening-btn" data-id="french">French Defense <span class="eco">C00</span></button>
+      <button class="opening-btn" data-id="caro-kann">Caro-Kann <span class="eco">B10</span></button>
+      <button class="opening-btn" data-id="kings-indian">King's Indian <span class="eco">E60</span></button>
+    </div>
+    <div class="library-section">
+      <div class="library-label">Gambits</div>
+      <button class="opening-btn" data-id="kings-gambit">King's Gambit <span class="eco">C30</span></button>
+      <button class="opening-btn" data-id="evans-gambit">Evans Gambit <span class="eco">C51</span></button>
+    </div>
+  </aside>
+
+  <!-- ── BOARD AREA ── -->
+  <main class="board-area">
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="btn-study">Study</button>
+      <button class="mode-btn" id="btn-quiz">Quiz</button>
+    </div>
+
+    <div id="board-wrap">
+      <div id="myBoard"></div>
+      <div id="board-placeholder" class="board-empty-state">
+        <div class="icon">♟</div>
+        <p>Select an opening to begin</p>
+      </div>
+    </div>
+
+    <div class="feedback-bar" id="feedback-bar"></div>
+
+    <div class="board-controls">
+      <button class="ctrl-btn" id="btn-start" disabled title="To start">«</button>
+      <button class="ctrl-btn" id="btn-prev" disabled>← Prev</button>
+      <button class="ctrl-btn" id="btn-next" disabled>Next →</button>
+      <button class="ctrl-btn" id="btn-end" disabled title="To end">»</button>
+      <button class="ctrl-btn flip" id="btn-flip" disabled title="Flip board">⇅</button>
+    </div>
+
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+  </main>
+
+  <!-- ── INFO PANEL ── -->
+  <aside class="info-panel" id="info-panel">
+    <div class="empty-state" id="empty-state">
+      <div class="icon">♛</div>
+      <p>Choose an opening from the library to start learning</p>
+    </div>
+    <div id="opening-content" style="display:none; flex-direction:column; gap:1.25rem;">
+      <div>
+        <div class="opening-title" id="opening-title"></div>
+        <div class="opening-tagline" id="opening-tagline"></div>
+      </div>
+      <div class="opening-desc" id="opening-desc"></div>
+
+      <div>
+        <div class="section-label">Moves</div>
+        <div class="move-list" id="move-list"></div>
+      </div>
+
+      <div>
+        <div class="section-label" id="exp-label">Explanation</div>
+        <div class="explanation-box" id="explanation-box">
+          <p>Click a move or use Next → to step through the opening.</p>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-label">Key Ideas</div>
+        <div class="key-ideas" id="key-ideas"></div>
+      </div>
+    </div>
+  </aside>
+
+</div>
+
+<!-- Scripts: jQuery first, then chess.js, then chessboard.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard.js/1.0.0/chessboard-1.0.0.min.js"></script>
+
+<script>
+// ─────────────────────────────────────────────
+// OPENING DATA
+// ─────────────────────────────────────────────
+const OPENINGS = [
+  {
+    id: 'italian',
+    name: 'Italian Game',
+    eco: 'C50',
+    category: 'white',
+    tagline: 'Classical development and early f7 pressure',
+    description: 'One of the oldest openings in chess, dating to the 16th century. The Italian Game focuses on rapid development, central control with e4+d3, and long-term structural advantages. The Bc4 bishop eyes the f7 pawn — Black\'s most vulnerable point early in the game.',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4'],
+    explanations: [
+      { label: '1. e4 — White', text: 'The King\'s Pawn — the most popular first move in all of chess. It immediately stakes a claim in the center, opens lines for the queen and bishop, and prepares rapid castling. Bobby Fischer called it "best by test."' },
+      { label: '1... e5 — Black', text: 'The symmetrical response. Black mirrors White\'s central claim, contesting the center immediately. This is one of Black\'s most solid and time-tested replies — known as Open Game territory.' },
+      { label: '2. Nf3 — White', text: 'The knight develops to its most natural square, simultaneously attacking Black\'s e5 pawn and preparing to castle kingside. Following the classical principle: "Knights before bishops." This also gains a tempo by forcing Black to defend.' },
+      { label: '2... Nc6 — Black', text: 'The most natural defense — the knight defends e5 and comes to a strong central square. Black develops with purpose. The knight on c6 will often support ...d5 or ...Nd4 counterplay later.' },
+      { label: '3. Bc4 — White', text: 'The Italian bishop! White aims at f7 — the weakest square in Black\'s position (defended only by the king). This bishop is tremendously active and creates real threats. Common plans: Ng5 attacking f7, d3 for solid setup, or the sharp Giuoco Piano with c3+d4.' }
+    ],
+    keyIdeas: [
+      'The Bc4 bishop targets f7 — watch for Ng5 attacking it',
+      'Solid plan: d3, 0-0, Re1, then Bb3 repositioning',
+      'Sharp plan: c3 then d4 (Giuoco Piano) — grab the center',
+      'Common trap: Fried Liver Attack (Ng5 against ...Nf6)'
+    ]
+  },
+  {
+    id: 'ruy-lopez',
+    name: 'Ruy López',
+    eco: 'C60',
+    category: 'white',
+    tagline: 'The gold standard of 1.e4 openings',
+    description: 'Named after a 16th-century Spanish priest, the Ruy López is one of the most deeply studied openings in chess history — hundreds of years of theory! It puts immediate pressure on the Nc6 that defends e5, creating long-term strategic tension rather than quick tactics.',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5'],
+    explanations: [
+      { label: '1. e4 — White', text: 'The King\'s Pawn — White stakes a central claim immediately, opening lines for rapid piece development and kingside castling.' },
+      { label: '1... e5 — Black', text: 'Black responds symmetrically, taking equal central space. A principled, classical response that leads to rich middlegame play in either an Open Game or the Ruy López variations.' },
+      { label: '2. Nf3 — White', text: 'The knight attacks e5, develops naturally, and prepares to castle. Note that White does NOT immediately capture on e5 (2.Nxe5?? would lose to 2...Qe7 pinning the knight).' },
+      { label: '2... Nc6 — Black', text: 'The most natural defense to e5 — the knight develops to an active central square and covers the pawn.' },
+      { label: '3. Bb5 — White', text: 'The Ruy López! The bishop "pins" the Nc6 — not literally (the king is not on d8 yet), but it threatens Bxc6 followed by Nxe5, winning the e5 pawn. Black\'s most popular response is 3...a6 (Morphy Defense), asking the bishop to declare its intentions. The Berlin (3...Nf6) is the super-solid choice beloved by Carlsen.' }
+    ],
+    keyIdeas: [
+      '3...a6 (Morphy Defense) — most popular, leads to rich play',
+      '3...Nf6 (Berlin Defense) — solid endgame-oriented choice',
+      'After 3...a6 4.Ba4 Nf6 5.0-0 Be7 6.Re1 — main line begins',
+      'Long-term: pressure on e5 pawn and queenside expansion'
+    ]
+  },
+  {
+    id: 'queens-gambit',
+    name: "Queen's Gambit",
+    eco: 'D06',
+    category: 'white',
+    tagline: 'Classical central dominance from the d-file',
+    description: 'One of the oldest and most respected openings in chess. White offers the c4 pawn — a "gambit" in name, but it\'s actually very safe since the pawn is usually regained. If accepted, White gets excellent central control. If declined, White still achieves a strong position. The Netflix show made this famous worldwide!',
+    moves: ['d4', 'd5', 'c4'],
+    explanations: [
+      { label: '1. d4 — White', text: 'The Queen\'s Pawn opening. Controls the center from the d-file side and opens the diagonal for the dark-squared bishop. Unlike 1.e4, this leads to more positional, strategic battles. It\'s harder for Black to immediately create tactical chaos.' },
+      { label: '1... d5 — Black', text: 'Black responds symmetrically, taking equal central space. A principled response that leads to the Queen\'s Gambit complex — some of the richest positional chess ever played.' },
+      { label: '2. c4 — White', text: 'The Queen\'s Gambit! White offers a pawn to deflect Black\'s d5 pawn. If Black captures (2...dxc4 — Accepted), White plays 3.e4, building a big center. The c4 pawn is very hard for Black to hold. If Black declines (2...e6 — Declined), White maintains good central pressure. The Slav (2...c6) is also solid. Note: this is NOT really a gambit — White almost always gets the pawn back!' }
+    ],
+    keyIdeas: [
+      'QGA (2...dxc4): White plays e4, gets strong center, and regains pawn',
+      'QGD (2...e6): Solid — White pressures d5 with Bg5, Nc3, e3',
+      'Slav (2...c6): Supports d5 while keeping the light-squared bishop free',
+      'Exchange Variation (3.cxd5): Leads to endgame-heavy positional play'
+    ]
+  },
+  {
+    id: 'london',
+    name: 'London System',
+    eco: 'D02',
+    category: 'white',
+    tagline: 'Solid, flexible, and low on theory',
+    description: 'The London System is a reliable, low-theory approach beloved by everyone from club players to Magnus Carlsen. White builds a solid pawn structure (d4, e3, c3) with the bishop developed to f4 outside the pawn chain — before playing e3. It\'s very hard to beat but can be quieter than sharp openings.',
+    moves: ['d4', 'd5', 'Nf3', 'Nf6', 'Bf4'],
+    explanations: [
+      { label: '1. d4 — White', text: 'White opens with the Queen\'s Pawn, controlling the center and preparing a solid queenside-oriented setup. Less sharp than 1.e4, but deeply strategic.' },
+      { label: '1... d5 — Black', text: 'Black takes central space. The symmetrical 1...d5 is a principled response that leads to a variety of structures.' },
+      { label: '2. Nf3 — White', text: 'Natural development — the knight goes to f3, attacking nothing immediately but preparing the London setup. Move order matters here: White plays Nf3 before deciding on the bishop.' },
+      { label: '2... Nf6 — Black', text: 'Black mirrors with Nf6 — natural development, contesting the e4 square and preparing to develop the rest of the pieces.' },
+      { label: '5. Bf4 — White', text: 'The defining London move! The bishop develops to f4, outside the pawn chain. The key is doing this BEFORE playing e3 — once e3 is played, the c8 bishop gets locked in. White\'s plan: e3, c3, Nbd2, Be2, 0-0. The Bf4 bishop controls e5 and d6, creating long-term pressure. It\'s solid, flexible, and hard to attack directly.' }
+    ],
+    keyIdeas: [
+      'Always play Bf4 BEFORE e3 — the critical move order',
+      'Build the triangle: d4, e3, c3 for a rock-solid structure',
+      'Typical plan: Nbd2, Be2, 0-0, then push e4 or expand',
+      'Very flexible — works against almost any Black setup'
+    ]
+  },
+  {
+    id: 'sicilian',
+    name: 'Sicilian Defense',
+    eco: 'B20',
+    category: 'black',
+    tagline: "Black's sharpest and most popular weapon against 1.e4",
+    description: 'The most played opening in chess at all levels. The Sicilian creates an asymmetrical pawn structure from move one — Black gets queenside counterplay while White attacks on the kingside. This asymmetry is the engine of the most complex, fighting chess in the game\'s history. Favored by Fischer, Kasparov, and countless champions.',
+    moves: ['e4', 'c5'],
+    explanations: [
+      { label: '1. e4 — White', text: 'White opens with the King\'s Pawn, claiming central space and preparing rapid development. White will typically aim for a kingside attack.' },
+      { label: '1... c5 — Black', text: 'The Sicilian! Instead of matching White\'s central pawn with 1...e5, Black plays c5 — controlling d4 without giving White a central pawn duo. This asymmetry is the whole point: Black has a queenside majority of pawns while White gets central control. After 2.Nf3 and 3.d4 cxd4 4.Nxd4, the main variations begin. The sharpest is the Najdorf (4...Nf6 5.Nc3 a6) — Fischer\'s and Kasparov\'s weapon. The Dragon (5...g6) is another aggressive choice. The Scheveningen (5...e6) is more flexible.' }
+    ],
+    keyIdeas: [
+      'Black counters on the queenside (c-file, b-file), White on the kingside',
+      'Najdorf (5...a6): Most theoretically rich — be ready to study deeply',
+      'Dragon (5...g6): Double-edged — White often plays 6.Be3 Yugoslav Attack',
+      'Scheveningen (5...e6): Flexible, solid, less committal structure'
+    ]
+  },
+  {
+    id: 'french',
+    name: 'French Defense',
+    eco: 'C00',
+    category: 'black',
+    tagline: 'Solid and counterattacking with ...c5',
+    description: 'The French Defense is a strategic, counterattacking system. Black builds a solid structure and prepares the ...c5 break to challenge White\'s center. It leads to rich positional battles with clear plans for both sides. The slight drawback: the c8 bishop can become "bad" — blocked by the e6 pawn.',
+    moves: ['e4', 'e6'],
+    explanations: [
+      { label: '1. e4 — White', text: 'White opens with the King\'s Pawn, claiming central space.' },
+      { label: '1... e6 — Black', text: 'The French Defense! Black prepares to challenge the center with ...d5 on the next move. The e6 pawn makes the position very solid and supports d5 firmly. After 2.d4 d5, the game enters the main French tabiya. Key variations: Advance (3.e5) — sharp, spatial; Exchange (3.exd5) — symmetrical, drawish; Classical (3.Nc3 Nf6) — rich theory; Tarrasch (3.Nd2) — flexible. Black\'s main plan: ...c5 to challenge d4, ...Nc6 or ...Nd7, then attack the d4 pawn. Watch out for the "bad" light-squared bishop on c8 — a classic French challenge.' }
+    ],
+    keyIdeas: [
+      'The "bad" c8 bishop is the French\'s main weakness — try to activate it',
+      '...c5 is Black\'s main counterattacking break',
+      'Advance Variation (3.e5): Black plays ...c5 immediately to attack White\'s center',
+      'Winawer (3.Nc3 Bb4): Double-edged, sharp, and theoretically rich'
+    ]
+  },
+  {
+    id: 'caro-kann',
+    name: 'Caro-Kann Defense',
+    eco: 'B10',
+    category: 'black',
+    tagline: 'Solid, free bishop, and strong endgames',
+    description: 'The Caro-Kann is Black\'s most solid defense against 1.e4. Like the French, Black prepares ...d5 — but with c6 instead of e6. The key difference: Black\'s light-squared bishop remains free, avoiding the French\'s main weakness. Favored by positional giants like Karpov and Petrosian.',
+    moves: ['e4', 'c6'],
+    explanations: [
+      { label: '1. e4 — White', text: 'White opens with the King\'s Pawn, claiming the center and preparing rapid development.' },
+      { label: '1... c6 — Black', text: 'The Caro-Kann! Black prepares ...d5 using the c-pawn to support it. Unlike the French (1...e6), the light-squared bishop on c8 remains completely free — one of the Caro-Kann\'s main virtues. After 2.d4 d5 3.Nc3 (or 3.Nd2), the main variations branch out. Classical (3...dxe4 4.Nxe4): Black exchanges, gets a solid position and can develop the c8 bishop freely. Advance (3.e5): White grabs space, similar to the French Advance. Exchange (3.exd5 cxd5): Symmetrical, gives Black easy equality. The Caro-Kann is known for excellent endgame chances — Black\'s pawn structure is very healthy.' }
+    ],
+    keyIdeas: [
+      'The c8 bishop stays free — a big advantage over the French',
+      'Classical line: 3...dxe4 4.Nxe4 Bf5 — activate the bishop immediately!',
+      'Solid pawn structure makes Caro-Kann excellent in endgames',
+      'Typical plan: ...Nd7, ...Ngf6, ...0-0, then ...e5 or ...c5 break'
+    ]
+  },
+  {
+    id: 'kings-indian',
+    name: "King's Indian Defense",
+    eco: 'E60',
+    category: 'black',
+    tagline: "Black's most dynamic weapon against 1.d4",
+    description: 'The King\'s Indian is an aggressive, dynamic defense favored by Fischer, Kasparov, and Bronstein. Black allows White to build a large central pawn mass, then attacks it from the flanks with ...e5 or ...c5. The g7 bishop — sometimes called the "Dragon bishop" — is the opening\'s key weapon.',
+    moves: ['d4', 'Nf6', 'c4', 'g6', 'Nc3', 'Bg7'],
+    explanations: [
+      { label: '1. d4 — White', text: 'White opens with the Queen\'s Pawn, aiming for central control and a solid queenside setup.' },
+      { label: '1... Nf6 — Black', text: 'Black develops the knight to f6, immediately contesting the e4 square and preparing to fianchetto the kingside bishop. This flexible move doesn\'t commit to a specific pawn structure yet.' },
+      { label: '2. c4 — White', text: 'White expands, building a large central presence. The c4 pawn takes more space and supports d4. White is going for a dominant center.' },
+      { label: '2... g6 — Black', text: 'The signal! Black prepares to fianchetto the bishop on g7. This is the King\'s Indian — Black allows White the center and will attack it from the flanks. The g6 pawn also provides kingside shelter.' },
+      { label: '3. Nc3 — White', text: 'White develops the knight, supporting the d4 pawn and controlling e4.' },
+      { label: '3... Bg7 — Black', text: 'The King\'s Indian bishop! On g7, this piece is sometimes called the "Dragon bishop" — when the center opens up, it can become enormously powerful, raking down the long diagonal. Black will castle kingside then launch ...e5 (Classical) or ...c5 (Benoni-like). The key battle: Black must generate counterplay before White\'s center becomes overwhelming.' }
+    ],
+    keyIdeas: [
+      'After 0-0, Black plays ...e5 (Classical) to challenge the center',
+      'The g7 bishop is Black\'s main weapon — open the center to activate it',
+      'Classical Variation: ...d6, ...e5, then ...Nd7-f6 and kingside attack',
+      'Sämisch Variation (f3): White plays f3 — sharp and aggressive for both sides'
+    ]
+  },
+  {
+    id: 'kings-gambit',
+    name: "King's Gambit",
+    eco: 'C30',
+    category: 'gambit',
+    tagline: 'The most romantic gambit in chess history',
+    description: 'The King\'s Gambit was the most popular opening for hundreds of years. White sacrifices the f4 pawn to gain a powerful center with d4+e4 and open the f-file for attacking chances. It leads to wild, tactical games. In modern play, Black can defend, but the positions are always exciting.',
+    moves: ['e4', 'e5', 'f4'],
+    explanations: [
+      { label: '1. e4 — White', text: 'White opens with the King\'s Pawn, claiming central space and preparing rapid development.' },
+      { label: '1... e5 — Black', text: 'Black takes equal central space — the natural and principled response.' },
+      { label: '2. f4 — White', text: 'The King\'s Gambit! White offers the f4 pawn, aiming to open the f-file and build a dominant center with d4. If Black accepts (2...exf4 — King\'s Gambit Accepted), White plays 3.Nf3 and then d4, with strong central pawns and attacking chances down the f-file. If declined (2...Bc5 or 2...d5), White still has interesting play. Famous accepted lines: 3...g5 (Kieseritsky: wild, double-edged), 3...d6 (Fischer Defense: solid). The Immortal Game (Anderssen vs Kieseritsky, 1851) was a King\'s Gambit. Paul Morphy loved it. It\'s the most romantic opening in chess history.' }
+    ],
+    keyIdeas: [
+      'After 2...exf4, White plays 3.Nf3 and d4 — dominant center',
+      'The f-file opens after exf4 — White will use it to attack',
+      'Fischer Defense (3...d6): Solid — Black keeps the pawn and develops',
+      'Kieseritsky (3...g5): Wild double-edged — the classic King\'s Gambit battle'
+    ]
+  },
+  {
+    id: 'evans-gambit',
+    name: 'Evans Gambit',
+    eco: 'C51',
+    category: 'gambit',
+    tagline: 'A b-pawn sacrifice for explosive development',
+    description: 'The Evans Gambit arises from the Italian Game when White sacrifices the b4 pawn to gain a powerful center and rapid development. It was a favorite of Paul Morphy and was revived by Garry Kasparov in 1995. When it works, White gets fantastic piece activity and attacking chances. A gambit where the compensation is clear.',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Bc5', 'b4'],
+    explanations: [
+      { label: '1. e4 — White', text: 'White opens with the King\'s Pawn, claiming the center immediately.' },
+      { label: '1... e5 — Black', text: 'The classical symmetrical response — Black takes equal central space.' },
+      { label: '2. Nf3 — White', text: 'The knight develops naturally to f3, attacking e5 and preparing to castle.' },
+      { label: '2... Nc6 — Black', text: 'Natural development — the knight defends e5 and develops to a strong central square.' },
+      { label: '3. Bc4 — White', text: 'The Italian bishop — aiming at f7 and setting up the Evans Gambit.' },
+      { label: '3... Bc5 — Black', text: 'Black develops symmetrically — the bishop goes to c5, aiming at f2 and mirroring White\'s setup. This is exactly what White wants!' },
+      { label: '4. b4 — White', text: 'The Evans Gambit! White offers the b4 pawn to deflect the Bc5. If Black accepts (4...Bxb4), White plays 5.c3, attacking the bishop, and after 5...Ba5 or 5...Bc5, plays 6.d4 — grabbing a huge center with two pawns on d4+e4. The compensation is clear: excellent development, open lines, and attacking chances. Kasparov used this against Anand in 1995 to win brilliantly. Paul Morphy produced immortal attacks with it in the 19th century.' }
+    ],
+    keyIdeas: [
+      'After 4...Bxb4 5.c3 — attack the bishop and prepare d4',
+      '5...Ba5 or 5...Bc5: then 6.d4 — White gets a huge center',
+      'White\'s compensation: powerful center, open b-file, rapid development',
+      'Key idea: if Black tries to hold the pawn with ...d5, White has 6.cxd5'
+    ]
+  }
+];
+
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+let board = null;
+let game = new Chess();
+let currentOpening = null;
+let currentMoveIdx = -1;  // -1 = starting position
+let quizMode = false;
+let boardFlipped = false;
+let quizAttempts = 0;
+let feedbackTimeout = null;
+
+// ─────────────────────────────────────────────
+// BOARD INIT (lazy — board is created on first opening load)
+// ─────────────────────────────────────────────
+function createBoard(position, draggable, orientation) {
+  if (board) board.destroy();
+  board = Chessboard('myBoard', {
+    position: position || 'start',
+    draggable: !!draggable,
+    orientation: orientation || 'white',
+    pieceTheme: 'https://cdnjs.cloudflare.com/ajax/libs/chessboard.js/1.0.0/img/chesspieces/wikipedia/{piece}.png',
+    onDrop: handleDrop,
+    onSnapEnd: handleSnapEnd,
+  });
+}
+
+function handleDrop(source, target) {
+  if (!quizMode || !currentOpening) return 'snapback';
+  const nextIdx = currentMoveIdx + 1;
+  if (nextIdx >= currentOpening.moves.length) return 'snapback';
+
+  const expectedSAN = currentOpening.moves[nextIdx];
+
+  // Try the move on a temp game
+  const tempGame = new Chess(game.fen());
+  const move = tempGame.move({ from: source, to: target, promotion: 'q' });
+  if (!move) return 'snapback';
+
+  if (move.san === expectedSAN) {
+    game.move({ from: source, to: target, promotion: 'q' });
+    currentMoveIdx = nextIdx;
+    quizAttempts = 0;
+    showFeedback('correct', '✓ Correct! ' + currentOpening.explanations[nextIdx].text);
+    setTimeout(() => {
+      board.position(game.fen());
+      renderMoveList();
+      updateProgress();
+      updateControls();
+    }, 300);
+  } else {
+    quizAttempts++;
+    if (quizAttempts >= 2) {
+      showFeedback('hint', '💡 The correct move is ' + expectedSAN);
+    } else {
+      showFeedback('incorrect', '✗ Not quite — try again!');
+    }
+    return 'snapback';
+  }
+}
+
+function handleSnapEnd() {
+  if (!quizMode) return;
+  board.position(game.fen());
+}
+
+// ─────────────────────────────────────────────
+// LOAD AN OPENING
+// ─────────────────────────────────────────────
+function loadOpening(id) {
+  currentOpening = OPENINGS.find(o => o.id === id);
+  if (!currentOpening) return;
+
+  currentMoveIdx = -1;
+  quizAttempts = 0;
+  game.reset();
+  boardFlipped = false;
+
+  // Show board element first (must be visible before chessboard.js measures it)
+  $('#board-placeholder').hide();
+  $('#myBoard').show();
+  createBoard('start', quizMode, 'white');
+
+  // Enable controls
+  ['btn-prev', 'btn-start', 'btn-flip'].forEach(id => $('#' + id).prop('disabled', true));
+  ['btn-next', 'btn-end'].forEach(id => $('#' + id).prop('disabled', false));
+  $('#btn-flip').prop('disabled', false);
+
+  // Update library
+  $('.opening-btn').removeClass('active');
+  $(`.opening-btn[data-id="${currentOpening.id}"]`).addClass('active');
+
+  // Update info panel
+  $('#empty-state').hide();
+  $('#opening-content').show();
+  $('#opening-title').text(currentOpening.name);
+  $('#opening-tagline').text(currentOpening.tagline);
+  $('#opening-desc').text(currentOpening.description);
+
+  renderKeyIdeas();
+  renderMoveList();
+  renderExplanation(-1);
+  updateProgress();
+  updateBoardDraggable();
+  clearFeedback();
+}
+
+// ─────────────────────────────────────────────
+// NAVIGATION
+// ─────────────────────────────────────────────
+function goToMove(idx) {
+  if (!currentOpening || !board) return;
+  idx = Math.max(-1, Math.min(idx, currentOpening.moves.length - 1));
+  game.reset();
+  for (let i = 0; i <= idx; i++) {
+    game.move(currentOpening.moves[i]);
+  }
+  currentMoveIdx = idx;
+  board.position(idx === -1 ? 'start' : game.fen(), false);
+  renderMoveList();
+  renderExplanation(idx);
+  updateProgress();
+  updateControls();
+  quizAttempts = 0;
+  if (!quizMode) clearFeedback();
+}
+
+function updateControls() {
+  const atStart = currentMoveIdx <= -1;
+  const atEnd = currentOpening && currentMoveIdx >= currentOpening.moves.length - 1;
+  $('#btn-prev').prop('disabled', atStart);
+  $('#btn-start').prop('disabled', atStart);
+  $('#btn-next').prop('disabled', atEnd || !currentOpening);
+  $('#btn-end').prop('disabled', atEnd || !currentOpening);
+}
+
+// ─────────────────────────────────────────────
+// RENDER FUNCTIONS
+// ─────────────────────────────────────────────
+function renderMoveList() {
+  if (!currentOpening) return;
+  const moves = currentOpening.moves;
+  let html = '';
+  for (let i = 0; i < moves.length; i += 2) {
+    const moveNum = Math.floor(i / 2) + 1;
+    html += `<div class="move-pair">`;
+    html += `<span class="move-num">${moveNum}.</span>`;
+    // White move
+    const wClass = i === currentMoveIdx ? 'current' : (i < currentMoveIdx ? 'played' : '');
+    html += `<button class="move-chip ${wClass}" data-idx="${i}">${moves[i]}</button>`;
+    // Black move (if exists)
+    if (i + 1 < moves.length) {
+      const bClass = (i + 1) === currentMoveIdx ? 'current' : (i + 1 < currentMoveIdx ? 'played' : '');
+      html += `<button class="move-chip ${bClass}" data-idx="${i + 1}">${moves[i + 1]}</button>`;
+    }
+    html += `</div>`;
+  }
+  $('#move-list').html(html);
+
+  // Click handlers for move chips
+  $('.move-chip').on('click', function () {
+    if (quizMode) return; // no clicking in quiz mode
+    const idx = parseInt($(this).data('idx'));
+    goToMove(idx);
+  });
+}
+
+function renderExplanation(idx) {
+  const box = $('#explanation-box');
+  if (idx < 0 || !currentOpening) {
+    if (quizMode) {
+      const next = currentOpening ? currentOpening.moves[0] : '?';
+      box.html(`<span class="move-label">Quiz Mode Active</span><p>Find the correct move on the board. Drag the right piece to the right square.</p>`);
+    } else {
+      box.html(`<p>Click a move or use <strong>Next →</strong> to step through the opening.</p>`);
+    }
+    return;
+  }
+  const exp = currentOpening.explanations[idx];
+  box.html(`<span class="move-label">${exp.label}</span><p>${exp.text}</p>`);
+}
+
+function renderKeyIdeas() {
+  if (!currentOpening) return;
+  const html = currentOpening.keyIdeas.map(idea => `<div class="key-idea">${idea}</div>`).join('');
+  $('#key-ideas').html(html);
+}
+
+function updateProgress() {
+  if (!currentOpening) { $('#progress-fill').css('width', '0%'); return; }
+  const pct = ((currentMoveIdx + 1) / currentOpening.moves.length) * 100;
+  $('#progress-fill').css('width', pct + '%');
+}
+
+// ─────────────────────────────────────────────
+// QUIZ MODE
+// ─────────────────────────────────────────────
+function updateBoardDraggable() {
+  if (!board) return;
+  createBoard(game.fen(), quizMode, boardFlipped ? 'black' : 'white');
+}
+
+function setMode(mode) {
+  quizMode = (mode === 'quiz');
+  if (quizMode) {
+    $('#btn-study').removeClass('active');
+    $('#btn-quiz').addClass('active');
+    $('#btn-next, #btn-prev, #btn-start, #btn-end').prop('disabled', true);
+    // Reset to beginning for quiz
+    if (currentOpening) {
+      game.reset();
+      currentMoveIdx = -1;
+      board.position('start');
+      renderMoveList();
+      renderExplanation(-1);
+      updateProgress();
+      quizAttempts = 0;
+      clearFeedback();
+      showFeedback('hint', '💡 Drag the correct piece to play each move in the opening.');
+    }
+  } else {
+    $('#btn-study').addClass('active');
+    $('#btn-quiz').removeClass('active');
+    if (currentOpening) updateControls();
+    renderExplanation(currentMoveIdx);
+    clearFeedback();
+  }
+  updateBoardDraggable();
+}
+
+// ─────────────────────────────────────────────
+// FEEDBACK
+// ─────────────────────────────────────────────
+function showFeedback(type, message) {
+  const bar = $('#feedback-bar');
+  bar.removeClass('correct incorrect hint').addClass(type + ' show').text(message);
+  if (feedbackTimeout) clearTimeout(feedbackTimeout);
+  if (type === 'correct') {
+    feedbackTimeout = setTimeout(clearFeedback, 5000);
+  }
+}
+
+function clearFeedback() {
+  $('#feedback-bar').removeClass('show correct incorrect hint');
+}
+
+// ─────────────────────────────────────────────
+// EVENT HANDLERS
+// ─────────────────────────────────────────────
+$(function () {
+  // Board is initialized lazily on first opening selection
+
+  // Library buttons
+  $('.opening-btn').on('click', function () {
+    loadOpening($(this).data('id'));
+  });
+
+  // Navigation
+  $('#btn-prev').on('click', () => goToMove(currentMoveIdx - 1));
+  $('#btn-next').on('click', () => goToMove(currentMoveIdx + 1));
+  $('#btn-start').on('click', () => goToMove(-1));
+  $('#btn-end').on('click', () => { if (currentOpening) goToMove(currentOpening.moves.length - 1); });
+
+  // Flip board
+  $('#btn-flip').on('click', function () {
+    if (!currentOpening) return;
+    boardFlipped = !boardFlipped;
+    board.flip();
+  });
+
+  // Mode toggle
+  $('#btn-study').on('click', () => setMode('study'));
+  $('#btn-quiz').on('click', () => { if (currentOpening) setMode('quiz'); });
+
+  // Keyboard navigation
+  $(document).on('keydown', function (e) {
+    if (quizMode) return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!$('#btn-next').prop('disabled')) goToMove(currentMoveIdx + 1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!$('#btn-prev').prop('disabled')) goToMove(currentMoveIdx - 1);
+    }
+  });
+});
+</script>
+
+</body>
+</html>
