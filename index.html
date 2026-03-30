@@ -294,7 +294,9 @@
       line-height: 1.65;
       color: var(--muted);
       min-height: 80px;
-      transition: all 0.2s;
+      height: 110px;
+      overflow-y: auto;
+      transition: background 0.2s, border-color 0.2s;
     }
     .explanation-box .move-label {
       font-size: 0.75rem;
@@ -822,7 +824,7 @@ function goToMove(idx) {
     game.move(currentOpening.moves[i]);
   }
   currentMoveIdx = idx;
-  board.position(idx === -1 ? 'start' : game.fen(), false);
+  board.position(idx === -1 ? 'start' : game.fen());
   renderMoveList();
   renderExplanation(idx);
   updateProgress();
