@@ -71,6 +71,7 @@
       grid-template-columns: 240px 1fr 300px;
       grid-template-rows: 1fr;
       min-height: calc(100vh - 65px);
+      align-items: start;
     }
 
     /* ── LIBRARY SIDEBAR ── */
@@ -119,9 +120,11 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       padding: 2rem;
       gap: 1.25rem;
+      position: sticky;
+      top: 0;
     }
 
     .mode-toggle {
@@ -294,9 +297,7 @@
       line-height: 1.65;
       color: var(--muted);
       min-height: 80px;
-      height: 110px;
-      overflow-y: auto;
-      transition: background 0.2s, border-color 0.2s;
+      transition: all 0.2s;
     }
     .explanation-box .move-label {
       font-size: 0.75rem;
