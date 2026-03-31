@@ -359,12 +359,51 @@
       font-weight: 400;
     }
 
+    /* ── CATEGORY TABS ── */
+    .cat-tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 1rem 0;
+      flex-wrap: wrap;
+    }
+    .cat-tab {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.72rem;
+      font-weight: 400;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      padding: 0.4rem 0.7rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      margin-bottom: -1px;
+    }
+    .cat-tab:hover { color: var(--text); }
+    .cat-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* trap-styled openings get a little danger marker */
+    .trap-badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      background: rgba(138,58,58,0.25);
+      color: #cd7b7b;
+      border-radius: 3px;
+      padding: 0.05rem 0.3rem;
+      margin-left: 0.35rem;
+      vertical-align: middle;
+    }
+
     /* Responsive */
     @media (max-width: 900px) {
       .app { grid-template-columns: 1fr; grid-template-rows: auto; }
       .library { border-right: none; border-bottom: 1px solid var(--border); padding: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; }
       .library-section { margin-bottom: 0; }
       .library-label { display: none; }
+      .cat-tabs { display: none; }
       .opening-btn { border-radius: 4px; border-left: none; border: 1px solid var(--border); padding: 0.35rem 0.75rem; width: auto; display: inline-block; }
       .info-panel { border-left: none; border-top: 1px solid var(--border); }
       #myBoard { width: 90vw; max-width: 440px; }
@@ -384,24 +423,54 @@
 
   <!-- ── LIBRARY SIDEBAR ── -->
   <aside class="library" id="library">
-    <div class="library-section">
+    <!-- Category filter tabs -->
+    <div class="cat-tabs">
+      <button class="cat-tab active" data-cat="all">All</button>
+      <button class="cat-tab" data-cat="white">White</button>
+      <button class="cat-tab" data-cat="black">Black</button>
+      <button class="cat-tab" data-cat="gambit">Gambits</button>
+      <button class="cat-tab" data-cat="trap">Traps</button>
+    </div>
+
+    <div class="library-section" data-section="white">
       <div class="library-label">White Openings</div>
-      <button class="opening-btn" data-id="italian">Italian Game <span class="eco">C50</span></button>
-      <button class="opening-btn" data-id="ruy-lopez">Ruy López <span class="eco">C60</span></button>
-      <button class="opening-btn" data-id="queens-gambit">Queen's Gambit <span class="eco">D06</span></button>
-      <button class="opening-btn" data-id="london">London System <span class="eco">D02</span></button>
+      <button class="opening-btn" data-id="italian" data-cat="white">Italian Game <span class="eco">C50</span></button>
+      <button class="opening-btn" data-id="ruy-lopez" data-cat="white">Ruy López <span class="eco">C60</span></button>
+      <button class="opening-btn" data-id="queens-gambit" data-cat="white">Queen's Gambit <span class="eco">D06</span></button>
+      <button class="opening-btn" data-id="london" data-cat="white">London System <span class="eco">D02</span></button>
+      <button class="opening-btn" data-id="scotch" data-cat="white">Scotch Game <span class="eco">C45</span></button>
+      <button class="opening-btn" data-id="english" data-cat="white">English Opening <span class="eco">A10</span></button>
+      <button class="opening-btn" data-id="reti" data-cat="white">Réti Opening <span class="eco">A05</span></button>
     </div>
-    <div class="library-section">
+    <div class="library-section" data-section="black">
       <div class="library-label">Black Defenses</div>
-      <button class="opening-btn" data-id="sicilian">Sicilian Defense <span class="eco">B20</span></button>
-      <button class="opening-btn" data-id="french">French Defense <span class="eco">C00</span></button>
-      <button class="opening-btn" data-id="caro-kann">Caro-Kann <span class="eco">B10</span></button>
-      <button class="opening-btn" data-id="kings-indian">King's Indian <span class="eco">E60</span></button>
+      <button class="opening-btn" data-id="sicilian" data-cat="black">Sicilian Najdorf <span class="eco">B90</span></button>
+      <button class="opening-btn" data-id="sicilian-dragon" data-cat="black">Sicilian Dragon <span class="eco">B70</span></button>
+      <button class="opening-btn" data-id="sicilian-schev" data-cat="black">Sicilian Scheveningen <span class="eco">B80</span></button>
+      <button class="opening-btn" data-id="french" data-cat="black">French Defense <span class="eco">C00</span></button>
+      <button class="opening-btn" data-id="caro-kann" data-cat="black">Caro-Kann <span class="eco">B10</span></button>
+      <button class="opening-btn" data-id="kings-indian" data-cat="black">King's Indian <span class="eco">E60</span></button>
+      <button class="opening-btn" data-id="nimzo-indian" data-cat="black">Nimzo-Indian <span class="eco">E20</span></button>
+      <button class="opening-btn" data-id="grunfeld" data-cat="black">Grünfeld Defense <span class="eco">D70</span></button>
+      <button class="opening-btn" data-id="slav" data-cat="black">Slav Defense <span class="eco">D10</span></button>
+      <button class="opening-btn" data-id="queens-indian" data-cat="black">Queen's Indian <span class="eco">E12</span></button>
+      <button class="opening-btn" data-id="four-knights" data-cat="black">Four Knights <span class="eco">C47</span></button>
     </div>
-    <div class="library-section">
+    <div class="library-section" data-section="gambit">
       <div class="library-label">Gambits</div>
-      <button class="opening-btn" data-id="kings-gambit">King's Gambit <span class="eco">C30</span></button>
-      <button class="opening-btn" data-id="evans-gambit">Evans Gambit <span class="eco">C51</span></button>
+      <button class="opening-btn" data-id="kings-gambit" data-cat="gambit">King's Gambit <span class="eco">C30</span></button>
+      <button class="opening-btn" data-id="evans-gambit" data-cat="gambit">Evans Gambit <span class="eco">C51</span></button>
+    </div>
+    <div class="library-section" data-section="trap">
+      <div class="library-label">Traps &amp; Tricks</div>
+      <button class="opening-btn" data-id="scholars-mate" data-cat="trap">Scholar's Mate <span class="trap-badge">trap</span></button>
+      <button class="opening-btn" data-id="fools-mate" data-cat="trap">Fool's Mate <span class="trap-badge">trap</span></button>
+      <button class="opening-btn" data-id="legal-trap" data-cat="trap">Legal's Trap <span class="trap-badge">trap</span></button>
+      <button class="opening-btn" data-id="fried-liver" data-cat="trap">Fried Liver Attack <span class="trap-badge">trap</span></button>
+      <button class="opening-btn" data-id="elephant-trap" data-cat="trap">Elephant Trap <span class="trap-badge">trap</span></button>
+      <button class="opening-btn" data-id="stafford-gambit" data-cat="trap">Stafford Gambit <span class="trap-badge">trap</span></button>
+      <button class="opening-btn" data-id="blackburne-shilling" data-cat="trap">Blackburne Shilling <span class="trap-badge">trap</span></button>
+      <button class="opening-btn" data-id="budapest-gambit" data-cat="trap">Budapest Gambit <span class="trap-badge">trap</span></button>
     </div>
   </aside>
 
@@ -896,6 +965,724 @@ const OPENINGS = [
       'Kasparov used the Evans vs Anand (1995) for a brilliant win',
       'Key idea: if Black tries to consolidate, White generates attacks on f7'
     ]
+  },
+
+  // ── NEW OPENINGS ──────────────────────────────
+
+  {
+    id: 'scotch',
+    name: 'Scotch Game',
+    eco: 'C45',
+    category: 'white',
+    tagline: 'Open and active — White fights for the center immediately',
+    description: 'The Scotch Game (1.e4 e5 2.Nf3 Nc6 3.d4) was popularized by Garry Kasparov who used it to sidestep the mountains of Ruy López theory. By striking at the center immediately on move 3, White creates open, dynamic positions. After 5.Nxc6 bxc6 6.e5, Black\'s queen goes on a wild journey through the center while White tries to build a powerful pawn structure.',
+    moves: ['e4','e5','Nf3','Nc6','d4','exd4','Nxd4','Nf6','Nxc6','bxc6','e5','Qe7','Qe2','Nd5','c4','Nb6','Nc3','Qe6','Qe4','f5','exf6','Qxe4+','Nxe4','gxf6','f4','d6'],
+    explanations: [
+      { label: '1. e4 — White', text: 'The King\'s Pawn — White stakes a central claim and opens lines for quick piece development.' },
+      { label: '1... e5 — Black', text: 'The classical symmetrical response — Black takes equal space in the center.' },
+      { label: '2. Nf3 — White', text: 'The knight develops, attacks e5, and prepares to castle.' },
+      { label: '2... Nc6 — Black', text: 'The most natural defense to e5, developing the knight to a strong central square.' },
+      { label: '3. d4 — White', text: 'The Scotch Game! White immediately challenges Black\'s center rather than building up slowly. This creates an open, dynamic game.' },
+      { label: '3... exd4 — Black', text: 'Black accepts the pawn trade, opening the e-file. The resulting open position suits both sides\' active play.' },
+      { label: '4. Nxd4 — White', text: 'White recaptures with the knight, establishing it on d4. The knight is well-centralized but can be challenged.' },
+      { label: '4... Nf6 — Black', text: 'Black develops the knight and attacks the e4 pawn. This is the most principled response to the Scotch.' },
+      { label: '5. Nxc6 — White', text: 'White takes the Nc6, preparing to advance e5 and dislodge Black\'s Nf6. This pawn structure battle is the heart of the Scotch.' },
+      { label: '5... bxc6 — Black', text: 'Black recaptures with the b-pawn, creating a half-open b-file. This is the most popular recapture, accepting doubled pawns for active piece play.' },
+      { label: '6. e5 — White', text: 'Attacking the Nf6! White gains space and forces Black to deal with the e5 pawn threat.' },
+      { label: '6... Qe7 — Black', text: 'Black defends the Nf6 with the queen and prepares to castle queenside. A flexible move that keeps options open.' },
+      { label: '7. Qe2 — White', text: 'White\'s queen goes to e2, supporting the e5 pawn and eyeing the e-file. White also connects well with the queenside development.' },
+      { label: '7... Nd5 — Black', text: 'The knight retreats to d5, attacking c4 and eyeing the center. From d5, the knight is powerfully placed.' },
+      { label: '8. c4 — White', text: 'White challenges the Nd5, pushing it away and grabbing more central space. This gains territory but creates some queenside weaknesses.' },
+      { label: '8... Nb6 — Black', text: 'The knight retreats to b6, where it keeps pressure on c4 and prepares ...Ba6, ...Bb7, or ...c5 ideas.' },
+      { label: '9. Nc3 — White', text: 'White develops the queenside knight, completing development and supporting the center. Nc3 also eyes d5 for potential knight jumps.' },
+      { label: '9... Qe6 — Black', text: 'The queen moves to e6, contesting the center and preparing ...d6 or ...Ba6 ideas. Black\'s queen is active in the center.' },
+      { label: '10. Qe4 — White', text: 'White\'s queen goes to e4, pressuring the c6 pawn and controlling the center. White is building up for a kingside push.' },
+      { label: '10... f5 — Black', text: 'Black strikes back with f5! This attacks White\'s queen and gains space. It\'s a bold, committal move creating dynamic play.' },
+      { label: '11. exf6 — White', text: 'White takes en passant on f6 (or captures f5 square)! The f6-square becomes a target and Black\'s king loses some shelter.' },
+      { label: '11... Qxe4+ — Black', text: 'Black takes the e4 queen with check — the queens are exchanged! Both sides simplify into an endgame where Black has the extra pawn from exf6 but White has activity.' },
+      { label: '12. Nxe4 — White', text: 'White recaptures. Now the game is queenless — White has the Ne4 centrally placed and will try to target the weak c6 and f6 pawns.' },
+      { label: '12... gxf6 — Black', text: 'Black recaptures on f6, creating a passed f-pawn. The position is unbalanced with both sides having structural strengths and weaknesses.' },
+      { label: '13. f4 — White', text: 'White advances f4, controlling the center and preparing Be3, Nf6+, or a queenside push. White\'s pieces are very active despite the queen trade.' },
+      { label: '13... d6 — Black', text: 'Black challenges White\'s center and tries to free the position. The game is rich and double-edged — both sides have targets to play against.' }
+    ],
+    keyIdeas: [
+      'Scotch key idea: open the center early to fight for activity, not slow maneuvering',
+      'After Nxc6 bxc6 e5: the pawn advance creates immediate tension and gains space',
+      'Watch the c6 pawn chain — White will target it throughout the game',
+      'Kasparov revived the Scotch in the 1990s as a surprise against Karpov'
+    ]
+  },
+
+  {
+    id: 'english',
+    name: 'English Opening',
+    eco: 'A10',
+    category: 'white',
+    tagline: 'Flexible hypermodern control from the flank',
+    description: 'The English Opening (1.c4) is a hypermodern classic — rather than occupying the center with pawns, White controls it from the flank. It leads to rich positional battles and can transpose into many other openings. The English is favored by positional players who want to sidestep Black\'s prepared systems while building long-term pressure.',
+    moves: ['c4','e5','Nc3','Nf6','Nf3','Nc6','g3','d5','cxd5','Nxd5','Bg2','Nb6','O-O','Be7','d3','O-O','Be3','Be6','Qd2','f6','Rfd1','Qd7','a3','a5','Rac1','Nd4'],
+    explanations: [
+      { label: '1. c4 — White', text: 'The English Opening! White controls d5 from the flank without immediately occupying the center. This flexible move allows many different setups.' },
+      { label: '1... e5 — Black', text: 'The most direct response — Black occupies the center immediately. This leads to the "Reversed Sicilian" structure where Black gets the dynamic Sicilian positions with an extra tempo.' },
+      { label: '2. Nc3 — White', text: 'White develops the knight to c3, supporting the c4 pawn and preparing to challenge Black\'s center. Natural development.' },
+      { label: '2... Nf6 — Black', text: 'Black develops the knight, fighting for central control. Nf6 is an active, flexible response.' },
+      { label: '3. Nf3 — White', text: 'The kingside knight develops, completing White\'s minor piece setup and preparing to fianchetto with g3.' },
+      { label: '3... Nc6 — Black', text: 'Black completes the minor piece development, supporting e5. Both sides are building naturally.' },
+      { label: '4. g3 — White', text: 'White prepares the fianchetto. The Bg2 will control the long diagonal and provide solid kingside defense. This is the most common setup in the English.' },
+      { label: '4... d5 — Black', text: 'Black strikes back in the center! This is a critical move — Black challenges White\'s space advantage. The tension must be resolved.' },
+      { label: '5. cxd5 — White', text: 'White takes on d5, opening the c-file and the position. The resulting isolated pawn positions favor active piece play.' },
+      { label: '5... Nxd5 — Black', text: 'Black recaptures with the knight, centralizing it on d5. This is the most active recapture.' },
+      { label: '6. Bg2 — White', text: 'The bishop arrives at g2, completing the fianchetto. From g2, the bishop controls the long a1-h8 diagonal and supports the center.' },
+      { label: '6... Nb6 — Black', text: 'The knight retreats to b6, avoiding exchanges and going to a safe square where it eyeing c4 and d5.' },
+      { label: '7. O-O — White', text: 'White castles, bringing the king to safety. The fianchettoed bishop makes the kingside very solid.' },
+      { label: '7... Be7 — Black', text: 'Black develops the bishop, preparing to castle. Be7 is a solid, classical development.' },
+      { label: '8. d3 — White', text: 'White plays d3, supporting the center and preparing to develop the queen\'s bishop. The d3 pawn solidifies White\'s structure.' },
+      { label: '8... O-O — Black', text: 'Black castles, completing basic development. Now the strategic battle begins — Black will try to use the e5 pawn as a strength.' },
+      { label: '9. Be3 — White', text: 'The queen\'s bishop develops to e3, where it supports the center and prepares queenside activity. White is building up slowly but effectively.' },
+      { label: '9... Be6 — Black', text: 'Black\'s bishop develops to e6, contesting the long diagonal and fighting for the d5 square. Solid and natural.' },
+      { label: '10. Qd2 — White', text: 'White\'s queen comes to d2, completing the "London-style" setup on the queenside. The queen supports d3 and prepares Rfd1.' },
+      { label: '10... f6 — Black', text: 'Black plays f6, defending e5 and preparing ...Nd5 or ...Qd7. This solidifies the e5 pawn but slightly weakens the kingside.' },
+      { label: '11. Rfd1 — White', text: 'White centralizes the rook to d1, increasing pressure on the d-file and supporting potential d4 advances.' },
+      { label: '11... Qd7 — Black', text: 'Black\'s queen comes to d7, connecting the rooks and preparing queenside counterplay. Both sides are building up steadily.' },
+      { label: '12. a3 — White', text: 'Prophylaxis! White prevents ...Nb4 and prepares b4 to gain queenside space. Small moves like these are typical in positional English games.' },
+      { label: '12... a5 — Black', text: 'Black prevents b4 and grabs queenside space. The game is now a strategic battle over the queenside.' },
+      { label: '13. Rac1 — White', text: 'The rook comes to c1, controlling the c-file and preparing for queenside action. Both rooks are active.' },
+      { label: '13... Nd4 — Black', text: 'Black\'s knight jumps to d4! From d4, it controls many key squares and is very hard to challenge. This is a typical outpost in the English — the game has reached a rich strategic middlegame.' }
+    ],
+    keyIdeas: [
+      'English fianchetto: g3 + Bg2 creates long-term diagonal pressure and solid kingside',
+      'Typical plan: cxd5, Bg2, O-O, d3, Be3, Qd2, Rfd1 — build up slowly',
+      'Watch for Black\'s ...Nd4 outpost — it can be very powerful in these structures',
+      'The English often transposes into Queen\'s Gambit or King\'s Indian structures'
+    ]
+  },
+
+  {
+    id: 'reti',
+    name: 'Réti Opening',
+    eco: 'A05',
+    category: 'white',
+    tagline: 'Hypermodern king\'s knight — control without occupation',
+    description: 'Named after Czech grandmaster Richard Réti, this hypermodern opening starts with 1.Nf3 rather than a pawn. White delays central pawn occupation, instead controlling the center from the flanks with knights and bishops. The Réti is extremely flexible and can transpose into many different structures. It was revolutionary in the 1920s and remains popular today.',
+    moves: ['Nf3','d5','g3','Nf6','Bg2','c6','O-O','Bf5','d3','e6','Nbd2','h6','Qe1','Be7','e4','dxe4','dxe4','Bg4','h3','Bxf3','Bxf3','Nbd7','e5','Nd5','c4','Nxe5','Qxe5','Bd6','Qd4','f5'],
+    explanations: [
+      { label: '1. Nf3 — White', text: 'The Réti! White develops the knight without committing to a pawn center. This delays revealing White\'s strategy and keeps maximum flexibility.' },
+      { label: '1... d5 — Black', text: 'Black takes central space immediately. A principled response — Black occupies the center while White has not yet done so.' },
+      { label: '2. g3 — White', text: 'White prepares the fianchetto with Bg2. This is the "pure Réti" — White will control d5 from afar with the bishop rather than with pawns.' },
+      { label: '2... Nf6 — Black', text: 'Black develops the knight, contesting the center. A natural, flexible response.' },
+      { label: '3. Bg2 — White', text: 'The Réti bishop arrives at g2, pointing at Black\'s queenside and center. This bishop is a powerful long-range weapon.' },
+      { label: '3... c6 — Black', text: 'Black solidifies d5 with c6 — the Slav-like setup. This ensures the d5 pawn is well-supported and creates a solid structure.' },
+      { label: '4. O-O — White', text: 'White castles quickly, getting the king safe before deciding on the pawn structure. The Réti often involves very flexible development before committing.' },
+      { label: '4... Bf5 — Black', text: 'Black develops the bishop to f5 — an active square outside the pawn chain. This is the London System setup from the Black side.' },
+      { label: '5. d3 — White', text: 'White plays d3 rather than d4, supporting the center modestly. This is the hypermodern approach — avoid locking in the structure too early.' },
+      { label: '5... e6 — Black', text: 'Black solidifies further with e6. The pawn structure is solid but the light-squared bishop is now hemmed in.' },
+      { label: '6. Nbd2 — White', text: 'White\'s queenside knight develops to d2. From d2, it can go to f1 or b3, and supports the center.' },
+      { label: '6... h6 — Black', text: 'A prophylactic move — Black prevents Ng5 ideas and secures the bishop on f5. Typical in these solid setups.' },
+      { label: '7. Qe1 — White', text: 'White\'s queen moves to e1, preparing e4. This mysterious queen move is a key Réti idea — the queen will support the e4 advance.' },
+      { label: '7... Be7 — Black', text: 'Black develops the dark-squared bishop to e7, preparing to castle. Black\'s position is solid and complete.' },
+      { label: '8. e4 — White', text: 'The central break! White strikes in the center, using the Qe1-Nbd2 setup to support this advance. The position opens up.' },
+      { label: '8... dxe4 — Black', text: 'Black trades pawns in the center, opening the position. This is principled — Black relieves central tension.' },
+      { label: '9. dxe4 — White', text: 'White recaptures, now with a pawn on e4 giving space advantage. The position is open and dynamic.' },
+      { label: '9... Bg4 — Black', text: 'Black\'s bishop develops to g4, pinning the Nf3 knight. This creates immediate tactical pressure and fights for the initiative.' },
+      { label: '10. h3 — White', text: 'White asks the bishop to declare its intentions. This typical prophylactic move tests Black — exchange the bishop or retreat?' },
+      { label: '10... Bxf3 — Black', text: 'Black exchanges the bishop for the knight. This gives White the bishop pair but eliminates the Nf3 and potentially weakens White\'s kingside.' },
+      { label: '11. Bxf3 — White', text: 'White recaptures with the Bg2, now on f3. The bishop pair is a long-term advantage, and White controls the center.' },
+      { label: '11... Nbd7 — Black', text: 'Black develops the queenside knight, completing development. From d7, it can go to b6, c5, or e5.' },
+      { label: '12. e5 — White', text: 'White advances e5, gaining central space and attacking the Nf6. This pawn advance is the Réti\'s typical aggressive central action.' },
+      { label: '12... Nd5 — Black', text: 'The Nf6 retreats to d5 — a powerful central outpost! From d5, the knight controls many important squares.' },
+      { label: '13. c4 — White', text: 'White challenges the Nd5 with c4. The pawn advance gains more central space and opens lines for White\'s bishops.' },
+      { label: '13... Nxe5 — Black', text: 'Black\'s Nd7 knight takes the e5 pawn! An active sacrifice — Black wins material but White gets compensation with active pieces.' },
+      { label: '14. Qxe5 — White', text: 'White\'s queen recaptures on e5, dominating the center. The queen is very active from e5.' },
+      { label: '14... Bd6 — Black', text: 'Black develops the bishop to d6, attacking the queen and activating pieces. Black\'s position is rich despite material considerations.' },
+      { label: '15. Qd4 — White', text: 'The queen retreats to d4, maintaining central dominance while avoiding exchanges. White has a dynamic middlegame advantage.' },
+      { label: '15... f5 — Black', text: 'Black plays f5 — an ambitious pawn advance gaining space on the kingside. The game is sharp and double-edged with complex play ahead.' }
+    ],
+    keyIdeas: [
+      'Réti hypermodernism: control the center from afar with Nf3 + Bg2 rather than occupying it',
+      'The Qe1 + e4 maneuver is the key attacking plan — often surprising opponents',
+      'Bishop pair in open positions: after Bxf3, White\'s two bishops are long-term assets',
+      'Can transpose into King\'s Indian Attack (KIA) or Queen\'s Gambit structures'
+    ]
+  },
+
+  {
+    id: 'sicilian-dragon',
+    name: 'Sicilian Dragon',
+    eco: 'B70',
+    category: 'black',
+    tagline: 'Fire on the board — Black\'s most aggressive Sicilian',
+    description: 'The Dragon is the most feared and exciting Sicilian variation. Black fianchettoes the kingside bishop on g7, creating a "dragon" formation of pawns, and unleashes it down the long diagonal. Both sides attack on opposite wings — White goes after the Black king with the Yugoslav Attack (f3 + g4 + h4), while Black counterattacks down the c-file. Games are razor-sharp and beautiful.',
+    moves: ['e4','c5','Nf3','d6','d4','cxd4','Nxd4','Nf6','Nc3','g6','Be3','Bg7','f3','O-O','Qd2','Nc6','Bc4','Bd7','O-O-O','Rc8','Bb3','Ne5','h4','Nc4','Bxc4','Rxc4'],
+    explanations: [
+      { label: '1. e4 — White', text: 'The King\'s Pawn — the starting move for the Open Sicilian, the most analyzed opening in chess history.' },
+      { label: '1... c5 — Black', text: 'The Sicilian Defense! Black attacks d4 from the flank. This asymmetrical response creates rich, imbalanced positions where both sides can fight for the win.' },
+      { label: '2. Nf3 — White', text: 'The most common continuation — White will typically follow with d4 to open the center.' },
+      { label: '2... d6 — Black', text: 'Black prepares to develop the dark-squared bishop (it will go to g7 in the Dragon) and supports the e5 square.' },
+      { label: '3. d4 — White', text: 'The Open Sicilian! White strikes in the center, and after cxd4 Nxd4, the game becomes incredibly complex.' },
+      { label: '3... cxd4 — Black', text: 'Black trades the c-pawn for White\'s d-pawn — a Sicilian hallmark. Black gets a half-open c-file for later counterplay.' },
+      { label: '4. Nxd4 — White', text: 'White recaptures with the knight. The Nd4 is centralized but can be challenged by Black pieces.' },
+      { label: '4... Nf6 — Black', text: 'Black develops the knight and attacks e4 — immediately pressuring White\'s center.' },
+      { label: '5. Nc3 — White', text: 'White defends e4 and develops the queenside knight. White\'s setup is now pointing toward f5, a key attacking square.' },
+      { label: '5... g6 — Black', text: 'The Dragon move! Black prepares the fianchetto with ...Bg7. The bishop on g7 will be a monster on the long diagonal.' },
+      { label: '6. Be3 — White', text: 'White prepares the Yugoslav Attack with Be3, f3, Qd2, O-O-O. This is White\'s most aggressive system against the Dragon.' },
+      { label: '6... Bg7 — Black', text: 'The Dragon bishop arrives at g7. This bishop is Black\'s most powerful piece — from g7 it x-rays all the way to a1 and supports the counterattack.' },
+      { label: '7. f3 — White', text: 'A key Yugoslav Attack move! f3 supports e4, prepares g4-g5 kingside assault, and stops ...Ng4. White is preparing a pawn storm.' },
+      { label: '7... O-O — Black', text: 'Black castles kingside — into the teeth of White\'s coming g4-g5-h5 pawn storm. Black relies on the counterattack down the c-file.' },
+      { label: '8. Qd2 — White', text: 'The queen comes to d2, completing the Yugoslav Attack setup. White prepares O-O-O and then h4-h5-g4 to attack Black\'s king.' },
+      { label: '8... Nc6 — Black', text: 'Black develops the knight, attacking the Nd4 and preparing ...d5 or ...Ne5. The knight on c6 is a key piece in the Dragon counterplay.' },
+      { label: '9. Bc4 — White', text: 'The bishop to c4 — White eyes d5 and f7. This aggressive bishop placement adds to White\'s attacking forces.' },
+      { label: '9... Bd7 — Black', text: 'Black develops the bishop to d7, preparing to double rooks on the c-file (...Rc8) and planning ...Ne5 to challenge the Bc4.' },
+      { label: '10. O-O-O — White', text: 'White castles queenside! The kings are now on opposite wings — both sides will attack. This creates the ultimate double-edged Dragon fight.' },
+      { label: '10... Rc8 — Black', text: 'Black\'s rook goes to c8 — the c-file is Black\'s main attacking route. The rook will support ...Rxc4 or ...c5-c4 advances.' },
+      { label: '11. Bb3 — White', text: 'The bishop retreats to b3, where it\'s safe from ...Ne5 attacks and still eyes d5. This is a key regrouping move in the Yugoslav.' },
+      { label: '11... Ne5 — Black', text: 'The knight jumps to e5 — an excellent central outpost. From e5, it attacks the Bb3 and supports ...Nc4 ideas.' },
+      { label: '12. h4 — White', text: 'White launches the kingside pawn storm! h4 is the beginning of h4-h5-g4-g5 — a classic Dragon attack on Black\'s king.' },
+      { label: '12... Nc4 — Black', text: 'Black\'s Ne5 jumps to c4, attacking the Bb3 and preparing to trade it off. This removes a key attacking piece from White\'s setup.' },
+      { label: '13. Bxc4 — White', text: 'White exchanges the bishop for the knight rather than retreating. The position simplifies somewhat, but White still has the kingside attack.' },
+      { label: '13... Rxc4 — Black', text: 'Black recaptures with the rook, activating it powerfully on the c-file. Black is ready to double rooks and create devastating pressure. The Dragon counterattack is in full swing.' }
+    ],
+    keyIdeas: [
+      'Dragon key idea: Black\'s Bg7 and open c-file create massive counterplay against White\'s queenside',
+      'Yugoslav Attack: White plays f3, Be3, Qd2, O-O-O then storms with h4-h5-g4-g5',
+      'Both sides attack on opposite wings — who gets there first? Pure chess warfare',
+      'Critical: Black must counterattack; passive play invites White\'s overwhelming kingside assault'
+    ]
+  },
+
+  {
+    id: 'sicilian-schev',
+    name: 'Sicilian Scheveningen',
+    eco: 'B80',
+    category: 'black',
+    tagline: 'The flexible Sicilian — Black builds a solid formation',
+    description: 'The Scheveningen Variation is one of the most respected Sicilian systems. Named after the Dutch beach resort where it was first played systematically, Black builds a solid structure with pawns on d6 and e6, keeping maximum flexibility. Kasparov and Fischer both used it. White typically attacks on the kingside while Black counters on the queenside and center.',
+    moves: ['e4','c5','Nf3','d6','d4','cxd4','Nxd4','Nf6','Nc3','e6','Be2','a6','O-O','Be7','f4','Qc7','Kh1','O-O','Be3','Nc6','Qe1','Nxd4','Bxd4','b5','a3','Bb7'],
+    explanations: [
+      { label: '1. e4 — White', text: 'The Open Game — White stakes out the center and begins what will become a complex battle.' },
+      { label: '1... c5 — Black', text: 'The Sicilian Defense. Black fights for the center from the flank, creating rich asymmetrical positions.' },
+      { label: '2. Nf3 — White', text: 'Natural development heading toward d4.' },
+      { label: '2... d6 — Black', text: 'Black prepares the Scheveningen setup — the d6 pawn will support e5 and give the knight on f6 room to maneuver.' },
+      { label: '3. d4 — White', text: 'The Open Sicilian thrust — White opens the center and takes control of d4.' },
+      { label: '3... cxd4 — Black', text: 'Black trades pawns, gaining the half-open c-file for future counterplay.' },
+      { label: '4. Nxd4 — White', text: 'The knight takes d4, centralizing and setting up the tension.' },
+      { label: '4... Nf6 — Black', text: 'The knight develops and attacks e4, forcing White to defend or advance.' },
+      { label: '5. Nc3 — White', text: 'Development and defense of e4 — White is ready for an attacking setup.' },
+      { label: '5... e6 — Black', text: 'The defining Scheveningen move! Black plays e6 rather than g6, creating a solid "small center" with d6+e6 pawns. The light-squared bishop is temporarily locked in, but the structure is very solid.' },
+      { label: '6. Be2 — White', text: 'White chooses the Classical Scheveningen setup with Be2, avoiding the sharper Keres Attack. Be2 leads to rich strategic play.' },
+      { label: '6... a6 — Black', text: 'The Najdorf move order! a6 prevents Bb5+ and prepares queenside expansion with ...b5. This flexible move is essential in many Sicilian systems.' },
+      { label: '7. O-O — White', text: 'White castles, bringing the king to safety before launching the f4-f5 pawn storm.' },
+      { label: '7... Be7 — Black', text: 'Black develops the bishop, preparing to castle. Be7 is the solid, classical approach in the Scheveningen.' },
+      { label: '8. f4 — White', text: 'The English Attack begins! f4 prepares f5, aiming to attack the kingside. White will follow up with f5 to break open Black\'s kingside pawn structure.' },
+      { label: '8... Qc7 — Black', text: 'The queen centralizes to c7, preparing ...O-O and supporting the c-file counterplay. Qc7 is a typical Sicilian queen move connecting rooks.' },
+      { label: '9. Kh1 — White', text: 'A prophylactic king move — White gets the king off the g1-a7 diagonal before castling queenside or continuing the f-file attack.' },
+      { label: '9... O-O — Black', text: 'Black castles — the king goes to safety before White can launch g4-g5-f5.' },
+      { label: '10. Be3 — White', text: 'The bishop develops to e3, supporting d4 and preparing Qe1-Qg3 attacking ideas. The position is full of tension.' },
+      { label: '10... Nc6 — Black', text: 'Black develops the queenside knight, attacking the Nd4. This forces White to decide what to do with the centralized knight.' },
+      { label: '11. Qe1 — White', text: 'A key prophylactic move — White\'s queen goes to e1 to support g4-f5 ideas and avoids potential knight forks on d4.' },
+      { label: '11... Nxd4 — Black', text: 'Black captures on d4, simplifying the position. Trading off White\'s centralized knight is a common Sicilian plan.' },
+      { label: '12. Bxd4 — White', text: 'White recaptures with the bishop, maintaining a strong presence on d4 and controlling the long diagonal.' },
+      { label: '12... b5 — Black', text: 'Black advances b5 — the queenside counterattack begins! This is the typical Sicilian counterplay: Black attacks on the queenside while White storms on the kingside.' },
+      { label: '13. a3 — White', text: 'White prevents ...b4 which would attack the Nc3. Small preventive moves like this are crucial in tight Sicilian battles.' },
+      { label: '13... Bb7 — Black', text: 'The bishop arrives at b7, pointing at the center and the White king area along the long diagonal. Black\'s position is solid with good counterplay. A rich strategic battle lies ahead.' }
+    ],
+    keyIdeas: [
+      'Scheveningen structure: d6+e6 pawns = solid but flexible; bishop on c8 can develop both ways',
+      'White\'s plan: f4-f5 kingside attack, or Keres Attack (e5 early), or positional English Attack',
+      'Black\'s plan: ...b5-b4 queenside counterattack + ...d5 central break at the right moment',
+      'The "hedgehog" quality: Black looks passive but springs to life — never underestimate it'
+    ]
+  },
+
+  {
+    id: 'nimzo-indian',
+    name: 'Nimzo-Indian Defense',
+    eco: 'E20',
+    category: 'black',
+    tagline: 'Pin and break — Nimzowitsch\'s revolutionary hypermodern weapon',
+    description: 'The Nimzo-Indian (1.d4 Nf6 2.c4 e6 3.Nc3 Bb4) is one of the most respected defenses in chess. Black immediately pins White\'s Nc3 with the bishop, preventing e4 and creating long-term structural pressure. The key question: will Black\'s bishop pair disadvantage or White\'s doubled pawns prove more important? Kasparov, Fischer, and countless world champions played this opening.',
+    moves: ['d4','Nf6','c4','e6','Nc3','Bb4','e3','O-O','Bd3','d5','Nf3','c5','O-O','Nc6','a3','Bxc3','bxc3','dxc4','Bxc4','Qc7','Bd3','e5','dxe5','Nxe5','Nxe5','Qxe5'],
+    explanations: [
+      { label: '1. d4 — White', text: 'The Queen\'s Pawn — White opens with d4, leading to strategic battles quite different from the open 1.e4 games.' },
+      { label: '1... Nf6 — Black', text: 'Black\'s most flexible response — the knight develops to f6, fighting for the center and keeping all options open.' },
+      { label: '2. c4 — White', text: 'White grabs space with c4, extending the center. This leads to the Queen\'s Gambit complex or Indian Defenses.' },
+      { label: '2... e6 — Black', text: 'Black prepares either the Queen\'s Gambit (with ...d5) or Nimzo-Indian (with ...Bb4). Flexible and solid.' },
+      { label: '3. Nc3 — White', text: 'White\'s knight develops to c3, preparing e4 and supporting d4. This invites the Nimzo-Indian.' },
+      { label: '3... Bb4 — Black', text: 'The Nimzo-Indian! The bishop pins the Nc3, preventing e4 and creating immediate imbalance. This is one of the most principled moves in chess.' },
+      { label: '4. e3 — White', text: 'The Classical Variation — solid and reliable. White unpins the knight (the bishop no longer threatens to take c3 effectively after e3).' },
+      { label: '4... O-O — Black', text: 'Black castles early, getting the king to safety before the strategic complications begin.' },
+      { label: '5. Bd3 — White', text: 'White develops the bishop to d3, eyeing h7 and preparing for a kingside attack. Bd3 is active and aggressive.' },
+      { label: '5... d5 — Black', text: 'Black claims central space with d5, challenging White\'s c4 pawn. This is the most principled response in the Classical Nimzo.' },
+      { label: '6. Nf3 — White', text: 'Natural development — the knight develops and prepares to castle.' },
+      { label: '6... c5 — Black', text: 'Black attacks d4! This central break is the key counterplay in the Nimzo-Indian — Black challenges White\'s pawn center.' },
+      { label: '7. O-O — White', text: 'White castles, getting the king safe before the center tension resolves.' },
+      { label: '7... Nc6 — Black', text: 'The queenside knight develops, increasing pressure on d4 and supporting the c5 break.' },
+      { label: '8. a3 — White', text: 'White tests the bishop — a3 forces Black to decide between retreating or exchanging on c3.' },
+      { label: '8... Bxc3 — Black', text: 'Black exchanges the bishop for the knight! This gives White doubled c-pawns but eliminates the powerful Nc3 and gives Black the bishop pair temporarily.' },
+      { label: '9. bxc3 — White', text: 'White recaptures with the b-pawn, creating doubled c-pawns (c3 and c4). This weakens White\'s queenside but opens the b-file.' },
+      { label: '9... dxc4 — Black', text: 'Black takes the c4 pawn! After Bxc4, Black exchanges the bishop, and the structure clarifies.' },
+      { label: '10. Bxc4 — White', text: 'White recaptures with the bishop. Now White has a bishop pair and semi-open b-file, while Black has a solid structure with no weaknesses.' },
+      { label: '10... Qc7 — Black', text: 'The queen comes to c7, eyeing the e5 break and preparing to contest the center. Black is ready to equalize.' },
+      { label: '11. Bd3 — White', text: 'The bishop retreats to d3, maintaining pressure on h7 and supporting potential e4 advances.' },
+      { label: '11... e5 — Black', text: 'Black\'s central break! ...e5 challenges White\'s d4 pawn, opening the position and activating Black\'s pieces.' },
+      { label: '12. dxe5 — White', text: 'White captures on e5, opening the d-file. Now both sides must play precisely.' },
+      { label: '12... Nxe5 — Black', text: 'The Nc6 takes on e5, centralizing powerfully. The knight on e5 is a magnificent outpost — well-protected and very active.' },
+      { label: '13. Nxe5 — White', text: 'White exchanges the centralized knight. After Qxe5, Black has a very active queen and piece play.' },
+      { label: '13... Qxe5 — Black', text: 'Black recaptures with the queen! From e5, the queen is extremely active — threatening multiple ideas. Black has fully equalized and has excellent counterplay in this Nimzo-Indian structure.' }
+    ],
+    keyIdeas: [
+      'The Nimzo pin: Bb4 prevents White\'s e4 immediately — Black buys time for development',
+      'Structural battle: Black creates doubled c-pawns for White; White gets the bishop pair',
+      '...e5 break: the key central strike that Black always eyes in the Nimzo-Indian',
+      'Kasparov considered the Nimzo-Indian the "most correct" defense to 1.d4'
+    ]
+  },
+
+  {
+    id: 'grunfeld',
+    name: 'Grünfeld Defense',
+    eco: 'D70',
+    category: 'black',
+    tagline: 'Give White the center — then destroy it',
+    description: 'The Grünfeld Defense is one of the most theoretically sharp and intellectually exciting openings in chess. Black invites White to build a massive pawn center (d4+e4) then systematically undermines it with ...c5, ...cxd4, and the powerful Bg7 bishop. Bobby Fischer called it "the hypermodern paradox." Modern computers have proven it completely sound — Black was right all along!',
+    moves: ['d4','Nf6','c4','g6','Nc3','d5','cxd5','Nxd5','e4','Nxc3','bxc3','Bg7','Bc4','c5','Ne2','Nc6','Be3','O-O','O-O','cxd4','cxd4','Bg4','f3','Na5','Bd3','Be6'],
+    explanations: [
+      { label: '1. d4 — White', text: 'The Queen\'s Pawn opening — White occupies the center with d4, starting a strategic battle.' },
+      { label: '1... Nf6 — Black', text: 'Black\'s flexible response, keeping all Indian Defense options open.' },
+      { label: '2. c4 — White', text: 'White extends the center grab with c4. Together with d4, this builds a powerful central pawn duo.' },
+      { label: '2... g6 — Black', text: 'Black prepares the fianchetto — the Bg7 will be the weapon that targets White\'s entire center.' },
+      { label: '3. Nc3 — White', text: 'White develops the knight to c3, supporting d4 and preparing e4.' },
+      { label: '3... d5 — Black', text: 'The Grünfeld move! Black challenges the center directly rather than building a flank attack. This leads to the sharpest positions.' },
+      { label: '4. cxd5 — White', text: 'White captures on d5, building toward the massive center that the Grünfeld invites.' },
+      { label: '4... Nxd5 — Black', text: 'Black recaptures with the knight, attacking the Nc3. The exchange on c3 is coming, giving White the center but opening lines for the Bg7.' },
+      { label: '5. e4 — White', text: 'White builds the "ideal" pawn center with e4+d4! This is exactly what White wants — a huge space advantage. But Black has a plan to destroy it.' },
+      { label: '5... Nxc3 — Black', text: 'Black trades the knight for the Nc3, which forces White to recapture and gives the Bg7 a clear diagonal toward d4.' },
+      { label: '6. bxc3 — White', text: 'White recaptures with the b-pawn. Now White has pawns on c3, d4, and e4 — a imposing center. But those are targets, not strengths!' },
+      { label: '6... Bg7 — Black', text: 'The Dragon bishop arrives at g7, immediately pressuring the entire long diagonal. This bishop is the star of the Grünfeld — it x-rays d4 from g7.' },
+      { label: '7. Bc4 — White', text: 'White develops the bishop aggressively to c4, eyeing f7 and supporting the center. White\'s position looks imposing.' },
+      { label: '7... c5 — Black', text: 'Black strikes at the center with c5! This is the key Grünfeld counter — attacking d4 and opening lines for Black\'s pieces.' },
+      { label: '8. Ne2 — White', text: 'The knight retreats to e2, getting out of the way of potential ...Bg4 pins and preparing to support the center.' },
+      { label: '8... Nc6 — Black', text: 'The knight develops to c6, increasing pressure on d4 and threatening ...cxd4 followed by ...Qa5.' },
+      { label: '9. Be3 — White', text: 'White develops the bishop to e3, supporting d4 and preparing for the strategic battle over the center.' },
+      { label: '9... O-O — Black', text: 'Black castles, getting the king safe. The Bg7 becomes fully active now that the king has moved.' },
+      { label: '10. O-O — White', text: 'White castles as well. Now both sides are fully developed — the strategic fight over d4 begins in earnest.' },
+      { label: '10... cxd4 — Black', text: 'Black captures on d4, forcing White to deal with the recapture. This is a key tension-releasing move.' },
+      { label: '11. cxd4 — White', text: 'White recaptures with the c-pawn, maintaining the center. The d4 pawn is now potentially isolated but very strong.' },
+      { label: '11... Bg4 — Black', text: 'Black\'s other bishop develops to g4, pinning the Ne2 and adding pressure. Black is fighting hard against the center.' },
+      { label: '12. f3 — White', text: 'White breaks the pin with f3. This solidifies the center and kicks the bishop, but slightly weakens the kingside.' },
+      { label: '12... Na5 — Black', text: 'The knight leaps to a5, attacking the Bc4. Black will win the bishop pair or force another concession from White.' },
+      { label: '13. Bd3 — White', text: 'The bishop retreats to d3, maintaining pressure on h7. White is keeping the center while Black has active piece play.' },
+      { label: '13... Be6 — Black', text: 'Black\'s bishop develops to e6, contesting the center and fighting for the d5 outpost. The Grünfeld creates a rich strategic middlegame where both sides have genuine winning chances.' }
+    ],
+    keyIdeas: [
+      'Grünfeld paradox: give White the huge center (d4+e4), then destroy it with ...c5 + Bg7',
+      'The Bg7 dragon: once Black castles, this bishop becomes a monster — it targets d4 constantly',
+      'Black\'s goal: eliminate d4 pawn or make it isolated (blockade it), then exploit the weakness',
+      'Used by Kasparov, Spassky, Fischer — proof that the counterattack can beat the center'
+    ]
+  },
+
+  {
+    id: 'slav',
+    name: 'Slav Defense',
+    eco: 'D10',
+    category: 'black',
+    tagline: 'Solid and active — the most popular QGD variation',
+    description: 'The Slav Defense is Black\'s most popular response to the Queen\'s Gambit. By playing 2...c6 (instead of 2...e6), Black supports d5 while keeping the light-squared bishop free to develop to f5 or g4 — unlike in the QGD proper. The Slav is solid yet active, and is favored by Anand, Kramnik, and Carlsen for its excellent structural properties.',
+    moves: ['d4','d5','c4','c6','Nf3','Nf6','Nc3','dxc4','a4','Bf5','e3','e6','Bxc4','Bb4','O-O','O-O','Qe2','Nbd7','e4','Bg6','Bd3','Bh5','g4','Bg6','h4','h6','Ne5','Nxe5','dxe5','Nd5','f4','c5'],
+    explanations: [
+      { label: '1. d4 — White', text: 'The Queen\'s Pawn — White builds a central presence and starts a strategic battle.' },
+      { label: '1... d5 — Black', text: 'The classical response — Black takes equal central space.' },
+      { label: '2. c4 — White', text: 'The Queen\'s Gambit! White offers to trade the c-pawn for central dominance.' },
+      { label: '2... c6 — Black', text: 'The Slav Defense! Rather than declining with 2...e6 (QGD), Black supports d5 with c6. The crucial advantage: the Bc8 can now develop to f5 or g4 without being locked in.' },
+      { label: '3. Nf3 — White', text: 'Natural development — White prepares Nc3 and avoids giving Black easy queenside counterplay immediately.' },
+      { label: '3... Nf6 — Black', text: 'The knight develops, fighting for the center and preparing to castle.' },
+      { label: '4. Nc3 — White', text: 'White develops the queenside knight, now threatening 5.cxd5 followed by 6.e4.' },
+      { label: '4... dxc4 — Black', text: 'Black takes the gambit pawn! This is the accepted Slav. Black will try to hold c4 temporarily while White tries to regain it.' },
+      { label: '5. a4 — White', text: 'White plays a4 to prevent ...b5 which would defend the extra c-pawn. This gives White queenside space but weakens b4.' },
+      { label: '5... Bf5 — Black', text: 'The bishop develops to f5! This is the key Slav advantage over the QGD — the bishop is active outside the pawn chain. Black is ready to develop freely.' },
+      { label: '6. e3 — White', text: 'White solidifies the center with e3. This will allow Bxc4 to regain the pawn while keeping the position solid.' },
+      { label: '6... e6 — Black', text: 'Black finishes development with e6, supporting the center and preparing to castle.' },
+      { label: '7. Bxc4 — White', text: 'White recaptures the gambited pawn. Now White has two bishops and central control, while Black has a solid structure.' },
+      { label: '7... Bb4 — Black', text: 'Black pins the Nc3, echoing the Nimzo-Indian! This creates immediate tactical pressure on White\'s knight and d4.' },
+      { label: '8. O-O — White', text: 'White castles, getting the king safe and avoiding the pin complications for now.' },
+      { label: '8... O-O — Black', text: 'Black castles as well — both kings are safe. The real strategic battle begins.' },
+      { label: '9. Qe2 — White', text: 'The queen comes to e2, supporting e4 and preparing to fight for central space. White wants to play e4 soon.' },
+      { label: '9... Nbd7 — Black', text: 'The queenside knight develops to d7, where it supports the center and prepares ...e5 breaks.' },
+      { label: '10. e4 — White', text: 'White advances e4, seizing central space and challenging Black\'s bishops. This is White\'s main plan in the Slav.' },
+      { label: '10... Bg6 — Black', text: 'The Bf5 retreats to g6 to avoid being pushed back by e5. From g6, it still controls important squares.' },
+      { label: '11. Bd3 — White', text: 'White develops the bishop to d3, aiming at h7 and supporting the center. White\'s pieces are coordinating well.' },
+      { label: '11... Bh5 — Black', text: 'The bishop retreats to h5, where it keeps pressure on the Nf3 (via the g4 square later). Black is trying to maintain the bishop\'s activity.' },
+      { label: '12. g4 — White', text: 'White attacks the bishop with g4! This bold pawn advance starts a kingside storm, but also creates some weaknesses around the White king.' },
+      { label: '12... Bg6 — Black', text: 'The bishop retreats again to g6. Each bishop move by Black has been forced — but the bishop is still active.' },
+      { label: '13. h4 — White', text: 'White continues the kingside advance with h4. The threat is h5 to kick the bishop further. White is pushing hard on the kingside.' },
+      { label: '13... h6 — Black', text: 'Black plays h6, preventing h5 and keeping the bishop on g6. Black is defending calmly.' },
+      { label: '14. Ne5 — White', text: 'White\'s knight jumps to e5 — a powerful outpost in the center. From e5, it threatens many pieces and dominates the board.' },
+      { label: '14... Nxe5 — Black', text: 'Black exchanges on e5 to remove the powerful knight. After dxe5, White has a strong passed e-pawn.' },
+      { label: '15. dxe5 — White', text: 'White recaptures with the d-pawn, creating a strong passed pawn on e5. White\'s pawn structure is very imposing.' },
+      { label: '15... Nd5 — Black', text: 'The knight jumps to d5 — a powerful central outpost. Black uses the weakening of the white center to create a strong knight.' },
+      { label: '16. f4 — White', text: 'White continues the kingside push with f4, preparing f5. The king-side storm is building up.' },
+      { label: '16... c5 — Black', text: 'Black finally activates the queenside with c5! This breaks the tension in the center and creates counterplay. The game is highly complex with mutual chances.' }
+    ],
+    keyIdeas: [
+      'Slav key: 2...c6 keeps the light-squared bishop free — unlike the Queen\'s Gambit Declined',
+      'The Bf5 is Black\'s pride — keep it active; White will constantly try to chase it',
+      'Black\'s central plan: establish Nd5 as an outpost and play ...c5 for queenside counterplay',
+      'After e4 by White: watch for the typical kingside expansion g4-h4-f4 attacking sequence'
+    ]
+  },
+
+  {
+    id: 'queens-indian',
+    name: "Queen's Indian Defense",
+    eco: 'E12',
+    category: 'black',
+    tagline: 'Nimzowitsch\'s other weapon — the fianchetto variation',
+    description: 'The Queen\'s Indian Defense (1.d4 Nf6 2.c4 e6 3.Nf3 b6) is the companion to the Nimzo-Indian. When White plays 3.Nf3 instead of 3.Nc3, Black plays b6 and fianchettoes the bishop on b7, controlling d5 and e4 from the flank. This leads to rich, positional battles. Kramnik won multiple world championship games with it, and Carlsen regularly employs it.',
+    moves: ['d4','Nf6','c4','e6','Nf3','b6','g3','Bb7','Bg2','Be7','O-O','O-O','Nc3','Ne4','Qc2','Nxc3','Qxc3','d6','b4','Nd7','Bb2','a5','bxa5','bxa5','Rfd1','c5'],
+    explanations: [
+      { label: '1. d4 — White', text: 'The Queen\'s Pawn — White aims for a strategic battle.' },
+      { label: '1... Nf6 — Black', text: 'The flexible knight development — keeping Indian Defense options alive.' },
+      { label: '2. c4 — White', text: 'White extends the pawn center, challenging Black to decide on a defense.' },
+      { label: '2... e6 — Black', text: 'Black prepares for the Queen\'s Indian (if White plays Nf3) or Nimzo-Indian (if Nc3). Very flexible.' },
+      { label: '3. Nf3 — White', text: 'White plays Nf3 rather than Nc3, avoiding the Nimzo-Indian pin. This invites the Queen\'s Indian.' },
+      { label: '3... b6 — Black', text: 'The Queen\'s Indian! Black prepares ...Bb7, fianchettoing the bishop to control the long diagonal and contest d5 and e4.' },
+      { label: '4. g3 — White', text: 'White also fianchettoes! The g3 + Bg2 setup leads to a "battle of the bishops" down the long diagonals.' },
+      { label: '4... Bb7 — Black', text: 'The queen\'s bishop arrives at b7 — this powerful piece controls the a8-h1 diagonal and will fight against White\'s Bg2.' },
+      { label: '5. Bg2 — White', text: 'White\'s bishop reaches g2, completing the fianchetto. The two bishops face each other down the long diagonal — a fascinating strategic duel.' },
+      { label: '5... Be7 — Black', text: 'Black develops the king\'s bishop to e7, preparing to castle. A solid, classical development.' },
+      { label: '6. O-O — White', text: 'White castles, completing the kingside setup. White\'s fianchettoed position is very solid.' },
+      { label: '6... O-O — Black', text: 'Black castles as well — both kings are safe. Now the real positional battle begins.' },
+      { label: '7. Nc3 — White', text: 'White develops the queenside knight to c3. Now the position resembles a Catalan/QID hybrid with many strategic subtleties.' },
+      { label: '7... Ne4 — Black', text: 'Black\'s knight jumps to e4! This active move challenges White\'s control of the center and invites simplification.' },
+      { label: '8. Qc2 — White', text: 'White plays Qc2, attacking the Ne4 and offering a trade. This is the most principled response.' },
+      { label: '8... Nxc3 — Black', text: 'Black exchanges the knight. After Qxc3, the queens come off and Black has a solid position without weaknesses.' },
+      { label: '9. Qxc3 — White', text: 'White recaptures with the queen. Now White has the queen on c3 and a slight space advantage, while Black has good piece coordination.' },
+      { label: '9... d6 — Black', text: 'Black solidifies the center with d6. This prevents e4 and keeps a solid, unbreachable position.' },
+      { label: '10. b4 — White', text: 'White launches queenside expansion with b4! This gains space and prepares Bb2 to reinforce the long diagonal battle.' },
+      { label: '10... Nd7 — Black', text: 'The knight retreats to d7, where it supports c5 and can go to f6 or e5. Black is regrouping.' },
+      { label: '11. Bb2 — White', text: 'The bishop develops to b2, engaging in the long diagonal battle with Black\'s Bb7. This is a key strategic moment.' },
+      { label: '11... a5 — Black', text: 'Black challenges the queenside expansion with a5! This fights for space and creates tension on the b-file.' },
+      { label: '12. bxa5 — White', text: 'White captures on a5, opening the b-file. This forces Black to recapture and creates some structural tension.' },
+      { label: '12... bxa5 — Black', text: 'Black recaptures on a5, now with a passed a-pawn. The pawn on a5 will be a long-term strategic asset.' },
+      { label: '13. Rfd1 — White', text: 'White centralizes the rook to d1, supporting d4 and preparing for central action. Both sides are maneuvering for optimal positions.' },
+      { label: '13... c5 — Black', text: 'Black strikes in the center with c5! This challenges d4 directly. After the dust settles, Black has a solid position with active counterplay and no weaknesses — a typical Queen\'s Indian achievement.' }
+    ],
+    keyIdeas: [
+      'QID key: Bb7 controls the long a8-h1 diagonal — fighting against White\'s Bg2 for central influence',
+      'The "battle of fianchettoes": both bishops on g2 and b7 eye the same long diagonal',
+      'Black\'s queenside counterplay: ...a5 and ...c5 to challenge White\'s space advantage',
+      'Very solid — Black has no structural weaknesses and always has counterplay ideas'
+    ]
+  },
+
+  {
+    id: 'four-knights',
+    name: 'Four Knights Game',
+    eco: 'C47',
+    category: 'black',
+    tagline: 'Symmetry shattered — the Italian-Spanish hybrid',
+    description: 'The Four Knights Game begins with the symmetrical 1.e4 e5 2.Nf3 Nc6 3.Nc3 Nf6, but quickly becomes asymmetrical. After 4.Bb5, White pins Black\'s Nc6 (Spanish setup). The resulting play can be sharp and tactical, as shown by Rubinstein\'s famous games. The line shown features a knight sacrifice with Nxe5 that leads to wild complications.',
+    moves: ['e4','e5','Nf3','Nc6','Nc3','Nf6','Bb5','Nd4','Bc4','Bc5','Nxe5','Qe7','Nf3','Nxf3+','Qxf3','d6','O-O','O-O','d3','c6','Bg5','Qxe4','Bxf6','gxf6','Nxe4','Bg4'],
+    explanations: [
+      { label: '1. e4 — White', text: 'The King\'s Pawn opening — White begins the classical fight for the center.' },
+      { label: '1... e5 — Black', text: 'The symmetrical response — Black mirrors White and takes equal space.' },
+      { label: '2. Nf3 — White', text: 'Development and attack on e5 — the most principled continuation.' },
+      { label: '2... Nc6 — Black', text: 'The knight defends e5 and develops actively.' },
+      { label: '3. Nc3 — White', text: 'The Four Knights begins! White develops the queenside knight symmetrically.' },
+      { label: '3... Nf6 — Black', text: 'Black mirrors with Nf6. Now we have the classic Four Knights position — all four knights are developed.' },
+      { label: '4. Bb5 — White', text: 'White plays Bb5 — the Spanish Four Knights (or "Halloween Gambit" territory approaches!). White pins the Nc6.' },
+      { label: '4... Nd4 — Black', text: 'Black plays the unusual Nd4 — attacking the Bb5 and preparing to exchange it. This is a sharp variation that leads to complications.' },
+      { label: '5. Bc4 — White', text: 'The bishop retreats to c4, setting a trap. If 5...Nxf3+? 6.Qxf3 Nxe4?? 7.Qxf7# would be quick checkmate! Instead play continues...' },
+      { label: '5... Bc5 — Black', text: 'Black develops the bishop to c5 — a natural active square. Now both sides are eyeing f7.' },
+      { label: '6. Nxe5 — White', text: 'White sacrifices the Nf3 to e5, taking the e5 pawn! This is a bold gambit — if Black is not careful, White gets a devastating attack on f7.' },
+      { label: '6... Qe7 — Black', text: 'Black plays Qe7, defending the e5 piece (the Nd4) and preventing the Nxf7 fork (Re7 would give back the knight). A critical defensive move.' },
+      { label: '7. Nf3 — White', text: 'White retreats the knight to f3 — the gambit is declined. White keeps the extra pawn and a slight initiative.' },
+      { label: '7... Nxf3+ — Black', text: 'Black captures on f3 with check! This forces the queen to recapture and opens lines in White\'s position.' },
+      { label: '8. Qxf3 — White', text: 'White recaptures with the queen. Now White has the powerful queen on f3, aiming at f7 and controlling the center.' },
+      { label: '8... d6 — Black', text: 'Black plays d6, developing and preventing Bc4 from attacking f7 immediately. A solid, defensive move.' },
+      { label: '9. O-O — White', text: 'White castles, getting the king safe and activating the rook on f1.' },
+      { label: '9... O-O — Black', text: 'Black castles as well. Now the position is sharp — White has the queen pair and piece activity, Black is solid.' },
+      { label: '10. d3 — White', text: 'White plays d3, solidifying the center and preparing to develop the dark-squared bishop. The position is slowly building toward an attack.' },
+      { label: '10... c6 — Black', text: 'Black plays c6, strengthening the center and preparing to challenge White\'s pieces.' },
+      { label: '11. Bg5 — White', text: 'White\'s bishop develops to g5, pinning Black\'s Qe7? Wait — the queen is on e7. Bg5 pins the queen and adds pressure.' },
+      { label: '11... Qxe4 — Black', text: 'Black boldly captures on e4! But this is a trap — after Bxf6 gxf6, White plays Nxe4 winning the queen back with a great position.' },
+      { label: '12. Bxf6 — White', text: 'White takes the Nf6, discovered attack on the queen. Black must recapture.' },
+      { label: '12... gxf6 — Black', text: 'Black must take with the g-pawn, creating serious kingside weaknesses. The f6 pawn is doubled and weak.' },
+      { label: '13. Nxe4 — White', text: 'White takes back the queen with Nxe4. White now has excellent compensation: the bishop pair, open lines, and Black\'s shattered kingside.' },
+      { label: '13... Bg4 — Black', text: 'Black plays Bg4, pinning the Qf3 and trying to complicate. The position remains sharp and dynamic — Black has the two bishops and some counterplay, but White\'s structure is better.' }
+    ],
+    keyIdeas: [
+      'Four Knights: symmetry breaks quickly after 4.Bb5 Nd4 — each side plays asymmetrically',
+      'The Nxe5 gambit idea: always watch for this knight sacrifice in Italian/Spanish structures',
+      'After the queen trade sequence: White gets structural compensation for material equality',
+      'Black\'s kingside weakness after gxf6 is a long-term strategic target for White'
+    ]
+  },
+
+  // ── TRAPS ──────────────────────────────────────
+
+  {
+    id: 'scholars-mate',
+    name: "Scholar's Mate",
+    eco: null,
+    category: 'trap',
+    tagline: 'The fastest trap — beginner beware!',
+    description: "Scholar's Mate is the most famous beginner trap in chess. White attacks f7 with the queen and bishop, and if Black doesn't see it coming, it's checkmate in just 4 moves! The key lesson: don't move the queen too early, and always watch for Qxf7# threats. Almost every strong player fell for this at least once as a beginner.",
+    moves: ['e4','e5','Bc4','Nc6','Qh5','Nf6','Qxf7'],
+    explanations: [
+      { label: '1. e4 — White', text: 'White opens with e4 — but the Scholar\'s Mate is already being planned. White will try to attack f7 as fast as possible.' },
+      { label: '1... e5 — Black', text: 'Black plays e5, a natural response. But Black needs to be very careful about the f7 square — it\'s only defended by the king.' },
+      { label: '2. Bc4 — White', text: 'The Italian bishop develops to c4, immediately targeting f7! This bishop is now on the most dangerous diagonal aimed at Black\'s weakest point.' },
+      { label: '2... Nc6 — Black', text: 'Black develops the knight — a natural move, but Black has missed White\'s plan. The correct response would be 2...Nf6 to stop Qh5, or 2...d6 for solid defense.' },
+      { label: '3. Qh5 — White', text: 'The queen leaps to h5, threatening Qxf7# immediately! This is the Scholar\'s Mate threat. Black must respond correctly or get checkmated.' },
+      { label: '3... Nf6?? — Black', text: 'Black plays Nf6, attacking the queen — but this is a BLUNDER! The correct move was g6 to drive the queen away. Now White delivers checkmate.' },
+      { label: '4. Qxf7# — White', text: 'CHECKMATE! The queen takes f7 — the king on e8 is in check with no escape. The Bc4 covers d5, and the queen covers e8 and f7. A painful lesson for the beginner who falls for this!' }
+    ],
+    keyIdeas: [
+      'f7 is Black\'s most vulnerable square — defended only by the king in the opening',
+      'To defend: play g6 when the queen reaches h5, or develop Nf6 BEFORE Qh5 can threaten',
+      'White lesson: this works only against beginners — don\'t rely on it against prepared players',
+      'Key principle: don\'t bring the queen out too early — but watch for opponents who do!'
+    ]
+  },
+
+  {
+    id: 'fools-mate',
+    name: "Fool's Mate",
+    eco: null,
+    category: 'trap',
+    tagline: 'Checkmate in 2 — the fastest game possible',
+    description: "Fool's Mate is the fastest possible checkmate in chess — just 2 moves! White plays the weakest possible opening (f3 + g4), opening lines toward the king, and Black delivers Qh4#. While no strong player will ever fall for it, it illustrates a crucial lesson: never weaken your king unnecessarily in the opening.",
+    moves: ['f3','e5','g4','Qh4'],
+    explanations: [
+      { label: '1. f3 — White', text: 'A terrible opening move! f3 weakens the e1 king and does nothing for development. This move is almost never played, but demonstrates the danger of opening pawn moves near your king.' },
+      { label: '1... e5 — Black', text: 'Black takes central space and opens lines. E5 is a natural, strong move that also helps set up the checkmate threat.' },
+      { label: '2. g4?? — White', text: 'Another disastrous move — g4 further weakens the kingside and opens the h4-e1 diagonal. White has created the perfect conditions for an immediate checkmate.' },
+      { label: '2... Qh4# — Black', text: 'CHECKMATE on move 2! The queen delivers the quickest possible checkmate in all of chess. The White king on e1 is in check from Qh4 via the diagonal, and cannot escape: f2 is not covered (f3 pawn has moved away), and there are no pieces to block. Game over!' }
+    ],
+    keyIdeas: [
+      'Never move f and g pawns simultaneously in the opening — this fatally weakens your king',
+      'The h4-e1 diagonal is extremely dangerous when f3 and g4 are played — any queen or bishop can use it',
+      'Principle: don\'t create weaknesses around your king in the opening',
+      'This checkmate illustrates why "developing pawns near your king" is so dangerous'
+    ]
+  },
+
+  {
+    id: 'legal-trap',
+    name: "Legal's Trap",
+    eco: null,
+    category: 'trap',
+    tagline: 'The brilliant queen sacrifice leading to smothered mate',
+    description: "Legal's Trap is a beautiful queen sacrifice that leads to a brilliant checkmate. White appears to hang the queen (allowing Bxd1), but after Bxf7+ Ke7, the knight on d5 delivers checkmate! The lesson: always check if a piece sacrifice leads to a forced checkmate before capturing. Named after 18th century French master Sire de Legal.",
+    moves: ['e4','e5','Nf3','Nc6','Bc4','d6','Nc3','Bg4','Nxe5','Bxd1','Bxf7+','Ke7','Nd5'],
+    explanations: [
+      { label: '1. e4 — White', text: 'The standard King\'s Pawn opening.' },
+      { label: '1... e5 — Black', text: 'Black mirrors in the center — the game begins with classical symmetry.' },
+      { label: '2. Nf3 — White', text: 'The knight develops and attacks e5.' },
+      { label: '2... Nc6 — Black', text: 'The knight defends e5. Both sides are developing normally.' },
+      { label: '3. Bc4 — White', text: 'The Italian Bishop to c4 — this targets f7 and sets up the trap that\'s coming.' },
+      { label: '3... d6 — Black', text: 'A solid move supporting e5. Nothing suspicious yet.' },
+      { label: '4. Nc3 — White', text: 'White develops the queenside knight, building toward the trap. The key ingredient: White needs Nc3 to jump to d5 later.' },
+      { label: '4... Bg4 — Black', text: 'Black pins the Nf3! The bishop on g4 attacks the knight defending e4. Black threatens to double White\'s pawns if the knight moves. This looks clever — but it walks right into the trap!' },
+      { label: '5. Nxe5! — White', text: 'WHITE SACRIFICES THE QUEEN! The knight takes e5, apparently hanging the queen (since Bxd1 would win it). But White has calculated the forced mate. This move is the heart of the Legal Trap!' },
+      { label: '5... Bxd1 — Black', text: 'Black greedily takes the queen on d1. This looks like a huge material gain — but it\'s a catastrophic mistake! Black\'s queen has never moved, so the bishop takes White\'s queen. The king is now on e8 about to walk into a mating net.' },
+      { label: '6. Bxf7+ — White', text: 'CHECK! The bishop takes f7, giving check to the Black king on e8. The king must move — there are no other legal moves to escape this check.' },
+      { label: '6... Ke7 — Black', text: 'The king is forced to move to e7. This seems like escaping, but it walks right into the final checkmate. Every escape square will be covered.' },
+      { label: '7. Nd5# — White', text: 'CHECKMATE! The knight from c3 jumps to d5, and it\'s over. The king on e7 has no escape: d6 has Black\'s own pawn, d8 has Black\'s own queen, e8 is attacked by Bxf7, f8 has Black\'s own bishop (Bf8), e6 is attacked by Bf7, f6 is attacked by Nd5 itself, and f7 has the White bishop. A beautiful smothered mate!' }
+    ],
+    keyIdeas: [
+      'The Legal Trap: Nxe5 looks like a blunder (queen is en prise) but leads to forced checkmate',
+      'Key lesson: always check whether taking a piece leads to checkmate before capturing!',
+      'The Bg4 pin is a mistake — it walks into this trap. Better: don\'t pin Nf3 here',
+      'After Nxe5 Bxd1, the forced sequence Bxf7+ Ke7 Nd5# is unstoppable — memorize the mating pattern'
+    ]
+  },
+
+  {
+    id: 'fried-liver',
+    name: 'Fried Liver Attack',
+    eco: null,
+    category: 'trap',
+    tagline: 'The knife into f7 — a legendary knight sacrifice',
+    description: "The Fried Liver Attack is one of chess's most spectacular sacrificial attacks. Arising from the Two Knights Defense, White sacrifices the knight on f7 (6.Nxf7!) to drag the Black king into the center. With the king exposed, White launches a devastating attack. It\'s named because Black's position gets 'fried.' Very popular at club level where Black is not well-prepared.",
+    moves: ['e4','e5','Nf3','Nc6','Bc4','Nf6','Ng5','d5','exd5','Nxd5','Nxf7','Kxf7','Qf3+','Ke6','Nc3','Nb4','Qe4','c6','a3','Na6','d4','Bd7','O-O','Nc7'],
+    explanations: [
+      { label: '1. e4 — White', text: 'Standard King\'s Pawn opening.' },
+      { label: '1... e5 — Black', text: 'Black takes central space.' },
+      { label: '2. Nf3 — White', text: 'The knight develops, attacking e5.' },
+      { label: '2... Nc6 — Black', text: 'The knight defends e5.' },
+      { label: '3. Bc4 — White', text: 'The Italian bishop develops, setting up the Two Knights Defense. The bishop eyes f7.' },
+      { label: '3... Nf6 — Black', text: 'Black plays Nf6, entering the Two Knights Defense. This creates the conditions for the Fried Liver!' },
+      { label: '4. Ng5 — White', text: 'The knight attacks f7 with Ng5! Along with the Bc4, White is threatening Nxf7, winning the exchange. Black must respond carefully.' },
+      { label: '4... d5 — Black', text: 'Black strikes back with d5! The best response — Black counterattacks in the center rather than defending passively. If 4...Bc5 instead, White plays Nxf7 anyway.' },
+      { label: '5. exd5 — White', text: 'White captures on d5 — the center opens up.' },
+      { label: '5... Nxd5 — Black', text: 'Black takes back with the knight, centralizing it powerfully on d5. This looks natural but walks into the sacrifice.' },
+      { label: '6. Nxf7! — White', text: 'THE FRIED LIVER SACRIFICE! The knight takes f7, giving check! Black\'s king must take the knight — and then it gets dragged into the center. This sacrifice has been played since the 16th century.' },
+      { label: '6... Kxf7 — Black', text: 'The king takes the knight on f7. Black has no choice — it must capture. Now the king is exposed in the center, and White has a powerful attack for the sacrificed knight.' },
+      { label: '7. Qf3+ — White', text: 'Check! The queen comes to f3 with a devastating check. The king is forced to move further into the center.' },
+      { label: '7... Ke6 — Black', text: 'The king retreats to e6 — in the center of the board! This is dangerous, but Ke8 loses immediately too. Black must try to survive.' },
+      { label: '8. Nc3 — White', text: 'White develops the knight with tempo, preparing Nd5+ or Ne4 ideas to continue the attack.' },
+      { label: '8... Nb4 — Black', text: 'Black\'s Nd5 retreats to b4, attacking the Bc4 and trying to trade off White\'s attacking pieces. Black needs to simplify to survive.' },
+      { label: '9. Qe4 — White', text: 'The queen centralizes to e4, threatening d4 and keeping the pressure on Black\'s exposed king. White\'s attack continues.' },
+      { label: '9... c6 — Black', text: 'Black plays c6, trying to establish some central stability. The king needs pawn cover desperately.' },
+      { label: '10. a3 — White', text: 'White forces the Nb4 to declare its intentions. After Na6, the knight is sidelined.' },
+      { label: '10... Na6 — Black', text: 'The knight retreats to a6 — a passive but forced move. Black\'s pieces are not coordinating well under the pressure.' },
+      { label: '11. d4 — White', text: 'White advances d4, opening more lines and creating threats against the exposed king. The initiative remains firmly with White.' },
+      { label: '11... Bd7 — Black', text: 'Black develops the bishop to d7, preparing to coordinate the pieces and potentially castle queenside to get the king to safety.' },
+      { label: '12. O-O — White', text: 'White castles, bringing the rook into the game. White is fully developed and the attack on Black\'s king will continue.' },
+      { label: '12... Nc7 — Black', text: 'The knight reroutes to c7, defending and preparing ...Nd5 or ...Ne6. Black is trying desperately to organize a defense, but White has an enormous advantage in activity. This is the power of the Fried Liver!' }
+    ],
+    keyIdeas: [
+      'The Fried Liver works: Nxf7 sacrifices a piece to drag the Black king into the center',
+      'After Kxf7, White plays Qf3+ forcing Ke6 — the king is trapped in the middle of the board',
+      'White gets enormous compensation: open lines, centralized pieces, exposed king',
+      'Defense: Black should play 5...Na5 (attacking Bc4) instead of 5...Nxd5 to avoid the sacrifice'
+    ]
+  },
+
+  {
+    id: 'elephant-trap',
+    name: 'Elephant Trap',
+    eco: null,
+    category: 'trap',
+    tagline: 'Win the queen in the Queen\'s Gambit Declined',
+    description: "The Elephant Trap is one of the most important opening traps to know in the Queen's Gambit Declined. After 5.cxd5 exd5 6.Nxd5??, Black wins the queen with the brilliant Bb4+! White cannot avoid losing material — the queen is trapped. The lesson: be very careful about premature captures in the QGD.",
+    moves: ['d4','d5','c4','e6','Nc3','Nf6','Bg5','Nbd7','cxd5','exd5','Nxd5','Nxd5','Bxd8','Bb4+','Qd2','Bxd2+','Kxd2','Kxd8'],
+    explanations: [
+      { label: '1. d4 — White', text: 'The Queen\'s Pawn opening begins.' },
+      { label: '1... d5 — Black', text: 'Black claims central space with d5.' },
+      { label: '2. c4 — White', text: 'The Queen\'s Gambit! White offers the c-pawn.' },
+      { label: '2... e6 — Black', text: 'The Queen\'s Gambit Declined. Black solidifies d5 with e6.' },
+      { label: '3. Nc3 — White', text: 'White develops the knight.' },
+      { label: '3... Nf6 — Black', text: 'Black develops the kingside knight.' },
+      { label: '4. Bg5 — White', text: 'White pins the Nf6 with Bg5. This is the Classical QGD — White creates pressure on Black\'s position.' },
+      { label: '4... Nbd7 — Black', text: 'Black develops the queenside knight to d7 rather than c6, maintaining the pressure on the Bg5 pin without blocking the c-pawn.' },
+      { label: '5. cxd5 — White', text: 'White trades pawns. This relieves the central tension, but now comes the trap...' },
+      { label: '5... exd5 — Black', text: 'Black recaptures with the e-pawn. Now d5 is defended by the Nf6, and the Nbd7 is protecting the Nf6. This seemingly simple position contains a deadly trap.' },
+      { label: '6. Nxd5?? — White', text: 'WHITE FALLS INTO THE TRAP! The knight takes d5, apparently winning a pawn and forking the Nf6 and Nbd7. But this loses the queen! White should play e3, Nf3, or Qc2 instead.' },
+      { label: '6... Nxd5 — Black', text: 'Black takes back with the knight on d5 — the queen on d1 is now unprotected! And the next move will expose this beautifully.' },
+      { label: '7. Bxd8 — White', text: 'White takes the Black queen... but waits for the brilliant reply that wins the game.' },
+      { label: '7... Bb4+ — Black', text: 'CHECK! The bishop comes to b4, giving check to the White king AND defending the Nd5. White cannot take the bishop because the queen would hang. The White queen is trapped on d8!' },
+      { label: '8. Qd2 — White', text: 'White must interpose with Qd2 to block the check. But now the queen is on d2, not defending anything useful, and Black wins it back.' },
+      { label: '8... Bxd2+ — Black', text: 'Check again! Black takes the Qd2 with check. White must take back.' },
+      { label: '9. Kxd2 — White', text: 'White\'s king takes the bishop. White has the queens off the board, but Black recovers the queen on d8.' },
+      { label: '9... Kxd8 — Black', text: 'Black takes White\'s queen on d8! Black has won a queen for a bishop and knight — a huge material advantage. The Elephant Trap catches so many unsuspecting players at club level!' }
+    ],
+    keyIdeas: [
+      'Elephant Trap: after cxd5 exd5, the move Nxd5 loses to Nxd5 Bxd8 Bb4+! winning the queen',
+      'Key sequence: 6...Nxd5 7.Bxd8 Bb4+ 8.Qd2 Bxd2+ 9.Kxd2 Kxd8 — Black wins a queen for two pieces',
+      'White lesson: after cxd5 exd5, the d5 square is solidly defended — don\'t try to grab it',
+      'Prevention: White should play e3, Nf3, or Qc2 instead of the greedy Nxd5'
+    ]
+  },
+
+  {
+    id: 'stafford-gambit',
+    name: 'Stafford Gambit',
+    eco: null,
+    category: 'trap',
+    tagline: 'The reckless gambit that has trapped thousands',
+    description: "The Stafford Gambit (1.e4 e5 2.Nf3 Nf6 3.Nxe5 Nc6) is a swashbuckling gambit where Black sacrifices a pawn to get wild attacking chances. After 4.Nxc6 dxc6 5.e5 Ne4, Black creates chaos with piece activity and tactical tricks. White needs to be well-prepared — many attacking lines win for Black if White plays carelessly.",
+    moves: ['e4','e5','Nf3','Nf6','Nxe5','Nc6','Nxc6','dxc6','e5','Ne4','Nc3','Bc5','Qf3','Nxc3','bxc3','Qd4','Qg3','Be6','Ba3','O-O-O','Bxc5','Qxc5','d4','Qa5'],
+    explanations: [
+      { label: '1. e4 — White', text: 'Standard King\'s Pawn opening.' },
+      { label: '1... e5 — Black', text: 'Black takes central space.' },
+      { label: '2. Nf3 — White', text: 'The knight develops and attacks e5.' },
+      { label: '2... Nf6 — Black', text: 'The Petrov/Russian variation — or is it? Black is about to play the Stafford Gambit!' },
+      { label: '3. Nxe5 — White', text: 'White takes the e5 pawn.' },
+      { label: '3... Nc6 — Black', text: 'The Stafford Gambit! Black develops the knight rather than recapturing the pawn. If White is greedy and takes on c6, the complications will favor Black.' },
+      { label: '4. Nxc6 — White', text: 'White takes the Nc6. This is exactly what Black wants — the position becomes wildly complex and full of traps.' },
+      { label: '4... dxc6 — Black', text: 'Black recaptures with the d-pawn, opening the d-file and giving the queen access to d4. The gambit pawn is gone, but Black has huge piece activity.' },
+      { label: '5. e5 — White', text: 'White advances e5, attacking the Nf6. This looks natural but the game gets very sharp.' },
+      { label: '5... Ne4 — Black', text: 'Black\'s knight jumps to e4 — a powerful central outpost. The knight threatens to come to d2 or f2, creating immediate problems for White.' },
+      { label: '6. Nc3 — White', text: 'White develops the knight, trying to challenge the Ne4. If Black takes Nxc3, the b-pawn recaptures and White gets a solid center.' },
+      { label: '6... Bc5 — Black', text: 'Black develops the bishop to c5 — a powerful diagonal aiming at f2. Along with the Ne4, Black has serious attacking threats.' },
+      { label: '7. Qf3 — White', text: 'White plays Qf3, defending f2 (protecting against Bxf2+) and attacking the Ne4. White is trying to consolidate.' },
+      { label: '7... Nxc3 — Black', text: 'Black takes the Nc3. After bxc3, White\'s pawn structure is damaged and the b-file is open.' },
+      { label: '8. bxc3 — White', text: 'White recaptures with the b-pawn — forced. Now Black has an important tactical resource.' },
+      { label: '8... Qd4 — Black', text: 'The queen jumps to d4! A powerful centralizing move that attacks c4, pressures f2, and threatens to take on c3 or e5. White must respond carefully.' },
+      { label: '9. Qg3 — White', text: 'White retreats the queen to g3 to avoid exchanges and maintain some attacking potential.' },
+      { label: '9... Be6 — Black', text: 'Black develops the bishop to e6, preparing to castle queenside and connect the rooks. Black is building a dangerous attacking setup.' },
+      { label: '10. Ba3 — White', text: 'White plays Ba3, trying to develop and create some counterplay. The position is extremely complex.' },
+      { label: '10... O-O-O — Black', text: 'Black castles queenside! The king goes to safety and the rook comes to d8. Black\'s pieces are all active and coordinated — the Stafford Gambit has provided rich compensation.' },
+      { label: '11. Bxc5 — White', text: 'White exchanges the bishop, simplifying somewhat. After Qxc5, both sides continue fighting.' },
+      { label: '11... Qxc5 — Black', text: 'Black recaptures with the queen. Black has a very active queen and rooks pointing at White\'s center.' },
+      { label: '12. d4 — White', text: 'White pushes d4, fighting for central space. White needs to challenge Black\'s control.' },
+      { label: '12... Qa5 — Black', text: 'The queen goes to a5, eyeing the queenside and potentially c3. Black continues to create multiple threats simultaneously — the Stafford\'s hallmark is keeping White off balance.' }
+    ],
+    keyIdeas: [
+      'Stafford Gambit: sacrifice the e5 pawn for wild piece activity and tactical tricks',
+      'Key threat: Ne4 + Bc5 combo targets f2 constantly — White must always watch for Bxf2+ tactics',
+      'White lesson: play 6.d3 or 6.Qe2 carefully — grabbing material with Nxc6 leads to trouble',
+      'Black\'s compensation: open d-file, active pieces, the c5 bishop + Ne4 combo creates constant threats'
+    ]
+  },
+
+  {
+    id: 'blackburne-shilling',
+    name: 'Blackburne Shilling Gambit',
+    eco: null,
+    category: 'trap',
+    tagline: 'Swindling knight trick — wins a shilling from careless players',
+    description: "The Blackburne Shilling Gambit (named because Joseph Blackburne would supposedly win a shilling from amateurs with this trick) is a sharp trap in the Italian Game. After 3...Nd4, Black offers the e5 pawn. If White grabs it greedily with 4.Nxe5 Qg5! 5.Nxf7 Qxg2 6.Rf1 Qxe4+, the game ends dramatically. If White plays 7.Be2, the crushing Nf3# delivers checkmate!",
+    moves: ['e4','e5','Nf3','Nc6','Bc4','Nd4','Nxe5','Qg5','Nxf7','Qxg2','Rf1','Qxe4+','Be2','Nf3#'],
+    explanations: [
+      { label: '1. e4 — White', text: 'Standard King\'s Pawn opening.' },
+      { label: '1... e5 — Black', text: 'Black mirrors in the center.' },
+      { label: '2. Nf3 — White', text: 'Natural development attacking e5.' },
+      { label: '2... Nc6 — Black', text: 'Black defends e5.' },
+      { label: '3. Bc4 — White', text: 'The Italian Bishop — aimed at f7, the weakest point in Black\'s position.' },
+      { label: '3... Nd4!? — Black', text: 'The Blackburne Shilling Gambit! Black places the knight on d4, attacking the Nf3. This looks active but actually sets a beautiful trap for White.' },
+      { label: '4. Nxe5? — White', text: 'White grabs the e5 pawn — falling into the trap! After Nxe5, White thinks they\'re winning material. But the attack that follows is devastating.' },
+      { label: '4... Qg5! — Black', text: 'The queen jumps to g5, attacking both the Ne5 and the g2 pawn simultaneously! White cannot defend both.' },
+      { label: '5. Nxf7 — White', text: 'White takes f7 with a fork (threatening Nxh8 + rook), but falls deeper into the trap. White is still trying to grab material while Black\'s attack builds.' },
+      { label: '5... Qxg2 — Black', text: 'Black\'s queen takes g2, threatening the Rh1! After Rf1, the trap is almost sprung.' },
+      { label: '6. Rf1 — White', text: 'White plays Rf1 to save the rook. This looks like a reasonable defensive move, but the position is now lost for White.' },
+      { label: '6... Qxe4+ — Black', text: 'CHECK! Black\'s queen comes back with a devastating check on e4. White must interpose.' },
+      { label: '7. Be2 — White', text: 'White blocks with Be2 — forced. But now the final blow falls.' },
+      { label: '7... Nf3# — Black', text: 'CHECKMATE! The knight from d4 delivers checkmate on f3. The king cannot escape: e3 is protected by the queen on e4, e1 is blocked by Be2, f1 has the rook. A stunning smothered checkmate — the Blackburne Shilling Gambit strikes!' }
+    ],
+    keyIdeas: [
+      'The Blackburne trap: after 3...Nd4 4.Nxe5 Qg5! 5.Nxf7 Qxg2 6.Rf1 Qxe4+ 7.Be2 Nf3#',
+      'White must avoid Nxe5 — better moves are Nxd4 or c3 to challenge the Nd4',
+      'Key pattern: queen on g2 threatens the rook, and the Nd4-f3 checkmate is the finale',
+      'The trap works because White greedily takes too many pawns while Black builds the mating net'
+    ]
+  },
+
+  {
+    id: 'budapest-gambit',
+    name: 'Budapest Gambit',
+    eco: null,
+    category: 'trap',
+    tagline: 'e5 pawn gambit — active piece play vs. White\'s center',
+    description: "The Budapest Gambit (1.d4 Nf6 2.c4 e5) is a lively gambit where Black sacrifices a pawn for active piece play. After 3.dxe5 Ng4, Black pressures the e5 pawn immediately. White must play precisely to hold the material advantage — one slip and Black's active pieces overwhelm the position. It's a great surprise weapon at club level.",
+    moves: ['d4','Nf6','c4','e5','dxe5','Ng4','Nf3','Bc5','e3','Nc6','Be2','Ngxe5','Nxe5','Nxe5','O-O','O-O'],
+    explanations: [
+      { label: '1. d4 — White', text: 'White opens with d4, aiming for a positional battle.' },
+      { label: '1... Nf6 — Black', text: 'The knight develops, keeping multiple options open.' },
+      { label: '2. c4 — White', text: 'White grabs central space with c4.' },
+      { label: '2... e5!? — Black', text: 'The Budapest Gambit! Black sacrifices the e5 pawn immediately for active piece play. This is a surprise weapon — White is often unprepared for it.' },
+      { label: '3. dxe5 — White', text: 'White takes the gambit pawn. This is the most principled response — White accepts the challenge.' },
+      { label: '3... Ng4 — Black', text: 'The knight immediately attacks the e5 pawn, demanding that White defend it. Black will regain the pawn or win compensation in activity.' },
+      { label: '4. Nf3 — White', text: 'White defends the e5 pawn. This is the safest continuation — White holds the extra pawn and tries to develop.' },
+      { label: '4... Bc5 — Black', text: 'Black develops the bishop to c5, a powerful active square. The bishop eyes f2 and creates pressure from the outset.' },
+      { label: '5. e3 — White', text: 'White solidifies the center and prepares to develop the dark-squared bishop. White is playing cautiously to hold the extra pawn.' },
+      { label: '5... Nc6 — Black', text: 'The knight develops to c6, increasing pressure on e5 and eyeing the d4 square. Black now threatens ...Ngxe5 to win back the pawn.' },
+      { label: '6. Be2 — White', text: 'White develops the bishop, preparing to castle. After castling, White hopes to consolidate the extra pawn.' },
+      { label: '6... Ngxe5 — Black', text: 'Black takes the e5 pawn back! The gambit pawn is regained. But Black could also try the speculative ...Nxe5 immediately, which leads to more complex play.' },
+      { label: '7. Nxe5 — White', text: 'White takes the Ne5 — trading the extra pawn. The position has simplified somewhat but is still rich.' },
+      { label: '7... Nxe5 — Black', text: 'Black recaptures on e5 with the Nc6. Now we have a balanced position where Black has fully equalized.' },
+      { label: '8. O-O — White', text: 'White castles, bringing the king to safety. The game enters a middlegame where both sides have solid positions.' },
+      { label: '8... O-O — Black', text: 'Black castles as well. The Budapest Gambit has achieved its main goal: Black has active piece play, no structural weaknesses, and good counterplay from the very start. The gambit is a complete success in terms of dynamism.' }
+    ],
+    keyIdeas: [
+      'Budapest Gambit: sacrifice e5 for immediate piece activity and disruption of White\'s plans',
+      'Key idea: Ng4 immediately pressures the e5 pawn — Black threatens to regain it right away',
+      'White must play precisely — any slip allows Black to get a lead in development with the open e-file',
+      'Best for White: 3.dxe5 Ng4 4.Bf4! — the strongest response, maintaining the pawn advantage safely'
+    ]
   }
 ];
 
@@ -1170,6 +1957,19 @@ $(function () {
   // Library buttons
   $('.opening-btn').on('click', function () {
     loadOpening($(this).data('id'));
+  });
+
+  // Category tab filtering
+  $('.cat-tab').on('click', function () {
+    const cat = $(this).data('cat');
+    $('.cat-tab').removeClass('active');
+    $(this).addClass('active');
+    if (cat === 'all') {
+      $('.library-section').show();
+    } else {
+      $('.library-section').hide();
+      $(`.library-section[data-section="${cat}"]`).show();
+    }
   });
 
   // Navigation
