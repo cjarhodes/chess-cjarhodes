@@ -1875,6 +1875,45 @@ function createBoard(position, draggable, orientation) {
   });
 }
 
+// ─────────────────────────────────────────────
+// QUIZ AUTO-PLAY HELPERS
+// ─────────────────────────────────────────────
+function getUserColor() {
+  if (!currentOpening) return 'white';
+  return currentOpening.category === 'black' ? 'black' : 'white';
+}
+
+function isUserTurn(idx) {
+  // Even indices (0,2,4…) = White's move; odd = Black's move
+  const userIsWhite = getUserColor() === 'white';
+  return userIsWhite ? (idx % 2 === 0) : (idx % 2 === 1);
+}
+
+function autoPlayOpponent() {
+  if (!quizMode || !currentOpening) return;
+  const nextIdx = currentMoveIdx + 1;
+  if (nextIdx >= currentOpening.moves.length) {
+    showFeedback('correct', '🎉 Opening complete — well done!');
+    return;
+  }
+  if (isUserTurn(nextIdx)) return; // user's move, wait for them
+
+  // Play opponent's move after a short pause
+  setTimeout(function () {
+    if (!quizMode) return;
+    game.move(currentOpening.moves[nextIdx]);
+    currentMoveIdx = nextIdx;
+    board.position(game.fen(), false);
+    renderMoveList();
+    updateProgress();
+    if (currentMoveIdx >= currentOpening.moves.length - 1) {
+      showFeedback('correct', '🎉 Opening complete — well done!');
+    } else {
+      clearFeedback();
+    }
+  }, 600);
+}
+
 function handleDrop(source, target) {
   // Explore mode: free play, any legal move for either colour
   if (exploreMode) {
@@ -1885,6 +1924,7 @@ function handleDrop(source, target) {
   if (!quizMode || !currentOpening) return 'snapback';
   const nextIdx = currentMoveIdx + 1;
   if (nextIdx >= currentOpening.moves.length) return 'snapback';
+  if (!isUserTurn(nextIdx)) return 'snapback'; // opponent's turn — auto-playing
 
   const expectedSAN = currentOpening.moves[nextIdx];
 
@@ -1897,12 +1937,12 @@ function handleDrop(source, target) {
     game.move({ from: source, to: target, promotion: 'q' });
     currentMoveIdx = nextIdx;
     quizAttempts = 0;
-    showFeedback('correct', '✓ Correct! ' + currentOpening.explanations[nextIdx].text);
+    showFeedback('correct', '✓ ' + currentOpening.explanations[nextIdx].text);
     setTimeout(() => {
       board.position(game.fen());
       renderMoveList();
       updateProgress();
-      updateControls();
+      autoPlayOpponent();
     }, 300);
   } else {
     quizAttempts++;
@@ -2121,15 +2161,19 @@ function setMode(mode) {
     if (currentOpening) {
       game.reset();
       currentMoveIdx = -1;
-      if (board) board.position('start');
+      quizAttempts = 0;
+      // Orient the board so the user plays from the bottom
+      boardFlipped = (getUserColor() === 'black');
+      createBoard('start', true, boardFlipped ? 'black' : 'white');
       renderMoveList();
       renderExplanation(-1);
       updateProgress();
-      quizAttempts = 0;
       clearFeedback();
-      showFeedback('hint', '💡 Drag the correct piece to play each move in the opening.');
+      const colorLabel = getUserColor() === 'white' ? 'White ♙' : 'Black ♟';
+      showFeedback('hint', `💡 You're playing ${colorLabel}. The opponent's moves play automatically.`);
+      // For black openings, auto-play White's first move(s)
+      autoPlayOpponent();
     }
-    updateBoardDraggable();
 
   } else {
     // Study mode
