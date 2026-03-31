@@ -397,6 +397,82 @@
       vertical-align: middle;
     }
 
+    /* ── EXPLORE MODE ── */
+    .explore-db-toggle {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .db-btn {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.75rem;
+      padding: 0.35rem 0.6rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .db-btn.active { background: var(--surface2); color: var(--text); }
+    .db-btn:not(.active):hover { color: var(--text); }
+
+    .continuation-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.45rem 0.5rem;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.15s;
+      border: 1px solid transparent;
+    }
+    .continuation-row:hover { background: var(--surface); border-color: var(--border); }
+
+    .cont-move {
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: var(--text);
+      min-width: 2.8rem;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .cont-bar-wrap { flex: 1; }
+    .cont-bar {
+      height: 5px;
+      border-radius: 3px;
+      display: flex;
+      overflow: hidden;
+      background: var(--border);
+    }
+    .cont-bar-w { background: #d4cfc5; }
+    .cont-bar-d { background: #6b6860; }
+    .cont-bar-b { background: #3a3836; }
+    .cont-pct {
+      font-size: 0.68rem;
+      color: var(--muted);
+      margin-top: 0.2rem;
+      letter-spacing: 0.01em;
+    }
+    .cont-games {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-align: right;
+      min-width: 2.8rem;
+    }
+    .explore-total {
+      font-size: 0.73rem;
+      color: var(--muted);
+      padding: 0.2rem 0 0.5rem;
+    }
+    .explore-loading, .explore-empty {
+      font-size: 0.8rem;
+      color: var(--muted);
+      padding: 0.5rem 0;
+      font-style: italic;
+    }
+    .explore-actions { display: flex; gap: 0.5rem; margin-top: 0.25rem; }
+
     /* Responsive */
     @media (max-width: 900px) {
       .app { grid-template-columns: 1fr; grid-template-rows: auto; }
@@ -479,6 +555,7 @@
     <div class="mode-toggle">
       <button class="mode-btn active" id="btn-study">Study</button>
       <button class="mode-btn" id="btn-quiz">Quiz</button>
+      <button class="mode-btn" id="btn-explore">Explore</button>
     </div>
 
     <div id="board-wrap">
@@ -496,6 +573,8 @@
       <button class="ctrl-btn" id="btn-prev" disabled>← Prev</button>
       <button class="ctrl-btn" id="btn-next" disabled>Next →</button>
       <button class="ctrl-btn" id="btn-end" disabled title="To end">»</button>
+      <button class="ctrl-btn" id="btn-explore-undo" style="display:none">← Undo</button>
+      <button class="ctrl-btn" id="btn-explore-reset" style="display:none" title="Reset to start of explore session">↺ Reset</button>
       <button class="ctrl-btn flip" id="btn-flip" disabled title="Flip board">⇅</button>
     </div>
 
@@ -530,6 +609,24 @@
       <div>
         <div class="section-label">Key Ideas</div>
         <div class="key-ideas" id="key-ideas"></div>
+      </div>
+    </div>
+
+    <!-- Explore mode panel -->
+    <div id="explore-content" style="display:none; flex-direction:column; gap:1.25rem;">
+      <div>
+        <div class="opening-title" id="explore-title">Free Exploration</div>
+        <div class="opening-tagline" id="explore-tagline">Move freely — see what real players do</div>
+      </div>
+
+      <div class="explore-db-toggle">
+        <button class="db-btn active" data-db="lichess">Lichess Games</button>
+        <button class="db-btn" data-db="masters">Masters Only</button>
+      </div>
+
+      <div>
+        <div class="section-label">Real Game Continuations</div>
+        <div id="continuations-list"><div class="explore-loading">Loading…</div></div>
       </div>
     </div>
   </aside>
@@ -1694,6 +1791,10 @@ let game = new Chess();
 let currentOpening = null;
 let currentMoveIdx = -1;  // -1 = starting position
 let quizMode = false;
+let exploreMode = false;
+let exploreGame = null;
+let exploreStartFen = null;
+let currentDb = 'lichess';
 let boardFlipped = false;
 let quizAttempts = 0;
 let feedbackTimeout = null;
@@ -1730,6 +1831,12 @@ function createBoard(position, draggable, orientation) {
 }
 
 function handleDrop(source, target) {
+  // Explore mode: free play, any legal move for either colour
+  if (exploreMode) {
+    const move = exploreGame.move({ from: source, to: target, promotion: 'q' });
+    if (!move) return 'snapback';
+    return; // board updated in handleSnapEnd
+  }
   if (!quizMode || !currentOpening) return 'snapback';
   const nextIdx = currentMoveIdx + 1;
   if (nextIdx >= currentOpening.moves.length) return 'snapback';
@@ -1764,6 +1871,11 @@ function handleDrop(source, target) {
 }
 
 function handleSnapEnd() {
+  if (exploreMode) {
+    board.position(exploreGame.fen());
+    fetchExploreData();
+    return;
+  }
   if (!quizMode) return;
   board.position(game.fen());
 }
@@ -1774,6 +1886,16 @@ function handleSnapEnd() {
 function loadOpening(id) {
   currentOpening = OPENINGS.find(o => o.id === id);
   if (!currentOpening) return;
+
+  // Exit explore mode when user picks an opening
+  if (exploreMode) {
+    exploreMode = false;
+    $('#btn-study, #btn-quiz, #btn-explore').removeClass('active');
+    $('#btn-study').addClass('active');
+    $('#btn-start, #btn-prev, #btn-next, #btn-end').show();
+    $('#btn-explore-undo, #btn-explore-reset').hide();
+    $('#explore-content').hide();
+  }
 
   currentMoveIdx = -1;
   quizAttempts = 0;
@@ -1906,15 +2028,54 @@ function updateBoardDraggable() {
 
 function setMode(mode) {
   quizMode = (mode === 'quiz');
-  if (quizMode) {
-    $('#btn-study').removeClass('active');
-    $('#btn-quiz').addClass('active');
+  exploreMode = (mode === 'explore');
+
+  $('#btn-study, #btn-quiz, #btn-explore').removeClass('active');
+  $(`#btn-${mode}`).addClass('active');
+
+  if (exploreMode) {
+    // Hide study nav, show explore nav
+    $('#btn-start, #btn-prev, #btn-next, #btn-end').hide();
+    $('#btn-explore-undo, #btn-explore-reset').show();
+    $('#btn-flip').prop('disabled', false);
+
+    // Swap info panel to explore view
+    $('#empty-state, #opening-content').hide();
+    $('#explore-content').show().css('display', 'flex');
+
+    // Build explore game from end of current opening (or start position)
+    exploreGame = new Chess();
+    if (currentOpening) {
+      currentOpening.moves.forEach(m => exploreGame.move(m));
+      $('#explore-title').text(currentOpening.name);
+      $('#explore-tagline').text('Exploring from end of line · move freely');
+    } else {
+      $('#explore-title').text('Free Exploration');
+      $('#explore-tagline').text('Move freely from the starting position');
+    }
+    exploreStartFen = exploreGame.fen();
+
+    // Show board in free-play mode
+    $('#board-placeholder').hide();
+    $('#myBoard').show();
+    createBoard(exploreStartFen, true, boardFlipped ? 'black' : 'white');
+    clearFeedback();
+    fetchExploreData();
+
+  } else if (quizMode) {
+    // Back to study nav
+    $('#btn-start, #btn-prev, #btn-next, #btn-end').show();
+    $('#btn-explore-undo, #btn-explore-reset').hide();
+    $('#explore-content').hide();
+    if (currentOpening) {
+      $('#empty-state').hide();
+      $('#opening-content').show();
+    }
     $('#btn-next, #btn-prev, #btn-start, #btn-end').prop('disabled', true);
-    // Reset to beginning for quiz
     if (currentOpening) {
       game.reset();
       currentMoveIdx = -1;
-      board.position('start');
+      if (board) board.position('start');
       renderMoveList();
       renderExplanation(-1);
       updateProgress();
@@ -1922,14 +2083,22 @@ function setMode(mode) {
       clearFeedback();
       showFeedback('hint', '💡 Drag the correct piece to play each move in the opening.');
     }
+    updateBoardDraggable();
+
   } else {
-    $('#btn-study').addClass('active');
-    $('#btn-quiz').removeClass('active');
-    if (currentOpening) updateControls();
+    // Study mode
+    $('#btn-start, #btn-prev, #btn-next, #btn-end').show();
+    $('#btn-explore-undo, #btn-explore-reset').hide();
+    $('#explore-content').hide();
+    if (currentOpening) {
+      $('#empty-state').hide();
+      $('#opening-content').show();
+      updateControls();
+      createBoard(game.fen(), false, boardFlipped ? 'black' : 'white');
+    }
     renderExplanation(currentMoveIdx);
     clearFeedback();
   }
-  updateBoardDraggable();
 }
 
 // ─────────────────────────────────────────────
@@ -1946,6 +2115,78 @@ function showFeedback(type, message) {
 
 function clearFeedback() {
   $('#feedback-bar').removeClass('show correct incorrect hint');
+}
+
+// ─────────────────────────────────────────────
+// EXPLORE MODE — LICHESS OPENING EXPLORER API
+// ─────────────────────────────────────────────
+function fetchExploreData() {
+  if (!exploreGame) return;
+  const fen = exploreGame.fen();
+  const endpoint = currentDb === 'masters'
+    ? 'https://explorer.lichess.ovh/masters'
+    : 'https://explorer.lichess.ovh/lichess';
+  $('#continuations-list').html('<div class="explore-loading">Fetching data…</div>');
+  $.ajax({
+    url: endpoint,
+    data: { fen: fen, topGames: 0, recentGames: 0 },
+    dataType: 'json',
+    success: function(data) { renderContinuations(data); },
+    error: function() {
+      $('#continuations-list').html('<div class="explore-empty">Could not reach Lichess. Check your connection.</div>');
+    }
+  });
+}
+
+function renderContinuations(data) {
+  const list = $('#continuations-list');
+  const totalPos = (data.white || 0) + (data.draws || 0) + (data.black || 0);
+
+  if (!data.moves || data.moves.length === 0) {
+    const msg = totalPos === 0
+      ? 'No games found for this position.'
+      : `${formatNum(totalPos)} total games — no further continuations recorded.`;
+    list.html(`<div class="explore-empty">${msg}</div>`);
+    return;
+  }
+
+  let html = `<div class="explore-total">${formatNum(totalPos)} games from this position</div>`;
+  data.moves.slice(0, 8).forEach(function(m) {
+    const total = (m.white || 0) + (m.draws || 0) + (m.black || 0);
+    if (total === 0) return;
+    const wPct = Math.round(m.white / total * 100);
+    const dPct = Math.round(m.draws / total * 100);
+    const bPct = 100 - wPct - dPct;
+    html += `<div class="continuation-row" data-san="${m.san}">
+      <div class="cont-move">${m.san}</div>
+      <div class="cont-bar-wrap">
+        <div class="cont-bar">
+          <div class="cont-bar-w" style="width:${wPct}%"></div>
+          <div class="cont-bar-d" style="width:${dPct}%"></div>
+          <div class="cont-bar-b" style="width:${bPct}%"></div>
+        </div>
+        <div class="cont-pct">${wPct}% · ${dPct}% · ${bPct}%</div>
+      </div>
+      <div class="cont-games">${formatNum(total)}</div>
+    </div>`;
+  });
+
+  list.html(html);
+
+  // Click a continuation to play it
+  $('.continuation-row').on('click', function() {
+    const san = $(this).data('san');
+    if (exploreGame.move(san)) {
+      board.position(exploreGame.fen());
+      fetchExploreData();
+    }
+  });
+}
+
+function formatNum(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return Math.round(n / 1000) + 'k';
+  return n.toString();
 }
 
 // ─────────────────────────────────────────────
@@ -1988,10 +2229,36 @@ $(function () {
   // Mode toggle
   $('#btn-study').on('click', () => setMode('study'));
   $('#btn-quiz').on('click', () => { if (currentOpening) setMode('quiz'); });
+  $('#btn-explore').on('click', () => setMode('explore'));
+
+  // Explore: database toggle
+  $('.db-btn').on('click', function() {
+    currentDb = $(this).data('db');
+    $('.db-btn').removeClass('active');
+    $(this).addClass('active');
+    if (exploreMode) fetchExploreData();
+  });
+
+  // Explore: undo last move
+  $('#btn-explore-undo').on('click', function() {
+    if (!exploreMode || !exploreGame) return;
+    if (exploreGame.fen() === exploreStartFen) return; // already at start
+    exploreGame.undo();
+    board.position(exploreGame.fen());
+    fetchExploreData();
+  });
+
+  // Explore: reset to opening end position (or initial if no opening)
+  $('#btn-explore-reset').on('click', function() {
+    if (!exploreMode) return;
+    exploreGame = new Chess(exploreStartFen);
+    board.position(exploreStartFen);
+    fetchExploreData();
+  });
 
   // Keyboard navigation
   $(document).on('keydown', function (e) {
-    if (quizMode) return;
+    if (quizMode || exploreMode) return;
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
       e.preventDefault();
       if (!$('#btn-next').prop('disabled')) goToMove(currentMoveIdx + 1);
