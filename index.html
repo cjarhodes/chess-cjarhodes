@@ -582,13 +582,16 @@
 
     /* Responsive */
     @media (max-width: 900px) {
-      .app { grid-template-columns: 1fr; grid-template-rows: auto; }
-      .library { border-right: none; border-bottom: 1px solid var(--border); padding: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem; }
-      .library-section { margin-bottom: 0; }
+      .app { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; }
+      .library { border-right: none; border-bottom: 1px solid var(--border); padding: 1rem; overflow-y: visible; }
+      .library-search { padding: 0 0 0.75rem; }
+      .library-section, .sr-due-section { margin-bottom: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+      .sr-due-section { width: 100%; }
       .library-label { display: none; }
-      .cat-tabs { display: none; }
+      .cat-tabs { flex-wrap: wrap; padding: 0 0 0.5rem; border-bottom: none; }
       .opening-btn { border-radius: 4px; border-left: none; border: 1px solid var(--border); padding: 0.35rem 0.75rem; width: auto; display: inline-block; }
-      .info-panel { border-left: none; border-top: 1px solid var(--border); }
+      .info-panel { border-left: none; border-top: 1px solid var(--border); overflow-y: visible; }
+      .board-area { overflow-y: visible; padding: 1rem; }
       #myBoard { width: 90vw; max-width: 440px; }
       .feedback-bar, .progress-bar { width: 90vw; max-width: 440px; }
     }
