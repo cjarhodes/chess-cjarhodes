@@ -71,8 +71,10 @@
       display: grid;
       grid-template-columns: 240px 1fr 300px;
       grid-template-rows: 1fr;
-      min-height: calc(100vh - 65px);
+      height: calc(100vh - 65px);
     }
+    .info-panel { overflow-y: auto; }
+    .board-area { overflow-y: auto; }
 
     /* ── LIBRARY SIDEBAR ── */
     .library {
@@ -80,7 +82,7 @@
       overflow-y: auto;
       padding: 1.5rem 0;
     }
-    .library-section { margin-bottom: 1.5rem; }
+    .library-section, .sr-due-section { margin-bottom: 1.5rem; }
     .library-label {
       font-size: 0.7rem;
       letter-spacing: 0.12em;
@@ -359,6 +361,87 @@
       font-weight: 400;
     }
 
+    /* ── LIBRARY SEARCH ── */
+    .library-search {
+      padding: 0 1.25rem 0.75rem;
+    }
+    .library-search input {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 300;
+      font-size: 0.85rem;
+      padding: 0.4rem 0.65rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .library-search input:focus { border-color: var(--accent); }
+    .library-search input::placeholder { color: var(--muted); }
+    .library-empty {
+      padding: 0.75rem 1.25rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* ── SR REVIEW SECTION ── */
+    .sr-dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      margin-right: 0.4rem;
+      vertical-align: middle;
+      background: transparent;
+    }
+    .opening-btn.sr-due .sr-dot { background: var(--accent); }
+    .opening-btn.sr-mastered .sr-dot { background: var(--success); }
+    .opening-btn.sr-learning .sr-dot { background: #8a6d3a; }
+    .sr-panel {
+      margin-top: 1rem;
+      padding: 0.75rem 0.9rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      font-size: 0.8rem;
+    }
+    .sr-panel .sr-line {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      margin-bottom: 0.25rem;
+    }
+    .sr-panel .sr-line strong { color: var(--text); font-weight: 400; }
+
+    /* ── SHARE LINK BUTTON ── */
+    .btn-share {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 0.25rem 0.55rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s;
+      margin-left: 0.5rem;
+    }
+    .btn-share:hover { color: var(--text); border-color: var(--muted); }
+    .btn-share.copied { color: var(--success); border-color: var(--success); }
+
+    /* ── TAP-TO-MOVE HIGHLIGHT ── */
+    .square-55d63.tap-selected {
+      box-shadow: inset 0 0 0 3px var(--accent);
+    }
+    .square-55d63.tap-target {
+      box-shadow: inset 0 0 0 2px rgba(201,169,110,0.5);
+    }
+
     /* ── CATEGORY TABS ── */
     .cat-tabs {
       display: flex;
@@ -523,6 +606,18 @@
 
   <!-- ── LIBRARY SIDEBAR ── -->
   <aside class="library" id="library">
+    <!-- Search -->
+    <div class="library-search">
+      <input type="search" id="library-search-input" placeholder="Search openings, ECO, moves…" autocomplete="off" />
+    </div>
+    <div id="library-empty" class="library-empty" style="display:none">No openings match.</div>
+
+    <!-- Due-for-review (SR) -->
+    <div class="sr-due-section" id="sr-due-section" style="display:none">
+      <div class="library-label">Due for Review</div>
+      <div id="sr-due-list"></div>
+    </div>
+
     <!-- Category filter tabs -->
     <div class="cat-tabs">
       <button class="cat-tab active" data-cat="all">All</button>
@@ -615,8 +710,10 @@
       <div>
         <div class="opening-title" id="opening-title"></div>
         <div class="opening-tagline" id="opening-tagline"></div>
+        <button class="btn-share" id="btn-share" title="Copy shareable link">Share link</button>
       </div>
       <div class="opening-desc" id="opening-desc"></div>
+      <div id="sr-status-panel" class="sr-panel" style="display:none"></div>
 
       <div>
         <div class="section-label">Moves</div>
@@ -1843,6 +1940,116 @@ let currentDb = 'lichess';
 let boardFlipped = false;
 let quizAttempts = 0;
 let feedbackTimeout = null;
+let quizSessionMisses = 0;  // misses in current quiz session (before completion)
+let tapSelected = null;      // square selected for tap-to-move, or null
+
+// ─────────────────────────────────────────────
+// SPACED REPETITION (SM-2 lite)
+// ─────────────────────────────────────────────
+const SR_KEY = 'chess_sr_v1';
+const DAY_MS = 86400000;
+
+function loadSR() {
+  try { return JSON.parse(localStorage.getItem(SR_KEY)) || {}; }
+  catch(e) { return {}; }
+}
+function saveSR(data) {
+  localStorage.setItem(SR_KEY, JSON.stringify(data));
+}
+function getSRRecord(id) {
+  const data = loadSR();
+  return data[id] || null;
+}
+function srStatus(id) {
+  const rec = getSRRecord(id);
+  if (!rec) return 'new';
+  if (Date.now() >= rec.nextDue) return 'due';
+  if (rec.reps >= 3) return 'mastered';
+  return 'learning';
+}
+function srRecordQuiz(id, quality) {
+  // quality: 5=perfect, 4=1-2 misses, 0=many misses (reset)
+  const data = loadSR();
+  let rec = data[id] || { ease: 2.5, interval: 0, reps: 0, attempts: 0 };
+  rec.attempts = (rec.attempts || 0) + 1;
+  rec.ease = Math.max(1.3, rec.ease + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
+  if (quality < 3) {
+    rec.reps = 0;
+    rec.interval = 1;
+  } else {
+    rec.reps += 1;
+    if (rec.reps === 1) rec.interval = 1;
+    else if (rec.reps === 2) rec.interval = 3;
+    else rec.interval = Math.round(rec.interval * rec.ease);
+  }
+  rec.lastReviewed = Date.now();
+  rec.nextDue = Date.now() + rec.interval * DAY_MS;
+  data[id] = rec;
+  saveSR(data);
+}
+function updateSRSidebar() {
+  $('.opening-btn').each(function() {
+    const id = $(this).data('id');
+    const status = srStatus(id);
+    $(this).removeClass('sr-due sr-mastered sr-learning');
+    if (status !== 'new') $(this).addClass('sr-' + status);
+    if ($(this).find('.sr-dot').length === 0) {
+      $(this).prepend('<span class="sr-dot"></span>');
+    }
+  });
+  // Populate "Due for Review" section
+  const due = OPENINGS.filter(o => srStatus(o.id) === 'due');
+  const $section = $('#sr-due-section');
+  const $list = $('#sr-due-list');
+  if (due.length === 0) {
+    $section.hide();
+  } else {
+    const html = due.map(o => {
+      const badge = o.category === 'trap' ? '<span class="trap-badge">trap</span>' : `<span class="eco">${o.eco || ''}</span>`;
+      return `<button class="opening-btn sr-due" data-id="${o.id}" data-cat="${o.category}"><span class="sr-dot"></span>${o.name} ${badge}</button>`;
+    }).join('');
+    $list.html(html);
+    $section.show();
+    $list.find('.opening-btn').on('click', function() { loadOpening($(this).data('id')); });
+  }
+}
+function updateSRPanel() {
+  const $panel = $('#sr-status-panel');
+  if (!currentOpening || !quizMode) { $panel.hide(); return; }
+  const rec = getSRRecord(currentOpening.id);
+  const status = srStatus(currentOpening.id);
+  const statusLabel = { new: 'Never attempted', due: 'Due for review', learning: 'Learning', mastered: 'Mastered' }[status];
+  let html = `<div class="sr-line"><span>Status</span><strong>${statusLabel}</strong></div>`;
+  if (rec) {
+    html += `<div class="sr-line"><span>Clean runs</span><strong>${rec.reps}</strong></div>`;
+    html += `<div class="sr-line"><span>Attempts</span><strong>${rec.attempts}</strong></div>`;
+    if (rec.nextDue) {
+      const days = Math.max(0, Math.round((rec.nextDue - Date.now()) / DAY_MS));
+      html += `<div class="sr-line"><span>Next review</span><strong>${days === 0 ? 'now' : days + 'd'}</strong></div>`;
+    }
+  }
+  $panel.html(html).show();
+}
+
+// ─────────────────────────────────────────────
+// URL STATE
+// ─────────────────────────────────────────────
+function updateURL() {
+  const params = new URLSearchParams();
+  if (currentOpening) params.set('opening', currentOpening.id);
+  if (quizMode) params.set('mode', 'quiz');
+  else if (exploreMode) params.set('mode', 'explore');
+  if (currentOpening && !quizMode && !exploreMode && currentMoveIdx >= 0) {
+    params.set('move', String(currentMoveIdx));
+  }
+  const q = params.toString();
+  const url = q ? `?${q}` : location.pathname;
+  history.replaceState(null, '', url);
+}
+function readURL() {
+  const p = new URLSearchParams(location.search);
+  return { opening: p.get('opening'), mode: p.get('mode'), move: parseInt(p.get('move'), 10) };
+}
 
 // ─────────────────────────────────────────────
 // BOARD INIT (lazy — board is created on first opening load)
@@ -1889,11 +2096,24 @@ function isUserTurn(idx) {
   return userIsWhite ? (idx % 2 === 0) : (idx % 2 === 1);
 }
 
+function finishQuiz() {
+  if (!currentOpening) return;
+  const m = quizSessionMisses;
+  const quality = m === 0 ? 5 : (m <= 2 ? 4 : (m <= 4 ? 3 : 2));
+  srRecordQuiz(currentOpening.id, quality);
+  const summary = m === 0
+    ? '🎉 Opening complete — perfect run!'
+    : `🎉 Opening complete — ${m} miss${m === 1 ? '' : 'es'}.`;
+  showFeedback('correct', summary);
+  updateSRSidebar();
+  updateSRPanel();
+}
+
 function autoPlayOpponent() {
   if (!quizMode || !currentOpening) return;
   const nextIdx = currentMoveIdx + 1;
   if (nextIdx >= currentOpening.moves.length) {
-    showFeedback('correct', '🎉 Opening complete — well done!');
+    finishQuiz();
     return;
   }
   if (isUserTurn(nextIdx)) return; // user's move, wait for them
@@ -1907,7 +2127,7 @@ function autoPlayOpponent() {
     renderMoveList();
     updateProgress();
     if (currentMoveIdx >= currentOpening.moves.length - 1) {
-      showFeedback('correct', '🎉 Opening complete — well done!');
+      finishQuiz();
     } else {
       clearFeedback();
     }
@@ -1946,6 +2166,7 @@ function handleDrop(source, target) {
     }, 300);
   } else {
     quizAttempts++;
+    if (quizAttempts === 1) quizSessionMisses++;
     if (quizAttempts >= 2) {
       showFeedback('hint', '💡 The correct move is ' + expectedSAN);
     } else {
@@ -2014,6 +2235,8 @@ function loadOpening(id) {
   updateProgress();
   updateBoardDraggable();
   clearFeedback();
+  updateSRPanel();
+  updateURL();
 }
 
 // ─────────────────────────────────────────────
@@ -2034,6 +2257,7 @@ function goToMove(idx) {
   updateControls();
   quizAttempts = 0;
   if (!quizMode) clearFeedback();
+  updateURL();
 }
 
 function updateControls() {
@@ -2162,6 +2386,7 @@ function setMode(mode) {
       game.reset();
       currentMoveIdx = -1;
       quizAttempts = 0;
+      quizSessionMisses = 0;
       // Orient the board so the user plays from the bottom
       boardFlipped = (getUserColor() === 'black');
       createBoard('start', true, boardFlipped ? 'black' : 'white');
@@ -2189,6 +2414,8 @@ function setMode(mode) {
     renderExplanation(currentMoveIdx);
     clearFeedback();
   }
+  updateSRPanel();
+  updateURL();
 }
 
 // ─────────────────────────────────────────────
@@ -2316,15 +2543,9 @@ $(function () {
 
   // Category tab filtering
   $('.cat-tab').on('click', function () {
-    const cat = $(this).data('cat');
     $('.cat-tab').removeClass('active');
     $(this).addClass('active');
-    if (cat === 'all') {
-      $('.library-section').show();
-    } else {
-      $('.library-section').hide();
-      $(`.library-section[data-section="${cat}"]`).show();
-    }
+    applySearch($('#library-search-input').val());
   });
 
   // Navigation
@@ -2404,17 +2625,173 @@ $(function () {
     fetchExploreData();
   });
 
-  // Keyboard navigation
+  // ─── SEARCH ─────────────────────────────
+  function applySearch(q) {
+    q = (q || '').trim().toLowerCase();
+    const activeCat = $('.cat-tab.active').data('cat') || 'all';
+    let visibleCount = 0;
+    // When searching, ignore category filter and flatten view
+    $('.library > .library-section').each(function() {
+      const $sec = $(this);
+      let secVisible = 0;
+      $sec.find('.opening-btn').each(function() {
+        const id = $(this).data('id');
+        const op = OPENINGS.find(o => o.id === id);
+        const hay = (($(this).text() || '') + ' ' + (op ? op.moves.join(' ') : '')).toLowerCase();
+        const matchesQuery = !q || hay.includes(q);
+        const matchesCat = q ? true : (activeCat === 'all' || op?.category === activeCat);
+        const show = matchesQuery && matchesCat;
+        $(this).toggle(show);
+        if (show) { secVisible++; visibleCount++; }
+      });
+      $sec.toggle(secVisible > 0);
+    });
+    $('#library-empty').toggle(visibleCount === 0);
+    $('.cat-tabs').toggle(!q);
+    // Hide the SR due section while searching
+    if (q) $('#sr-due-section').hide();
+    else updateSRSidebar();
+  }
+  $('#library-search-input').on('input', function() { applySearch($(this).val()); });
+
+  // ─── SHARE LINK ─────────────────────────
+  $('#btn-share').on('click', function() {
+    const $btn = $(this);
+    navigator.clipboard.writeText(location.href).then(() => {
+      const orig = $btn.text();
+      $btn.text('Copied ✓').addClass('copied');
+      setTimeout(() => $btn.text(orig).removeClass('copied'), 1500);
+    });
+  });
+
+  // ─── KEYBOARD SHORTCUTS ─────────────────
   $(document).on('keydown', function (e) {
-    if (quizMode || exploreMode) return;
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea') {
+      if (e.key === 'Escape') e.target.blur();
+      return;
+    }
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    // Arrow keys: prev/next in study mode
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      if (quizMode || exploreMode) return;
       e.preventDefault();
       if (!$('#btn-next').prop('disabled')) goToMove(currentMoveIdx + 1);
-    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      return;
+    }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      if (quizMode || exploreMode) return;
       e.preventDefault();
       if (!$('#btn-prev').prop('disabled')) goToMove(currentMoveIdx - 1);
+      return;
+    }
+
+    const k = e.key.toLowerCase();
+    // Focus search
+    if (k === '/' ) { e.preventDefault(); $('#library-search-input').trigger('focus').select(); return; }
+    // Flip board
+    if (k === 'f') {
+      if (!currentOpening && !exploreMode) return;
+      e.preventDefault();
+      if (exploreMode) { boardFlipped = !boardFlipped; board.flip(); return; }
+      $('#btn-flip').trigger('click');
+      return;
+    }
+    // Reset
+    if (k === 'r') {
+      e.preventDefault();
+      if (exploreMode) { $('#btn-explore-reset').trigger('click'); return; }
+      if (quizMode) { setMode('quiz'); return; }
+      if (currentOpening) goToMove(-1);
+      return;
+    }
+    // Mode switch: 1=Study, 2=Quiz, 3=Explore
+    if (k === '1') { e.preventDefault(); setMode('study'); return; }
+    if (k === '2') { if (currentOpening) { e.preventDefault(); setMode('quiz'); } return; }
+    if (k === '3') { e.preventDefault(); setMode('explore'); return; }
+  });
+
+  // ─── TAP-TO-MOVE (mobile) ───────────────
+  function clearTapSelection() {
+    $('.square-55d63').removeClass('tap-selected tap-target');
+    tapSelected = null;
+  }
+  $(document).on('click', '.square-55d63', function(e) {
+    // Only intercept taps in quiz or explore mode (study has no interaction)
+    if (!quizMode && !exploreMode) return;
+    // If the drop already happened (pointerup after drag), chessboard will have already moved — don't interfere
+    const sq = $(this).data('square');
+    if (!sq) return;
+    const activeGame = exploreMode ? exploreGame : game;
+    if (!activeGame) return;
+
+    if (tapSelected && tapSelected !== sq) {
+      // Attempt move
+      const tryMove = { from: tapSelected, to: sq, promotion: 'q' };
+      if (exploreMode) {
+        const mv = exploreGame.move(tryMove);
+        if (mv) { board.position(exploreGame.fen()); fetchExploreData(); }
+      } else {
+        // Quiz: delegate to handleDrop to reuse validation logic
+        const result = handleDrop(tapSelected, sq);
+        if (result !== 'snapback') {
+          // handleDrop already updated game; update board position
+          board.position(game.fen());
+        }
+      }
+      clearTapSelection();
+    } else if (tapSelected === sq) {
+      clearTapSelection();
+    } else {
+      // Select source if it has a piece of the side to move
+      const piece = activeGame.get(sq);
+      if (!piece) return;
+      const turn = activeGame.turn(); // 'w' or 'b'
+      if (piece.color !== turn) return;
+      clearTapSelection();
+      tapSelected = sq;
+      $(this).addClass('tap-selected');
+      // Highlight legal target squares
+      const moves = activeGame.moves({ square: sq, verbose: true });
+      moves.forEach(m => $('.square-' + m.to).addClass('tap-target'));
     }
   });
+
+  // ─── SWIPE FOR PREV/NEXT (mobile, study only) ───
+  let touchStartX = null;
+  let touchStartY = null;
+  $('.board-area').on('touchstart', function(e) {
+    if (quizMode || exploreMode) return;
+    if (e.touches.length !== 1) return;
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  });
+  $('.board-area').on('touchend', function(e) {
+    if (touchStartX === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    touchStartX = touchStartY = null;
+    if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return;
+    if (quizMode || exploreMode) return;
+    if (dx < 0) { if (!$('#btn-next').prop('disabled')) goToMove(currentMoveIdx + 1); }
+    else { if (!$('#btn-prev').prop('disabled')) goToMove(currentMoveIdx - 1); }
+  });
+
+  // ─── SR SIDEBAR INIT ────────────────────
+  updateSRSidebar();
+
+  // ─── HYDRATE FROM URL ───────────────────
+  const initial = readURL();
+  if (initial.opening) {
+    const op = OPENINGS.find(o => o.id === initial.opening);
+    if (op) {
+      loadOpening(op.id);
+      if (initial.mode === 'quiz') setMode('quiz');
+      else if (initial.mode === 'explore') setMode('explore');
+      else if (!isNaN(initial.move) && initial.move >= 0) goToMove(initial.move);
+    }
+  }
 });
 </script>
 
