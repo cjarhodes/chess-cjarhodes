@@ -2706,6 +2706,9 @@ function loadOpening(id) {
     $('#explore-content').hide();
   }
 
+  // Ensure coach panel is hidden in study mode
+  $('#coach-content').hide();
+
   currentMoveIdx = -1;
   quizAttempts = 0;
   game.reset();
@@ -2839,9 +2842,13 @@ function updateBoardDraggable() {
 }
 
 function setMode(mode) {
+  const wasCoach = coachMode;
   quizMode = (mode === 'quiz');
   exploreMode = (mode === 'explore');
   coachMode = (mode === 'coach');
+
+  // Cancel any in-flight engine work when leaving coach mode
+  if (wasCoach && !coachMode && engine.status === 'ready') engine.cancel();
 
   $('#btn-study, #btn-quiz, #btn-coach, #btn-explore').removeClass('active');
   $(`#btn-${mode}`).addClass('active');
@@ -2883,7 +2890,7 @@ function setMode(mode) {
     $('#btn-flip').prop('disabled', false);
 
     // Swap info panel to explore view
-    $('#empty-state, #opening-content').hide();
+    $('#empty-state, #opening-content, #coach-content').hide();
     $('#explore-content').show().css('display', 'flex');
 
     // Build explore game from end of current opening (or start position)
@@ -2910,7 +2917,7 @@ function setMode(mode) {
     // Back to study nav
     $('#btn-start, #btn-prev, #btn-next, #btn-end').show();
     $('#btn-explore-undo, #btn-explore-reset').hide();
-    $('#explore-content').hide();
+    $('#explore-content, #coach-content').hide();
     if (currentOpening) {
       $('#empty-state').hide();
       $('#opening-content').show();
@@ -2938,7 +2945,7 @@ function setMode(mode) {
     // Study mode
     $('#btn-start, #btn-prev, #btn-next, #btn-end').show();
     $('#btn-explore-undo, #btn-explore-reset').hide();
-    $('#explore-content').hide();
+    $('#explore-content, #coach-content').hide();
     if (currentOpening) {
       $('#empty-state').hide();
       $('#opening-content').show();
