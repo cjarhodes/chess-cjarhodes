@@ -442,6 +442,126 @@
       box-shadow: inset 0 0 0 2px rgba(201,169,110,0.5);
     }
 
+    /* ── COACH MODE ── */
+    .coach-status {
+      padding: 0.5rem 0.75rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+    .coach-classification {
+      display: inline-block;
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      border: 1px solid transparent;
+    }
+    .coach-class-best { background: rgba(74,124,89,0.2); color: #7ec29a; border-color: rgba(74,124,89,0.4); }
+    .coach-class-good { background: rgba(201,169,110,0.15); color: var(--accent); border-color: rgba(201,169,110,0.3); }
+    .coach-class-inaccuracy { background: rgba(201,149,70,0.15); color: #d4a76a; border-color: rgba(201,149,70,0.3); }
+    .coach-class-mistake { background: rgba(200,100,60,0.18); color: #dd9275; border-color: rgba(200,100,60,0.35); }
+    .coach-class-blunder { background: rgba(138,58,58,0.25); color: #cd7b7b; border-color: rgba(138,58,58,0.4); }
+    .coach-class-book { background: rgba(100,130,190,0.18); color: #8eb0d9; border-color: rgba(100,130,190,0.3); }
+
+    .coach-review {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+    .coach-review-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .coach-review-loss {
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .coach-review-moves {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.35rem 0.75rem;
+      font-size: 0.8rem;
+    }
+    .coach-review-moves .label { color: var(--muted); }
+    .coach-review-moves .value { color: var(--text); font-family: 'EB Garamond', serif; font-size: 0.95rem; }
+    .coach-review-pv {
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-family: 'EB Garamond', serif;
+      letter-spacing: 0.01em;
+      padding-top: 0.4rem;
+      border-top: 1px solid var(--border);
+    }
+    .coach-review-pv strong { color: var(--text); font-weight: 500; }
+    .coach-actions {
+      display: flex;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+    }
+    .coach-actions .ctrl-btn { flex: 1 1 auto; font-size: 0.72rem; padding: 0.35rem 0.5rem; }
+
+    .coach-summary {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.4rem 0.75rem;
+      padding: 0.75rem 0.9rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      font-size: 0.8rem;
+    }
+    .coach-summary .k { color: var(--muted); }
+    .coach-summary .v { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+    .coach-summary .v.big { font-size: 1.05rem; color: var(--accent); }
+
+    /* Eval bar */
+    .eval-bar {
+      width: 14px;
+      background: #222;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .eval-bar-white {
+      background: #e8e5de;
+      width: 100%;
+      transition: height 0.4s ease;
+    }
+    .eval-bar-label {
+      position: absolute;
+      left: 50%;
+      top: 2px;
+      transform: translateX(-50%);
+      font-size: 0.55rem;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      pointer-events: none;
+      mix-blend-mode: difference;
+      color: #888;
+    }
+    .board-row {
+      display: flex;
+      gap: 0.6rem;
+      align-items: stretch;
+    }
+
     /* ── CATEGORY TABS ── */
     .cat-tabs {
       display: flex;
@@ -677,6 +797,7 @@
     <div class="mode-toggle">
       <button class="mode-btn active" id="btn-study">Study</button>
       <button class="mode-btn" id="btn-quiz">Quiz</button>
+      <button class="mode-btn" id="btn-coach">Coach</button>
       <button class="mode-btn" id="btn-explore">Explore</button>
     </div>
 
@@ -733,6 +854,43 @@
       <div>
         <div class="section-label">Key Ideas</div>
         <div class="key-ideas" id="key-ideas"></div>
+      </div>
+    </div>
+
+    <!-- Coach mode panel -->
+    <div id="coach-content" style="display:none; flex-direction:column; gap:1rem;">
+      <div>
+        <div class="opening-title" id="coach-title">Coach Mode</div>
+        <div class="opening-tagline" id="coach-tagline">Play freely — every move gets analyzed</div>
+      </div>
+
+      <div id="coach-status" class="coach-status">Engine not loaded.</div>
+
+      <div id="coach-review" class="coach-review" style="display:none">
+        <div class="coach-review-header">
+          <span id="coach-classification" class="coach-classification coach-class-best">Best</span>
+          <span id="coach-loss" class="coach-review-loss">0 cp</span>
+        </div>
+        <div class="coach-review-moves">
+          <span class="label">You played</span><span class="value" id="coach-user-move">—</span>
+          <span class="label">Best move</span><span class="value" id="coach-best-move">—</span>
+        </div>
+        <div id="coach-explanation" style="font-size:0.82rem; color:var(--muted); line-height:1.45;"></div>
+        <div class="coach-review-pv" id="coach-pv" style="display:none"></div>
+        <div class="coach-actions">
+          <button class="ctrl-btn" id="btn-coach-takeback" title="Take back the last move pair">↺ Take back</button>
+          <button class="ctrl-btn" id="btn-coach-showbest" title="Replay the best move instead">► Show best</button>
+        </div>
+      </div>
+
+      <div class="coach-summary" id="coach-summary">
+        <span class="k">Moves played</span><span class="v" id="coach-moves-count">0</span>
+        <span class="k">Accuracy</span><span class="v big" id="coach-accuracy">—</span>
+        <span class="k">Best</span><span class="v" id="coach-tally-best">0</span>
+        <span class="k">Good</span><span class="v" id="coach-tally-good">0</span>
+        <span class="k">Inaccuracies</span><span class="v" id="coach-tally-inacc">0</span>
+        <span class="k">Mistakes</span><span class="v" id="coach-tally-mistake">0</span>
+        <span class="k">Blunders</span><span class="v" id="coach-tally-blunder">0</span>
       </div>
     </div>
 
@@ -1946,6 +2104,324 @@ let feedbackTimeout = null;
 let quizSessionMisses = 0;  // misses in current quiz session (before completion)
 let tapSelected = null;      // square selected for tap-to-move, or null
 
+// Coach mode
+let coachMode = false;
+let coachGame = null;
+let coachStartFen = null;
+let coachStats = null;
+let coachLastReview = null;  // latest review object (for take back)
+let coachThinking = false;
+let coachOpponentSide = 'auto'; // side opponent plays; 'auto' = opposite of user color (opening-based)
+
+// ─────────────────────────────────────────────
+// STOCKFISH ENGINE WRAPPER
+// ─────────────────────────────────────────────
+const engine = {
+  worker: null,
+  status: 'idle',   // idle | loading | ready
+  queue: [],
+  current: null,
+  _readyResolvers: [],
+
+  init() {
+    if (this.status === 'ready') return Promise.resolve();
+    if (this.status === 'loading') {
+      return new Promise(r => this._readyResolvers.push(r));
+    }
+    this.status = 'loading';
+    return new Promise((resolve, reject) => {
+      try {
+        this.worker = new Worker('stockfish/stockfish.js');
+      } catch (err) {
+        this.status = 'idle';
+        reject(err);
+        return;
+      }
+      this._readyResolvers.push(resolve);
+      this.worker.onmessage = (e) => this._onMessage(e.data);
+      this.worker.onerror = (e) => {
+        this.status = 'idle';
+        this._readyResolvers.forEach(r => r(new Error('Engine failed: ' + (e.message || e.filename))));
+        this._readyResolvers = [];
+      };
+      this.worker.postMessage('uci');
+    });
+  },
+
+  _onMessage(msg) {
+    if (typeof msg !== 'string') return;
+    if (msg === 'uciok') { this.worker.postMessage('isready'); return; }
+    if (msg === 'readyok' && this.status === 'loading') {
+      this.status = 'ready';
+      this._readyResolvers.forEach(r => r());
+      this._readyResolvers = [];
+      this._runNext();
+      return;
+    }
+    if (!this.current) return;
+    if (msg.startsWith('info ')) {
+      const parsed = parseInfo(msg);
+      if (parsed) this.current.lastInfo = parsed;
+      return;
+    }
+    if (msg.startsWith('bestmove ')) {
+      const bm = msg.split(' ')[1];
+      const done = this.current;
+      this.current = null;
+      const info = done.lastInfo || { cp: 0, pv: [bm], depth: 0 };
+      done.resolve({ bestmove: bm === '(none)' ? null : bm, info });
+      this._runNext();
+    }
+  },
+
+  evaluate(fen, depth) {
+    return this.init().then(() => new Promise((resolve) => {
+      this.queue.push({ fen, depth, resolve, lastInfo: null });
+      this._runNext();
+    }));
+  },
+
+  _runNext() {
+    if (this.status !== 'ready' || this.current || this.queue.length === 0) return;
+    this.current = this.queue.shift();
+    this.worker.postMessage('ucinewgame');
+    this.worker.postMessage('position fen ' + this.current.fen);
+    this.worker.postMessage('go depth ' + this.current.depth);
+  },
+
+  cancel() {
+    if (this.status === 'ready' && this.current) {
+      this.worker.postMessage('stop');
+    }
+    this.queue = [];
+  }
+};
+
+function parseInfo(msg) {
+  const depthMatch = msg.match(/\bdepth (\d+)/);
+  const cpMatch = msg.match(/\bscore cp (-?\d+)/);
+  const mateMatch = msg.match(/\bscore mate (-?\d+)/);
+  // PV runs from "pv " to next space-delimited keyword or end
+  const pvMatch = msg.match(/\bpv ((?:[a-h][1-8][a-h][1-8][qrbn]? ?)+)/);
+  if (!depthMatch) return null;
+  return {
+    depth: parseInt(depthMatch[1]),
+    cp: cpMatch ? parseInt(cpMatch[1]) : null,
+    mate: mateMatch ? parseInt(mateMatch[1]) : null,
+    pv: pvMatch ? pvMatch[1].trim().split(/\s+/) : []
+  };
+}
+
+function scoreToCp(info) {
+  if (info.mate !== null && info.mate !== undefined) {
+    return info.mate > 0 ? 10000 - info.mate : -10000 - info.mate;
+  }
+  return info.cp || 0;
+}
+
+function formatEval(info) {
+  if (info.mate !== null && info.mate !== undefined) {
+    return '#' + Math.abs(info.mate);
+  }
+  const cp = info.cp || 0;
+  const sign = cp > 0 ? '+' : (cp < 0 ? '−' : '±');
+  return sign + (Math.abs(cp) / 100).toFixed(2);
+}
+
+function uciToSan(fen, uci) {
+  const g = new Chess(fen);
+  const move = g.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || undefined });
+  return move ? move.san : uci;
+}
+
+function pvToSan(fen, pvArr, max) {
+  const g = new Chess(fen);
+  const out = [];
+  for (const uci of pvArr.slice(0, max || 5)) {
+    const mv = g.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || undefined });
+    if (!mv) break;
+    out.push(mv.san);
+  }
+  return out;
+}
+
+// ─────────────────────────────────────────────
+// COACH CLASSIFICATION
+// ─────────────────────────────────────────────
+const COACH_DEPTH = 12;
+
+function classifyLoss(loss) {
+  if (loss < 15)  return { tier: 'best',       label: 'Best move',  emoji: '✓' };
+  if (loss < 50)  return { tier: 'good',       label: 'Good',       emoji: '👍' };
+  if (loss < 100) return { tier: 'inaccuracy', label: 'Inaccuracy', emoji: '⚠' };
+  if (loss < 200) return { tier: 'mistake',    label: 'Mistake',    emoji: '✗' };
+  return            { tier: 'blunder',     label: 'Blunder',    emoji: '💥' };
+}
+
+// Side-to-move perspective: score is always in the mover's favor.
+// cp-loss for the player that just moved = cpBefore(moverPerspective) - cpAfterFromOpponent * (-1)
+// simpler: cpBefore(mover) + cpAfter(opponent) where both are in side-to-move perspective.
+async function classifyMove(fenBefore, userUciMove, fenAfter) {
+  const [beforeEval, afterEval] = await Promise.all([
+    engine.evaluate(fenBefore, COACH_DEPTH),
+    engine.evaluate(fenAfter, COACH_DEPTH)
+  ]);
+  const bestUci = beforeEval.bestmove;
+  const bestInfo = beforeEval.info;
+  const afterInfo = afterEval.info;
+
+  // cp values are in side-to-move perspective. After the user's move, side-to-move flips.
+  // Mover's score after = -(afterInfo in opponent perspective)
+  const cpBefore = scoreToCp(bestInfo);               // mover's POV before
+  const cpAfter = -scoreToCp(afterInfo);              // mover's POV after (flip sign)
+  const loss = Math.max(0, cpBefore - cpAfter);
+
+  const isBest = bestUci === userUciMove;
+  const cls = isBest ? { tier: 'best', label: 'Best move', emoji: '✓' } : classifyLoss(loss);
+
+  return {
+    tier: cls.tier,
+    label: cls.label,
+    emoji: cls.emoji,
+    loss: isBest ? 0 : Math.round(loss),
+    bestUci,
+    bestSan: bestUci ? uciToSan(fenBefore, bestUci) : null,
+    userSan: uciToSan(fenBefore, userUciMove),
+    pvSan: pvToSan(fenBefore, bestInfo.pv || [], 5),
+    evalBefore: bestInfo,
+    evalAfter: afterInfo
+  };
+}
+
+function coachUserColor() {
+  // If we started from an opening, user plays that side; otherwise white
+  if (!currentOpening) return 'white';
+  return currentOpening.category === 'black' ? 'black' : 'white';
+}
+
+function coachOpponentColorChar() {
+  return coachUserColor() === 'white' ? 'b' : 'w';
+}
+
+function coachIsUserTurn() {
+  const turn = coachGame.turn();
+  return (turn === 'w' && coachUserColor() === 'white') ||
+         (turn === 'b' && coachUserColor() === 'black');
+}
+
+function updateCoachSummary() {
+  if (!coachStats) return;
+  const total = coachStats.moves;
+  $('#coach-moves-count').text(total);
+  $('#coach-tally-best').text(coachStats.best);
+  $('#coach-tally-good').text(coachStats.good);
+  $('#coach-tally-inacc').text(coachStats.inaccuracy);
+  $('#coach-tally-mistake').text(coachStats.mistake);
+  $('#coach-tally-blunder').text(coachStats.blunder);
+  if (total === 0) { $('#coach-accuracy').text('—'); return; }
+  // Crude accuracy: weighted by tier
+  const weight = coachStats.best * 1 + coachStats.good * 0.85 +
+                 coachStats.inaccuracy * 0.6 + coachStats.mistake * 0.3 +
+                 coachStats.blunder * 0.05;
+  const pct = Math.round((weight / total) * 100);
+  $('#coach-accuracy').text(pct + '%');
+}
+
+function renderCoachReview(review) {
+  if (!review) { $('#coach-review').hide(); return; }
+  const $badge = $('#coach-classification');
+  $badge.text(review.emoji + ' ' + review.label);
+  $badge.attr('class', 'coach-classification coach-class-' + review.tier);
+  $('#coach-loss').text(review.loss > 0 ? '−' + (review.loss / 100).toFixed(2) : '0.00');
+  $('#coach-user-move').text(review.userSan || '—');
+  $('#coach-best-move').text(review.bestSan || '—');
+  const isBest = review.tier === 'best';
+  const msg = isBest
+    ? 'You found the engine\'s top choice. Keep it coming.'
+    : `The engine prefers ${review.bestSan}. You lost ${(review.loss / 100).toFixed(2)} pawns of evaluation with ${review.userSan}.`;
+  $('#coach-explanation').text(msg);
+  if (review.pvSan && review.pvSan.length > 1) {
+    $('#coach-pv').show().text('Engine line: ' + review.pvSan.join(' '));
+  } else {
+    $('#coach-pv').hide();
+  }
+  $('#coach-review').show().css('display', 'flex');
+  $('#btn-coach-showbest').prop('disabled', isBest);
+}
+
+function setCoachStatus(msg) {
+  $('#coach-status').text(msg);
+}
+
+function resetCoachState(fen) {
+  coachGame = fen ? new Chess(fen) : new Chess();
+  coachStartFen = coachGame.fen();
+  coachStats = { moves: 0, best: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
+  coachLastReview = null;
+  coachThinking = false;
+  $('#coach-review').hide();
+  updateCoachSummary();
+}
+
+async function coachOpponentRespond() {
+  if (!coachMode) return;
+  if (coachGame.game_over()) { setCoachStatus('Game over.'); return; }
+  if (coachIsUserTurn()) return;
+  setCoachStatus('Opponent thinking…');
+  const fen = coachGame.fen();
+  try {
+    const result = await engine.evaluate(fen, COACH_DEPTH);
+    if (!coachMode) return;
+    if (!result.bestmove) { setCoachStatus('Your move.'); return; }
+    setTimeout(() => {
+      if (!coachMode) return;
+      const mv = coachGame.move({
+        from: result.bestmove.slice(0, 2),
+        to: result.bestmove.slice(2, 4),
+        promotion: result.bestmove[4] || undefined
+      });
+      if (!mv) return;
+      board.position(coachGame.fen());
+      setCoachStatus(coachGame.game_over() ? 'Game over.' : 'Your move.');
+    }, 350);
+  } catch (err) {
+    setCoachStatus('Engine error: ' + err.message);
+  }
+}
+
+async function coachHandleUserMove(source, target) {
+  if (coachThinking) return 'snapback';
+  if (!coachIsUserTurn()) return 'snapback';
+  const fenBefore = coachGame.fen();
+  const tempGame = new Chess(fenBefore);
+  const move = tempGame.move({ from: source, to: target, promotion: 'q' });
+  if (!move) return 'snapback';
+
+  // Commit the move locally (engine will analyze in the background)
+  coachGame.move({ from: source, to: target, promotion: 'q' });
+  const fenAfter = coachGame.fen();
+  const userUci = source + target + (move.promotion || '');
+
+  coachThinking = true;
+  setCoachStatus('Analyzing your move…');
+  try {
+    const review = await classifyMove(fenBefore, userUci, fenAfter);
+    coachLastReview = Object.assign({}, review, { fenBefore, fenAfter, userUci });
+    coachStats.moves++;
+    coachStats[review.tier] = (coachStats[review.tier] || 0) + 1;
+    renderCoachReview(review);
+    updateCoachSummary();
+  } catch (err) {
+    setCoachStatus('Engine error: ' + err.message);
+    coachThinking = false;
+    return;
+  }
+  coachThinking = false;
+
+  if (coachGame.game_over()) { setCoachStatus('Game over.'); return; }
+  coachOpponentRespond();
+}
+
 // ─────────────────────────────────────────────
 // SPACED REPETITION (SM-2 lite)
 // ─────────────────────────────────────────────
@@ -2042,7 +2518,8 @@ function updateURL() {
   if (currentOpening) params.set('opening', currentOpening.id);
   if (quizMode) params.set('mode', 'quiz');
   else if (exploreMode) params.set('mode', 'explore');
-  if (currentOpening && !quizMode && !exploreMode && currentMoveIdx >= 0) {
+  else if (coachMode) params.set('mode', 'coach');
+  if (currentOpening && !quizMode && !exploreMode && !coachMode && currentMoveIdx >= 0) {
     params.set('move', String(currentMoveIdx));
   }
   const q = params.toString();
@@ -2144,6 +2621,16 @@ function handleDrop(source, target) {
     if (!move) return 'snapback';
     return; // board updated in handleSnapEnd
   }
+  // Coach mode: accept any legal move, classify async
+  if (coachMode) {
+    // Validate on a temp game first (so snapback works synchronously)
+    const tempGame = new Chess(coachGame.fen());
+    const move = tempGame.move({ from: source, to: target, promotion: 'q' });
+    if (!move) return 'snapback';
+    // Defer the real handling until after chessboard processes the drop
+    setTimeout(() => coachHandleUserMove(source, target), 0);
+    return;
+  }
   if (!quizMode || !currentOpening) return 'snapback';
   const nextIdx = currentMoveIdx + 1;
   if (nextIdx >= currentOpening.moves.length) return 'snapback';
@@ -2185,6 +2672,10 @@ function handleSnapEnd() {
     fetchExploreData();
     return;
   }
+  if (coachMode) {
+    board.position(coachGame.fen());
+    return;
+  }
   if (!quizMode) return;
   board.position(game.fen());
 }
@@ -2196,10 +2687,19 @@ function loadOpening(id) {
   currentOpening = OPENINGS.find(o => o.id === id);
   if (!currentOpening) return;
 
+  // If coach mode active, re-seed to end of new opening and return
+  if (coachMode) {
+    setMode('coach');
+    $('.opening-btn').removeClass('active');
+    $(`.opening-btn[data-id="${currentOpening.id}"]`).addClass('active');
+    updateURL();
+    return;
+  }
+
   // Exit explore mode when user picks an opening
   if (exploreMode) {
     exploreMode = false;
-    $('#btn-study, #btn-quiz, #btn-explore').removeClass('active');
+    $('#btn-study, #btn-quiz, #btn-coach, #btn-explore').removeClass('active');
     $('#btn-study').addClass('active');
     $('#btn-start, #btn-prev, #btn-next, #btn-end').show();
     $('#btn-explore-undo, #btn-explore-reset').hide();
@@ -2341,11 +2841,42 @@ function updateBoardDraggable() {
 function setMode(mode) {
   quizMode = (mode === 'quiz');
   exploreMode = (mode === 'explore');
+  coachMode = (mode === 'coach');
 
-  $('#btn-study, #btn-quiz, #btn-explore').removeClass('active');
+  $('#btn-study, #btn-quiz, #btn-coach, #btn-explore').removeClass('active');
   $(`#btn-${mode}`).addClass('active');
 
-  if (exploreMode) {
+  if (coachMode) {
+    $('#btn-start, #btn-prev, #btn-next, #btn-end').hide();
+    $('#btn-explore-undo, #btn-explore-reset').hide();
+    $('#btn-flip').prop('disabled', false);
+    $('#empty-state, #opening-content, #explore-content').hide();
+    $('#coach-content').show().css('display', 'flex');
+
+    // Seed from opening if present, otherwise start position
+    let seedFen = null;
+    if (currentOpening) {
+      const g = new Chess();
+      currentOpening.moves.forEach(m => g.move(m));
+      seedFen = g.fen();
+    }
+    resetCoachState(seedFen);
+    $('#coach-title').text(currentOpening ? currentOpening.name : 'Coach Mode');
+    $('#coach-tagline').text(currentOpening ? 'Continuing from end of line · engine reviews every move' : 'Free play · engine reviews every move');
+
+    boardFlipped = (coachUserColor() === 'black');
+    $('#board-placeholder').hide();
+    $('#myBoard').show();
+    createBoard(coachGame.fen(), true, boardFlipped ? 'black' : 'white');
+    clearFeedback();
+
+    setCoachStatus('Loading engine…');
+    engine.init().then(() => {
+      setCoachStatus(coachIsUserTurn() ? 'Your move.' : 'Opponent thinking…');
+      if (!coachIsUserTurn()) coachOpponentRespond();
+    }).catch(err => setCoachStatus('Engine failed to load: ' + err.message));
+
+  } else if (exploreMode) {
     // Hide study nav, show explore nav
     $('#btn-start, #btn-prev, #btn-next, #btn-end').hide();
     $('#btn-explore-undo, #btn-explore-reset').show();
@@ -2567,7 +3098,60 @@ $(function () {
   // Mode toggle
   $('#btn-study').on('click', () => setMode('study'));
   $('#btn-quiz').on('click', () => { if (currentOpening) setMode('quiz'); });
+  $('#btn-coach').on('click', () => setMode('coach'));
   $('#btn-explore').on('click', () => setMode('explore'));
+
+  // Coach: take back (undo user move + opponent reply if present)
+  $('#btn-coach-takeback').on('click', function() {
+    if (!coachMode || !coachGame) return;
+    engine.cancel();
+    // Undo opponent reply if it was played
+    if (coachLastReview && coachGame.fen() !== coachLastReview.fenAfter) {
+      coachGame.undo();
+    }
+    // Undo user move
+    coachGame.undo();
+    // Roll back stats
+    if (coachLastReview && coachStats) {
+      coachStats.moves = Math.max(0, coachStats.moves - 1);
+      coachStats[coachLastReview.tier] = Math.max(0, (coachStats[coachLastReview.tier] || 0) - 1);
+    }
+    coachLastReview = null;
+    coachThinking = false;
+    board.position(coachGame.fen());
+    $('#coach-review').hide();
+    updateCoachSummary();
+    setCoachStatus('Your move.');
+  });
+
+  // Coach: show best — replay the best move instead of the user's
+  $('#btn-coach-showbest').on('click', function() {
+    if (!coachMode || !coachGame || !coachLastReview || !coachLastReview.bestUci) return;
+    engine.cancel();
+    // Undo opponent reply (if played) + user move
+    if (coachGame.fen() !== coachLastReview.fenAfter) coachGame.undo();
+    coachGame.undo();
+    // Play best move
+    const bu = coachLastReview.bestUci;
+    coachGame.move({ from: bu.slice(0, 2), to: bu.slice(2, 4), promotion: bu[4] || undefined });
+    // Adjust stats: convert prior classification to 'best'
+    if (coachStats) {
+      coachStats[coachLastReview.tier] = Math.max(0, (coachStats[coachLastReview.tier] || 0) - 1);
+      coachStats.best = (coachStats.best || 0) + 1;
+    }
+    board.position(coachGame.fen());
+    renderCoachReview({
+      tier: 'best', label: 'Best move', emoji: '✓',
+      loss: 0,
+      bestSan: coachLastReview.bestSan,
+      userSan: coachLastReview.bestSan,
+      pvSan: coachLastReview.pvSan
+    });
+    coachLastReview = null;
+    updateCoachSummary();
+    setCoachStatus('Opponent thinking…');
+    coachOpponentRespond();
+  });
 
   // Explore: database toggle
   $('.db-btn').on('click', function() {
@@ -2678,13 +3262,13 @@ $(function () {
 
     // Arrow keys: prev/next in study mode
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-      if (quizMode || exploreMode) return;
+      if (quizMode || exploreMode || coachMode) return;
       e.preventDefault();
       if (!$('#btn-next').prop('disabled')) goToMove(currentMoveIdx + 1);
       return;
     }
     if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-      if (quizMode || exploreMode) return;
+      if (quizMode || exploreMode || coachMode) return;
       e.preventDefault();
       if (!$('#btn-prev').prop('disabled')) goToMove(currentMoveIdx - 1);
       return;
@@ -2695,9 +3279,9 @@ $(function () {
     if (k === '/' ) { e.preventDefault(); $('#library-search-input').trigger('focus').select(); return; }
     // Flip board
     if (k === 'f') {
-      if (!currentOpening && !exploreMode) return;
+      if (!currentOpening && !exploreMode && !coachMode) return;
       e.preventDefault();
-      if (exploreMode) { boardFlipped = !boardFlipped; board.flip(); return; }
+      if (exploreMode || coachMode) { boardFlipped = !boardFlipped; board.flip(); return; }
       $('#btn-flip').trigger('click');
       return;
     }
@@ -2705,14 +3289,16 @@ $(function () {
     if (k === 'r') {
       e.preventDefault();
       if (exploreMode) { $('#btn-explore-reset').trigger('click'); return; }
+      if (coachMode) { setMode('coach'); return; }
       if (quizMode) { setMode('quiz'); return; }
       if (currentOpening) goToMove(-1);
       return;
     }
-    // Mode switch: 1=Study, 2=Quiz, 3=Explore
+    // Mode switch: 1=Study, 2=Quiz, 3=Coach, 4=Explore
     if (k === '1') { e.preventDefault(); setMode('study'); return; }
     if (k === '2') { if (currentOpening) { e.preventDefault(); setMode('quiz'); } return; }
-    if (k === '3') { e.preventDefault(); setMode('explore'); return; }
+    if (k === '3') { e.preventDefault(); setMode('coach'); return; }
+    if (k === '4') { e.preventDefault(); setMode('explore'); return; }
   });
 
   // ─── TAP-TO-MOVE (mobile) ───────────────
@@ -2721,12 +3307,12 @@ $(function () {
     tapSelected = null;
   }
   $(document).on('click', '.square-55d63', function(e) {
-    // Only intercept taps in quiz or explore mode (study has no interaction)
-    if (!quizMode && !exploreMode) return;
+    // Only intercept taps in interactive modes (study has no interaction)
+    if (!quizMode && !exploreMode && !coachMode) return;
     // If the drop already happened (pointerup after drag), chessboard will have already moved — don't interfere
     const sq = $(this).data('square');
     if (!sq) return;
-    const activeGame = exploreMode ? exploreGame : game;
+    const activeGame = exploreMode ? exploreGame : (coachMode ? coachGame : game);
     if (!activeGame) return;
 
     if (tapSelected && tapSelected !== sq) {
@@ -2735,6 +3321,9 @@ $(function () {
       if (exploreMode) {
         const mv = exploreGame.move(tryMove);
         if (mv) { board.position(exploreGame.fen()); fetchExploreData(); }
+      } else if (coachMode) {
+        const result = handleDrop(tapSelected, sq);
+        if (result !== 'snapback') board.position(coachGame.fen());
       } else {
         // Quiz: delegate to handleDrop to reuse validation logic
         const result = handleDrop(tapSelected, sq);
@@ -2752,6 +3341,8 @@ $(function () {
       if (!piece) return;
       const turn = activeGame.turn(); // 'w' or 'b'
       if (piece.color !== turn) return;
+      // In coach mode, only allow picking up pieces of user's color
+      if (coachMode && !coachIsUserTurn()) return;
       clearTapSelection();
       tapSelected = sq;
       $(this).addClass('tap-selected');
@@ -2792,8 +3383,13 @@ $(function () {
       loadOpening(op.id);
       if (initial.mode === 'quiz') setMode('quiz');
       else if (initial.mode === 'explore') setMode('explore');
+      else if (initial.mode === 'coach') setMode('coach');
       else if (!isNaN(initial.move) && initial.move >= 0) goToMove(initial.move);
     }
+  } else if (initial.mode === 'coach') {
+    setMode('coach');
+  } else if (initial.mode === 'explore') {
+    setMode('explore');
   }
 });
 </script>
