@@ -3137,26 +3137,36 @@ $(function () {
   $('#btn-coach-showbest').on('click', function() {
     if (!coachMode || !coachGame || !coachLastReview || !coachLastReview.bestUci) return;
     engine.cancel();
+    const prev = coachLastReview;
     // Undo opponent reply (if played) + user move
-    if (coachGame.fen() !== coachLastReview.fenAfter) coachGame.undo();
+    if (coachGame.fen() !== prev.fenAfter) coachGame.undo();
     coachGame.undo();
     // Play best move
-    const bu = coachLastReview.bestUci;
+    const bu = prev.bestUci;
     coachGame.move({ from: bu.slice(0, 2), to: bu.slice(2, 4), promotion: bu[4] || undefined });
+    const newFenAfter = coachGame.fen();
     // Adjust stats: convert prior classification to 'best'
     if (coachStats) {
-      coachStats[coachLastReview.tier] = Math.max(0, (coachStats[coachLastReview.tier] || 0) - 1);
+      coachStats[prev.tier] = Math.max(0, (coachStats[prev.tier] || 0) - 1);
       coachStats.best = (coachStats.best || 0) + 1;
     }
-    board.position(coachGame.fen());
+    board.position(newFenAfter);
     renderCoachReview({
       tier: 'best', label: 'Best move', emoji: '✓',
       loss: 0,
-      bestSan: coachLastReview.bestSan,
-      userSan: coachLastReview.bestSan,
-      pvSan: coachLastReview.pvSan
+      bestSan: prev.bestSan,
+      userSan: prev.bestSan,
+      pvSan: prev.pvSan
     });
-    coachLastReview = null;
+    // Keep a review pointer so take-back can roll back cleanly
+    coachLastReview = {
+      tier: 'best',
+      fenBefore: prev.fenBefore,
+      fenAfter: newFenAfter,
+      userUci: prev.bestUci,
+      bestUci: prev.bestUci,
+      bestSan: prev.bestSan
+    };
     updateCoachSummary();
     setCoachStatus('Opponent thinking…');
     coachOpponentRespond();
