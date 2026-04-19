@@ -1059,6 +1059,21 @@
       font-weight: 500;
     }
     .candidate-row.best-delta .eval { color: var(--highlight); }
+    .candidate-hint {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+      line-height: 1.4;
+      margin-bottom: 0.35rem;
+    }
+    .candidate-cont {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+      padding: 0.1rem 0.75rem 0.3rem 1.8rem;
+      letter-spacing: 0.01em;
+    }
 
     /* Post-game summary */
     .summary-overlay {
@@ -3184,11 +3199,48 @@ function piecesDefenders(game, square, defenderColor) {
   return g.moves({ verbose: true }).filter(m => m.to === square).length;
 }
 
+// Piece values for static-exchange evaluation.
+const SEE_VALUES = { p: 100, n: 300, b: 325, r: 500, q: 900, k: 10000 };
+
+// Standard SEE — least-valuable attacker. Returns the material gain (cp) for
+// `sideFirst` if they initiate captures on `square`, with optimal recaptures.
+// Handles the case where a knight captures a pawn and the king recaptures the
+// knight: SEE correctly reports that as a loss for the attacker, whereas the
+// old attackers-vs-defenders heuristic reported the pawn as "hanging".
+function seeAtSquare(game, square, sideFirst) {
+  const fen = game.fen();
+  const parts = fen.split(' ');
+  parts[1] = sideFirst;
+  parts[3] = '-';
+  const g = new Chess();
+  if (!g.load(parts.join(' '))) return 0;
+  const caps = g.moves({ verbose: true }).filter(m => m.to === square && m.captured);
+  if (caps.length === 0) return 0;
+  caps.sort((a, b) => SEE_VALUES[a.piece] - SEE_VALUES[b.piece]);
+  const first = caps[0];
+  const firstValue = SEE_VALUES[first.captured];
+  g.move(first);
+  const recurse = () => {
+    const ms = g.moves({ verbose: true }).filter(m => m.to === square && m.captured);
+    if (ms.length === 0) return 0;
+    ms.sort((a, b) => SEE_VALUES[a.piece] - SEE_VALUES[b.piece]);
+    const m = ms[0];
+    const capVal = SEE_VALUES[m.captured];
+    g.move(m);
+    const sub = recurse();
+    g.undo();
+    // Stand-pat: side only recaptures if net gain is positive.
+    return Math.max(0, capVal - sub);
+  };
+  const oppRecap = recurse();
+  return firstValue - oppRecap;
+}
+
 function detectHangingPieces(game, userColor) {
-  // Pieces the OPPONENT is attacking that user has insufficient defense for.
+  // A user piece is "hanging" iff the opponent can initiate captures on its
+  // square and come out with at least a pawn's worth of material (SEE ≥ 100).
   const userChar = userColor === 'white' ? 'w' : 'b';
   const oppChar = userColor === 'white' ? 'b' : 'w';
-  const oppAttacks = squaresAttackedBy(game, oppChar);
   const hangs = [];
   const boardArr = game.board();
   for (let r = 0; r < 8; r++) {
@@ -3196,12 +3248,11 @@ function detectHangingPieces(game, userColor) {
       const sq = boardArr[r][f];
       if (!sq || sq.color !== userChar) continue;
       const square = 'abcdefgh'[f] + (8 - r);
-      if (!oppAttacks.has(square)) continue;
-      // Count attackers and defenders — naive hanging check
-      const attackers = countAttackers(game, square, oppChar);
-      const defenders = piecesDefenders(game, square, userChar);
-      if (defenders < attackers || (defenders === 0 && attackers > 0)) {
-        hangs.push({ square, piece: sq.type, attackers, defenders });
+      const gain = seeAtSquare(game, square, oppChar);
+      if (gain >= 100) {
+        const attackers = countAttackers(game, square, oppChar);
+        const defenders = piecesDefenders(game, square, userChar);
+        hangs.push({ square, piece: sq.type, attackers, defenders, gain });
       }
     }
   }
@@ -3246,10 +3297,11 @@ async function showThreats() {
   hangs.forEach(h => {
     const name = PIECE_NAME[h.piece];
     const glyph = PIECE_GLYPH[h.piece];
+    const pawns = (h.gain / 100).toFixed(h.gain >= 100 && h.gain % 100 === 0 ? 0 : 2);
     items.push({
       kind: 'hang',
       glyph,
-      text: `${name} on ${h.square} is ${h.defenders === 0 ? 'hanging' : 'inadequately defended'} (${h.attackers} attacker${h.attackers > 1 ? 's' : ''} vs ${h.defenders} defender${h.defenders === 1 ? '' : 's'})`
+      text: `${name} on ${h.square} loses ~${pawns} pawns if left undefended (${h.attackers} attacker${h.attackers > 1 ? 's' : ''} vs ${h.defenders} defender${h.defenders === 1 ? '' : 's'})`
     });
   });
   if (items.length === 0) {
@@ -3275,9 +3327,12 @@ async function showCandidates() {
   const fen = coachGame.fen();
   const $section = $('#candidates-section').show();
   const $list = $('#candidates-list');
-  $list.html('<div class="explore-loading">Computing top moves…</div>');
+  $list.html('<div class="explore-loading">Computing top moves at depth 18…</div>');
   try {
-    const res = await engine.evaluate(fen, 12, { multipv: 3 });
+    // Depth 18 with MultiPV=3 is strong enough to see most tactics up to ~9 moves
+    // deep. Depth 12 was leaving blunders on the board and producing candidates
+    // that didn't actually win material when the user expected them to.
+    const res = await engine.evaluate(fen, 18, { multipv: 3 });
     $list.empty();
     if (!res.lines || res.lines.length === 0) {
       $list.html('<div class="explore-empty">No candidates found.</div>');
@@ -3286,6 +3341,11 @@ async function showCandidates() {
     const bestCp = res.lines[0].mate !== null && res.lines[0].mate !== undefined
       ? (res.lines[0].mate > 0 ? 10000 : -10000)
       : (res.lines[0].cp || 0);
+    // Small hint so users don't assume "best move" means "wins material immediately".
+    const $hint = $('<div class="candidate-hint"></div>').text(
+      'Top moves by full-position evaluation — continuation shown after each.'
+    );
+    $list.append($hint);
     res.lines.forEach((line, idx) => {
       const uci = (line.pv && line.pv[0]) || null;
       if (!uci) return;
@@ -3295,12 +3355,17 @@ async function showCandidates() {
         ? (line.mate > 0 ? 10000 : -10000)
         : (line.cp || 0);
       const delta = cp - bestCp;
+      const continuation = pvToSan(fen, line.pv || [], 5);
       const $row = $('<div class="candidate-row"></div>');
       $row.append($('<span class="rank"></span>').text((idx + 1) + '.'));
       $row.append($('<span class="move"></span>').text(san));
       const $eval = $('<span class="eval"></span>').text(evalLabel + (idx > 0 ? ` (${(delta / 100).toFixed(2)})` : ''));
       $row.append($eval);
       $list.append($row);
+      if (continuation.length > 1) {
+        const $cont = $('<div class="candidate-cont"></div>').text(continuation.slice(1).join(' '));
+        $list.append($cont);
+      }
     });
   } catch (err) {
     $list.html('<div class="token-error">Engine error: ' + err.message + '</div>');
