@@ -210,6 +210,43 @@
     .feedback-bar.incorrect { background: var(--error-bg); color: #dd8a8a; border: 1px solid rgba(160,58,58,0.35); }
     .feedback-bar.hint { background: var(--accent-dim); color: var(--accent-soft); border: 1px solid rgba(162,51,70,0.35); }
 
+    .captured-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      width: 440px;
+      min-height: 22px;
+      padding: 0.1rem 0.1rem;
+      font-family: var(--font-mono);
+    }
+    .captured-pieces { display: inline-flex; gap: 0; flex-wrap: wrap; line-height: 1; }
+    .captured-pieces .cap-piece {
+      font-size: 1.15rem;
+      opacity: 0.85;
+      letter-spacing: -0.15em;
+      margin-right: 0.05em;
+    }
+    .material-lead {
+      font-size: 0.72rem;
+      color: var(--highlight);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .board-nav {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      width: 440px;
+      margin-top: 0.45rem;
+    }
+    .board-nav .ctrl-btn.nav { padding: 0.3rem 0.6rem; font-size: 0.85rem; min-width: 36px; }
+    .board-nav .nav-position {
+      margin-left: auto;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
     .board-controls {
       display: flex;
       gap: 0.5rem;
@@ -524,12 +561,14 @@
       text-transform: uppercase;
       border: 1px solid transparent;
     }
-    .coach-class-best       { background: rgba(107,130,104,0.22); color: #9bbf97; border-color: rgba(107,130,104,0.45); }
-    .coach-class-good       { background: rgba(184,160,106,0.16); color: var(--highlight); border-color: rgba(184,160,106,0.35); }
+    .coach-class-best       { background: rgba(184,160,106,0.28); color: #e6c879; border-color: rgba(184,160,106,0.65); box-shadow: 0 0 0 1px rgba(230,200,121,0.25), 0 0 10px rgba(230,200,121,0.25) inset; }
+    .coach-class-excellent  { background: rgba(107,130,104,0.22); color: #9bbf97; border-color: rgba(107,130,104,0.45); }
+    .coach-class-good       { background: rgba(130,150,170,0.16); color: #a8bcd0; border-color: rgba(130,150,170,0.35); }
     .coach-class-inaccuracy { background: rgba(201,149,70,0.16); color: #d4a76a; border-color: rgba(201,149,70,0.35); }
     .coach-class-mistake    { background: rgba(200,100,60,0.20); color: #dd9275; border-color: rgba(200,100,60,0.40); }
     .coach-class-blunder    { background: rgba(162,51,70,0.28); color: var(--accent-soft); border-color: rgba(162,51,70,0.50); }
     .coach-class-book       { background: rgba(100,130,190,0.18); color: #8eb0d9; border-color: rgba(100,130,190,0.35); }
+    .coach-class-unknown    { background: rgba(140,140,140,0.14); color: #a6a6a6; border-color: rgba(140,140,140,0.30); }
 
     .coach-review {
       background: var(--surface2);
@@ -1334,12 +1373,27 @@
 
   <!-- BOARD -->
   <main class="coach-board-area">
+    <div class="captured-bar" id="captured-top">
+      <span class="captured-pieces" id="captured-top-pieces"></span>
+      <span class="material-lead" id="captured-top-lead"></span>
+    </div>
     <div id="coachBoard-wrap" style="position:relative;">
       <div id="coachBoard" style="width:440px;"></div>
       <div id="coachBoard-placeholder" class="board-empty-state" style="display:none;">
         <div class="icon">♟</div>
         <p>Start a new game to begin</p>
       </div>
+    </div>
+    <div class="captured-bar" id="captured-bottom">
+      <span class="captured-pieces" id="captured-bottom-pieces"></span>
+      <span class="material-lead" id="captured-bottom-lead"></span>
+    </div>
+
+    <div class="board-nav">
+      <button class="ctrl-btn nav" id="btn-coach-prev" title="Previous position" disabled>◀</button>
+      <button class="ctrl-btn nav" id="btn-coach-next" title="Next position" disabled>▶</button>
+      <button class="ctrl-btn" id="btn-coach-live" title="Return to live position" style="display:none;">⇥ Live</button>
+      <span class="nav-position" id="coach-nav-label"></span>
     </div>
 
     <div class="board-controls">
@@ -1383,6 +1437,7 @@
         <span class="k">Moves played</span><span class="v" id="coach-moves-count">0</span>
         <span class="k">Accuracy</span><span class="v big" id="coach-accuracy">—</span>
         <span class="k">Best</span><span class="v" id="coach-tally-best">0</span>
+        <span class="k">Excellent</span><span class="v" id="coach-tally-excellent">0</span>
         <span class="k">Good</span><span class="v" id="coach-tally-good">0</span>
         <span class="k">Inaccuracies</span><span class="v" id="coach-tally-inacc">0</span>
         <span class="k">Mistakes</span><span class="v" id="coach-tally-mistake">0</span>
@@ -1400,6 +1455,7 @@
       <span class="k">Moves</span><span class="v" id="summary-moves">0</span>
       <span class="k">Accuracy</span><span class="v accuracy" id="summary-accuracy">—</span>
       <span class="k">Best</span><span class="v" id="summary-best">0</span>
+      <span class="k">Excellent</span><span class="v" id="summary-excellent">0</span>
       <span class="k">Inaccuracies</span><span class="v" id="summary-inacc">0</span>
       <span class="k">Mistakes</span><span class="v" id="summary-mistakes">0</span>
       <span class="k">Blunders</span><span class="v" id="summary-blunders">0</span>
@@ -2598,6 +2654,7 @@ let coachBoard = null;             // separate Chessboard.js instance
 let coachBoardFlipped = false;
 let coachGameActive = false;       // true once user hits New Game
 let coachEndedAt = null;           // timestamp of game end, null while playing
+let coachReviewCursor = null;      // null = live; integer = ply index displayed on the board
 
 // ─────────────────────────────────────────────
 // STOCKFISH ENGINE WRAPPER
@@ -2648,8 +2705,11 @@ const engine = {
     if (msg.startsWith('info ')) {
       const parsed = parseInfo(msg);
       if (!parsed) return;
+      // Skip info lines without a pv (e.g. currmove progress reports) — they
+      // would otherwise overwrite the real pv1 entry with an empty PV and
+      // corrupt ranking / candidate display.
+      if (!parsed.pv || parsed.pv.length === 0) return;
       if (this.current.multipv) {
-        // collect last-seen info per multipv index
         this.current.pvLines = this.current.pvLines || {};
         this.current.pvLines[parsed.multipv || 1] = parsed;
       } else {
@@ -2661,6 +2721,7 @@ const engine = {
       const bm = msg.split(' ')[1];
       const done = this.current;
       this.current = null;
+      if (done.timeoutId) { clearTimeout(done.timeoutId); done.timeoutId = null; }
       if (done.multipv) {
         const lines = Object.keys(done.pvLines || {})
           .map(k => parseInt(k))
@@ -2677,15 +2738,35 @@ const engine = {
 
   evaluate(fen, depth, opts) {
     return this.init().then(() => new Promise((resolve) => {
-      this.queue.push({
+      const task = {
         fen,
         depth,
         resolve,
         lastInfo: null,
         skill: (opts && typeof opts.skill === 'number') ? opts.skill : null,
         elo: (opts && typeof opts.elo === 'number') ? opts.elo : null,
-        multipv: (opts && opts.multipv) || null
-      });
+        multipv: (opts && opts.multipv) || null,
+        timeoutId: null
+      };
+      // Safety timeout — if the engine worker stalls or the WASM module
+      // wedges, abandon the task after 30s so the queue can drain and
+      // subsequent moves aren't permanently blocked.
+      task.timeoutId = setTimeout(() => {
+        task.timeoutId = null;
+        if (this.current === task) {
+          this.current = null;
+          try { this.worker.postMessage('stop'); } catch (_) {}
+        } else {
+          this.queue = this.queue.filter(t => t !== task);
+        }
+        if (task.multipv) {
+          resolve({ bestmove: null, lines: [] });
+        } else {
+          resolve({ bestmove: null, info: { cp: 0, pv: [], depth: 0 } });
+        }
+        this._runNext();
+      }, 30000);
+      this.queue.push(task);
       this._runNext();
     }));
   },
@@ -2774,45 +2855,75 @@ function pvToSan(fen, pvArr, max) {
 // ─────────────────────────────────────────────
 const COACH_DEPTH = 12;
 
-function classifyLoss(loss) {
-  if (loss < 15)  return { tier: 'best',       label: 'Best move',  emoji: '✓' };
-  if (loss < 50)  return { tier: 'good',       label: 'Good',       emoji: '👍' };
-  if (loss < 100) return { tier: 'inaccuracy', label: 'Inaccuracy', emoji: '⚠' };
-  if (loss < 200) return { tier: 'mistake',    label: 'Mistake',    emoji: '✗' };
+// Rank-and-loss aware classification. `rank` is 1 if user played the engine's
+// #1 move, 2 or 3 if it was a top-3 alternative, otherwise null.
+function classifyRankLoss(rank, loss) {
+  if (rank === 1) return { tier: 'best',      label: 'Best move', emoji: '★' };
+  if (rank === 2 || rank === 3)
+                  return { tier: 'excellent', label: 'Excellent', emoji: '✦' };
+  if (loss < 60)  return { tier: 'good',       label: 'Good',       emoji: '👍' };
+  if (loss < 120) return { tier: 'inaccuracy', label: 'Inaccuracy', emoji: '⚠' };
+  if (loss < 250) return { tier: 'mistake',    label: 'Mistake',    emoji: '✗' };
   return            { tier: 'blunder',     label: 'Blunder',    emoji: '💥' };
 }
 
 // Side-to-move perspective: score is always in the mover's favor.
-// cp-loss for the player that just moved = cpBefore(moverPerspective) - cpAfterFromOpponent * (-1)
-// simpler: cpBefore(mover) + cpAfter(opponent) where both are in side-to-move perspective.
+// We pull MultiPV=3 before the move so we know if the user picked #1/#2/#3.
 async function classifyMove(fenBefore, userUciMove, fenAfter) {
   const [beforeEval, afterEval] = await Promise.all([
-    engine.evaluate(fenBefore, COACH_DEPTH),
+    engine.evaluate(fenBefore, COACH_DEPTH, { multipv: 3 }),
     engine.evaluate(fenAfter, COACH_DEPTH)
   ]);
-  const bestUci = beforeEval.bestmove;
-  const bestInfo = beforeEval.info;
+  const lines = beforeEval.lines || [];
+  const bestLine = lines[0];
+  const bestUci = (bestLine && bestLine.pv && bestLine.pv[0]) || beforeEval.bestmove;
   const afterInfo = afterEval.info;
 
-  // cp values are in side-to-move perspective. After the user's move, side-to-move flips.
-  // Mover's score after = -(afterInfo in opponent perspective)
-  const cpBefore = scoreToCp(bestInfo);               // mover's POV before
-  const cpAfter = -scoreToCp(afterInfo);              // mover's POV after (flip sign)
+  // Engine timeout / stall — evaluate resolved with no bestmove and no PV data.
+  // Return a neutral review instead of classifying based on zeroes.
+  const beforeStalled = !bestUci && lines.length === 0;
+  const afterStalled = !afterEval.bestmove && (!afterInfo || !afterInfo.pv || afterInfo.pv.length === 0);
+  if (beforeStalled || afterStalled) {
+    return {
+      tier: 'unknown',
+      label: 'Not analyzed',
+      emoji: '·',
+      loss: 0,
+      rank: null,
+      bestUci: null,
+      bestSan: null,
+      userSan: uciToSan(fenBefore, userUciMove),
+      pvSan: [],
+      evalBefore: null,
+      evalAfter: null,
+      stalled: true
+    };
+  }
+
+  // Determine user's rank in the top-3 (if any)
+  let rank = null;
+  for (let i = 0; i < lines.length; i++) {
+    const pvFirst = lines[i].pv && lines[i].pv[0];
+    if (pvFirst === userUciMove) { rank = i + 1; break; }
+  }
+
+  const cpBefore = bestLine ? scoreToCp(bestLine) : 0;
+  const cpAfter = -scoreToCp(afterInfo);
   const loss = Math.max(0, cpBefore - cpAfter);
 
-  const isBest = bestUci === userUciMove;
-  const cls = isBest ? { tier: 'best', label: 'Best move', emoji: '✓' } : classifyLoss(loss);
+  const cls = classifyRankLoss(rank, loss);
 
   return {
     tier: cls.tier,
     label: cls.label,
     emoji: cls.emoji,
-    loss: isBest ? 0 : Math.round(loss),
+    loss: rank === 1 ? 0 : Math.round(loss),
+    rank,
     bestUci,
     bestSan: bestUci ? uciToSan(fenBefore, bestUci) : null,
     userSan: uciToSan(fenBefore, userUciMove),
-    pvSan: pvToSan(fenBefore, bestInfo.pv || [], 5),
-    evalBefore: bestInfo,
+    pvSan: bestLine ? pvToSan(fenBefore, bestLine.pv || [], 5) : [],
+    evalBefore: bestLine || null,
     evalAfter: afterInfo
   };
 }
@@ -2847,15 +2958,16 @@ function updateCoachSummary() {
   const total = coachStats.moves;
   $('#coach-moves-count').text(total);
   $('#coach-tally-best').text(coachStats.best);
+  $('#coach-tally-excellent').text(coachStats.excellent);
   $('#coach-tally-good').text(coachStats.good);
   $('#coach-tally-inacc').text(coachStats.inaccuracy);
   $('#coach-tally-mistake').text(coachStats.mistake);
   $('#coach-tally-blunder').text(coachStats.blunder);
   if (total === 0) { $('#coach-accuracy').text('—'); return; }
   // Crude accuracy: weighted by tier
-  const weight = coachStats.best * 1 + coachStats.good * 0.85 +
-                 coachStats.inaccuracy * 0.6 + coachStats.mistake * 0.3 +
-                 coachStats.blunder * 0.05;
+  const weight = coachStats.best * 1 + coachStats.excellent * 0.95 +
+                 coachStats.good * 0.85 + coachStats.inaccuracy * 0.6 +
+                 coachStats.mistake * 0.3 + coachStats.blunder * 0.05;
   const pct = Math.round((weight / total) * 100);
   $('#coach-accuracy').text(pct + '%');
 }
@@ -2869,9 +2981,18 @@ function renderCoachReview(review) {
   $('#coach-user-move').text(review.userSan || '—');
   $('#coach-best-move').text(review.bestSan || '—');
   const isBest = review.tier === 'best';
-  const msg = isBest
-    ? 'You found the engine\'s top choice. Keep it coming.'
-    : `The engine prefers ${review.bestSan}. You lost ${(review.loss / 100).toFixed(2)} pawns of evaluation with ${review.userSan}.`;
+  const isExcellent = review.tier === 'excellent';
+  const isUnknown = review.tier === 'unknown';
+  let msg;
+  if (isUnknown) {
+    msg = 'Engine timed out on this move — skipping classification. The game continues.';
+  } else if (isBest) {
+    msg = 'Engine\'s #1 choice. Keep it coming.';
+  } else if (isExcellent) {
+    msg = `Top-3 engine move (#${review.rank}). ${review.bestSan} was #1 — you're in great company.`;
+  } else {
+    msg = `The engine prefers ${review.bestSan}. You lost ${(review.loss / 100).toFixed(2)} pawns of evaluation with ${review.userSan}.`;
+  }
   $('#coach-explanation').text(msg);
   if (review.pvSan && review.pvSan.length > 1) {
     $('#coach-pv').show().text('Engine line: ' + review.pvSan.join(' '));
@@ -2879,7 +3000,7 @@ function renderCoachReview(review) {
     $('#coach-pv').hide();
   }
   $('#coach-review').show().css('display', 'flex');
-  $('#btn-coach-showbest').prop('disabled', isBest);
+  $('#btn-coach-showbest').prop('disabled', isBest || isUnknown || !review.bestUci);
 }
 
 function setCoachStatus(msg) {
@@ -2889,15 +3010,17 @@ function setCoachStatus(msg) {
 function resetCoachState(fen) {
   coachGame = fen ? new Chess(fen) : new Chess();
   coachStartFen = coachGame.fen();
-  coachStats = { moves: 0, best: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
+  coachStats = { moves: 0, best: 0, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
   coachReviewLog = [];
   coachLastReview = null;
   coachThinking = false;
   coachEndedAt = null;
+  coachReviewCursor = null;
   $('#coach-review').hide();
   $('#threats-section').hide();
   $('#candidates-section').hide();
   updateCoachSummary();
+  updateCapturedDisplay(coachGame.fen());
 }
 
 async function coachOpponentRespond() {
@@ -2920,12 +3043,16 @@ async function coachOpponentRespond() {
         promotion: result.bestmove[4] || undefined
       });
       if (!mv) return;
-      coachBoard.position(coachGame.fen());
+      if (!coachIsReviewing()) {
+        coachBoard.position(coachGame.fen());
+        updateCapturedDisplay(coachGame.fen());
+      }
       if (coachGame.game_over()) { coachHandleGameOver(); return; }
-      setCoachStatus('Your move.');
+      if (!coachIsReviewing()) {
+        setCoachStatus('Your move.');
+        showThreats();
+      }
       updateCoachControlsState();
-      // Show threats after opponent has moved
-      showThreats();
     }, 300);
   } catch (err) {
     setCoachStatus('Engine error: ' + err.message);
@@ -2944,6 +3071,7 @@ async function coachHandleUserMove(source, target) {
   coachGame.move({ from: source, to: target, promotion: 'q' });
   const fenAfter = coachGame.fen();
   const userUci = source + target + (move.promotion || '');
+  updateCapturedDisplay(fenAfter);
 
   // Clear threats/candidates on new move
   $('#threats-section').hide();
@@ -2958,8 +3086,11 @@ async function coachHandleUserMove(source, target) {
     const logged = Object.assign({}, review, { fenBefore, fenAfter, userUci, ply, pairNum });
     coachLastReview = logged;
     coachReviewLog.push(logged);
-    coachStats.moves++;
-    coachStats[review.tier] = (coachStats[review.tier] || 0) + 1;
+    // Don't count engine-timeout ("unknown") reviews in stats or accuracy.
+    if (review.tier !== 'unknown') {
+      coachStats.moves++;
+      coachStats[review.tier] = (coachStats[review.tier] || 0) + 1;
+    }
     renderCoachReview(review);
     updateCoachSummary();
     updateCoachControlsState();
@@ -3013,15 +3144,20 @@ function squaresAttackedBy(game, color) {
 
 function piecesDefenders(game, square, defenderColor) {
   // Count defenders of `square` owned by `defenderColor`.
-  // Trick: clear the piece on `square`, then count attackers from defenderColor to that square.
-  const pos = game.board(); // 2D array, [rank][file] top-down
+  // Trick: swap the piece on `square` for an enemy queen (so pawns and sliders
+  // alike generate capture moves to that square), then list captures from the
+  // defender side. Using a queen — not an empty square — is key: pawns only
+  // capture when a target exists, and only a non-pawn piece can legally occupy
+  // the first/last ranks.
+  const pos = game.board();
   const fileStr = 'abcdefgh';
   const f = fileStr.indexOf(square[0]);
   const r = 8 - parseInt(square[1]);
   const piece = pos[r][f];
   if (!piece) return 0;
 
-  // Build a modified FEN with that square emptied, side-to-move = defender
+  const enemyQueen = defenderColor === 'w' ? 'q' : 'Q';
+
   const parts = game.fen().split(' ');
   const rows = parts[0].split('/');
   let row = rows[r];
@@ -3030,8 +3166,7 @@ function piecesDefenders(game, square, defenderColor) {
     if (/\d/.test(ch)) for (let i = 0; i < parseInt(ch); i++) expanded += '1';
     else expanded += ch;
   }
-  expanded = expanded.substring(0, f) + '1' + expanded.substring(f + 1);
-  // collapse back
+  expanded = expanded.substring(0, f) + enemyQueen + expanded.substring(f + 1);
   let collapsed = '';
   let runs = 0;
   for (const ch of expanded) {
@@ -3142,7 +3277,7 @@ async function showCandidates() {
   const $list = $('#candidates-list');
   $list.html('<div class="explore-loading">Computing top moves…</div>');
   try {
-    const res = await engine.evaluate(fen, 14, { multipv: 3 });
+    const res = await engine.evaluate(fen, 12, { multipv: 3 });
     $list.empty();
     if (!res.lines || res.lines.length === 0) {
       $list.html('<div class="explore-empty">No candidates found.</div>');
@@ -3179,6 +3314,7 @@ function showPostGameSummary(endMsg) {
   $('#summary-title').text(endMsg);
   $('#summary-moves').text(coachStats.moves);
   $('#summary-best').text(coachStats.best);
+  $('#summary-excellent').text(coachStats.excellent);
   $('#summary-inacc').text(coachStats.inaccuracy);
   $('#summary-mistakes').text(coachStats.mistake);
   $('#summary-blunders').text(coachStats.blunder);
@@ -3187,9 +3323,9 @@ function showPostGameSummary(endMsg) {
   if (total === 0) {
     $('#summary-accuracy').text('—');
   } else {
-    const weight = coachStats.best * 1 + coachStats.good * 0.85 +
-                   coachStats.inaccuracy * 0.6 + coachStats.mistake * 0.3 +
-                   coachStats.blunder * 0.05;
+    const weight = coachStats.best * 1 + coachStats.excellent * 0.95 +
+                   coachStats.good * 0.85 + coachStats.inaccuracy * 0.6 +
+                   coachStats.mistake * 0.3 + coachStats.blunder * 0.05;
     $('#summary-accuracy').text(Math.round((weight / total) * 100) + '%');
   }
 
@@ -3377,6 +3513,7 @@ function createCoachBoard(position, orientation) {
     onDragStart: function(source, piece) {
       if (!coachGameActive || !coachGame) return false;
       if (coachThinking) return false;
+      if (coachIsReviewing()) return false;
       if (!coachIsUserTurn()) return false;
       // Only allow picking up pieces of the user's colour
       const userPrefix = coachUserColor() === 'white' ? 'w' : 'b';
@@ -3385,6 +3522,7 @@ function createCoachBoard(position, orientation) {
     onDrop: function(source, target) {
       if (!coachGameActive || !coachGame) return 'snapback';
       if (coachThinking) return 'snapback';
+      if (coachIsReviewing()) return 'snapback';
       if (!coachIsUserTurn()) return 'snapback';
       // Synchronous legality check — chessboard.js needs a sync return value
       const tempGame = new Chess(coachGame.fen());
@@ -3494,11 +3632,128 @@ function startCoachGame() {
 // ─────────────────────────────────────────────
 function updateCoachControlsState() {
   const active = coachGameActive;
+  const reviewing = coachIsReviewing();
   const hasReview = !!coachLastReview;
-  $('#btn-coach-resign').prop('disabled', !active);
-  $('#btn-coach-takeback').prop('disabled', !hasReview);
-  $('#btn-coach-showbest').prop('disabled', !hasReview || coachLastReview.tier === 'best');
-  $('#btn-coach-candidates').prop('disabled', !active || !coachGame || !coachIsUserTurn());
+  const total = coachGame ? coachGame.history().length : 0;
+  const cur = coachReviewCursor === null ? total : coachReviewCursor;
+  $('#btn-coach-resign').prop('disabled', !active || reviewing);
+  $('#btn-coach-takeback').prop('disabled', !hasReview || reviewing);
+  $('#btn-coach-showbest').prop('disabled', !hasReview || (coachLastReview && coachLastReview.tier === 'best') || reviewing);
+  $('#btn-coach-candidates').prop('disabled', !active || !coachGame || !coachIsUserTurn() || reviewing);
+  $('#btn-coach-prev').prop('disabled', !coachGame || total === 0 || cur === 0);
+  $('#btn-coach-next').prop('disabled', !coachGame || total === 0 || cur === total);
+  $('#btn-coach-live').toggle(reviewing);
+  $('#coach-nav-label').text(
+    !coachGame || total === 0 ? '' :
+    reviewing ? `Move ${cur}/${total}` : `Move ${total} • Live`
+  );
+}
+
+// ─────────────────────────────────────────────
+// HISTORY NAVIGATION / REVIEW MODE
+// ─────────────────────────────────────────────
+function coachIsReviewing() {
+  if (!coachGame || coachReviewCursor === null) return false;
+  return coachReviewCursor !== coachGame.history().length;
+}
+
+function coachFenAtPly(n) {
+  if (!coachGame) return null;
+  const tmp = new Chess(coachStartFen);
+  const moves = coachGame.history({ verbose: true });
+  const end = Math.max(0, Math.min(n, moves.length));
+  for (let i = 0; i < end; i++) {
+    tmp.move({ from: moves[i].from, to: moves[i].to, promotion: moves[i].promotion });
+  }
+  return tmp.fen();
+}
+
+function coachGotoPly(n) {
+  if (!coachGame) return;
+  const total = coachGame.history().length;
+  n = Math.max(0, Math.min(n, total));
+  coachReviewCursor = n === total ? null : n;
+  const fen = coachFenAtPly(n);
+  if (coachBoard && fen) coachBoard.position(fen);
+  if (coachIsReviewing()) {
+    $('#threats-section').hide();
+    $('#candidates-section').hide();
+    setCoachStatus(`Reviewing move ${n} of ${total} — click Live to return.`);
+  }
+  updateCoachControlsState();
+  updateCapturedDisplay(fen);
+}
+
+function coachGotoLive() {
+  if (!coachGame) return;
+  coachReviewCursor = null;
+  if (coachBoard) coachBoard.position(coachGame.fen());
+  updateCoachControlsState();
+  updateCapturedDisplay(coachGame.fen());
+  if (coachGameActive) {
+    setCoachStatus(coachIsUserTurn() ? 'Your move.' : 'Opponent thinking…');
+  }
+}
+
+// ─────────────────────────────────────────────
+// CAPTURED PIECES / MATERIAL LEAD
+// ─────────────────────────────────────────────
+const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+const PIECE_START_COUNT = { p: 8, n: 2, b: 2, r: 2, q: 1 };
+const PIECE_GLYPH_WHITE = { p: '♙', n: '♘', b: '♗', r: '♖', q: '♕' };
+const PIECE_GLYPH_BLACK = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛' };
+
+function countPieces(fen) {
+  const counts = { w: { p: 0, n: 0, b: 0, r: 0, q: 0 }, b: { p: 0, n: 0, b: 0, r: 0, q: 0 } };
+  const rows = fen.split(' ')[0].split('/');
+  for (const row of rows) {
+    for (const ch of row) {
+      if (/\d/.test(ch)) continue;
+      const color = ch === ch.toUpperCase() ? 'w' : 'b';
+      const type = ch.toLowerCase();
+      if (type === 'k') continue;
+      if (counts[color][type] !== undefined) counts[color][type]++;
+    }
+  }
+  return counts;
+}
+
+function renderCapturedRow(caps, glyphs) {
+  let html = '';
+  for (const t of ['q', 'r', 'b', 'n', 'p']) {
+    for (let i = 0; i < caps[t]; i++) {
+      html += '<span class="cap-piece">' + glyphs[t] + '</span>';
+    }
+  }
+  return html;
+}
+
+function updateCapturedDisplay(fen) {
+  if (!fen || !coachGame) {
+    $('#captured-top-pieces, #captured-bottom-pieces').empty();
+    $('#captured-top-lead, #captured-bottom-lead').text('');
+    return;
+  }
+  const counts = countPieces(fen);
+  const whiteTook = {}; // white's captures = black's missing pieces
+  const blackTook = {};
+  let whiteMat = 0, blackMat = 0;
+  for (const t of ['p', 'n', 'b', 'r', 'q']) {
+    whiteTook[t] = Math.max(0, PIECE_START_COUNT[t] - counts.b[t]);
+    blackTook[t] = Math.max(0, PIECE_START_COUNT[t] - counts.w[t]);
+    whiteMat += whiteTook[t] * PIECE_VALUES[t];
+    blackMat += blackTook[t] * PIECE_VALUES[t];
+  }
+  const userIsWhite = coachUserColor() === 'white';
+  const userTook = userIsWhite ? whiteTook : blackTook;
+  const oppTook = userIsWhite ? blackTook : whiteTook;
+  const userGlyphs = userIsWhite ? PIECE_GLYPH_BLACK : PIECE_GLYPH_WHITE;
+  const oppGlyphs = userIsWhite ? PIECE_GLYPH_WHITE : PIECE_GLYPH_BLACK;
+  const userLead = (userIsWhite ? whiteMat - blackMat : blackMat - whiteMat);
+  $('#captured-bottom-pieces').html(renderCapturedRow(userTook, userGlyphs));
+  $('#captured-top-pieces').html(renderCapturedRow(oppTook, oppGlyphs));
+  $('#captured-bottom-lead').text(userLead > 0 ? '+' + userLead : '');
+  $('#captured-top-lead').text(userLead < 0 ? '+' + (-userLead) : '');
 }
 
 // ─────────────────────────────────────────────
@@ -4048,7 +4303,9 @@ $(function () {
     coachLastReview = null;
     coachThinking = false;
     coachGameActive = true;
+    coachReviewCursor = null;
     if (coachBoard) coachBoard.position(coachGame.fen());
+    updateCapturedDisplay(coachGame.fen());
     $('#coach-review').hide();
     $('#threats-section').hide();
     $('#candidates-section').hide();
@@ -4075,8 +4332,9 @@ $(function () {
       coachStats.best = (coachStats.best || 0) + 1;
     }
     if (coachBoard) coachBoard.position(newFenAfter);
+    updateCapturedDisplay(newFenAfter);
     renderCoachReview({
-      tier: 'best', label: 'Best move', emoji: '✓',
+      tier: 'best', label: 'Best move', emoji: '★',
       loss: 0,
       bestSan: prev.bestSan,
       userSan: prev.bestSan,
@@ -4101,7 +4359,26 @@ $(function () {
   // Coach: show top-3 candidate moves
   $('#btn-coach-candidates').on('click', function() {
     if (!coachMode || !coachGame) return;
+    if (coachIsReviewing()) return;
     showCandidates();
+  });
+
+  // Coach: history navigation
+  $('#btn-coach-prev').on('click', function() {
+    if (!coachGame) return;
+    const total = coachGame.history().length;
+    const cur = coachReviewCursor === null ? total : coachReviewCursor;
+    if (cur > 0) coachGotoPly(cur - 1);
+  });
+  $('#btn-coach-next').on('click', function() {
+    if (!coachGame) return;
+    const total = coachGame.history().length;
+    const cur = coachReviewCursor === null ? total : coachReviewCursor;
+    if (cur < total) coachGotoPly(cur + 1);
+  });
+  $('#btn-coach-live').on('click', function() {
+    if (!coachGame) return;
+    coachGotoLive();
   });
 
   // Summary overlay buttons
