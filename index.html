@@ -767,7 +767,329 @@
     .token-disconnect:hover { color: var(--text); }
     .token-error { font-size: 0.75rem; color: #dd8a8a; margin-top: 0.25rem; }
 
+    /* ── TOP-LEVEL NAV (header) ── */
+    .top-nav {
+      display: flex;
+      gap: 0;
+      margin-left: auto;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .top-nav-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.4rem 0.95rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .top-nav-btn.active { background: var(--surface2); color: var(--text); }
+    .top-nav-btn:not(.active):hover { color: var(--text); }
+
+    /* ── COACH VIEW (standalone page) ── */
+    .coach-view {
+      display: grid;
+      grid-template-columns: 290px 1fr 340px;
+      grid-template-rows: 1fr;
+      height: calc(100vh - 65px);
+    }
+    .coach-settings {
+      border-right: 1px solid var(--border);
+      padding: 1.5rem 1.25rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    .coach-board-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 1.5rem 2rem 2rem;
+      gap: 1.25rem;
+      overflow-y: auto;
+    }
+    .coach-board-area > * { flex-shrink: 0; }
+    .coach-panel {
+      border-left: 1px solid var(--border);
+      padding: 1.5rem 1.25rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .coach-hero {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .coach-hero .title {
+      font-family: var(--font-reading);
+      font-size: 1.5rem;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      color: var(--text);
+    }
+    .coach-hero .tagline {
+      font-family: var(--font-reading);
+      font-style: italic;
+      color: var(--accent-soft);
+      font-size: 0.92rem;
+    }
+
+    .field-group { display: flex; flex-direction: column; gap: 0.6rem; }
+    .field-group .section-label { margin-bottom: 0; }
+
+    .strength-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .strength-value {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--accent-soft);
+      font-variant-numeric: tabular-nums;
+    }
+    .strength-label {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    input[type=range].strength-slider {
+      -webkit-appearance: none;
+      width: 100%;
+      background: transparent;
+      margin: 0.25rem 0;
+    }
+    input[type=range].strength-slider:focus { outline: none; }
+    input[type=range].strength-slider::-webkit-slider-runnable-track {
+      height: 3px;
+      background: var(--rule-3);
+      border-radius: 0;
+    }
+    input[type=range].strength-slider::-moz-range-track {
+      height: 3px;
+      background: var(--rule-3);
+      border-radius: 0;
+    }
+    input[type=range].strength-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      background: var(--accent);
+      border: none;
+      margin-top: -5.5px;
+      border-radius: 0;
+      cursor: pointer;
+    }
+    input[type=range].strength-slider::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      background: var(--accent);
+      border: none;
+      border-radius: 0;
+      cursor: pointer;
+    }
+    .strength-tier {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+
+    .side-toggle {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .side-toggle button {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.5rem 0.6rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .side-toggle button.active { background: var(--surface2); color: var(--text); font-weight: 500; }
+    .side-toggle button:not(.active):hover { color: var(--text); }
+
+    .fen-input {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      padding: 0.5rem 0.6rem;
+      outline: none;
+      resize: vertical;
+      min-height: 3em;
+      transition: border-color 0.15s;
+    }
+    .fen-input:focus { border-color: var(--accent); }
+    .fen-input::placeholder { color: var(--muted); opacity: 0.7; }
+    .fen-error {
+      font-size: 0.72rem;
+      color: #dd8a8a;
+    }
+
+    .coach-panel-section {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    /* Threats panel */
+    .threats-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+    .threat-card {
+      padding: 0.55rem 0.7rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 2px solid var(--accent);
+      border-radius: 2px;
+      font-size: 0.8rem;
+      display: flex;
+      gap: 0.5rem;
+      align-items: baseline;
+    }
+    .threat-card.mate { border-left-color: var(--accent-soft); background: rgba(162,51,70,0.08); }
+    .threat-card .piece {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: 0.92rem;
+      color: var(--accent-soft);
+      min-width: 2.2em;
+    }
+    .threat-card .text { color: var(--text); opacity: 0.9; }
+    .threats-empty {
+      font-family: var(--font-reading);
+      font-size: 0.9rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* Candidates */
+    .candidate-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 0.6rem;
+      padding: 0.4rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      align-items: baseline;
+      background: var(--surface);
+    }
+    .candidate-row .rank {
+      color: var(--muted);
+      font-size: 0.72rem;
+    }
+    .candidate-row .move {
+      font-weight: 600;
+      color: var(--text);
+    }
+    .candidate-row .eval {
+      color: var(--accent-soft);
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+    }
+    .candidate-row.best-delta .eval { color: var(--highlight); }
+
+    /* Post-game summary */
+    .summary-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 10, 7, 0.78);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      backdrop-filter: blur(2px);
+    }
+    .summary-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 2px;
+      padding: 1.75rem 2rem;
+      max-width: 440px;
+      width: 90%;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .summary-title {
+      font-family: var(--font-reading);
+      font-size: 1.6rem;
+      font-weight: 500;
+      color: var(--text);
+    }
+    .summary-stats {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.45rem 1rem;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+    }
+    .summary-stats .k { color: var(--muted); letter-spacing: 0.02em; }
+    .summary-stats .v { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+    .summary-stats .v.accuracy { color: var(--accent-soft); font-size: 1.1rem; }
+    .summary-turning {
+      padding: 0.75rem 0.85rem;
+      background: var(--surface2);
+      border-left: 2px solid var(--highlight);
+      border-radius: 2px;
+      font-family: var(--font-reading);
+      font-size: 0.92rem;
+      color: var(--text);
+      line-height: 1.45;
+    }
+    .summary-turning .eyebrow {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--highlight);
+      margin-bottom: 0.35rem;
+    }
+    .summary-actions { display: flex; gap: 0.5rem; margin-top: 0.25rem; }
+
     /* Responsive */
+    @media (max-width: 1100px) {
+      .coach-view { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; }
+      .coach-settings { border-right: none; border-bottom: 1px solid var(--border); }
+      .coach-panel { border-left: none; border-top: 1px solid var(--border); }
+      .coach-board-area { padding: 1rem; }
+      #coachBoard { width: 90vw; max-width: 440px; }
+    }
     @media (max-width: 1100px) {
       .app { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; }
       .library { border-right: none; border-bottom: 1px solid var(--border); padding: 1rem; overflow-y: visible; }
@@ -789,7 +1111,10 @@
 <header>
   <a class="back" href="https://cjarhodes.com">← cjarhodes.com</a>
   <h1>chess<span class="tld">.cjarhodes.com</span><span class="dot" aria-hidden="true"></span></h1>
-  <span class="subtitle">Study · Drill · Master</span>
+  <div class="top-nav" role="tablist">
+    <button class="top-nav-btn active" id="nav-library" role="tab" aria-selected="true">Library</button>
+    <button class="top-nav-btn" id="nav-coach" role="tab" aria-selected="false">Coach</button>
+  </div>
 </header>
 
 <div class="app">
@@ -864,7 +1189,6 @@
     <div class="mode-toggle">
       <button class="mode-btn active" id="btn-study">Study</button>
       <button class="mode-btn" id="btn-quiz">Quiz</button>
-      <button class="mode-btn" id="btn-coach">Coach</button>
       <button class="mode-btn" id="btn-explore">Explore</button>
     </div>
 
@@ -924,43 +1248,6 @@
       </div>
     </div>
 
-    <!-- Coach mode panel -->
-    <div id="coach-content" style="display:none; flex-direction:column; gap:1rem;">
-      <div>
-        <div class="opening-title" id="coach-title">Coach Mode</div>
-        <div class="opening-tagline" id="coach-tagline">Play freely — every move gets analyzed</div>
-      </div>
-
-      <div id="coach-status" class="coach-status">Engine not loaded.</div>
-
-      <div id="coach-review" class="coach-review" style="display:none">
-        <div class="coach-review-header">
-          <span id="coach-classification" class="coach-classification coach-class-best">Best</span>
-          <span id="coach-loss" class="coach-review-loss">0 cp</span>
-        </div>
-        <div class="coach-review-moves">
-          <span class="label">You played</span><span class="value" id="coach-user-move">—</span>
-          <span class="label">Best move</span><span class="value" id="coach-best-move">—</span>
-        </div>
-        <div id="coach-explanation" style="font-size:0.82rem; color:var(--muted); line-height:1.45;"></div>
-        <div class="coach-review-pv" id="coach-pv" style="display:none"></div>
-        <div class="coach-actions">
-          <button class="ctrl-btn" id="btn-coach-takeback" title="Take back the last move pair">↺ Take back</button>
-          <button class="ctrl-btn" id="btn-coach-showbest" title="Replay the best move instead">► Show best</button>
-        </div>
-      </div>
-
-      <div class="coach-summary" id="coach-summary">
-        <span class="k">Moves played</span><span class="v" id="coach-moves-count">0</span>
-        <span class="k">Accuracy</span><span class="v big" id="coach-accuracy">—</span>
-        <span class="k">Best</span><span class="v" id="coach-tally-best">0</span>
-        <span class="k">Good</span><span class="v" id="coach-tally-good">0</span>
-        <span class="k">Inaccuracies</span><span class="v" id="coach-tally-inacc">0</span>
-        <span class="k">Mistakes</span><span class="v" id="coach-tally-mistake">0</span>
-        <span class="k">Blunders</span><span class="v" id="coach-tally-blunder">0</span>
-      </div>
-    </div>
-
     <!-- Explore mode panel -->
     <div id="explore-content" style="display:none; flex-direction:column; gap:1.25rem;">
       <div>
@@ -1001,6 +1288,133 @@
     </div>
   </aside>
 
+</div>
+
+<!-- ── COACH VIEW (standalone page) ── -->
+<section class="coach-view" id="coach-view" style="display:none;" aria-hidden="true">
+
+  <!-- SETTINGS -->
+  <aside class="coach-settings">
+    <div class="coach-hero">
+      <div class="title">Coach</div>
+      <div class="tagline">Sharpen your reactive play</div>
+    </div>
+
+    <div class="field-group">
+      <div class="strength-row">
+        <span class="strength-label">Engine strength</span>
+        <span class="strength-value" id="coach-strength-value">1200</span>
+      </div>
+      <input type="range" class="strength-slider" id="coach-strength"
+             min="800" max="2400" step="50" value="1200" />
+      <div class="strength-tier" id="coach-strength-tier">Club novice</div>
+    </div>
+
+    <div class="field-group">
+      <div class="section-label">Play as</div>
+      <div class="side-toggle" role="tablist">
+        <button class="active" data-side="white" role="tab">White</button>
+        <button data-side="black" role="tab">Black</button>
+        <button data-side="random" role="tab">Random</button>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <div class="section-label">Starting position</div>
+      <textarea class="fen-input" id="coach-fen" rows="3"
+                placeholder="FEN (optional) — leave empty for the initial position"></textarea>
+      <div class="fen-error" id="coach-fen-error" style="display:none;"></div>
+    </div>
+
+    <div class="field-group">
+      <button class="ctrl-btn primary" id="btn-coach-newgame">▶ New game</button>
+      <button class="ctrl-btn" id="btn-coach-resign" disabled>Resign &amp; review</button>
+    </div>
+  </aside>
+
+  <!-- BOARD -->
+  <main class="coach-board-area">
+    <div id="coachBoard-wrap" style="position:relative;">
+      <div id="coachBoard" style="width:440px;"></div>
+      <div id="coachBoard-placeholder" class="board-empty-state" style="display:none;">
+        <div class="icon">♟</div>
+        <p>Start a new game to begin</p>
+      </div>
+    </div>
+
+    <div class="feedback-bar" id="coach-feedback"></div>
+
+    <div class="board-controls">
+      <button class="ctrl-btn" id="btn-coach-takeback" title="Take back the last move pair">↺ Take back</button>
+      <button class="ctrl-btn" id="btn-coach-showbest" title="Replay the best move instead">► Show best</button>
+      <button class="ctrl-btn" id="btn-coach-candidates" title="Show top 3 engine moves">◆ Candidates</button>
+      <button class="ctrl-btn flip" id="btn-coach-flip" title="Flip board">⇅</button>
+    </div>
+  </main>
+
+  <!-- COACH PANEL -->
+  <aside class="coach-panel">
+    <div id="coach-status" class="coach-status">Set a strength and start a new game.</div>
+
+    <div id="coach-review" class="coach-review" style="display:none">
+      <div class="coach-review-header">
+        <span id="coach-classification" class="coach-classification coach-class-best">Best</span>
+        <span id="coach-loss" class="coach-review-loss">0 cp</span>
+      </div>
+      <div class="coach-review-moves">
+        <span class="label">You played</span><span class="value" id="coach-user-move">—</span>
+        <span class="label">Best move</span><span class="value" id="coach-best-move">—</span>
+      </div>
+      <div id="coach-explanation" style="font-size:0.82rem; color:var(--muted); line-height:1.45;"></div>
+      <div class="coach-review-pv" id="coach-pv" style="display:none"></div>
+    </div>
+
+    <div class="coach-panel-section" id="threats-section" style="display:none;">
+      <div class="section-label">Opponent threats</div>
+      <div id="threats-list" class="threats-list"></div>
+    </div>
+
+    <div class="coach-panel-section" id="candidates-section" style="display:none;">
+      <div class="section-label">Top engine moves</div>
+      <div id="candidates-list"></div>
+    </div>
+
+    <div class="coach-panel-section">
+      <div class="section-label">Session</div>
+      <div class="coach-summary" id="coach-summary">
+        <span class="k">Moves played</span><span class="v" id="coach-moves-count">0</span>
+        <span class="k">Accuracy</span><span class="v big" id="coach-accuracy">—</span>
+        <span class="k">Best</span><span class="v" id="coach-tally-best">0</span>
+        <span class="k">Good</span><span class="v" id="coach-tally-good">0</span>
+        <span class="k">Inaccuracies</span><span class="v" id="coach-tally-inacc">0</span>
+        <span class="k">Mistakes</span><span class="v" id="coach-tally-mistake">0</span>
+        <span class="k">Blunders</span><span class="v" id="coach-tally-blunder">0</span>
+      </div>
+    </div>
+  </aside>
+</section>
+
+<!-- Post-game summary overlay -->
+<div class="summary-overlay" id="summary-overlay" style="display:none;" role="dialog" aria-modal="true">
+  <div class="summary-card">
+    <div class="summary-title" id="summary-title">Game over</div>
+    <div class="summary-stats">
+      <span class="k">Moves</span><span class="v" id="summary-moves">0</span>
+      <span class="k">Accuracy</span><span class="v accuracy" id="summary-accuracy">—</span>
+      <span class="k">Best</span><span class="v" id="summary-best">0</span>
+      <span class="k">Inaccuracies</span><span class="v" id="summary-inacc">0</span>
+      <span class="k">Mistakes</span><span class="v" id="summary-mistakes">0</span>
+      <span class="k">Blunders</span><span class="v" id="summary-blunders">0</span>
+    </div>
+    <div class="summary-turning" id="summary-turning" style="display:none;">
+      <span class="eyebrow">Turning point</span>
+      <span id="summary-turning-text">—</span>
+    </div>
+    <div class="summary-actions">
+      <button class="ctrl-btn primary" id="btn-summary-newgame">New game</button>
+      <button class="ctrl-btn" id="btn-summary-close">Close</button>
+    </div>
+  </div>
 </div>
 
 <!-- Scripts: jQuery first, then chess.js, then chessboard.js -->
@@ -2171,14 +2585,21 @@ let feedbackTimeout = null;
 let quizSessionMisses = 0;  // misses in current quiz session (before completion)
 let tapSelected = null;      // square selected for tap-to-move, or null
 
-// Coach mode
-let coachMode = false;
+// Coach mode (standalone page)
+let appView = 'library';           // 'library' | 'coach'
+let coachMode = false;             // true when coach view is active
 let coachGame = null;
 let coachStartFen = null;
 let coachStats = null;
-let coachLastReview = null;  // latest review object (for take back)
+let coachReviewLog = [];           // all reviews from current session (for summary turning point)
+let coachLastReview = null;        // most recent review (for take back / show best)
 let coachThinking = false;
-let coachOpponentSide = 'auto'; // side opponent plays; 'auto' = opposite of user color (opening-based)
+let coachUserSide = 'white';       // 'white' | 'black'
+let coachEngineElo = 1200;         // Stockfish UCI_Elo
+let coachBoard = null;             // separate Chessboard.js instance
+let coachBoardFlipped = false;
+let coachGameActive = false;       // true once user hits New Game
+let coachEndedAt = null;           // timestamp of game end, null while playing
 
 // ─────────────────────────────────────────────
 // STOCKFISH ENGINE WRAPPER
@@ -2228,22 +2649,45 @@ const engine = {
     if (!this.current) return;
     if (msg.startsWith('info ')) {
       const parsed = parseInfo(msg);
-      if (parsed) this.current.lastInfo = parsed;
+      if (!parsed) return;
+      if (this.current.multipv) {
+        // collect last-seen info per multipv index
+        this.current.pvLines = this.current.pvLines || {};
+        this.current.pvLines[parsed.multipv || 1] = parsed;
+      } else {
+        this.current.lastInfo = parsed;
+      }
       return;
     }
     if (msg.startsWith('bestmove ')) {
       const bm = msg.split(' ')[1];
       const done = this.current;
       this.current = null;
-      const info = done.lastInfo || { cp: 0, pv: [bm], depth: 0 };
-      done.resolve({ bestmove: bm === '(none)' ? null : bm, info });
+      if (done.multipv) {
+        const lines = Object.keys(done.pvLines || {})
+          .map(k => parseInt(k))
+          .sort((a, b) => a - b)
+          .map(k => done.pvLines[k]);
+        done.resolve({ bestmove: bm === '(none)' ? null : bm, lines });
+      } else {
+        const info = done.lastInfo || { cp: 0, pv: [bm], depth: 0 };
+        done.resolve({ bestmove: bm === '(none)' ? null : bm, info });
+      }
       this._runNext();
     }
   },
 
-  evaluate(fen, depth) {
+  evaluate(fen, depth, opts) {
     return this.init().then(() => new Promise((resolve) => {
-      this.queue.push({ fen, depth, resolve, lastInfo: null });
+      this.queue.push({
+        fen,
+        depth,
+        resolve,
+        lastInfo: null,
+        skill: (opts && typeof opts.skill === 'number') ? opts.skill : null,
+        elo: (opts && typeof opts.elo === 'number') ? opts.elo : null,
+        multipv: (opts && opts.multipv) || null
+      });
       this._runNext();
     }));
   },
@@ -2252,6 +2696,19 @@ const engine = {
     if (this.status !== 'ready' || this.current || this.queue.length === 0) return;
     this.current = this.queue.shift();
     this.worker.postMessage('ucinewgame');
+    // Apply strength options per task
+    if (this.current.elo !== null && this.current.elo !== undefined) {
+      this.worker.postMessage('setoption name UCI_LimitStrength value true');
+      this.worker.postMessage('setoption name UCI_Elo value ' + this.current.elo);
+    } else if (this.current.skill !== null && this.current.skill !== undefined) {
+      this.worker.postMessage('setoption name UCI_LimitStrength value false');
+      this.worker.postMessage('setoption name Skill Level value ' + this.current.skill);
+    } else {
+      this.worker.postMessage('setoption name UCI_LimitStrength value false');
+      this.worker.postMessage('setoption name Skill Level value 20');
+    }
+    // MultiPV
+    this.worker.postMessage('setoption name MultiPV value ' + (this.current.multipv || 1));
     this.worker.postMessage('position fen ' + this.current.fen);
     this.worker.postMessage('go depth ' + this.current.depth);
   },
@@ -2268,6 +2725,7 @@ function parseInfo(msg) {
   const depthMatch = msg.match(/\bdepth (\d+)/);
   const cpMatch = msg.match(/\bscore cp (-?\d+)/);
   const mateMatch = msg.match(/\bscore mate (-?\d+)/);
+  const mpvMatch = msg.match(/\bmultipv (\d+)/);
   // PV runs from "pv " to next space-delimited keyword or end
   const pvMatch = msg.match(/\bpv ((?:[a-h][1-8][a-h][1-8][qrbn]? ?)+)/);
   if (!depthMatch) return null;
@@ -2275,6 +2733,7 @@ function parseInfo(msg) {
     depth: parseInt(depthMatch[1]),
     cp: cpMatch ? parseInt(cpMatch[1]) : null,
     mate: mateMatch ? parseInt(mateMatch[1]) : null,
+    multipv: mpvMatch ? parseInt(mpvMatch[1]) : 1,
     pv: pvMatch ? pvMatch[1].trim().split(/\s+/) : []
   };
 }
@@ -2361,9 +2820,7 @@ async function classifyMove(fenBefore, userUciMove, fenAfter) {
 }
 
 function coachUserColor() {
-  // If we started from an opening, user plays that side; otherwise white
-  if (!currentOpening) return 'white';
-  return currentOpening.category === 'black' ? 'black' : 'white';
+  return coachUserSide === 'black' ? 'black' : 'white';
 }
 
 function coachOpponentColorChar() {
@@ -2371,9 +2828,20 @@ function coachOpponentColorChar() {
 }
 
 function coachIsUserTurn() {
+  if (!coachGame) return false;
   const turn = coachGame.turn();
   return (turn === 'w' && coachUserColor() === 'white') ||
          (turn === 'b' && coachUserColor() === 'black');
+}
+
+// Opponent search depth matches review depth; strength is controlled by Elo.
+function strengthTierLabel(elo) {
+  if (elo < 1000) return 'Beginner';
+  if (elo < 1300) return 'Club novice';
+  if (elo < 1600) return 'Improving club';
+  if (elo < 1900) return 'Strong club';
+  if (elo < 2200) return 'Expert';
+  return 'Master';
 }
 
 function updateCoachSummary() {
@@ -2424,39 +2892,49 @@ function resetCoachState(fen) {
   coachGame = fen ? new Chess(fen) : new Chess();
   coachStartFen = coachGame.fen();
   coachStats = { moves: 0, best: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
+  coachReviewLog = [];
   coachLastReview = null;
   coachThinking = false;
+  coachEndedAt = null;
   $('#coach-review').hide();
+  $('#threats-section').hide();
+  $('#candidates-section').hide();
   updateCoachSummary();
 }
 
 async function coachOpponentRespond() {
-  if (!coachMode) return;
-  if (coachGame.game_over()) { setCoachStatus('Game over.'); return; }
+  if (!coachMode || !coachGameActive) return;
+  if (coachGame.game_over()) { coachHandleGameOver(); return; }
   if (coachIsUserTurn()) return;
   setCoachStatus('Opponent thinking…');
   const fen = coachGame.fen();
   try {
-    const result = await engine.evaluate(fen, COACH_DEPTH);
-    if (!coachMode) return;
+    // Opponent uses configured Elo. Lower depth at low Elo for realism.
+    const depth = coachEngineElo < 1400 ? 8 : (coachEngineElo < 2000 ? 12 : 16);
+    const result = await engine.evaluate(fen, depth, { elo: coachEngineElo });
+    if (!coachMode || !coachGameActive) return;
     if (!result.bestmove) { setCoachStatus('Your move.'); return; }
     setTimeout(() => {
-      if (!coachMode) return;
+      if (!coachMode || !coachGameActive) return;
       const mv = coachGame.move({
         from: result.bestmove.slice(0, 2),
         to: result.bestmove.slice(2, 4),
         promotion: result.bestmove[4] || undefined
       });
       if (!mv) return;
-      board.position(coachGame.fen());
-      setCoachStatus(coachGame.game_over() ? 'Game over.' : 'Your move.');
-    }, 350);
+      coachBoard.position(coachGame.fen());
+      if (coachGame.game_over()) { coachHandleGameOver(); return; }
+      setCoachStatus('Your move.');
+      // Show threats after opponent has moved
+      showThreats();
+    }, 300);
   } catch (err) {
     setCoachStatus('Engine error: ' + err.message);
   }
 }
 
 async function coachHandleUserMove(source, target) {
+  if (!coachMode || !coachGameActive) return 'snapback';
   if (coachThinking) return 'snapback';
   if (!coachIsUserTurn()) return 'snapback';
   const fenBefore = coachGame.fen();
@@ -2464,16 +2942,21 @@ async function coachHandleUserMove(source, target) {
   const move = tempGame.move({ from: source, to: target, promotion: 'q' });
   if (!move) return 'snapback';
 
-  // Commit the move locally (engine will analyze in the background)
   coachGame.move({ from: source, to: target, promotion: 'q' });
   const fenAfter = coachGame.fen();
   const userUci = source + target + (move.promotion || '');
+
+  // Clear threats/candidates on new move
+  $('#threats-section').hide();
+  $('#candidates-section').hide();
 
   coachThinking = true;
   setCoachStatus('Analyzing your move…');
   try {
     const review = await classifyMove(fenBefore, userUci, fenAfter);
-    coachLastReview = Object.assign({}, review, { fenBefore, fenAfter, userUci });
+    const logged = Object.assign({}, review, { fenBefore, fenAfter, userUci, moveNum: coachGame.history().length });
+    coachLastReview = logged;
+    coachReviewLog.push(logged);
     coachStats.moves++;
     coachStats[review.tier] = (coachStats[review.tier] || 0) + 1;
     renderCoachReview(review);
@@ -2485,8 +2968,242 @@ async function coachHandleUserMove(source, target) {
   }
   coachThinking = false;
 
-  if (coachGame.game_over()) { setCoachStatus('Game over.'); return; }
+  if (coachGame.game_over()) { coachHandleGameOver(); return; }
   coachOpponentRespond();
+}
+
+function coachHandleGameOver() {
+  if (!coachGameActive) return;
+  coachGameActive = false;
+  coachEndedAt = Date.now();
+  let msg = 'Game over.';
+  if (coachGame.in_checkmate()) {
+    const loser = coachGame.turn() === 'w' ? 'White' : 'Black';
+    const winner = loser === 'White' ? 'Black' : 'White';
+    msg = `Checkmate — ${winner} wins.`;
+  } else if (coachGame.in_stalemate()) msg = 'Stalemate.';
+  else if (coachGame.in_draw()) msg = 'Draw.';
+  setCoachStatus(msg);
+  $('#btn-coach-resign').prop('disabled', true);
+  showPostGameSummary(msg);
+}
+
+// ─────────────────────────────────────────────
+// THREAT DETECTION
+// ─────────────────────────────────────────────
+const PIECE_GLYPH = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚' };
+const PIECE_NAME = { p: 'Pawn', n: 'Knight', b: 'Bishop', r: 'Rook', q: 'Queen', k: 'King' };
+
+function squaresAttackedBy(game, color) {
+  // Returns a Set of destination squares attacked by `color`'s pieces.
+  // Works by temporarily forcing side-to-move to `color` and asking chess.js for moves.
+  const fen = game.fen();
+  const parts = fen.split(' ');
+  parts[1] = color;
+  parts[3] = '-'; // clear en passant to avoid false positives
+  const g = new Chess();
+  if (!g.load(parts.join(' '))) return new Set();
+  const moves = g.moves({ verbose: true });
+  const attacked = new Set();
+  moves.forEach(m => attacked.add(m.to));
+  return attacked;
+}
+
+function piecesDefenders(game, square, defenderColor) {
+  // Count defenders of `square` owned by `defenderColor`.
+  // Trick: clear the piece on `square`, then count attackers from defenderColor to that square.
+  const pos = game.board(); // 2D array, [rank][file] top-down
+  const fileStr = 'abcdefgh';
+  const f = fileStr.indexOf(square[0]);
+  const r = 8 - parseInt(square[1]);
+  const piece = pos[r][f];
+  if (!piece) return 0;
+
+  // Build a modified FEN with that square emptied, side-to-move = defender
+  const parts = game.fen().split(' ');
+  const rows = parts[0].split('/');
+  let row = rows[r];
+  let expanded = '';
+  for (const ch of row) {
+    if (/\d/.test(ch)) for (let i = 0; i < parseInt(ch); i++) expanded += '1';
+    else expanded += ch;
+  }
+  expanded = expanded.substring(0, f) + '1' + expanded.substring(f + 1);
+  // collapse back
+  let collapsed = '';
+  let runs = 0;
+  for (const ch of expanded) {
+    if (ch === '1') runs++;
+    else { if (runs) { collapsed += runs; runs = 0; } collapsed += ch; }
+  }
+  if (runs) collapsed += runs;
+  rows[r] = collapsed;
+  parts[0] = rows.join('/');
+  parts[1] = defenderColor;
+  parts[3] = '-';
+
+  const g = new Chess();
+  if (!g.load(parts.join(' '))) return 0;
+  return g.moves({ verbose: true }).filter(m => m.to === square).length;
+}
+
+function detectHangingPieces(game, userColor) {
+  // Pieces the OPPONENT is attacking that user has insufficient defense for.
+  const userChar = userColor === 'white' ? 'w' : 'b';
+  const oppChar = userColor === 'white' ? 'b' : 'w';
+  const oppAttacks = squaresAttackedBy(game, oppChar);
+  const hangs = [];
+  const boardArr = game.board();
+  for (let r = 0; r < 8; r++) {
+    for (let f = 0; f < 8; f++) {
+      const sq = boardArr[r][f];
+      if (!sq || sq.color !== userChar) continue;
+      const square = 'abcdefgh'[f] + (8 - r);
+      if (!oppAttacks.has(square)) continue;
+      // Count attackers and defenders — naive hanging check
+      const attackers = countAttackers(game, square, oppChar);
+      const defenders = piecesDefenders(game, square, userChar);
+      if (defenders < attackers || (defenders === 0 && attackers > 0)) {
+        hangs.push({ square, piece: sq.type, attackers, defenders });
+      }
+    }
+  }
+  return hangs;
+}
+
+function countAttackers(game, square, attackerColor) {
+  const parts = game.fen().split(' ');
+  parts[1] = attackerColor;
+  parts[3] = '-';
+  const g = new Chess();
+  if (!g.load(parts.join(' '))) return 0;
+  return g.moves({ verbose: true }).filter(m => m.to === square).length;
+}
+
+async function detectMateThreat(fen) {
+  // Is opponent threatening mate on their next move? Flip side-to-move, shallow search.
+  const parts = fen.split(' ');
+  parts[1] = parts[1] === 'w' ? 'b' : 'w';
+  parts[3] = '-';
+  const flipped = parts.join(' ');
+  try {
+    const res = await engine.evaluate(flipped, 8);
+    if (res.info && res.info.mate !== null && res.info.mate !== undefined && res.info.mate > 0) {
+      return res.info.mate;
+    }
+  } catch (e) { /* ignore */ }
+  return null;
+}
+
+async function showThreats() {
+  if (!coachMode || !coachGameActive || !coachGame) return;
+  const $section = $('#threats-section');
+  const $list = $('#threats-list');
+  $list.empty();
+  const hangs = detectHangingPieces(coachGame, coachUserColor());
+  const mateIn = await detectMateThreat(coachGame.fen());
+  const items = [];
+  if (mateIn !== null) {
+    items.push({ kind: 'mate', text: `Mate-in-${mateIn} threat — you must defend now.` });
+  }
+  hangs.forEach(h => {
+    const name = PIECE_NAME[h.piece];
+    const glyph = PIECE_GLYPH[h.piece];
+    items.push({
+      kind: 'hang',
+      glyph,
+      text: `${name} on ${h.square} is ${h.defenders === 0 ? 'hanging' : 'inadequately defended'} (${h.attackers} attacker${h.attackers > 1 ? 's' : ''} vs ${h.defenders} defender${h.defenders === 1 ? '' : 's'})`
+    });
+  });
+  if (items.length === 0) {
+    $list.append($('<div class="threats-empty">No immediate threats. Look for active moves.</div>'));
+  } else {
+    items.forEach(it => {
+      const $card = $('<div class="threat-card"></div>').addClass(it.kind === 'mate' ? 'mate' : '');
+      if (it.glyph) $card.append($('<span class="piece"></span>').text(it.glyph));
+      $card.append($('<span class="text"></span>').text(it.text));
+      $list.append($card);
+    });
+  }
+  $section.show();
+}
+
+// ─────────────────────────────────────────────
+// CANDIDATE MOVES (top-3)
+// ─────────────────────────────────────────────
+async function showCandidates() {
+  if (!coachMode || !coachGame) return;
+  if (coachThinking) return;
+  const fen = coachGame.fen();
+  const $section = $('#candidates-section').show();
+  const $list = $('#candidates-list');
+  $list.html('<div class="explore-loading">Computing top moves…</div>');
+  try {
+    const res = await engine.evaluate(fen, 14, { multipv: 3 });
+    $list.empty();
+    if (!res.lines || res.lines.length === 0) {
+      $list.html('<div class="explore-empty">No candidates found.</div>');
+      return;
+    }
+    const bestCp = res.lines[0].mate !== null && res.lines[0].mate !== undefined
+      ? (res.lines[0].mate > 0 ? 10000 : -10000)
+      : (res.lines[0].cp || 0);
+    res.lines.forEach((line, idx) => {
+      const uci = (line.pv && line.pv[0]) || null;
+      if (!uci) return;
+      const san = uciToSan(fen, uci);
+      const evalLabel = formatEval(line);
+      const cp = line.mate !== null && line.mate !== undefined
+        ? (line.mate > 0 ? 10000 : -10000)
+        : (line.cp || 0);
+      const delta = cp - bestCp;
+      const $row = $('<div class="candidate-row"></div>');
+      $row.append($('<span class="rank"></span>').text((idx + 1) + '.'));
+      $row.append($('<span class="move"></span>').text(san));
+      const $eval = $('<span class="eval"></span>').text(evalLabel + (idx > 0 ? ` (${(delta / 100).toFixed(2)})` : ''));
+      $row.append($eval);
+      $list.append($row);
+    });
+  } catch (err) {
+    $list.html('<div class="token-error">Engine error: ' + err.message + '</div>');
+  }
+}
+
+// ─────────────────────────────────────────────
+// POST-GAME SUMMARY
+// ─────────────────────────────────────────────
+function showPostGameSummary(endMsg) {
+  $('#summary-title').text(endMsg);
+  $('#summary-moves').text(coachStats.moves);
+  $('#summary-best').text(coachStats.best);
+  $('#summary-inacc').text(coachStats.inaccuracy);
+  $('#summary-mistakes').text(coachStats.mistake);
+  $('#summary-blunders').text(coachStats.blunder);
+
+  const total = coachStats.moves;
+  if (total === 0) {
+    $('#summary-accuracy').text('—');
+  } else {
+    const weight = coachStats.best * 1 + coachStats.good * 0.85 +
+                   coachStats.inaccuracy * 0.6 + coachStats.mistake * 0.3 +
+                   coachStats.blunder * 0.05;
+    $('#summary-accuracy').text(Math.round((weight / total) * 100) + '%');
+  }
+
+  // Turning point: biggest loss among non-best moves
+  const biggest = coachReviewLog
+    .filter(r => r.tier !== 'best')
+    .sort((a, b) => b.loss - a.loss)[0];
+  if (biggest && biggest.loss >= 60) {
+    $('#summary-turning').show();
+    $('#summary-turning-text').text(
+      `Move ${biggest.moveNum}: ${biggest.userSan} lost ${(biggest.loss / 100).toFixed(2)} pawns — the engine preferred ${biggest.bestSan}.`
+    );
+  } else {
+    $('#summary-turning').hide();
+  }
+
+  $('#summary-overlay').css('display', 'flex');
 }
 
 // ─────────────────────────────────────────────
@@ -2582,12 +3299,15 @@ function updateSRPanel() {
 // ─────────────────────────────────────────────
 function updateURL() {
   const params = new URLSearchParams();
-  if (currentOpening) params.set('opening', currentOpening.id);
-  if (quizMode) params.set('mode', 'quiz');
-  else if (exploreMode) params.set('mode', 'explore');
-  else if (coachMode) params.set('mode', 'coach');
-  if (currentOpening && !quizMode && !exploreMode && !coachMode && currentMoveIdx >= 0) {
-    params.set('move', String(currentMoveIdx));
+  if (appView === 'coach') {
+    params.set('view', 'coach');
+  } else {
+    if (currentOpening) params.set('opening', currentOpening.id);
+    if (quizMode) params.set('mode', 'quiz');
+    else if (exploreMode) params.set('mode', 'explore');
+    if (currentOpening && !quizMode && !exploreMode && currentMoveIdx >= 0) {
+      params.set('move', String(currentMoveIdx));
+    }
   }
   const q = params.toString();
   const url = q ? `?${q}` : location.pathname;
@@ -2595,7 +3315,7 @@ function updateURL() {
 }
 function readURL() {
   const p = new URLSearchParams(location.search);
-  return { opening: p.get('opening'), mode: p.get('mode'), move: parseInt(p.get('move'), 10) };
+  return { view: p.get('view'), opening: p.get('opening'), mode: p.get('mode'), move: parseInt(p.get('move'), 10) };
 }
 
 // ─────────────────────────────────────────────
@@ -2626,6 +3346,131 @@ function createBoard(position, draggable, orientation) {
     },
     onDrop: handleDrop,
     onSnapEnd: handleSnapEnd,
+  });
+}
+
+const COACH_PIECE_THEME = {
+  bB: 'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg',
+  bK: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg',
+  bN: 'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg',
+  bP: 'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg',
+  bQ: 'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg',
+  bR: 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg',
+  wB: 'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg',
+  wK: 'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg',
+  wN: 'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg',
+  wP: 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg',
+  wQ: 'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg',
+  wR: 'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg'
+};
+
+function createCoachBoard(position, orientation) {
+  if (coachBoard) coachBoard.destroy();
+  coachBoard = Chessboard('coachBoard', {
+    position: position || 'start',
+    draggable: true,
+    orientation: orientation || 'white',
+    pieceTheme: function(piece) { return COACH_PIECE_THEME[piece]; },
+    onDragStart: function(source, piece) {
+      if (!coachGameActive || !coachGame) return false;
+      if (coachThinking) return false;
+      if (!coachIsUserTurn()) return false;
+      // Only allow picking up pieces of the user's colour
+      const userPrefix = coachUserColor() === 'white' ? 'w' : 'b';
+      if (piece[0] !== userPrefix) return false;
+    },
+    onDrop: function(source, target) {
+      if (!coachGameActive || !coachGame) return 'snapback';
+      if (coachThinking) return 'snapback';
+      if (!coachIsUserTurn()) return 'snapback';
+      // Synchronous legality check — chessboard.js needs a sync return value
+      const tempGame = new Chess(coachGame.fen());
+      const move = tempGame.move({ from: source, to: target, promotion: 'q' });
+      if (!move) return 'snapback';
+      // Legal move — dispatch async classification + opponent reply
+      coachHandleUserMove(source, target);
+    },
+    onSnapEnd: function() {
+      if (coachGame) coachBoard.position(coachGame.fen());
+    }
+  });
+}
+
+// ─────────────────────────────────────────────
+// COACH VIEW SWITCHING
+// ─────────────────────────────────────────────
+function switchView(view) {
+  appView = view;
+  coachMode = (view === 'coach');
+  const $app = $('.app');
+  const $coach = $('#coach-view');
+  if (view === 'coach') {
+    $app.hide();
+    $coach.show().css('display', 'grid').attr('aria-hidden', 'false');
+    $('#nav-library').removeClass('active').attr('aria-selected', 'false');
+    $('#nav-coach').addClass('active').attr('aria-selected', 'true');
+    // Initialize strength display
+    $('#coach-strength-value').text(coachEngineElo);
+    $('#coach-strength-tier').text(strengthTierLabel(coachEngineElo));
+    if (!coachGame) {
+      // Show an idle board so the user has visual context
+      $('#coachBoard-placeholder').hide();
+      createCoachBoard('start', 'white');
+      setCoachStatus('Set a strength and start a new game.');
+    }
+  } else {
+    $coach.hide().attr('aria-hidden', 'true');
+    $app.show();
+    $('#nav-coach').removeClass('active').attr('aria-selected', 'false');
+    $('#nav-library').addClass('active').attr('aria-selected', 'true');
+    // If library board exists, kick it into life via a resize so it redraws correctly
+    if (board) setTimeout(() => board.resize(), 0);
+  }
+  updateURL();
+}
+
+function isValidFen(fen) {
+  try {
+    const g = new Chess();
+    return g.load(fen);
+  } catch (e) { return false; }
+}
+
+function startCoachGame() {
+  const fenRaw = ($('#coach-fen').val() || '').trim();
+  let startFen = null;
+  if (fenRaw) {
+    if (!isValidFen(fenRaw)) {
+      $('#coach-fen-error').text('Invalid FEN — check the position string.').show();
+      return;
+    }
+    startFen = fenRaw;
+  }
+  $('#coach-fen-error').hide();
+
+  // Resolve "random" side
+  const chosenSide = $('.side-toggle button.active').data('side') || 'white';
+  coachUserSide = chosenSide === 'random'
+    ? (Math.random() < 0.5 ? 'white' : 'black')
+    : chosenSide;
+
+  resetCoachState(startFen);
+  coachGameActive = true;
+  $('#btn-coach-resign').prop('disabled', false);
+  $('#summary-overlay').hide();
+
+  // Orient board so user plays from bottom
+  coachBoardFlipped = (coachUserColor() === 'black');
+  createCoachBoard(coachGame.fen(), coachBoardFlipped ? 'black' : 'white');
+
+  setCoachStatus(`Playing ${coachUserColor() === 'white' ? 'White' : 'Black'} vs Stockfish ${coachEngineElo}. Your move.`);
+
+  // Pre-warm engine, then kick off opponent if it's their turn
+  engine.init().then(() => {
+    if (!coachGameActive) return;
+    if (!coachIsUserTurn()) {
+      coachOpponentRespond();
+    }
   });
 }
 
@@ -2688,16 +3533,6 @@ function handleDrop(source, target) {
     if (!move) return 'snapback';
     return; // board updated in handleSnapEnd
   }
-  // Coach mode: accept any legal move, classify async
-  if (coachMode) {
-    // Validate on a temp game first (so snapback works synchronously)
-    const tempGame = new Chess(coachGame.fen());
-    const move = tempGame.move({ from: source, to: target, promotion: 'q' });
-    if (!move) return 'snapback';
-    // Defer the real handling until after chessboard processes the drop
-    setTimeout(() => coachHandleUserMove(source, target), 0);
-    return;
-  }
   if (!quizMode || !currentOpening) return 'snapback';
   const nextIdx = currentMoveIdx + 1;
   if (nextIdx >= currentOpening.moves.length) return 'snapback';
@@ -2739,10 +3574,6 @@ function handleSnapEnd() {
     fetchExploreData();
     return;
   }
-  if (coachMode) {
-    board.position(coachGame.fen());
-    return;
-  }
   if (!quizMode) return;
   board.position(game.fen());
 }
@@ -2754,27 +3585,15 @@ function loadOpening(id) {
   currentOpening = OPENINGS.find(o => o.id === id);
   if (!currentOpening) return;
 
-  // If coach mode active, re-seed to end of new opening and return
-  if (coachMode) {
-    setMode('coach');
-    $('.opening-btn').removeClass('active');
-    $(`.opening-btn[data-id="${currentOpening.id}"]`).addClass('active');
-    updateURL();
-    return;
-  }
-
   // Exit explore mode when user picks an opening
   if (exploreMode) {
     exploreMode = false;
-    $('#btn-study, #btn-quiz, #btn-coach, #btn-explore').removeClass('active');
+    $('#btn-study, #btn-quiz, #btn-explore').removeClass('active');
     $('#btn-study').addClass('active');
     $('#btn-start, #btn-prev, #btn-next, #btn-end').show();
     $('#btn-explore-undo, #btn-explore-reset').hide();
     $('#explore-content').hide();
   }
-
-  // Ensure coach panel is hidden in study mode
-  $('#coach-content').hide();
 
   currentMoveIdx = -1;
   quizAttempts = 0;
@@ -2909,55 +3728,20 @@ function updateBoardDraggable() {
 }
 
 function setMode(mode) {
-  const wasCoach = coachMode;
   quizMode = (mode === 'quiz');
   exploreMode = (mode === 'explore');
-  coachMode = (mode === 'coach');
 
-  // Cancel any in-flight engine work when leaving coach mode
-  if (wasCoach && !coachMode && engine.status === 'ready') engine.cancel();
-
-  $('#btn-study, #btn-quiz, #btn-coach, #btn-explore').removeClass('active');
+  $('#btn-study, #btn-quiz, #btn-explore').removeClass('active');
   $(`#btn-${mode}`).addClass('active');
 
-  if (coachMode) {
-    $('#btn-start, #btn-prev, #btn-next, #btn-end').hide();
-    $('#btn-explore-undo, #btn-explore-reset').hide();
-    $('#btn-flip').prop('disabled', false);
-    $('#empty-state, #opening-content, #explore-content').hide();
-    $('#coach-content').show().css('display', 'flex');
-
-    // Seed from opening if present, otherwise start position
-    let seedFen = null;
-    if (currentOpening) {
-      const g = new Chess();
-      currentOpening.moves.forEach(m => g.move(m));
-      seedFen = g.fen();
-    }
-    resetCoachState(seedFen);
-    $('#coach-title').text(currentOpening ? currentOpening.name : 'Coach Mode');
-    $('#coach-tagline').text(currentOpening ? 'Continuing from end of line · engine reviews every move' : 'Free play · engine reviews every move');
-
-    boardFlipped = (coachUserColor() === 'black');
-    $('#board-placeholder').hide();
-    $('#myBoard').show();
-    createBoard(coachGame.fen(), true, boardFlipped ? 'black' : 'white');
-    clearFeedback();
-
-    setCoachStatus('Loading engine…');
-    engine.init().then(() => {
-      setCoachStatus(coachIsUserTurn() ? 'Your move.' : 'Opponent thinking…');
-      if (!coachIsUserTurn()) coachOpponentRespond();
-    }).catch(err => setCoachStatus('Engine failed to load: ' + err.message));
-
-  } else if (exploreMode) {
+  if (exploreMode) {
     // Hide study nav, show explore nav
     $('#btn-start, #btn-prev, #btn-next, #btn-end').hide();
     $('#btn-explore-undo, #btn-explore-reset').show();
     $('#btn-flip').prop('disabled', false);
 
     // Swap info panel to explore view
-    $('#empty-state, #opening-content, #coach-content').hide();
+    $('#empty-state, #opening-content').hide();
     $('#explore-content').show().css('display', 'flex');
 
     // Build explore game from end of current opening (or start position)
@@ -2984,7 +3768,7 @@ function setMode(mode) {
     // Back to study nav
     $('#btn-start, #btn-prev, #btn-next, #btn-end').show();
     $('#btn-explore-undo, #btn-explore-reset').hide();
-    $('#explore-content, #coach-content').hide();
+    $('#explore-content').hide();
     if (currentOpening) {
       $('#empty-state').hide();
       $('#opening-content').show();
@@ -3012,7 +3796,7 @@ function setMode(mode) {
     // Study mode
     $('#btn-start, #btn-prev, #btn-next, #btn-end').show();
     $('#btn-explore-undo, #btn-explore-reset').hide();
-    $('#explore-content, #coach-content').hide();
+    $('#explore-content').hide();
     if (currentOpening) {
       $('#empty-state').hide();
       $('#opening-content').show();
@@ -3172,8 +3956,52 @@ $(function () {
   // Mode toggle
   $('#btn-study').on('click', () => setMode('study'));
   $('#btn-quiz').on('click', () => { if (currentOpening) setMode('quiz'); });
-  $('#btn-coach').on('click', () => setMode('coach'));
   $('#btn-explore').on('click', () => setMode('explore'));
+
+  // ─── Header nav (Library / Coach) ───────
+  $('#nav-library').on('click', () => switchView('library'));
+  $('#nav-coach').on('click', () => switchView('coach'));
+
+  // ─── Coach settings ─────────────────────
+  $('#coach-strength').on('input', function() {
+    coachEngineElo = parseInt($(this).val(), 10);
+    $('#coach-strength-value').text(coachEngineElo);
+    $('#coach-strength-tier').text(strengthTierLabel(coachEngineElo));
+  });
+
+  $('.side-toggle button').on('click', function() {
+    $('.side-toggle button').removeClass('active');
+    $(this).addClass('active');
+    const side = $(this).data('side');
+    coachUserSide = side; // 'white' | 'black' | 'random'
+  });
+
+  $('#coach-fen').on('input', function() {
+    $('#coach-fen-error').hide();
+  });
+
+  $('#btn-coach-newgame').on('click', function() {
+    startCoachGame();
+  });
+
+  $('#btn-coach-resign').on('click', function() {
+    if (!coachGameActive) return;
+    coachGameActive = false;
+    coachEndedAt = Date.now();
+    const loser = coachUserColor() === 'white' ? 'White' : 'Black';
+    const winner = loser === 'White' ? 'Black' : 'White';
+    const msg = `Resigned — ${winner} wins.`;
+    setCoachStatus(msg);
+    $('#btn-coach-resign').prop('disabled', true);
+    showPostGameSummary(msg);
+  });
+
+  // Coach: flip board
+  $('#btn-coach-flip').on('click', function() {
+    if (!coachBoard) return;
+    coachBoardFlipped = !coachBoardFlipped;
+    coachBoard.flip();
+  });
 
   // Coach: take back (undo user move + opponent reply if present)
   $('#btn-coach-takeback').on('click', function() {
@@ -3192,8 +4020,12 @@ $(function () {
     }
     coachLastReview = null;
     coachThinking = false;
-    board.position(coachGame.fen());
+    coachGameActive = true;
+    $('#btn-coach-resign').prop('disabled', false);
+    if (coachBoard) coachBoard.position(coachGame.fen());
     $('#coach-review').hide();
+    $('#threats-section').hide();
+    $('#candidates-section').hide();
     updateCoachSummary();
     setCoachStatus('Your move.');
   });
@@ -3215,7 +4047,7 @@ $(function () {
       coachStats[prev.tier] = Math.max(0, (coachStats[prev.tier] || 0) - 1);
       coachStats.best = (coachStats.best || 0) + 1;
     }
-    board.position(newFenAfter);
+    if (coachBoard) coachBoard.position(newFenAfter);
     renderCoachReview({
       tier: 'best', label: 'Best move', emoji: '✓',
       loss: 0,
@@ -3234,7 +4066,23 @@ $(function () {
     };
     updateCoachSummary();
     setCoachStatus('Opponent thinking…');
+    if (coachGame.game_over()) { coachHandleGameOver(); return; }
     coachOpponentRespond();
+  });
+
+  // Coach: show top-3 candidate moves
+  $('#btn-coach-candidates').on('click', function() {
+    if (!coachMode || !coachGame) return;
+    showCandidates();
+  });
+
+  // Summary overlay buttons
+  $('#btn-summary-newgame').on('click', function() {
+    $('#summary-overlay').hide();
+    startCoachGame();
+  });
+  $('#btn-summary-close').on('click', function() {
+    $('#summary-overlay').hide();
   });
 
   // Explore: database toggle
@@ -3344,15 +4192,24 @@ $(function () {
     }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
 
+    // In coach view, only handle the flip shortcut; everything else is scoped to library
+    if (coachMode) {
+      if (e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        $('#btn-coach-flip').trigger('click');
+      }
+      return;
+    }
+
     // Arrow keys: prev/next in study mode
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-      if (quizMode || exploreMode || coachMode) return;
+      if (quizMode || exploreMode) return;
       e.preventDefault();
       if (!$('#btn-next').prop('disabled')) goToMove(currentMoveIdx + 1);
       return;
     }
     if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-      if (quizMode || exploreMode || coachMode) return;
+      if (quizMode || exploreMode) return;
       e.preventDefault();
       if (!$('#btn-prev').prop('disabled')) goToMove(currentMoveIdx - 1);
       return;
@@ -3363,9 +4220,9 @@ $(function () {
     if (k === '/' ) { e.preventDefault(); $('#library-search-input').trigger('focus').select(); return; }
     // Flip board
     if (k === 'f') {
-      if (!currentOpening && !exploreMode && !coachMode) return;
+      if (!currentOpening && !exploreMode) return;
       e.preventDefault();
-      if (exploreMode || coachMode) { boardFlipped = !boardFlipped; board.flip(); return; }
+      if (exploreMode) { boardFlipped = !boardFlipped; board.flip(); return; }
       $('#btn-flip').trigger('click');
       return;
     }
@@ -3373,16 +4230,14 @@ $(function () {
     if (k === 'r') {
       e.preventDefault();
       if (exploreMode) { $('#btn-explore-reset').trigger('click'); return; }
-      if (coachMode) { setMode('coach'); return; }
       if (quizMode) { setMode('quiz'); return; }
       if (currentOpening) goToMove(-1);
       return;
     }
-    // Mode switch: 1=Study, 2=Quiz, 3=Coach, 4=Explore
+    // Mode switch: 1=Study, 2=Quiz, 3=Explore
     if (k === '1') { e.preventDefault(); setMode('study'); return; }
     if (k === '2') { if (currentOpening) { e.preventDefault(); setMode('quiz'); } return; }
-    if (k === '3') { e.preventDefault(); setMode('coach'); return; }
-    if (k === '4') { e.preventDefault(); setMode('explore'); return; }
+    if (k === '3') { e.preventDefault(); setMode('explore'); return; }
   });
 
   // ─── TAP-TO-MOVE (mobile) ───────────────
@@ -3390,13 +4245,13 @@ $(function () {
     $('.square-55d63').removeClass('tap-selected tap-target');
     tapSelected = null;
   }
-  $(document).on('click', '.square-55d63', function(e) {
+  $(document).on('click', '#myBoard .square-55d63', function(e) {
     // Only intercept taps in interactive modes (study has no interaction)
-    if (!quizMode && !exploreMode && !coachMode) return;
+    if (!quizMode && !exploreMode) return;
     // If the drop already happened (pointerup after drag), chessboard will have already moved — don't interfere
     const sq = $(this).data('square');
     if (!sq) return;
-    const activeGame = exploreMode ? exploreGame : (coachMode ? coachGame : game);
+    const activeGame = exploreMode ? exploreGame : game;
     if (!activeGame) return;
 
     if (tapSelected && tapSelected !== sq) {
@@ -3405,9 +4260,6 @@ $(function () {
       if (exploreMode) {
         const mv = exploreGame.move(tryMove);
         if (mv) { board.position(exploreGame.fen()); fetchExploreData(); }
-      } else if (coachMode) {
-        const result = handleDrop(tapSelected, sq);
-        if (result !== 'snapback') board.position(coachGame.fen());
       } else {
         // Quiz: delegate to handleDrop to reuse validation logic
         const result = handleDrop(tapSelected, sq);
@@ -3425,13 +4277,36 @@ $(function () {
       if (!piece) return;
       const turn = activeGame.turn(); // 'w' or 'b'
       if (piece.color !== turn) return;
-      // In coach mode, only allow picking up pieces of user's color
-      if (coachMode && !coachIsUserTurn()) return;
       clearTapSelection();
       tapSelected = sq;
       $(this).addClass('tap-selected');
       // Highlight legal target squares
       const moves = activeGame.moves({ square: sq, verbose: true });
+      moves.forEach(m => $('.square-' + m.to).addClass('tap-target'));
+    }
+  });
+
+  // Coach board: tap-to-move (scoped to #coachBoard)
+  $(document).on('click', '#coachBoard .square-55d63', function() {
+    if (!coachMode || !coachGameActive || !coachGame) return;
+    const sq = $(this).data('square');
+    if (!sq) return;
+    if (tapSelected && tapSelected !== sq) {
+      coachHandleUserMove(tapSelected, sq).then(() => {
+        if (coachBoard) coachBoard.position(coachGame.fen());
+      });
+      clearTapSelection();
+    } else if (tapSelected === sq) {
+      clearTapSelection();
+    } else {
+      const piece = coachGame.get(sq);
+      if (!piece) return;
+      if (piece.color !== coachGame.turn()) return;
+      if (!coachIsUserTurn()) return;
+      clearTapSelection();
+      tapSelected = sq;
+      $(this).addClass('tap-selected');
+      const moves = coachGame.moves({ square: sq, verbose: true });
       moves.forEach(m => $('.square-' + m.to).addClass('tap-target'));
     }
   });
@@ -3461,17 +4336,16 @@ $(function () {
 
   // ─── HYDRATE FROM URL ───────────────────
   const initial = readURL();
-  if (initial.opening) {
+  if (initial.view === 'coach') {
+    switchView('coach');
+  } else if (initial.opening) {
     const op = OPENINGS.find(o => o.id === initial.opening);
     if (op) {
       loadOpening(op.id);
       if (initial.mode === 'quiz') setMode('quiz');
       else if (initial.mode === 'explore') setMode('explore');
-      else if (initial.mode === 'coach') setMode('coach');
       else if (!isNaN(initial.move) && initial.move >= 0) goToMove(initial.move);
     }
-  } else if (initial.mode === 'coach') {
-    setMode('coach');
   } else if (initial.mode === 'explore') {
     setMode('explore');
   }
