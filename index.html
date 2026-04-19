@@ -1342,12 +1342,10 @@
       </div>
     </div>
 
-    <div class="feedback-bar" id="coach-feedback"></div>
-
     <div class="board-controls">
-      <button class="ctrl-btn" id="btn-coach-takeback" title="Take back the last move pair">↺ Take back</button>
-      <button class="ctrl-btn" id="btn-coach-showbest" title="Replay the best move instead">► Show best</button>
-      <button class="ctrl-btn" id="btn-coach-candidates" title="Show top 3 engine moves">◆ Candidates</button>
+      <button class="ctrl-btn" id="btn-coach-takeback" title="Take back the last move pair" disabled>↺ Take back</button>
+      <button class="ctrl-btn" id="btn-coach-showbest" title="Replay the best move instead" disabled>► Show best</button>
+      <button class="ctrl-btn" id="btn-coach-candidates" title="Show top 3 engine moves" disabled>◆ Candidates</button>
       <button class="ctrl-btn flip" id="btn-coach-flip" title="Flip board">⇅</button>
     </div>
   </main>
@@ -2925,6 +2923,7 @@ async function coachOpponentRespond() {
       coachBoard.position(coachGame.fen());
       if (coachGame.game_over()) { coachHandleGameOver(); return; }
       setCoachStatus('Your move.');
+      updateCoachControlsState();
       // Show threats after opponent has moved
       showThreats();
     }, 300);
@@ -2954,13 +2953,16 @@ async function coachHandleUserMove(source, target) {
   setCoachStatus('Analyzing your move…');
   try {
     const review = await classifyMove(fenBefore, userUci, fenAfter);
-    const logged = Object.assign({}, review, { fenBefore, fenAfter, userUci, moveNum: coachGame.history().length });
+    const ply = coachGame.history().length;
+    const pairNum = Math.ceil(ply / 2);
+    const logged = Object.assign({}, review, { fenBefore, fenAfter, userUci, ply, pairNum });
     coachLastReview = logged;
     coachReviewLog.push(logged);
     coachStats.moves++;
     coachStats[review.tier] = (coachStats[review.tier] || 0) + 1;
     renderCoachReview(review);
     updateCoachSummary();
+    updateCoachControlsState();
   } catch (err) {
     setCoachStatus('Engine error: ' + err.message);
     coachThinking = false;
@@ -2984,7 +2986,7 @@ function coachHandleGameOver() {
   } else if (coachGame.in_stalemate()) msg = 'Stalemate.';
   else if (coachGame.in_draw()) msg = 'Draw.';
   setCoachStatus(msg);
-  $('#btn-coach-resign').prop('disabled', true);
+  updateCoachControlsState();
   showPostGameSummary(msg);
 }
 
@@ -3134,6 +3136,7 @@ async function showThreats() {
 async function showCandidates() {
   if (!coachMode || !coachGame) return;
   if (coachThinking) return;
+  if (!coachIsUserTurn()) return; // never compute candidates for opponent's turn
   const fen = coachGame.fen();
   const $section = $('#candidates-section').show();
   const $list = $('#candidates-list');
@@ -3197,7 +3200,7 @@ function showPostGameSummary(endMsg) {
   if (biggest && biggest.loss >= 60) {
     $('#summary-turning').show();
     $('#summary-turning-text').text(
-      `Move ${biggest.moveNum}: ${biggest.userSan} lost ${(biggest.loss / 100).toFixed(2)} pawns — the engine preferred ${biggest.bestSan}.`
+      `Move ${biggest.pairNum}: ${biggest.userSan} lost ${(biggest.loss / 100).toFixed(2)} pawns — the engine preferred ${biggest.bestSan}.`
     );
   } else {
     $('#summary-turning').hide();
@@ -3417,7 +3420,15 @@ function switchView(view) {
       $('#coachBoard-placeholder').hide();
       createCoachBoard('start', 'white');
       setCoachStatus('Set a strength and start a new game.');
+    } else {
+      // Returning to an existing game — resize the board and re-kick the
+      // opponent if the previous respond was aborted by the view switch.
+      if (coachBoard) setTimeout(() => coachBoard.resize(), 0);
+      if (coachGameActive && !coachIsUserTurn() && !coachGame.game_over()) {
+        coachOpponentRespond();
+      }
     }
+    updateCoachControlsState();
   } else {
     $coach.hide().attr('aria-hidden', 'true');
     $app.show();
@@ -3456,14 +3467,18 @@ function startCoachGame() {
 
   resetCoachState(startFen);
   coachGameActive = true;
-  $('#btn-coach-resign').prop('disabled', false);
   $('#summary-overlay').hide();
 
   // Orient board so user plays from bottom
   coachBoardFlipped = (coachUserColor() === 'black');
   createCoachBoard(coachGame.fen(), coachBoardFlipped ? 'black' : 'white');
 
-  setCoachStatus(`Playing ${coachUserColor() === 'white' ? 'White' : 'Black'} vs Stockfish ${coachEngineElo}. Your move.`);
+  const opening = coachIsUserTurn()
+    ? `Playing ${coachUserColor() === 'white' ? 'White' : 'Black'} vs Stockfish ${coachEngineElo}. Your move.`
+    : `Playing ${coachUserColor() === 'white' ? 'White' : 'Black'} vs Stockfish ${coachEngineElo}. Opponent opens — thinking…`;
+  setCoachStatus(opening);
+
+  updateCoachControlsState();
 
   // Pre-warm engine, then kick off opponent if it's their turn
   engine.init().then(() => {
@@ -3472,6 +3487,18 @@ function startCoachGame() {
       coachOpponentRespond();
     }
   });
+}
+
+// ─────────────────────────────────────────────
+// CONTROL ENABLED-STATE
+// ─────────────────────────────────────────────
+function updateCoachControlsState() {
+  const active = coachGameActive;
+  const hasReview = !!coachLastReview;
+  $('#btn-coach-resign').prop('disabled', !active);
+  $('#btn-coach-takeback').prop('disabled', !hasReview);
+  $('#btn-coach-showbest').prop('disabled', !hasReview || coachLastReview.tier === 'best');
+  $('#btn-coach-candidates').prop('disabled', !active || !coachGame || !coachIsUserTurn());
 }
 
 // ─────────────────────────────────────────────
@@ -3992,7 +4019,7 @@ $(function () {
     const winner = loser === 'White' ? 'Black' : 'White';
     const msg = `Resigned — ${winner} wins.`;
     setCoachStatus(msg);
-    $('#btn-coach-resign').prop('disabled', true);
+    updateCoachControlsState();
     showPostGameSummary(msg);
   });
 
@@ -4021,13 +4048,13 @@ $(function () {
     coachLastReview = null;
     coachThinking = false;
     coachGameActive = true;
-    $('#btn-coach-resign').prop('disabled', false);
     if (coachBoard) coachBoard.position(coachGame.fen());
     $('#coach-review').hide();
     $('#threats-section').hide();
     $('#candidates-section').hide();
     updateCoachSummary();
     setCoachStatus('Your move.');
+    updateCoachControlsState();
   });
 
   // Coach: show best — replay the best move instead of the user's
@@ -4066,6 +4093,7 @@ $(function () {
     };
     updateCoachSummary();
     setCoachStatus('Opponent thinking…');
+    updateCoachControlsState();
     if (coachGame.game_over()) { coachHandleGameOver(); return; }
     coachOpponentRespond();
   });
