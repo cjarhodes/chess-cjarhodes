@@ -1075,6 +1075,78 @@
       letter-spacing: 0.01em;
     }
 
+    /* Opening identification */
+    .coach-opening-card {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+      padding: 0.35rem 0.6rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 2px solid var(--accent-soft);
+      border-radius: 2px;
+      letter-spacing: 0.02em;
+    }
+    .coach-opening-card .eco {
+      color: var(--accent-soft);
+      font-weight: 600;
+      margin-right: 0.4rem;
+    }
+    .coach-opening-card .name {
+      color: var(--text);
+    }
+
+    /* Move list */
+    .movelist-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.5rem;
+    }
+    .movelist-copy {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--muted);
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 0.2rem 0.55rem;
+      cursor: pointer;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .movelist-copy:hover { color: var(--accent-soft); border-color: var(--accent-soft); }
+    .movelist-copy:disabled { opacity: 0.4; cursor: not-allowed; }
+    .movelist-copy.copied { color: var(--highlight); border-color: var(--highlight); }
+    .movelist {
+      display: grid;
+      grid-template-columns: 2.2em 1fr 1fr;
+      gap: 0.15rem 0.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      max-height: 12rem;
+      overflow-y: auto;
+      padding: 0.5rem 0.6rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      font-variant-numeric: tabular-nums;
+    }
+    .movelist .num { color: var(--muted); }
+    .movelist .ply {
+      color: var(--text);
+      padding: 0.05rem 0.3rem;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+    .movelist .ply:hover { background: var(--surface2); }
+    .movelist .ply.current { background: rgba(162,51,70,0.22); color: var(--text); }
+    .movelist .ply.blunder { color: var(--accent-soft); }
+    .movelist .ply.mistake { color: #c28a4e; }
+    .movelist .ply.inaccuracy { color: #a89a6a; }
+    .movelist .ply-empty { color: var(--muted); opacity: 0.4; }
+
     /* Post-game summary */
     .summary-overlay {
       position: fixed;
@@ -1446,11 +1518,27 @@
       <div id="candidates-list"></div>
     </div>
 
+    <div class="coach-panel-section" id="opening-section" style="display:none;">
+      <div class="section-label">Opening</div>
+      <div class="coach-opening-card">
+        <span class="eco" id="coach-opening-eco"></span><span class="name" id="coach-opening-name"></span>
+      </div>
+    </div>
+
+    <div class="coach-panel-section" id="movelist-section" style="display:none;">
+      <div class="movelist-head">
+        <span class="section-label">Move list</span>
+        <button id="btn-coach-copypgn" class="movelist-copy" title="Copy game as PGN">Copy PGN</button>
+      </div>
+      <div id="movelist" class="movelist"></div>
+    </div>
+
     <div class="coach-panel-section">
       <div class="section-label">Session</div>
       <div class="coach-summary" id="coach-summary">
         <span class="k">Moves played</span><span class="v" id="coach-moves-count">0</span>
         <span class="k">Accuracy</span><span class="v big" id="coach-accuracy">—</span>
+        <span class="k" id="coach-accuracy-recent-label">Recent accuracy</span><span class="v" id="coach-accuracy-recent">—</span>
         <span class="k">Best</span><span class="v" id="coach-tally-best">0</span>
         <span class="k">Excellent</span><span class="v" id="coach-tally-excellent">0</span>
         <span class="k">Good</span><span class="v" id="coach-tally-good">0</span>
@@ -2968,6 +3056,32 @@ function strengthTierLabel(elo) {
   return 'Master';
 }
 
+// Weight per classification tier for accuracy %.
+const ACCURACY_TIER_WEIGHT = {
+  best: 1, excellent: 0.95, good: 0.85,
+  inaccuracy: 0.6, mistake: 0.3, blunder: 0.05
+};
+
+function accuracyFromTallies(tallies, total) {
+  if (!total) return null;
+  let w = 0;
+  for (const tier in ACCURACY_TIER_WEIGHT) {
+    w += (tallies[tier] || 0) * ACCURACY_TIER_WEIGHT[tier];
+  }
+  return Math.round((w / total) * 100);
+}
+
+// Accuracy over the most recent `window` user moves (ignores 'unknown' tiers).
+function rollingAccuracy(windowSize) {
+  if (!coachReviewLog || coachReviewLog.length === 0) return null;
+  const scored = coachReviewLog.filter(r => r.tier && r.tier !== 'unknown');
+  if (scored.length === 0) return null;
+  const slice = scored.slice(-windowSize);
+  const tallies = {};
+  for (const r of slice) tallies[r.tier] = (tallies[r.tier] || 0) + 1;
+  return { pct: accuracyFromTallies(tallies, slice.length), n: slice.length };
+}
+
 function updateCoachSummary() {
   if (!coachStats) return;
   const total = coachStats.moves;
@@ -2978,13 +3092,22 @@ function updateCoachSummary() {
   $('#coach-tally-inacc').text(coachStats.inaccuracy);
   $('#coach-tally-mistake').text(coachStats.mistake);
   $('#coach-tally-blunder').text(coachStats.blunder);
-  if (total === 0) { $('#coach-accuracy').text('—'); return; }
-  // Crude accuracy: weighted by tier
-  const weight = coachStats.best * 1 + coachStats.excellent * 0.95 +
-                 coachStats.good * 0.85 + coachStats.inaccuracy * 0.6 +
-                 coachStats.mistake * 0.3 + coachStats.blunder * 0.05;
-  const pct = Math.round((weight / total) * 100);
-  $('#coach-accuracy').text(pct + '%');
+  if (total === 0) {
+    $('#coach-accuracy').text('—');
+    $('#coach-accuracy-recent').text('—');
+    $('#coach-accuracy-recent-label').text('Recent accuracy');
+    return;
+  }
+  const pct = accuracyFromTallies(coachStats, total);
+  $('#coach-accuracy').text((pct === null ? '—' : pct + '%'));
+  const roll = rollingAccuracy(10);
+  if (roll && roll.pct !== null) {
+    $('#coach-accuracy-recent').text(roll.pct + '%');
+    $('#coach-accuracy-recent-label').text(`Last ${roll.n} move${roll.n === 1 ? '' : 's'}`);
+  } else {
+    $('#coach-accuracy-recent').text('—');
+    $('#coach-accuracy-recent-label').text('Recent accuracy');
+  }
 }
 
 function renderCoachReview(review) {
@@ -3034,8 +3157,12 @@ function resetCoachState(fen) {
   $('#coach-review').hide();
   $('#threats-section').hide();
   $('#candidates-section').hide();
+  $('#opening-section').hide();
+  $('#movelist-section').hide();
   updateCoachSummary();
   updateCapturedDisplay(coachGame.fen());
+  updateMoveList();
+  updateOpeningLabel();
 }
 
 async function coachOpponentRespond() {
@@ -3062,6 +3189,8 @@ async function coachOpponentRespond() {
         coachBoard.position(coachGame.fen());
         updateCapturedDisplay(coachGame.fen());
       }
+      updateMoveList();
+      updateOpeningLabel();
       if (coachGame.game_over()) { coachHandleGameOver(); return; }
       if (!coachIsReviewing()) {
         setCoachStatus('Your move.');
@@ -3109,6 +3238,8 @@ async function coachHandleUserMove(source, target) {
     renderCoachReview(review);
     updateCoachSummary();
     updateCoachControlsState();
+    updateMoveList();
+    updateOpeningLabel();
   } catch (err) {
     setCoachStatus('Engine error: ' + err.message);
     coachThinking = false;
@@ -3269,13 +3400,14 @@ function countAttackers(game, square, attackerColor) {
 }
 
 async function detectMateThreat(fen) {
-  // Is opponent threatening mate on their next move? Flip side-to-move, shallow search.
+  // Is opponent threatening mate on their next move? Flip side-to-move.
+  // Depth 12 catches ~6-move mate nets that depth 8 missed; still fast.
   const parts = fen.split(' ');
   parts[1] = parts[1] === 'w' ? 'b' : 'w';
   parts[3] = '-';
   const flipped = parts.join(' ');
   try {
-    const res = await engine.evaluate(flipped, 8);
+    const res = await engine.evaluate(flipped, 12);
     if (res.info && res.info.mate !== null && res.info.mate !== undefined && res.info.mate > 0) {
       return res.info.mate;
     }
@@ -3298,10 +3430,16 @@ async function showThreats() {
     const name = PIECE_NAME[h.piece];
     const glyph = PIECE_GLYPH[h.piece];
     const pawns = (h.gain / 100).toFixed(h.gain >= 100 && h.gain % 100 === 0 ? 0 : 2);
+    // Severity prefix based on how much opponent nets from the capture sequence.
+    let severity;
+    if (h.gain >= 500) severity = 'Major piece hangs';
+    else if (h.gain >= 300) severity = 'Piece hangs';
+    else severity = 'Pawn hangs';
     items.push({
       kind: 'hang',
       glyph,
-      text: `${name} on ${h.square} loses ~${pawns} pawns if left undefended (${h.attackers} attacker${h.attackers > 1 ? 's' : ''} vs ${h.defenders} defender${h.defenders === 1 ? '' : 's'})`
+      severity,
+      text: `${severity}: ${name} on ${h.square} — defend or move (~${pawns} pawns).`
     });
   });
   if (items.length === 0) {
@@ -3385,14 +3523,8 @@ function showPostGameSummary(endMsg) {
   $('#summary-blunders').text(coachStats.blunder);
 
   const total = coachStats.moves;
-  if (total === 0) {
-    $('#summary-accuracy').text('—');
-  } else {
-    const weight = coachStats.best * 1 + coachStats.excellent * 0.95 +
-                   coachStats.good * 0.85 + coachStats.inaccuracy * 0.6 +
-                   coachStats.mistake * 0.3 + coachStats.blunder * 0.05;
-    $('#summary-accuracy').text(Math.round((weight / total) * 100) + '%');
-  }
+  const pct = accuracyFromTallies(coachStats, total);
+  $('#summary-accuracy').text(pct === null ? '—' : pct + '%');
 
   // Turning point: biggest loss among non-best moves
   const biggest = coachReviewLog
@@ -3722,6 +3854,18 @@ function coachIsReviewing() {
   return coachReviewCursor !== coachGame.history().length;
 }
 
+// Return the review whose ply matches cursor n, or the most recent review at
+// or before n (handles opponent-move plies, which have no review of their own).
+// Returns null if no user move has been reviewed up to that point.
+function reviewAtCursor(n) {
+  if (!coachReviewLog || coachReviewLog.length === 0 || n <= 0) return null;
+  let best = null;
+  for (const r of coachReviewLog) {
+    if (r.ply <= n && (best === null || r.ply > best.ply)) best = r;
+  }
+  return best;
+}
+
 function coachFenAtPly(n) {
   if (!coachGame) return null;
   const tmp = new Chess(coachStartFen);
@@ -3744,17 +3888,27 @@ function coachGotoPly(n) {
     $('#threats-section').hide();
     $('#candidates-section').hide();
     setCoachStatus(`Reviewing move ${n} of ${total} — click Live to return.`);
+    // Show the review card for the move at/before this cursor. If nothing has
+    // been reviewed yet (n==0 or only opponent moves so far), hide the card.
+    const r = reviewAtCursor(n);
+    if (r) renderCoachReview(r); else $('#coach-review').hide();
+  } else {
+    // Back to live — restore the latest review.
+    if (coachLastReview) renderCoachReview(coachLastReview);
   }
   updateCoachControlsState();
   updateCapturedDisplay(fen);
+  updateMoveList();
 }
 
 function coachGotoLive() {
   if (!coachGame) return;
   coachReviewCursor = null;
   if (coachBoard) coachBoard.position(coachGame.fen());
+  if (coachLastReview) renderCoachReview(coachLastReview);
   updateCoachControlsState();
   updateCapturedDisplay(coachGame.fen());
+  updateMoveList();
   if (coachGameActive) {
     setCoachStatus(coachIsUserTurn() ? 'Your move.' : 'Opponent thinking…');
   }
@@ -3793,32 +3947,306 @@ function renderCapturedRow(caps, glyphs) {
   return html;
 }
 
+// Count captures from move history up to the cursor (or live if null).
+// This is robust to promotions: if a pawn promotes to a queen, the pawn isn't
+// "captured" — nothing is, unless the promotion move itself was a capture.
+function capturedFromHistory() {
+  const caps = { w: { p: 0, n: 0, b: 0, r: 0, q: 0 }, b: { p: 0, n: 0, b: 0, r: 0, q: 0 } };
+  if (!coachGame) return caps;
+  const moves = coachGame.history({ verbose: true });
+  const end = coachReviewCursor === null ? moves.length : coachReviewCursor;
+  for (let i = 0; i < end; i++) {
+    const m = moves[i];
+    if (m.captured && caps[m.color][m.captured] !== undefined) {
+      caps[m.color][m.captured]++;
+    }
+  }
+  return caps;
+}
+
 function updateCapturedDisplay(fen) {
   if (!fen || !coachGame) {
     $('#captured-top-pieces, #captured-bottom-pieces').empty();
     $('#captured-top-lead, #captured-bottom-lead').text('');
     return;
   }
+  // Captured rows come from the move history (accurate under promotions).
+  const caps = capturedFromHistory();
+  const whiteTook = caps.w; // white's captures = pieces white removed from black
+  const blackTook = caps.b;
+  // Material lead comes from the current board so promotions (and net material
+  // after trades) are reflected correctly.
   const counts = countPieces(fen);
-  const whiteTook = {}; // white's captures = black's missing pieces
-  const blackTook = {};
   let whiteMat = 0, blackMat = 0;
   for (const t of ['p', 'n', 'b', 'r', 'q']) {
-    whiteTook[t] = Math.max(0, PIECE_START_COUNT[t] - counts.b[t]);
-    blackTook[t] = Math.max(0, PIECE_START_COUNT[t] - counts.w[t]);
-    whiteMat += whiteTook[t] * PIECE_VALUES[t];
-    blackMat += blackTook[t] * PIECE_VALUES[t];
+    whiteMat += counts.w[t] * PIECE_VALUES[t];
+    blackMat += counts.b[t] * PIECE_VALUES[t];
   }
   const userIsWhite = coachUserColor() === 'white';
   const userTook = userIsWhite ? whiteTook : blackTook;
   const oppTook = userIsWhite ? blackTook : whiteTook;
   const userGlyphs = userIsWhite ? PIECE_GLYPH_BLACK : PIECE_GLYPH_WHITE;
   const oppGlyphs = userIsWhite ? PIECE_GLYPH_WHITE : PIECE_GLYPH_BLACK;
-  const userLead = (userIsWhite ? whiteMat - blackMat : blackMat - whiteMat);
+  const userLead = userIsWhite ? (whiteMat - blackMat) : (blackMat - whiteMat);
   $('#captured-bottom-pieces').html(renderCapturedRow(userTook, userGlyphs));
   $('#captured-top-pieces').html(renderCapturedRow(oppTook, oppGlyphs));
   $('#captured-bottom-lead').text(userLead > 0 ? '+' + userLead : '');
   $('#captured-top-lead').text(userLead < 0 ? '+' + (-userLead) : '');
+}
+
+// ─────────────────────────────────────────────
+// OPENING IDENTIFICATION
+// ─────────────────────────────────────────────
+// Compact opening book: SAN move sequence (space-joined) → { eco, name }.
+// Curated to cover the most common lines encountered in club-level play.
+// Longer prefixes win — so Italian Giuoco Piano beats Italian Game once c3 is on.
+const OPENING_BOOK = [
+  // 1.e4 families
+  ['e4', 'B00', 'King\'s Pawn Opening'],
+  ['e4 e5', 'C20', 'Open Game'],
+  ['e4 e5 Nf3', 'C40', 'King\'s Knight Opening'],
+  ['e4 e5 Nf3 Nc6', 'C44', 'King\'s Pawn Game'],
+  ['e4 e5 Nf3 Nc6 Bb5', 'C60', 'Ruy Lopez'],
+  ['e4 e5 Nf3 Nc6 Bb5 a6', 'C68', 'Ruy Lopez, Morphy Defense'],
+  ['e4 e5 Nf3 Nc6 Bb5 a6 Ba4', 'C77', 'Ruy Lopez, Morphy Defense'],
+  ['e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6', 'C78', 'Ruy Lopez, Closed'],
+  ['e4 e5 Nf3 Nc6 Bb5 a6 Bxc6', 'C68', 'Ruy Lopez, Exchange Variation'],
+  ['e4 e5 Nf3 Nc6 Bb5 Nf6', 'C67', 'Ruy Lopez, Berlin Defense'],
+  ['e4 e5 Nf3 Nc6 Bc4', 'C50', 'Italian Game'],
+  ['e4 e5 Nf3 Nc6 Bc4 Bc5', 'C50', 'Italian Game, Giuoco Piano'],
+  ['e4 e5 Nf3 Nc6 Bc4 Bc5 c3', 'C53', 'Italian Game, Giuoco Pianissimo'],
+  ['e4 e5 Nf3 Nc6 Bc4 Nf6', 'C55', 'Italian Game, Two Knights Defense'],
+  ['e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5', 'C57', 'Two Knights, Fried Liver Attack'],
+  ['e4 e5 Nf3 Nc6 d4', 'C44', 'Scotch Game'],
+  ['e4 e5 Nf3 Nf6', 'C42', 'Petrov\'s Defense'],
+  ['e4 e5 Nf3 d6', 'C41', 'Philidor Defense'],
+  ['e4 e5 f4', 'C30', 'King\'s Gambit'],
+  ['e4 e5 Nc3', 'C25', 'Vienna Game'],
+  ['e4 e5 Bc4', 'C23', 'Bishop\'s Opening'],
+  ['e4 c5', 'B20', 'Sicilian Defense'],
+  ['e4 c5 Nf3', 'B27', 'Sicilian Defense'],
+  ['e4 c5 Nf3 d6', 'B50', 'Sicilian Defense'],
+  ['e4 c5 Nf3 d6 d4', 'B54', 'Sicilian, Open'],
+  ['e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6', 'B90', 'Sicilian, Najdorf'],
+  ['e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 g6', 'B70', 'Sicilian, Dragon'],
+  ['e4 c5 Nf3 Nc6', 'B30', 'Sicilian, Old Sicilian'],
+  ['e4 c5 Nf3 Nc6 d4 cxd4 Nxd4 Nf6 Nc3 e5', 'B32', 'Sicilian, Sveshnikov'],
+  ['e4 c5 Nf3 e6', 'B40', 'Sicilian, French Variation'],
+  ['e4 c5 Nf3 e6 d4 cxd4 Nxd4 a6', 'B42', 'Sicilian, Kan'],
+  ['e4 c5 Nf3 e6 d4 cxd4 Nxd4 Nc6', 'B44', 'Sicilian, Taimanov'],
+  ['e4 c5 Nc3', 'B23', 'Sicilian, Closed'],
+  ['e4 c5 c3', 'B22', 'Sicilian, Alapin'],
+  ['e4 e6', 'C00', 'French Defense'],
+  ['e4 e6 d4 d5', 'C01', 'French Defense'],
+  ['e4 e6 d4 d5 Nc3', 'C10', 'French, Classical/Winawer territory'],
+  ['e4 e6 d4 d5 Nc3 Bb4', 'C15', 'French, Winawer'],
+  ['e4 e6 d4 d5 Nc3 Nf6', 'C11', 'French, Classical'],
+  ['e4 e6 d4 d5 e5', 'C02', 'French, Advance'],
+  ['e4 e6 d4 d5 exd5', 'C01', 'French, Exchange'],
+  ['e4 c6', 'B10', 'Caro-Kann Defense'],
+  ['e4 c6 d4 d5', 'B12', 'Caro-Kann'],
+  ['e4 c6 d4 d5 Nc3', 'B15', 'Caro-Kann, Main Line'],
+  ['e4 c6 d4 d5 exd5 cxd5', 'B13', 'Caro-Kann, Exchange'],
+  ['e4 c6 d4 d5 e5', 'B12', 'Caro-Kann, Advance'],
+  ['e4 d6', 'B07', 'Pirc Defense'],
+  ['e4 d5', 'B01', 'Scandinavian Defense'],
+  ['e4 Nf6', 'B02', 'Alekhine\'s Defense'],
+  ['e4 g6', 'B06', 'Modern Defense'],
+  ['e4 Nc6', 'B00', 'Nimzowitsch Defense'],
+
+  // 1.d4 families
+  ['d4', 'A40', 'Queen\'s Pawn Opening'],
+  ['d4 d5', 'D00', 'Closed Game'],
+  ['d4 d5 c4', 'D06', 'Queen\'s Gambit'],
+  ['d4 d5 c4 e6', 'D30', 'Queen\'s Gambit Declined'],
+  ['d4 d5 c4 e6 Nc3 Nf6', 'D35', 'QGD, Main Line'],
+  ['d4 d5 c4 c6', 'D10', 'Slav Defense'],
+  ['d4 d5 c4 c6 Nf3 Nf6 Nc3 dxc4', 'D15', 'Slav, Main Line'],
+  ['d4 d5 c4 dxc4', 'D20', 'Queen\'s Gambit Accepted'],
+  ['d4 d5 c4 Nf6', 'D06', 'QGD, Marshall Defense'],
+  ['d4 d5 Nf3', 'D02', 'Queen\'s Pawn Game'],
+  ['d4 d5 Bf4', 'D00', 'London System'],
+  ['d4 d5 Nf3 Nf6 Bf4', 'D02', 'London System'],
+  ['d4 Nf6', 'A45', 'Indian Defense'],
+  ['d4 Nf6 c4', 'A50', 'Indian Defense'],
+  ['d4 Nf6 c4 e6', 'E00', 'Indian, Queen\'s Pawn'],
+  ['d4 Nf6 c4 e6 Nc3 Bb4', 'E20', 'Nimzo-Indian Defense'],
+  ['d4 Nf6 c4 e6 Nf3', 'E10', 'Indian, East Indian'],
+  ['d4 Nf6 c4 e6 Nf3 b6', 'E12', 'Queen\'s Indian Defense'],
+  ['d4 Nf6 c4 e6 g3', 'E00', 'Catalan Opening'],
+  ['d4 Nf6 c4 g6', 'A48', 'King\'s Indian / Grünfeld territory'],
+  ['d4 Nf6 c4 g6 Nc3 Bg7', 'E60', 'King\'s Indian Defense'],
+  ['d4 Nf6 c4 g6 Nc3 d5', 'D80', 'Grünfeld Defense'],
+  ['d4 Nf6 c4 c5', 'A56', 'Benoni Defense'],
+  ['d4 f5', 'A80', 'Dutch Defense'],
+  ['d4 Nf6 Bg5', 'A45', 'Trompowsky Attack'],
+
+  // Flank openings
+  ['c4', 'A10', 'English Opening'],
+  ['c4 e5', 'A20', 'English, King\'s English'],
+  ['c4 c5', 'A30', 'English, Symmetrical'],
+  ['c4 Nf6', 'A15', 'English, Anglo-Indian'],
+  ['c4 e6', 'A13', 'English, Agincourt'],
+  ['Nf3', 'A04', 'Réti Opening'],
+  ['Nf3 d5', 'A07', 'King\'s Indian Attack'],
+  ['g3', 'A00', 'Benko\'s Opening'],
+  ['b3', 'A01', 'Larsen\'s Opening'],
+  ['f4', 'A02', 'Bird\'s Opening'],
+  ['b4', 'A00', 'Sokolsky Opening'],
+];
+
+// Build an in-memory trie keyed by SAN tokens. Each node stores any
+// { eco, name } it terminates, and children keyed by next SAN.
+const OPENING_TRIE = (() => {
+  const root = { children: {} };
+  for (const [line, eco, name] of OPENING_BOOK) {
+    const tokens = line.split(' ');
+    let node = root;
+    for (const tok of tokens) {
+      if (!node.children[tok]) node.children[tok] = { children: {} };
+      node = node.children[tok];
+    }
+    node.data = { eco, name };
+  }
+  return root;
+})();
+
+// Find the deepest opening-book match for the given SAN history.
+// Returns { match, exact, matchedPlies } — exact=true only if every move in
+// `sans` walked into a trie node; matchedPlies is how far the named opening
+// extends (i.e. the depth of the last {eco,name}-bearing node we passed).
+function identifyOpening(sans) {
+  if (!sans || sans.length === 0) return { match: null, exact: false, matchedPlies: 0 };
+  let node = OPENING_TRIE;
+  let last = null;
+  let lastDepth = 0;
+  let walked = 0;
+  for (let i = 0; i < sans.length; i++) {
+    const next = node.children[sans[i]];
+    if (!next) break;
+    node = next;
+    walked = i + 1;
+    if (node.data) { last = node.data; lastDepth = walked; }
+  }
+  return { match: last, exact: walked === sans.length, matchedPlies: lastDepth };
+}
+
+function updateOpeningLabel() {
+  if (!coachGame) {
+    $('#opening-section').hide();
+    return;
+  }
+  const sans = coachGame.history();
+  if (sans.length === 0) {
+    $('#opening-section').hide();
+    return;
+  }
+  const info = identifyOpening(sans);
+  if (!info.match) {
+    $('#opening-section').hide();
+    return;
+  }
+  $('#coach-opening-eco').text(info.match.eco);
+  if (info.exact) {
+    // Still in book — just show the current opening name.
+    $('#coach-opening-name').text(info.match.name);
+  } else {
+    // Out of book — pin the deepest named match and say after which move.
+    const moveNum = Math.ceil(info.matchedPlies / 2);
+    $('#coach-opening-name').text(
+      `${info.match.name} — out of book after move ${moveNum}`
+    );
+  }
+  $('#opening-section').show();
+}
+
+// ─────────────────────────────────────────────
+// MOVE LIST / PGN
+// ─────────────────────────────────────────────
+// Build a minimal PGN from coachGame. Uses chess.js pgn() as the base and
+// only adds a couple of safe headers — the rest (result, strength) is inferred.
+function coachGetPgn() {
+  if (!coachGame) return '';
+  const headers = [];
+  const today = new Date();
+  const yyyy = today.getUTCFullYear();
+  const mm = String(today.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(today.getUTCDate()).padStart(2, '0');
+  headers.push(['Event', 'Coach Mode training']);
+  headers.push(['Site', 'chess.cjarhodes.com']);
+  headers.push(['Date', `${yyyy}.${mm}.${dd}`]);
+  headers.push(['White', coachUserColor() === 'white' ? 'Player' : `Stockfish ${coachEngineElo || ''}`.trim()]);
+  headers.push(['Black', coachUserColor() === 'black' ? 'Player' : `Stockfish ${coachEngineElo || ''}`.trim()]);
+  let result = '*';
+  if (coachGame.in_checkmate()) {
+    result = coachGame.turn() === 'w' ? '0-1' : '1-0';
+  } else if (coachGame.in_stalemate() || coachGame.in_draw() || coachGame.in_threefold_repetition() || coachGame.insufficient_material()) {
+    result = '1/2-1/2';
+  }
+  headers.push(['Result', result]);
+  const header = headers.map(([k, v]) => `[${k} "${String(v).replace(/"/g, '\\"')}"]`).join('\n');
+  // chess.js .pgn() may produce movetext without a trailing result — append it.
+  const body = coachGame.pgn();
+  const needsResult = !body.trimEnd().endsWith(result) && result !== '*';
+  return `${header}\n\n${body}${needsResult ? ' ' + result : ''}`.trim() + '\n';
+}
+
+// Render the move list, highlighting the ply at cursor (or the latest).
+function updateMoveList() {
+  const $section = $('#movelist-section');
+  const $list = $('#movelist');
+  if (!coachGame || coachGame.history().length === 0) {
+    $section.hide();
+    $list.empty();
+    return;
+  }
+  $section.show();
+  const sans = coachGame.history();
+  const total = sans.length;
+  const cursor = coachReviewCursor === null ? total : coachReviewCursor;
+  // Map ply → classification tier for coloring blunders/mistakes in the list.
+  const tierByPly = {};
+  for (const r of coachReviewLog) {
+    if (r && r.ply) tierByPly[r.ply] = r.tier;
+  }
+  const pairs = Math.ceil(sans.length / 2);
+  let html = '';
+  for (let i = 0; i < pairs; i++) {
+    const wPly = i * 2 + 1;
+    const bPly = i * 2 + 2;
+    const wSan = sans[wPly - 1] || '';
+    const bSan = sans[bPly - 1] || '';
+    const wTier = tierByPly[wPly] || '';
+    const bTier = tierByPly[bPly] || '';
+    const wClasses = ['ply'];
+    const bClasses = ['ply'];
+    if (wPly === cursor) wClasses.push('current');
+    if (bPly === cursor) bClasses.push('current');
+    if (['blunder', 'mistake', 'inaccuracy'].includes(wTier)) wClasses.push(wTier);
+    if (['blunder', 'mistake', 'inaccuracy'].includes(bTier)) bClasses.push(bTier);
+    html += `<span class="num">${i + 1}.</span>`;
+    html += `<span class="${wClasses.join(' ')}" data-ply="${wPly}">${escapeHtml(wSan)}</span>`;
+    if (bSan) {
+      html += `<span class="${bClasses.join(' ')}" data-ply="${bPly}">${escapeHtml(bSan)}</span>`;
+    } else {
+      html += `<span class="ply-empty">…</span>`;
+    }
+  }
+  $list.html(html);
+  // Scroll the current ply into view.
+  const $cur = $list.find('.ply.current');
+  if ($cur.length) {
+    const cEl = $cur[0];
+    const lEl = $list[0];
+    const top = cEl.offsetTop - lEl.offsetTop;
+    if (top < lEl.scrollTop || top > lEl.scrollTop + lEl.clientHeight - cEl.clientHeight) {
+      lEl.scrollTop = top - lEl.clientHeight / 2;
+    }
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 // ─────────────────────────────────────────────
@@ -4371,10 +4799,15 @@ $(function () {
     coachReviewCursor = null;
     if (coachBoard) coachBoard.position(coachGame.fen());
     updateCapturedDisplay(coachGame.fen());
+    // Also remove the rolled-back review from the log so rolling accuracy and
+    // the move list's tier coloring reflect the takeback.
+    if (coachReviewLog && coachReviewLog.length > 0) coachReviewLog.pop();
     $('#coach-review').hide();
     $('#threats-section').hide();
     $('#candidates-section').hide();
     updateCoachSummary();
+    updateMoveList();
+    updateOpeningLabel();
     setCoachStatus('Your move.');
     updateCoachControlsState();
   });
@@ -4414,7 +4847,18 @@ $(function () {
       bestUci: prev.bestUci,
       bestSan: prev.bestSan
     };
+    // Also fix the rolling review log so tier coloring reflects the swap.
+    if (coachReviewLog && coachReviewLog.length > 0) {
+      const last = coachReviewLog[coachReviewLog.length - 1];
+      last.tier = 'best';
+      last.userSan = prev.bestSan;
+      last.userUci = prev.bestUci;
+      last.fenAfter = newFenAfter;
+      last.loss = 0;
+    }
     updateCoachSummary();
+    updateMoveList();
+    updateOpeningLabel();
     setCoachStatus('Opponent thinking…');
     updateCoachControlsState();
     if (coachGame.game_over()) { coachHandleGameOver(); return; }
@@ -4444,6 +4888,63 @@ $(function () {
   $('#btn-coach-live').on('click', function() {
     if (!coachGame) return;
     coachGotoLive();
+  });
+
+  // Coach: Copy PGN to clipboard
+  $('#btn-coach-copypgn').on('click', async function() {
+    const $btn = $(this);
+    const pgn = coachGetPgn();
+    if (!pgn) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(pgn);
+      } else {
+        // Fallback: textarea + execCommand
+        const ta = document.createElement('textarea');
+        ta.value = pgn;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      $btn.addClass('copied').text('Copied!');
+      setTimeout(() => $btn.removeClass('copied').text('Copy PGN'), 1500);
+    } catch (e) {
+      $btn.text('Copy failed');
+      setTimeout(() => $btn.text('Copy PGN'), 1500);
+    }
+  });
+
+  // Coach: click a ply in the move list to jump to that position.
+  $(document).on('click', '#movelist .ply', function() {
+    const ply = parseInt($(this).attr('data-ply'), 10);
+    if (!isNaN(ply)) coachGotoPly(ply);
+  });
+
+  // Coach: keyboard shortcuts for history navigation.
+  // ← previous ply, → next ply, End returns to the live position. Only
+  // fire in coach mode and never while the user is typing in a form field.
+  $(document).on('keydown', function(e) {
+    if (!coachMode || !coachGame) return;
+    // Ignore if the user is typing (inputs, textareas, contenteditable).
+    const tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === 'ArrowLeft') {
+      const total = coachGame.history().length;
+      const cur = coachReviewCursor === null ? total : coachReviewCursor;
+      if (cur > 0) { e.preventDefault(); coachGotoPly(cur - 1); }
+    } else if (e.key === 'ArrowRight') {
+      const total = coachGame.history().length;
+      const cur = coachReviewCursor === null ? total : coachReviewCursor;
+      if (cur < total) { e.preventDefault(); coachGotoPly(cur + 1); }
+    } else if (e.key === 'End') {
+      if (coachIsReviewing()) { e.preventDefault(); coachGotoLive(); }
+    } else if (e.key === 'Home') {
+      if (coachGame.history().length > 0) { e.preventDefault(); coachGotoPly(0); }
+    }
   });
 
   // Summary overlay buttons
