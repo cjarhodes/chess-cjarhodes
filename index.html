@@ -3899,6 +3899,7 @@ function coachGotoPly(n) {
   updateCoachControlsState();
   updateCapturedDisplay(fen);
   updateMoveList();
+  updateOpeningLabel();
 }
 
 function coachGotoLive() {
@@ -3909,6 +3910,7 @@ function coachGotoLive() {
   updateCoachControlsState();
   updateCapturedDisplay(coachGame.fen());
   updateMoveList();
+  updateOpeningLabel();
   if (coachGameActive) {
     setCoachStatus(coachIsUserTurn() ? 'Your move.' : 'Opponent thinking…');
   }
@@ -4136,7 +4138,11 @@ function updateOpeningLabel() {
     $('#opening-section').hide();
     return;
   }
-  const sans = coachGame.history();
+  // Respect the history cursor so navigating back shows the opening as it was
+  // at that ply, not the latest one.
+  const fullSans = coachGame.history();
+  const end = coachReviewCursor === null ? fullSans.length : coachReviewCursor;
+  const sans = fullSans.slice(0, end);
   if (sans.length === 0) {
     $('#opening-section').hide();
     return;
@@ -4167,28 +4173,54 @@ function updateOpeningLabel() {
 // only adds a couple of safe headers — the rest (result, strength) is inferred.
 function coachGetPgn() {
   if (!coachGame) return '';
-  const headers = [];
   const today = new Date();
   const yyyy = today.getUTCFullYear();
   const mm = String(today.getUTCMonth() + 1).padStart(2, '0');
   const dd = String(today.getUTCDate()).padStart(2, '0');
-  headers.push(['Event', 'Coach Mode training']);
-  headers.push(['Site', 'chess.cjarhodes.com']);
-  headers.push(['Date', `${yyyy}.${mm}.${dd}`]);
-  headers.push(['White', coachUserColor() === 'white' ? 'Player' : `Stockfish ${coachEngineElo || ''}`.trim()]);
-  headers.push(['Black', coachUserColor() === 'black' ? 'Player' : `Stockfish ${coachEngineElo || ''}`.trim()]);
   let result = '*';
   if (coachGame.in_checkmate()) {
     result = coachGame.turn() === 'w' ? '0-1' : '1-0';
   } else if (coachGame.in_stalemate() || coachGame.in_draw() || coachGame.in_threefold_repetition() || coachGame.insufficient_material()) {
     result = '1/2-1/2';
   }
-  headers.push(['Result', result]);
-  const header = headers.map(([k, v]) => `[${k} "${String(v).replace(/"/g, '\\"')}"]`).join('\n');
-  // chess.js .pgn() may produce movetext without a trailing result — append it.
-  const body = coachGame.pgn();
-  const needsResult = !body.trimEnd().endsWith(result) && result !== '*';
-  return `${header}\n\n${body}${needsResult ? ' ' + result : ''}`.trim() + '\n';
+  // chess.js .pgn() may include auto tags for custom FEN starts (FEN/SetUp).
+  // Pull them out and merge into our own tag pair section to keep the PGN
+  // standards-compliant (one tag pair section only).
+  const rawPgn = coachGame.pgn();
+  const autoTags = {};
+  const tagRe = /^\[(\w+)\s+"((?:\\.|[^"\\])*)"\]\s*$/gm;
+  let m;
+  let movetext = rawPgn;
+  while ((m = tagRe.exec(rawPgn)) !== null) {
+    autoTags[m[1]] = m[2];
+  }
+  // Strip tag lines and any leading blank lines from the movetext
+  movetext = movetext.replace(/^(?:\[[^\]]*\]\s*\n?)+/, '').trim();
+  const headers = [
+    ['Event', 'Coach Mode training'],
+    ['Site', 'chess.cjarhodes.com'],
+    ['Date', `${yyyy}.${mm}.${dd}`],
+    ['White', coachUserColor() === 'white' ? 'Player' : `Stockfish ${coachEngineElo || ''}`.trim()],
+    ['Black', coachUserColor() === 'black' ? 'Player' : `Stockfish ${coachEngineElo || ''}`.trim()],
+    ['Result', result],
+  ];
+  if (autoTags.SetUp) headers.push(['SetUp', autoTags.SetUp]);
+  if (autoTags.FEN) headers.push(['FEN', autoTags.FEN]);
+  const header = headers
+    .map(([k, v]) => `[${k} "${String(v).replace(/"/g, '\\"')}"]`)
+    .join('\n');
+  // A valid PGN always ends with the result token. Ensure it's present
+  // whether movetext is empty (just the token) or non-empty (appended if
+  // chess.js didn't already include it).
+  let bodyWithResult;
+  if (!movetext) {
+    bodyWithResult = result;
+  } else if (movetext.endsWith(result)) {
+    bodyWithResult = movetext;
+  } else {
+    bodyWithResult = `${movetext} ${result}`;
+  }
+  return `${header}\n\n${bodyWithResult}\n`;
 }
 
 // Render the move list, highlighting the ply at cursor (or the latest).
