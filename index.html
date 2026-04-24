@@ -1649,6 +1649,7 @@
     <div class="field-group">
       <button class="ctrl-btn primary" id="btn-coach-newgame">▶ New game</button>
       <button class="ctrl-btn" id="btn-coach-resign" disabled>Resign &amp; review</button>
+      <button class="ctrl-btn" id="btn-coach-openreview" style="display:none;">Open review</button>
     </div>
   </aside>
 
@@ -3006,6 +3007,7 @@ let coachBoardFlipped = false;
 let coachGameActive = false;       // true once user hits New Game
 let coachEndedAt = null;           // timestamp of game end, null while playing
 let coachReviewCursor = null;      // null = live; integer = ply index displayed on the board
+let coachLastEndMsg = null;        // headline from last game-over, used to reopen the review
 
 // ─────────────────────────────────────────────
 // STOCKFISH ENGINE WRAPPER
@@ -3402,6 +3404,7 @@ function resetCoachState(fen) {
   coachThinking = false;
   coachEndedAt = null;
   coachReviewCursor = null;
+  coachLastEndMsg = null;
   $('#coach-review').hide();
   $('#threats-section').hide();
   $('#candidates-section').hide();
@@ -3769,12 +3772,22 @@ function evalAfterUserCp(r) {
   return -scoreToCp(r.evalAfter);
 }
 
-// Average centipawn loss across scored (non-'unknown') moves.
+// Average centipawn loss across scored (non-'unknown') moves. Cap each move's
+// contribution at 1000cp so a single mate allowance (loss ~10000cp) doesn't
+// make ACPL meaningless — this matches the Lichess convention.
+const ACPL_CAP = 1000;
 function computeACPL(reviews) {
   const scored = reviews.filter(r => r && r.tier && r.tier !== 'unknown');
   if (!scored.length) return null;
-  const total = scored.reduce((s, r) => s + (r.loss || 0), 0);
+  const total = scored.reduce((s, r) => s + Math.min(r.loss || 0, ACPL_CAP), 0);
   return Math.round(total / scored.length);
+}
+
+// Format a centipawn loss as a signed pawn value. Losses past 10 pawns
+// (e.g. allowing mate) collapse to "9.9+" so rows don't show "−100.0".
+function formatLossPawns(loss) {
+  if (loss >= 1000) return '9.9+';
+  return (loss / 100).toFixed(1);
 }
 
 // Simple ply-based phase classifier. A game that resigns mid-opening
@@ -3910,6 +3923,9 @@ function coachingTakeaway(reviews, phases) {
 }
 
 function showPostGameSummary(endMsg) {
+  coachLastEndMsg = endMsg;
+  // Refresh the "Open review" button visibility now that we have an end message.
+  updateCoachControlsState();
   $('#summary-title').text(endMsg);
 
   // Subtitle: strength + user color context
@@ -4022,7 +4038,7 @@ function showPostGameSummary(endMsg) {
   if (critical.length) {
     for (const r of critical) {
       const ref = formatMoveRef(r);
-      const lossPawns = (r.loss / 100).toFixed(1);
+      const lossPawns = formatLossPawns(r.loss || 0);
       const best = r.bestSan ? ` — best was ${r.bestSan}` : '';
       const desc = `${tierLabel[r.tier]}${best}`;
       const row = document.createElement('div');
@@ -4372,6 +4388,8 @@ function updateCoachControlsState() {
   const total = coachGame ? coachGame.history().length : 0;
   const cur = coachReviewCursor === null ? total : coachReviewCursor;
   $('#btn-coach-resign').prop('disabled', !active || reviewing);
+  // "Open review" only appears once the game has ended and we have a summary to reopen.
+  $('#btn-coach-openreview').toggle(!active && !!coachLastEndMsg);
   $('#btn-coach-takeback').prop('disabled', !hasReview || reviewing);
   $('#btn-coach-showbest').prop('disabled', !hasReview || (coachLastReview && coachLastReview.tier === 'best') || reviewing);
   $('#btn-coach-candidates').prop('disabled', !active || !coachGame || !coachIsUserTurn() || reviewing);
@@ -5524,6 +5542,12 @@ $(function () {
   });
   $('#btn-summary-close').on('click', function() {
     $('#summary-overlay').hide();
+    updateCoachControlsState();
+  });
+  // Reopen the review summary once the game has ended.
+  $('#btn-coach-openreview').on('click', function() {
+    if (!coachLastEndMsg) return;
+    showPostGameSummary(coachLastEndMsg);
   });
   // Copy PGN from within the summary — shares logic with the move-list copy button.
   $('#btn-summary-copypgn').on('click', async function() {
@@ -5556,11 +5580,14 @@ $(function () {
     if (!Number.isInteger(ply)) return;
     $('#summary-overlay').hide();
     coachGotoPly(ply);
+    // Surface the "Open review" button so the user can get back to the summary.
+    updateCoachControlsState();
   });
   // Allow pressing Escape to dismiss the summary overlay.
   $(document).on('keydown.summary', function(e) {
     if (e.key === 'Escape' && $('#summary-overlay').is(':visible')) {
       $('#summary-overlay').hide();
+      updateCoachControlsState();
     }
   });
 
