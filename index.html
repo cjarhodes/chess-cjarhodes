@@ -1652,7 +1652,7 @@
         <span class="strength-value" id="coach-strength-value">1200</span>
       </div>
       <input type="range" class="strength-slider" id="coach-strength"
-             min="800" max="2400" step="50" value="1200" />
+             min="400" max="2400" step="50" value="1200" />
       <div class="strength-tier" id="coach-strength-tier">Club novice</div>
     </div>
 
@@ -3324,12 +3324,33 @@ function coachIsUserTurn() {
 
 // Opponent search depth matches review depth; strength is controlled by Elo.
 function strengthTierLabel(elo) {
+  if (elo < 600)  return 'Absolute beginner';
+  if (elo < 800)  return 'Learning the rules';
   if (elo < 1000) return 'Beginner';
   if (elo < 1300) return 'Club novice';
   if (elo < 1600) return 'Improving club';
   if (elo < 1900) return 'Strong club';
   if (elo < 2200) return 'Expert';
   return 'Master';
+}
+
+// Translate the slider's displayed Elo into real engine settings.
+// Stockfish's UCI_Elo floor is ~1320, so below 1200 we switch to Skill Level
+// (0–8, engine makes obvious blunders) combined with a very low search depth
+// so the opponent plays like a real beginner instead of a clamped-but-strong
+// club player.
+function coachStrengthOpts(elo) {
+  if (elo < 1200) {
+    // 400 → skill 0, depth 1 (absolute beginner)
+    // 1150 → skill 8, depth 4 (close to UCI_Elo handoff at 1200)
+    const t = Math.max(0, Math.min(1, (elo - 400) / 750));
+    const skill = Math.round(t * 8);
+    const depth = 1 + Math.round(t * 3);
+    return { skill, depth };
+  }
+  // 1200+: Stockfish's native Elo limiter, with depth tiered for realism.
+  const depth = elo < 1400 ? 8 : (elo < 2000 ? 12 : 16);
+  return { elo, depth };
 }
 
 // Weight per classification tier for accuracy %.
@@ -3452,9 +3473,11 @@ async function coachOpponentRespond() {
   setCoachStatus('Opponent thinking…');
   const fen = coachGame.fen();
   try {
-    // Opponent uses configured Elo. Lower depth at low Elo for realism.
-    const depth = coachEngineElo < 1400 ? 8 : (coachEngineElo < 2000 ? 12 : 16);
-    const result = await engine.evaluate(fen, depth, { elo: coachEngineElo });
+    // Opponent uses configured strength. Below 1200 we're past Stockfish's
+    // UCI_Elo floor, so fall back to Skill Level + low depth for genuine beginner play.
+    const opts = coachStrengthOpts(coachEngineElo);
+    const { depth, ...strength } = opts;
+    const result = await engine.evaluate(fen, depth, strength);
     if (!coachMode || !coachGameActive) return;
     if (!result.bestmove) { setCoachStatus('Your move.'); return; }
     setTimeout(() => {
