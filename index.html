@@ -1157,46 +1157,239 @@
       justify-content: center;
       z-index: 100;
       backdrop-filter: blur(2px);
+      padding: 1rem;
     }
     .summary-card {
       background: var(--surface);
       border: 1px solid var(--border);
       border-left: 3px solid var(--accent);
       border-radius: 2px;
-      padding: 1.75rem 2rem;
-      max-width: 440px;
-      width: 90%;
+      padding: 1.5rem 1.75rem;
+      max-width: 640px;
+      width: 100%;
+      max-height: 92vh;
+      overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 1rem;
+      gap: 1.1rem;
     }
     .summary-title {
       font-family: var(--font-reading);
-      font-size: 1.6rem;
+      font-size: 1.55rem;
       font-weight: 500;
       color: var(--text);
+      line-height: 1.2;
     }
-    .summary-stats {
+    .summary-subtitle {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+      margin-top: -0.6rem;
+    }
+
+    .summary-metrics {
       display: grid;
-      grid-template-columns: auto 1fr;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.75rem;
+      padding: 0.85rem 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .summary-metric { display: flex; flex-direction: column; gap: 0.15rem; }
+    .summary-metric .metric-label {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .summary-metric .metric-value {
+      font-family: var(--font-mono);
+      font-size: 1.4rem;
+      font-weight: 600;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      line-height: 1.1;
+    }
+    .summary-metric .metric-value.accent { color: var(--accent-soft); }
+    .summary-metric .metric-sub {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+
+    .summary-section { display: flex; flex-direction: column; gap: 0.55rem; }
+    .summary-section-title {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--highlight);
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    .summary-section-title .eval-chart-hint {
+      font-weight: 400;
+      color: var(--muted);
+      text-transform: none;
+      letter-spacing: 0.02em;
+      font-size: 0.66rem;
+    }
+
+    /* Tier bar (classification distribution) */
+    .tier-bar {
+      display: flex;
+      height: 10px;
+      border-radius: 2px;
+      overflow: hidden;
+      background: var(--surface2);
+    }
+    .tier-bar-seg { height: 100%; }
+    .tier-bar-seg.best { background: #8aa074; }
+    .tier-bar-seg.excellent { background: #6b8268; }
+    .tier-bar-seg.good { background: #4c6656; }
+    .tier-bar-seg.inaccuracy { background: #b8a06a; }
+    .tier-bar-seg.mistake { background: #c28a4e; }
+    .tier-bar-seg.blunder { background: var(--accent); }
+    .tier-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem 0.8rem;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+    .tier-legend-item { display: inline-flex; align-items: center; gap: 0.35rem; }
+    .tier-legend-item .swatch {
+      width: 8px; height: 8px; border-radius: 1px; display: inline-block;
+    }
+    .tier-legend-item .swatch.best { background: #8aa074; }
+    .tier-legend-item .swatch.excellent { background: #6b8268; }
+    .tier-legend-item .swatch.good { background: #4c6656; }
+    .tier-legend-item .swatch.inaccuracy { background: #b8a06a; }
+    .tier-legend-item .swatch.mistake { background: #c28a4e; }
+    .tier-legend-item .swatch.blunder { background: var(--accent); }
+    .tier-legend-item .count {
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+    }
+
+    /* Phase breakdown */
+    .phase-grid {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
       gap: 0.45rem 1rem;
       font-family: var(--font-mono);
       font-size: 0.85rem;
     }
-    .summary-stats .k { color: var(--muted); letter-spacing: 0.02em; }
-    .summary-stats .v { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
-    .summary-stats .v.accuracy { color: var(--accent-soft); font-size: 1.1rem; }
-    .summary-turning {
-      padding: 0.75rem 0.85rem;
+    .phase-grid .phase-name { color: var(--muted); }
+    .phase-grid .phase-acc {
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      font-weight: 500;
+    }
+    .phase-grid .phase-count {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    /* Eval chart */
+    .eval-chart {
+      width: 100%;
+      background: var(--surface2);
+      border-radius: 2px;
+      padding: 0.5rem;
+    }
+    .eval-chart svg { display: block; width: 100%; height: auto; }
+
+    /* Critical / best moments */
+    .moment-list { display: flex; flex-direction: column; gap: 0.35rem; }
+    .moment-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 0.6rem;
+      align-items: baseline;
+      padding: 0.5rem 0.7rem;
+      background: var(--surface2);
+      border-left: 2px solid var(--border);
+      border-radius: 2px;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .moment-row:hover { background: var(--surface); border-left-color: var(--highlight); }
+    .moment-row.blunder { border-left-color: var(--accent); }
+    .moment-row.mistake { border-left-color: #c28a4e; }
+    .moment-row.inaccuracy { border-left-color: var(--highlight); }
+    .moment-row.best { border-left-color: #8aa074; }
+    .moment-row.excellent { border-left-color: #6b8268; }
+    .moment-row .moment-num {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .moment-row .moment-san {
+      color: var(--text);
+      font-weight: 500;
+    }
+    .moment-row .moment-desc {
+      color: var(--muted);
+      font-size: 0.78rem;
+      letter-spacing: 0.01em;
+    }
+    .moment-row .moment-loss {
+      color: var(--accent-soft);
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .moment-hint {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* Opening line */
+    .summary-opening-line {
+      font-family: var(--font-reading);
+      font-size: 0.95rem;
+      color: var(--text);
+      line-height: 1.4;
+    }
+    .summary-opening-line .eco {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      padding: 0.1rem 0.45rem;
+      background: var(--surface2);
+      color: var(--highlight);
+      border-radius: 2px;
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    /* Takeaway */
+    .summary-takeaway {
+      padding: 0.8rem 0.95rem;
       background: var(--surface2);
       border-left: 2px solid var(--highlight);
       border-radius: 2px;
       font-family: var(--font-reading);
-      font-size: 0.92rem;
+      font-size: 0.94rem;
       color: var(--text);
       line-height: 1.45;
     }
-    .summary-turning .eyebrow {
+    .summary-takeaway .eyebrow {
       display: block;
       font-family: var(--font-mono);
       font-size: 0.66rem;
@@ -1206,7 +1399,8 @@
       color: var(--highlight);
       margin-bottom: 0.35rem;
     }
-    .summary-actions { display: flex; gap: 0.5rem; margin-top: 0.25rem; }
+
+    .summary-actions { display: flex; gap: 0.5rem; margin-top: 0.25rem; flex-wrap: wrap; }
 
     /* Responsive */
     @media (max-width: 1100px) {
@@ -1554,21 +1748,75 @@
 <div class="summary-overlay" id="summary-overlay" style="display:none;" role="dialog" aria-modal="true">
   <div class="summary-card">
     <div class="summary-title" id="summary-title">Game over</div>
-    <div class="summary-stats">
-      <span class="k">Moves</span><span class="v" id="summary-moves">0</span>
-      <span class="k">Accuracy</span><span class="v accuracy" id="summary-accuracy">—</span>
-      <span class="k">Best</span><span class="v" id="summary-best">0</span>
-      <span class="k">Excellent</span><span class="v" id="summary-excellent">0</span>
-      <span class="k">Inaccuracies</span><span class="v" id="summary-inacc">0</span>
-      <span class="k">Mistakes</span><span class="v" id="summary-mistakes">0</span>
-      <span class="k">Blunders</span><span class="v" id="summary-blunders">0</span>
+    <div class="summary-subtitle" id="summary-subtitle" style="display:none;"></div>
+
+    <!-- Headline metrics: three big numbers -->
+    <div class="summary-metrics">
+      <div class="summary-metric">
+        <div class="metric-label">Accuracy</div>
+        <div class="metric-value accent" id="summary-accuracy">—</div>
+      </div>
+      <div class="summary-metric">
+        <div class="metric-label">Avg loss</div>
+        <div class="metric-value" id="summary-acpl">—</div>
+        <div class="metric-sub">centipawns / move</div>
+      </div>
+      <div class="summary-metric">
+        <div class="metric-label">Moves</div>
+        <div class="metric-value" id="summary-moves">0</div>
+      </div>
     </div>
-    <div class="summary-turning" id="summary-turning" style="display:none;">
-      <span class="eyebrow">Turning point</span>
-      <span id="summary-turning-text">—</span>
+
+    <!-- Classification distribution bar -->
+    <div class="summary-section" id="summary-tier-section">
+      <div class="summary-section-title">Move quality</div>
+      <div class="tier-bar" id="summary-tier-bar" aria-label="Classification distribution"></div>
+      <div class="tier-legend" id="summary-tier-legend"></div>
     </div>
+
+    <!-- Phase breakdown -->
+    <div class="summary-section" id="summary-phase-section" style="display:none;">
+      <div class="summary-section-title">Phase accuracy</div>
+      <div class="phase-grid" id="summary-phase-grid"></div>
+    </div>
+
+    <!-- Evaluation sparkline -->
+    <div class="summary-section" id="summary-eval-section" style="display:none;">
+      <div class="summary-section-title">
+        <span>Evaluation swing</span>
+        <span class="eval-chart-hint">from your side</span>
+      </div>
+      <div class="eval-chart" id="summary-eval-chart"></div>
+    </div>
+
+    <!-- Opening -->
+    <div class="summary-section" id="summary-opening-section" style="display:none;">
+      <div class="summary-section-title">Opening</div>
+      <div class="summary-opening-line" id="summary-opening-line">—</div>
+    </div>
+
+    <!-- Critical moments (clickable) -->
+    <div class="summary-section" id="summary-critical-section" style="display:none;">
+      <div class="summary-section-title">Critical moments</div>
+      <div class="moment-list" id="summary-critical-list"></div>
+      <div class="moment-hint">Click any moment to jump to that position.</div>
+    </div>
+
+    <!-- Best moments (clickable) -->
+    <div class="summary-section" id="summary-best-section" style="display:none;">
+      <div class="summary-section-title">Best moves</div>
+      <div class="moment-list" id="summary-best-list"></div>
+    </div>
+
+    <!-- Coaching takeaway -->
+    <div class="summary-takeaway" id="summary-takeaway" style="display:none;">
+      <span class="eyebrow">Takeaway</span>
+      <span id="summary-takeaway-text">—</span>
+    </div>
+
     <div class="summary-actions">
       <button class="ctrl-btn primary" id="btn-summary-newgame">New game</button>
+      <button class="ctrl-btn" id="btn-summary-copypgn">Copy PGN</button>
       <button class="ctrl-btn" id="btn-summary-close">Close</button>
     </div>
   </div>
@@ -3513,33 +3761,323 @@ async function showCandidates() {
 // ─────────────────────────────────────────────
 // POST-GAME SUMMARY
 // ─────────────────────────────────────────────
+
+// Eval from user's POV (centipawns) after a given review's position.
+// evalAfter is stockfish's score from opponent-to-move POV, so we negate.
+function evalAfterUserCp(r) {
+  if (!r || !r.evalAfter) return null;
+  return -scoreToCp(r.evalAfter);
+}
+
+// Average centipawn loss across scored (non-'unknown') moves.
+function computeACPL(reviews) {
+  const scored = reviews.filter(r => r && r.tier && r.tier !== 'unknown');
+  if (!scored.length) return null;
+  const total = scored.reduce((s, r) => s + (r.loss || 0), 0);
+  return Math.round(total / scored.length);
+}
+
+// Simple ply-based phase classifier. A game that resigns mid-opening
+// will legitimately have zero moves in later phases.
+function phaseOf(pairNum) {
+  if (pairNum <= 12) return 'opening';
+  if (pairNum <= 25) return 'middlegame';
+  return 'endgame';
+}
+
+function phaseBreakdown(reviews) {
+  const buckets = {
+    opening: { best: 0, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0, moves: 0 },
+    middlegame: { best: 0, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0, moves: 0 },
+    endgame: { best: 0, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0, moves: 0 }
+  };
+  for (const r of reviews) {
+    if (!r || !r.tier || r.tier === 'unknown') continue;
+    const p = phaseOf(r.pairNum);
+    buckets[p][r.tier] = (buckets[p][r.tier] || 0) + 1;
+    buckets[p].moves++;
+  }
+  return {
+    opening: { ...buckets.opening, pct: accuracyFromTallies(buckets.opening, buckets.opening.moves) },
+    middlegame: { ...buckets.middlegame, pct: accuracyFromTallies(buckets.middlegame, buckets.middlegame.moves) },
+    endgame: { ...buckets.endgame, pct: accuracyFromTallies(buckets.endgame, buckets.endgame.moves) }
+  };
+}
+
+// Format "14. Qh5" or "14... Qh5" based on ply parity.
+function formatMoveRef(r) {
+  const dots = (r.ply % 2 === 1) ? '.' : '...';
+  return `${r.pairNum}${dots} ${r.userSan}`;
+}
+
+// Build an inline SVG eval chart from review log.
+// X axis: review index. Y axis: eval after user's move from user's POV.
+// Clamped to ±800 cp (±8 pawns) so blowouts don't flatten the interesting region.
+function renderEvalChart(reviews) {
+  const pts = [];
+  for (const r of reviews) {
+    if (!r || r.tier === 'unknown') continue;
+    const cp = evalAfterUserCp(r);
+    if (cp === null) continue;
+    pts.push({ cp, r });
+  }
+  if (pts.length < 2) return ''; // need at least 2 points for a line
+
+  const W = 580, H = 96, PAD = 4;
+  const CLAMP = 800;
+  const innerW = W - PAD * 2;
+  const innerH = H - PAD * 2;
+  const xStep = innerW / (pts.length - 1);
+  const midY = PAD + innerH / 2;
+  const yFor = (cp) => {
+    const c = Math.max(-CLAMP, Math.min(CLAMP, cp));
+    return midY - (c / CLAMP) * (innerH / 2);
+  };
+
+  let d = '';
+  pts.forEach((p, i) => {
+    const x = PAD + i * xStep;
+    const y = yFor(p.cp);
+    d += (i === 0 ? `M${x.toFixed(1)},${y.toFixed(1)}` : ` L${x.toFixed(1)},${y.toFixed(1)}`);
+  });
+
+  // Area fill down to zero line — gives visual weight to who's winning.
+  let area = '';
+  pts.forEach((p, i) => {
+    const x = PAD + i * xStep;
+    const y = yFor(p.cp);
+    area += (i === 0 ? `M${x.toFixed(1)},${midY.toFixed(1)} L${x.toFixed(1)},${y.toFixed(1)}` : ` L${x.toFixed(1)},${y.toFixed(1)}`);
+  });
+  area += ` L${(PAD + (pts.length - 1) * xStep).toFixed(1)},${midY.toFixed(1)} Z`;
+
+  // Dots for mistakes/blunders so users can eyeball where things went wrong.
+  const markers = pts.map((p, i) => {
+    const x = PAD + i * xStep;
+    const y = yFor(p.cp);
+    const tier = p.r.tier;
+    let color = null;
+    if (tier === 'blunder') color = '#a23346';
+    else if (tier === 'mistake') color = '#c28a4e';
+    if (!color) return '';
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${color}"/>`;
+  }).join('');
+
+  return `
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Evaluation over time">
+      <line x1="${PAD}" y1="${midY}" x2="${W - PAD}" y2="${midY}" stroke="#5a4a3b" stroke-dasharray="2,3" stroke-width="0.5"/>
+      <path d="${area}" fill="rgba(207, 109, 123, 0.12)"/>
+      <path d="${d}" fill="none" stroke="#cf6d7b" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+      ${markers}
+    </svg>
+  `;
+}
+
+// Human-readable coaching takeaway inferred from pattern in reviews.
+function coachingTakeaway(reviews, phases) {
+  const scored = reviews.filter(r => r.tier && r.tier !== 'unknown');
+  if (scored.length === 0) return null;
+  const blunders = reviews.filter(r => r.tier === 'blunder').length;
+  const mistakes = reviews.filter(r => r.tier === 'mistake').length;
+  const bestCnt = reviews.filter(r => r.tier === 'best').length;
+  const pctBest = bestCnt / scored.length;
+
+  const op = phases.opening.pct;
+  const mi = phases.middlegame.pct;
+  const en = phases.endgame.pct;
+
+  if (blunders === 0 && mistakes === 0 && pctBest >= 0.5) {
+    return 'Clean game — no blunders, over half your moves matched the engine.';
+  }
+  if (blunders === 0 && mistakes <= 1) {
+    return 'Solid play with no blunders. Keep the discipline on every move.';
+  }
+  if (op !== null && mi !== null && op - mi >= 20) {
+    return 'You played the opening sharply but the middlegame got away from you. Before each move, check what your opponent threatens.';
+  }
+  if (mi !== null && en !== null && mi - en >= 20) {
+    return 'Middlegame was steady but the endgame slipped. Endgame technique — king activity, passed pawns, opposition — often decides close games.';
+  }
+  if (blunders >= 3) {
+    return `${blunders} blunders tipped this one. Use the Threats tool before committing to a move — it surfaces hanging pieces and forcing replies.`;
+  }
+  if (blunders >= 1) {
+    return 'One blunder was the turning point — scrub to the critical moment below and try a different move with Show best to see the line you missed.';
+  }
+  if (mistakes >= 3) {
+    return 'Several mistakes without blunders — often a sign of missed candidate moves. Before moving, ask: what\'s the engine\'s #1 doing that mine isn\'t?';
+  }
+  return 'Mixed game with room to grow. The critical moments below are where the game turned.';
+}
+
 function showPostGameSummary(endMsg) {
   $('#summary-title').text(endMsg);
-  $('#summary-moves').text(coachStats.moves);
-  $('#summary-best').text(coachStats.best);
-  $('#summary-excellent').text(coachStats.excellent);
-  $('#summary-inacc').text(coachStats.inaccuracy);
-  $('#summary-mistakes').text(coachStats.mistake);
-  $('#summary-blunders').text(coachStats.blunder);
 
+  // Subtitle: strength + user color context
+  const eloEl = document.getElementById('coach-strength-value');
+  const elo = eloEl ? eloEl.textContent : '';
+  const sideName = coachUserColor() === 'white' ? 'White' : 'Black';
+  const subtitleParts = [];
+  if (sideName) subtitleParts.push(`You played ${sideName}`);
+  if (elo) subtitleParts.push(`vs Stockfish ${elo}`);
+  if (subtitleParts.length) {
+    $('#summary-subtitle').text(subtitleParts.join(' · ')).show();
+  } else {
+    $('#summary-subtitle').hide();
+  }
+
+  // Headline metrics
   const total = coachStats.moves;
   const pct = accuracyFromTallies(coachStats, total);
   $('#summary-accuracy').text(pct === null ? '—' : pct + '%');
+  $('#summary-moves').text(total);
+  const acpl = computeACPL(coachReviewLog);
+  $('#summary-acpl').text(acpl === null ? '—' : acpl);
 
-  // Turning point: biggest loss among non-best moves
-  const biggest = coachReviewLog
-    .filter(r => r.tier !== 'best')
-    .sort((a, b) => b.loss - a.loss)[0];
-  if (biggest && biggest.loss >= 60) {
-    $('#summary-turning').show();
-    $('#summary-turning-text').text(
-      `Move ${biggest.pairNum}: ${biggest.userSan} lost ${(biggest.loss / 100).toFixed(2)} pawns — the engine preferred ${biggest.bestSan}.`
-    );
+  // Classification distribution bar + legend
+  const tiers = ['best', 'excellent', 'good', 'inaccuracy', 'mistake', 'blunder'];
+  const tierLabel = {
+    best: 'Best', excellent: 'Excellent', good: 'Good',
+    inaccuracy: 'Inaccuracy', mistake: 'Mistake', blunder: 'Blunder'
+  };
+  const $bar = $('#summary-tier-bar').empty();
+  const $leg = $('#summary-tier-legend').empty();
+  if (total > 0) {
+    for (const t of tiers) {
+      const n = coachStats[t] || 0;
+      if (n > 0) {
+        const wPct = (n / total) * 100;
+        $bar.append(`<div class="tier-bar-seg ${t}" style="width:${wPct.toFixed(2)}%" title="${tierLabel[t]}: ${n}"></div>`);
+      }
+      // Legend always shows even zero counts so users can see "no blunders".
+      $leg.append(
+        `<span class="tier-legend-item"><span class="swatch ${t}"></span>${tierLabel[t]} <span class="count">${n}</span></span>`
+      );
+    }
+    $('#summary-tier-section').show();
   } else {
-    $('#summary-turning').hide();
+    // No moves scored — hide the whole section rather than show an empty bar.
+    $('#summary-tier-section').hide();
+  }
+
+  // Phase breakdown
+  const phases = phaseBreakdown(coachReviewLog);
+  const anyPhase = phases.opening.moves + phases.middlegame.moves + phases.endgame.moves > 0;
+  const $phaseGrid = $('#summary-phase-grid').empty();
+  if (anyPhase) {
+    const rows = [
+      ['Opening', phases.opening, '(moves 1–12)'],
+      ['Middlegame', phases.middlegame, '(13–25)'],
+      ['Endgame', phases.endgame, '(26+)']
+    ];
+    for (const [name, data, range] of rows) {
+      const acc = data.pct === null ? '—' : `${data.pct}%`;
+      const moves = data.moves === 0 ? '—' : `${data.moves} move${data.moves === 1 ? '' : 's'}`;
+      $phaseGrid.append(
+        `<span class="phase-name">${name} <span style="color:var(--muted);font-size:0.72rem">${range}</span></span>` +
+        `<span class="phase-acc">${acc}</span>` +
+        `<span class="phase-count">${moves}</span>`
+      );
+    }
+    $('#summary-phase-section').show();
+  } else {
+    $('#summary-phase-section').hide();
+  }
+
+  // Eval chart — need ≥ 2 scored points
+  const chartHtml = renderEvalChart(coachReviewLog);
+  if (chartHtml) {
+    $('#summary-eval-chart').html(chartHtml);
+    $('#summary-eval-section').show();
+  } else {
+    $('#summary-eval-section').hide();
+  }
+
+  // Opening — identify based on full history
+  const openingSans = coachGame ? coachGame.history() : [];
+  if (openingSans.length > 0 && typeof identifyOpening === 'function') {
+    const info = identifyOpening(openingSans);
+    if (info.match) {
+      const mNum = Math.ceil(info.matchedPlies / 2);
+      const lineText = info.exact
+        ? `Stayed in theory through move ${mNum}.`
+        : `Left book after move ${mNum}.`;
+      $('#summary-opening-line').html(
+        `<span class="eco">${escapeHtml(info.match.eco)}</span>` +
+        `<strong>${escapeHtml(info.match.name)}</strong> — ${escapeHtml(lineText)}`
+      );
+      $('#summary-opening-section').show();
+    } else {
+      $('#summary-opening-section').hide();
+    }
+  } else {
+    $('#summary-opening-section').hide();
+  }
+
+  // Critical moments — top 3 worst non-best moves, threshold loss ≥ 30cp
+  const critical = coachReviewLog
+    .filter(r => r.tier && r.tier !== 'unknown' && r.tier !== 'best' && (r.loss || 0) >= 30)
+    .sort((a, b) => (b.loss || 0) - (a.loss || 0))
+    .slice(0, 3);
+  const $crit = $('#summary-critical-list').empty();
+  if (critical.length) {
+    for (const r of critical) {
+      const ref = formatMoveRef(r);
+      const lossPawns = (r.loss / 100).toFixed(1);
+      const best = r.bestSan ? ` — best was ${r.bestSan}` : '';
+      const desc = `${tierLabel[r.tier]}${best}`;
+      const row = document.createElement('div');
+      row.className = `moment-row ${r.tier}`;
+      row.dataset.ply = r.ply;
+      row.innerHTML =
+        `<span class="moment-num">${escapeHtml(ref)}</span>` +
+        `<span class="moment-desc">${escapeHtml(desc)}</span>` +
+        `<span class="moment-loss">−${lossPawns}</span>`;
+      $crit.append(row);
+    }
+    $('#summary-critical-section').show();
+  } else {
+    $('#summary-critical-section').hide();
+  }
+
+  // Best moments — top 3 'best'-tier or 'excellent'-tier moves spaced through the game
+  // Prefer moves where engine rank=1 and there was a real alternative (>1 line seen).
+  // Simple approach: take the first 3 'best' tier reviews with a best alternative.
+  const bestMoves = coachReviewLog
+    .filter(r => r.tier === 'best' || r.tier === 'excellent')
+    .slice(0, 3);
+  const $best = $('#summary-best-list').empty();
+  if (bestMoves.length) {
+    for (const r of bestMoves) {
+      const ref = formatMoveRef(r);
+      const rankNote = r.rank === 1 ? 'top engine choice' : (r.rank ? `#${r.rank} engine choice` : '');
+      const tierNote = r.tier === 'best' ? 'Best' : 'Excellent';
+      const desc = rankNote ? `${tierNote} · ${rankNote}` : tierNote;
+      const row = document.createElement('div');
+      row.className = `moment-row ${r.tier}`;
+      row.dataset.ply = r.ply;
+      row.innerHTML =
+        `<span class="moment-num">${escapeHtml(ref)}</span>` +
+        `<span class="moment-desc">${escapeHtml(desc)}</span>` +
+        `<span class="moment-loss" style="color:#8aa074">✓</span>`;
+      $best.append(row);
+    }
+    $('#summary-best-section').show();
+  } else {
+    $('#summary-best-section').hide();
+  }
+
+  // Takeaway
+  const takeaway = coachingTakeaway(coachReviewLog, phases);
+  if (takeaway) {
+    $('#summary-takeaway-text').text(takeaway);
+    $('#summary-takeaway').show();
+  } else {
+    $('#summary-takeaway').hide();
   }
 
   $('#summary-overlay').css('display', 'flex');
+  // Scroll to top when reopening on a new game
+  $('.summary-card').scrollTop(0);
 }
 
 // ─────────────────────────────────────────────
@@ -4986,6 +5524,44 @@ $(function () {
   });
   $('#btn-summary-close').on('click', function() {
     $('#summary-overlay').hide();
+  });
+  // Copy PGN from within the summary — shares logic with the move-list copy button.
+  $('#btn-summary-copypgn').on('click', async function() {
+    const $btn = $(this);
+    const pgn = coachGetPgn();
+    if (!pgn) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(pgn);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = pgn;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      $btn.text('Copied!');
+      setTimeout(() => $btn.text('Copy PGN'), 1500);
+    } catch (e) {
+      $btn.text('Copy failed');
+      setTimeout(() => $btn.text('Copy PGN'), 1500);
+    }
+  });
+  // Click a critical/best moment to close the overlay and jump to that position.
+  $(document).on('click', '.moment-row', function() {
+    const ply = parseInt(this.dataset.ply, 10);
+    if (!Number.isInteger(ply)) return;
+    $('#summary-overlay').hide();
+    coachGotoPly(ply);
+  });
+  // Allow pressing Escape to dismiss the summary overlay.
+  $(document).on('keydown.summary', function(e) {
+    if (e.key === 'Escape' && $('#summary-overlay').is(':visible')) {
+      $('#summary-overlay').hide();
+    }
   });
 
   // Explore: database toggle
