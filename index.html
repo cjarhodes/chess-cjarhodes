@@ -372,6 +372,30 @@
       color: var(--text);
     }
 
+    /* Opening line selector */
+    .line-selector {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+    .line-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      color: var(--muted);
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      padding: 0.32rem 0.55rem;
+      transition: all 0.15s;
+    }
+    .line-btn:hover { border-color: var(--rule-3); color: var(--text); }
+    .line-btn.active {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      color: var(--accent-soft);
+    }
+
     /* Explanation box */
     .explanation-box {
       background: var(--surface);
@@ -1555,6 +1579,7 @@
       <button class="ctrl-btn" id="btn-end" disabled title="To end">»</button>
       <button class="ctrl-btn" id="btn-explore-undo" style="display:none">← Undo</button>
       <button class="ctrl-btn" id="btn-explore-reset" style="display:none" title="Reset to start of explore session">↺ Reset</button>
+      <button class="ctrl-btn" id="btn-review-misses" style="display:none">Review misses</button>
       <button class="ctrl-btn flip" id="btn-flip" disabled title="Flip board">⇅</button>
     </div>
 
@@ -1575,6 +1600,11 @@
       </div>
       <div class="opening-desc" id="opening-desc"></div>
       <div id="sr-status-panel" class="sr-panel" style="display:none"></div>
+
+      <div id="line-selector-wrap" style="display:none;">
+        <div class="section-label">Line</div>
+        <div class="line-selector" id="line-selector"></div>
+      </div>
 
       <div>
         <div class="section-label">Moves</div>
@@ -2999,22 +3029,71 @@ const OPENINGS = [
   }
 ];
 
+function attachOpeningVariations() {
+  const byId = {};
+  OPENINGS.forEach(o => { byId[o.id] = o; });
+  const link = (id, name, note) => {
+    const op = byId[id];
+    if (!op) return null;
+    return {
+      id,
+      name: name || op.name,
+      note: note || op.tagline || '',
+      description: op.description,
+      tagline: op.tagline,
+      moves: op.moves,
+      explanations: op.explanations,
+      keyIdeas: op.keyIdeas
+    };
+  };
+  const italian = byId.italian;
+  if (italian) {
+    italian.variations = [
+      link('evans-gambit', 'Evans Gambit', '4.b4 branch from the Italian'),
+      link('fried-liver', 'Fried Liver Attack', 'Ng5 tactical branch'),
+      link('blackburne-shilling', 'Blackburne Shilling', '3...Nd4 trap branch')
+    ].filter(Boolean);
+  }
+  const queensGambit = byId['queens-gambit'];
+  if (queensGambit) {
+    queensGambit.variations = [
+      link('slav', 'Slav Defense', '2...c6 branch'),
+      link('elephant-trap', 'Elephant Trap', 'QGD trap branch')
+    ].filter(Boolean);
+  }
+  const sicilian = byId.sicilian;
+  if (sicilian) {
+    sicilian.variations = [
+      link('sicilian-dragon', 'Dragon', 'g6 setup'),
+      link('sicilian-schev', 'Scheveningen', 'e6 setup')
+    ].filter(Boolean);
+  }
+}
+attachOpeningVariations();
+
 // ─────────────────────────────────────────────
 // STATE
 // ─────────────────────────────────────────────
 let board = null;
 let game = new Chess();
 let currentOpening = null;
+let currentLine = null;
+let currentLineId = 'main';
 let currentMoveIdx = -1;  // -1 = starting position
 let quizMode = false;
 let exploreMode = false;
 let exploreGame = null;
 let exploreStartFen = null;
+let exploreRequestId = 0;
 let currentDb = 'lichess';
 let boardFlipped = false;
 let quizAttempts = 0;
 let feedbackTimeout = null;
 let quizSessionMisses = 0;  // misses in current quiz session (before completion)
+let quizMissedMoves = [];
+let quizReviewMode = false;
+let quizReviewQueue = [];
+let quizReviewCursor = 0;
 let tapSelected = null;      // square selected for tap-to-move, or null
 
 // Coach mode (standalone page)
@@ -4263,6 +4342,45 @@ function updateSRPanel() {
   $panel.html(html).show();
 }
 
+function validateOpeningData() {
+  const errors = [];
+  const seenIds = new Set();
+  OPENINGS.forEach(opening => {
+    if (!opening.id) errors.push('Opening missing id');
+    if (seenIds.has(opening.id)) errors.push(`Duplicate opening id: ${opening.id}`);
+    seenIds.add(opening.id);
+    if (!Array.isArray(opening.moves) || opening.moves.length === 0) {
+      errors.push(`${opening.id}: missing moves`);
+    }
+    if (!Array.isArray(opening.explanations) || opening.explanations.length !== opening.moves.length) {
+      errors.push(`${opening.id}: explanations length does not match moves length`);
+    }
+    const lineIds = new Set();
+    getOpeningLines(opening).forEach(line => {
+      const lineKey = `${opening.id}/${line.id}`;
+      if (lineIds.has(line.id)) errors.push(`${opening.id}: duplicate line id ${line.id}`);
+      lineIds.add(line.id);
+      if (!Array.isArray(line.moves) || line.moves.length === 0) {
+        errors.push(`${lineKey}: missing moves`);
+        return;
+      }
+      if (!Array.isArray(line.explanations) || line.explanations.length !== line.moves.length) {
+        errors.push(`${lineKey}: explanations length does not match moves length`);
+      }
+      const g = new Chess();
+      for (let i = 0; i < line.moves.length; i++) {
+        const san = line.moves[i];
+        if (!g.move(san)) {
+          errors.push(`${lineKey}: illegal SAN at ply ${i + 1}: ${san}`);
+          break;
+        }
+      }
+    });
+  });
+  if (errors.length) console.warn('Opening data validation failed:', errors);
+  return errors;
+}
+
 // ─────────────────────────────────────────────
 // URL STATE
 // ─────────────────────────────────────────────
@@ -4272,6 +4390,7 @@ function updateURL() {
     params.set('view', 'coach');
   } else {
     if (currentOpening) params.set('opening', currentOpening.id);
+    if (currentOpening && currentLineId && currentLineId !== 'main') params.set('line', currentLineId);
     if (quizMode) params.set('mode', 'quiz');
     else if (exploreMode) params.set('mode', 'explore');
     if (currentOpening && !quizMode && !exploreMode && currentMoveIdx >= 0) {
@@ -4284,7 +4403,7 @@ function updateURL() {
 }
 function readURL() {
   const p = new URLSearchParams(location.search);
-  return { view: p.get('view'), opening: p.get('opening'), mode: p.get('mode'), move: parseInt(p.get('move'), 10) };
+  return { view: p.get('view'), opening: p.get('opening'), line: p.get('line'), mode: p.get('mode'), move: parseInt(p.get('move'), 10) };
 }
 
 // ─────────────────────────────────────────────
@@ -4916,6 +5035,156 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+function getOpeningLines(opening) {
+  if (!opening) return [];
+  return [{
+    id: 'main',
+    name: 'Main line',
+    note: opening.tagline || '',
+    tagline: opening.tagline,
+    description: opening.description,
+    moves: opening.moves,
+    explanations: opening.explanations,
+    keyIdeas: opening.keyIdeas
+  }].concat(opening.variations || []);
+}
+
+function setActiveLine(lineId) {
+  const lines = getOpeningLines(currentOpening);
+  currentLine = lines.find(line => line.id === lineId) || lines[0] || null;
+  currentLineId = currentLine ? currentLine.id : 'main';
+}
+
+function activeMoves() {
+  return currentLine && currentLine.moves ? currentLine.moves : [];
+}
+
+function activeExplanations() {
+  return currentLine && currentLine.explanations ? currentLine.explanations : [];
+}
+
+function activeKeyIdeas() {
+  if (currentLine && currentLine.keyIdeas) return currentLine.keyIdeas;
+  return currentOpening && currentOpening.keyIdeas ? currentOpening.keyIdeas : [];
+}
+
+function renderOpeningDetails() {
+  if (!currentOpening || !currentLine) return;
+  $('#opening-title').text(currentOpening.name);
+  if (currentLine.id === 'main') {
+    $('#opening-tagline').text(currentOpening.tagline || '');
+    $('#opening-desc').text(currentOpening.description || '');
+  } else {
+    const note = currentLine.note || currentLine.tagline || '';
+    $('#opening-tagline').text(note ? `${currentLine.name} · ${note}` : currentLine.name);
+    $('#opening-desc').text(currentLine.description || currentOpening.description || '');
+  }
+}
+
+function renderLineSelector() {
+  const lines = getOpeningLines(currentOpening);
+  const $wrap = $('#line-selector-wrap');
+  const $sel = $('#line-selector').empty();
+  if (!currentOpening || lines.length <= 1) {
+    $wrap.hide();
+    return;
+  }
+  lines.forEach(line => {
+    $('<button class="line-btn"></button>')
+      .toggleClass('active', line.id === currentLineId)
+      .attr('data-line', line.id)
+      .text(line.name)
+      .appendTo($sel);
+  });
+  $wrap.show();
+}
+
+function resetQuizTracking() {
+  quizAttempts = 0;
+  quizSessionMisses = 0;
+  quizMissedMoves = [];
+  quizReviewMode = false;
+  quizReviewQueue = [];
+  quizReviewCursor = 0;
+  $('#btn-review-misses').hide();
+}
+
+function recordQuizMiss(idx) {
+  if (!quizMissedMoves.includes(idx)) quizMissedMoves.push(idx);
+}
+
+function moveLabelForIndex(idx) {
+  const moveNo = Math.floor(idx / 2) + 1;
+  return `${moveNo}${idx % 2 === 0 ? '.' : '...'} ${activeMoves()[idx] || ''}`.trim();
+}
+
+function setLineStartPosition() {
+  currentMoveIdx = -1;
+  quizAttempts = 0;
+  game.reset();
+  board.position('start', false);
+  renderMoveList();
+  renderExplanation(-1);
+  updateProgress();
+  updateControls();
+}
+
+function switchOpeningLine(lineId) {
+  if (!currentOpening) return;
+  setActiveLine(lineId);
+  resetQuizTracking();
+  game.reset();
+  currentMoveIdx = -1;
+  if (quizMode) boardFlipped = (getUserColor() === 'black');
+  createBoard('start', quizMode, boardFlipped ? 'black' : 'white');
+  renderOpeningDetails();
+  renderLineSelector();
+  renderKeyIdeas();
+  renderMoveList();
+  renderExplanation(-1);
+  updateProgress();
+  updateControls();
+  clearFeedback();
+  updateSRPanel();
+  updateURL();
+  if (quizMode) {
+    const colorLabel = getUserColor() === 'white' ? 'White ♙' : 'Black ♟';
+    showFeedback('hint', `💡 You're playing ${colorLabel}. The opponent's moves play automatically.`);
+    autoPlayOpponent();
+  }
+}
+
+function startQuizMistakeReview() {
+  if (!currentOpening || quizMissedMoves.length === 0) return;
+  quizReviewQueue = quizMissedMoves.slice().sort((a, b) => a - b);
+  quizReviewCursor = 0;
+  quizReviewMode = true;
+  quizAttempts = 0;
+  $('#btn-review-misses').hide();
+  loadQuizReviewPosition();
+}
+
+function loadQuizReviewPosition() {
+  if (!quizReviewMode || quizReviewCursor >= quizReviewQueue.length) {
+    quizReviewMode = false;
+    setLineStartPosition();
+    showFeedback('correct', 'Review complete — missed moves replayed.');
+    return;
+  }
+  const idx = quizReviewQueue[quizReviewCursor];
+  const moves = activeMoves();
+  game.reset();
+  for (let i = 0; i < idx; i++) game.move(moves[i]);
+  currentMoveIdx = idx - 1;
+  quizAttempts = 0;
+  board.position(game.fen(), false);
+  renderMoveList();
+  renderExplanation(idx - 1);
+  updateProgress();
+  const moveNo = Math.floor(idx / 2) + 1;
+  showFeedback('hint', `Review ${quizReviewCursor + 1}/${quizReviewQueue.length}: find the missed ${idx % 2 === 0 ? moveNo + '.' : moveNo + '...'} move.`);
+}
+
 // ─────────────────────────────────────────────
 // QUIZ AUTO-PLAY HELPERS
 // ─────────────────────────────────────────────
@@ -4939,14 +5208,17 @@ function finishQuiz() {
     ? '🎉 Opening complete — perfect run!'
     : `🎉 Opening complete — ${m} miss${m === 1 ? '' : 'es'}.`;
   showFeedback('correct', summary);
+  if (quizMissedMoves.length > 0) $('#btn-review-misses').show();
   updateSRSidebar();
   updateSRPanel();
 }
 
 function autoPlayOpponent() {
   if (!quizMode || !currentOpening) return;
+  if (quizReviewMode) return;
+  const moves = activeMoves();
   const nextIdx = currentMoveIdx + 1;
-  if (nextIdx >= currentOpening.moves.length) {
+  if (nextIdx >= moves.length) {
     finishQuiz();
     return;
   }
@@ -4955,12 +5227,13 @@ function autoPlayOpponent() {
   // Play opponent's move after a short pause
   setTimeout(function () {
     if (!quizMode) return;
-    game.move(currentOpening.moves[nextIdx]);
+    if (quizReviewMode) return;
+    game.move(moves[nextIdx]);
     currentMoveIdx = nextIdx;
     board.position(game.fen(), false);
     renderMoveList();
     updateProgress();
-    if (currentMoveIdx >= currentOpening.moves.length - 1) {
+    if (currentMoveIdx >= moves.length - 1) {
       finishQuiz();
     } else {
       clearFeedback();
@@ -4976,11 +5249,37 @@ function handleDrop(source, target) {
     return; // board updated in handleSnapEnd
   }
   if (!quizMode || !currentOpening) return 'snapback';
+  const moves = activeMoves();
+  const explanations = activeExplanations();
+  if (quizReviewMode) {
+    const expectedIdx = quizReviewQueue[quizReviewCursor];
+    const expectedSAN = moves[expectedIdx];
+    const tempGame = new Chess(game.fen());
+    const move = tempGame.move({ from: source, to: target, promotion: 'q' });
+    if (!move) return 'snapback';
+    if (move.san === expectedSAN) {
+      game.move({ from: source, to: target, promotion: 'q' });
+      currentMoveIdx = expectedIdx;
+      board.position(game.fen(), false);
+      renderMoveList();
+      renderExplanation(expectedIdx);
+      updateProgress();
+      quizReviewCursor++;
+      showFeedback('correct', '✓ Replayed ' + moveLabelForIndex(expectedIdx));
+      setTimeout(loadQuizReviewPosition, 650);
+    } else {
+      quizAttempts++;
+      showFeedback(quizAttempts >= 2 ? 'hint' : 'incorrect',
+        quizAttempts >= 2 ? '💡 The correct move is ' + expectedSAN : '✗ Not quite — try again!');
+      return 'snapback';
+    }
+    return;
+  }
   const nextIdx = currentMoveIdx + 1;
-  if (nextIdx >= currentOpening.moves.length) return 'snapback';
+  if (nextIdx >= moves.length) return 'snapback';
   if (!isUserTurn(nextIdx)) return 'snapback'; // opponent's turn — auto-playing
 
-  const expectedSAN = currentOpening.moves[nextIdx];
+  const expectedSAN = moves[nextIdx];
 
   // Try the move on a temp game
   const tempGame = new Chess(game.fen());
@@ -4991,7 +5290,8 @@ function handleDrop(source, target) {
     game.move({ from: source, to: target, promotion: 'q' });
     currentMoveIdx = nextIdx;
     quizAttempts = 0;
-    showFeedback('correct', '✓ ' + currentOpening.explanations[nextIdx].text);
+    const exp = explanations[nextIdx];
+    showFeedback('correct', '✓ ' + (exp ? exp.text : moveLabelForIndex(nextIdx)));
     setTimeout(() => {
       board.position(game.fen());
       renderMoveList();
@@ -5000,7 +5300,10 @@ function handleDrop(source, target) {
     }, 300);
   } else {
     quizAttempts++;
-    if (quizAttempts === 1) quizSessionMisses++;
+    if (quizAttempts === 1) {
+      quizSessionMisses++;
+      recordQuizMiss(nextIdx);
+    }
     if (quizAttempts >= 2) {
       showFeedback('hint', '💡 The correct move is ' + expectedSAN);
     } else {
@@ -5023,9 +5326,10 @@ function handleSnapEnd() {
 // ─────────────────────────────────────────────
 // LOAD AN OPENING
 // ─────────────────────────────────────────────
-function loadOpening(id) {
+function loadOpening(id, lineId) {
   currentOpening = OPENINGS.find(o => o.id === id);
   if (!currentOpening) return;
+  setActiveLine(lineId || 'main');
 
   // Exit explore mode when user picks an opening
   if (exploreMode) {
@@ -5038,7 +5342,7 @@ function loadOpening(id) {
   }
 
   currentMoveIdx = -1;
-  quizAttempts = 0;
+  resetQuizTracking();
   game.reset();
   boardFlipped = false;
 
@@ -5059,10 +5363,9 @@ function loadOpening(id) {
   // Update info panel
   $('#empty-state').hide();
   $('#opening-content').show();
-  $('#opening-title').text(currentOpening.name);
-  $('#opening-tagline').text(currentOpening.tagline);
-  $('#opening-desc').text(currentOpening.description);
+  renderOpeningDetails();
 
+  renderLineSelector();
   renderKeyIdeas();
   renderMoveList();
   renderExplanation(-1);
@@ -5078,10 +5381,11 @@ function loadOpening(id) {
 // ─────────────────────────────────────────────
 function goToMove(idx) {
   if (!currentOpening || !board) return;
-  idx = Math.max(-1, Math.min(idx, currentOpening.moves.length - 1));
+  const moves = activeMoves();
+  idx = Math.max(-1, Math.min(idx, moves.length - 1));
   game.reset();
   for (let i = 0; i <= idx; i++) {
-    game.move(currentOpening.moves[i]);
+    game.move(moves[i]);
   }
   currentMoveIdx = idx;
   board.position(idx === -1 ? 'start' : game.fen(), false);
@@ -5095,8 +5399,9 @@ function goToMove(idx) {
 }
 
 function updateControls() {
+  const moves = activeMoves();
   const atStart = currentMoveIdx <= -1;
-  const atEnd = currentOpening && currentMoveIdx >= currentOpening.moves.length - 1;
+  const atEnd = currentOpening && currentMoveIdx >= moves.length - 1;
   $('#btn-prev').prop('disabled', atStart);
   $('#btn-start').prop('disabled', atStart);
   $('#btn-next').prop('disabled', atEnd || !currentOpening);
@@ -5108,7 +5413,7 @@ function updateControls() {
 // ─────────────────────────────────────────────
 function renderMoveList() {
   if (!currentOpening) return;
-  const moves = currentOpening.moves;
+  const moves = activeMoves();
   let html = '';
   for (let i = 0; i < moves.length; i += 2) {
     const moveNum = Math.floor(i / 2) + 1;
@@ -5116,11 +5421,11 @@ function renderMoveList() {
     html += `<span class="move-num">${moveNum}.</span>`;
     // White move
     const wClass = i === currentMoveIdx ? 'current' : (i < currentMoveIdx ? 'played' : '');
-    html += `<button class="move-chip ${wClass}" data-idx="${i}">${moves[i]}</button>`;
+    html += `<button class="move-chip ${wClass}" data-idx="${i}">${escapeHtml(moves[i])}</button>`;
     // Black move (if exists)
     if (i + 1 < moves.length) {
       const bClass = (i + 1) === currentMoveIdx ? 'current' : (i + 1 < currentMoveIdx ? 'played' : '');
-      html += `<button class="move-chip ${bClass}" data-idx="${i + 1}">${moves[i + 1]}</button>`;
+      html += `<button class="move-chip ${bClass}" data-idx="${i + 1}">${escapeHtml(moves[i + 1])}</button>`;
     }
     html += `</div>`;
   }
@@ -5138,26 +5443,26 @@ function renderExplanation(idx) {
   const box = $('#explanation-box');
   if (idx < 0 || !currentOpening) {
     if (quizMode) {
-      const next = currentOpening ? currentOpening.moves[0] : '?';
       box.html(`<span class="move-label">Quiz Mode Active</span><p>Find the correct move on the board. Drag the right piece to the right square.</p>`);
     } else {
       box.html(`<p>Click a move or use <strong>Next →</strong> to step through the opening.</p>`);
     }
     return;
   }
-  const exp = currentOpening.explanations[idx];
-  box.html(`<span class="move-label">${exp.label}</span><p>${exp.text}</p>`);
+  const exp = activeExplanations()[idx] || { label: moveLabelForIndex(idx), text: 'Continue the selected line from this position.' };
+  box.html(`<span class="move-label">${escapeHtml(exp.label)}</span><p>${escapeHtml(exp.text)}</p>`);
 }
 
 function renderKeyIdeas() {
   if (!currentOpening) return;
-  const html = currentOpening.keyIdeas.map(idea => `<div class="key-idea">${idea}</div>`).join('');
+  const html = activeKeyIdeas().map(idea => `<div class="key-idea">${escapeHtml(idea)}</div>`).join('');
   $('#key-ideas').html(html);
 }
 
 function updateProgress() {
   if (!currentOpening) { $('#progress-fill').css('width', '0%'); return; }
-  const pct = ((currentMoveIdx + 1) / currentOpening.moves.length) * 100;
+  const moves = activeMoves();
+  const pct = moves.length ? ((currentMoveIdx + 1) / moves.length) * 100 : 0;
   $('#progress-fill').css('width', pct + '%');
 }
 
@@ -5189,8 +5494,8 @@ function setMode(mode) {
     // Build explore game from end of current opening (or start position)
     exploreGame = new Chess();
     if (currentOpening) {
-      currentOpening.moves.forEach(m => exploreGame.move(m));
-      $('#explore-title').text(currentOpening.name);
+      activeMoves().forEach(m => exploreGame.move(m));
+      $('#explore-title').text(currentLineId === 'main' ? currentOpening.name : `${currentOpening.name}: ${currentLine.name}`);
       $('#explore-tagline').text('Exploring from end of line · move freely');
     } else {
       $('#explore-title').text('Free Exploration');
@@ -5219,8 +5524,7 @@ function setMode(mode) {
     if (currentOpening) {
       game.reset();
       currentMoveIdx = -1;
-      quizAttempts = 0;
-      quizSessionMisses = 0;
+      resetQuizTracking();
       // Orient the board so the user plays from the bottom
       boardFlipped = (getUserColor() === 'black');
       createBoard('start', true, boardFlipped ? 'black' : 'white');
@@ -5272,6 +5576,9 @@ function clearFeedback() {
 // EXPLORE MODE — LICHESS TOKEN + API
 // ─────────────────────────────────────────────
 const LICHESS_TOKEN_KEY = 'lichess_token';
+const EXPLORE_CACHE_TTL_MS = 10 * 60 * 1000;
+const EXPLORE_CACHE_MAX = 120;
+const exploreCache = new Map();
 try { localStorage.removeItem(LICHESS_TOKEN_KEY); } catch (e) { /* ignore */ }
 function getLichessToken() {
   try { return sessionStorage.getItem(LICHESS_TOKEN_KEY); }
@@ -5296,13 +5603,44 @@ function showExploreTokenState() {
   }
 }
 
+function exploreCacheKey(db, fen) {
+  return db + '|' + fen;
+}
+
+function getCachedExploreData(key) {
+  const cached = exploreCache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.time > EXPLORE_CACHE_TTL_MS) {
+    exploreCache.delete(key);
+    return null;
+  }
+  exploreCache.delete(key);
+  exploreCache.set(key, cached);
+  return cached.data;
+}
+
+function setCachedExploreData(key, data) {
+  exploreCache.set(key, { time: Date.now(), data });
+  while (exploreCache.size > EXPLORE_CACHE_MAX) {
+    exploreCache.delete(exploreCache.keys().next().value);
+  }
+}
+
 function fetchExploreData() {
   if (!exploreGame) return;
   const token = getLichessToken();
   if (!token) { showExploreTokenState(); return; }
 
   const fen = exploreGame.fen();
-  const endpoint = currentDb === 'masters'
+  const db = currentDb;
+  const requestId = ++exploreRequestId;
+  const cacheKey = exploreCacheKey(db, fen);
+  const cached = getCachedExploreData(cacheKey);
+  if (cached) {
+    renderContinuations(cached, { cached: true });
+    return;
+  }
+  const endpoint = db === 'masters'
     ? 'https://explorer.lichess.ovh/masters'
     : 'https://explorer.lichess.ovh/lichess';
   $('#continuations-list').html('<div class="explore-loading">Fetching data…</div>');
@@ -5311,10 +5649,22 @@ function fetchExploreData() {
     data: { fen: fen, topGames: 0, recentGames: 0 },
     dataType: 'json',
     headers: { 'Authorization': 'Bearer ' + token },
-    success: function(data) { renderContinuations(data); },
+    success: function(data) {
+      if (requestId !== exploreRequestId || !exploreMode || !exploreGame ||
+          exploreGame.fen() !== fen || currentDb !== db) {
+        return;
+      }
+      setCachedExploreData(cacheKey, data);
+      renderContinuations(data);
+    },
     error: function(xhr) {
+      if (requestId !== exploreRequestId || !exploreMode || !exploreGame ||
+          exploreGame.fen() !== fen || currentDb !== db) {
+        return;
+      }
       if (xhr.status === 401) {
         clearLichessToken();
+        exploreCache.clear();
         showExploreTokenState();
         $('#token-error').text('Token invalid or expired — please reconnect.').show();
       } else {
@@ -5324,7 +5674,7 @@ function fetchExploreData() {
   });
 }
 
-function renderContinuations(data) {
+function renderContinuations(data, opts) {
   const list = $('#continuations-list');
   const totalPos = (Number(data.white) || 0) + (Number(data.draws) || 0) + (Number(data.black) || 0);
 
@@ -5337,7 +5687,8 @@ function renderContinuations(data) {
   }
 
   list.empty();
-  list.append($('<div class="explore-total"></div>').text(`${formatNum(totalPos)} games from this position`));
+  const cacheNote = opts && opts.cached ? ' · cached' : '';
+  list.append($('<div class="explore-total"></div>').text(`${formatNum(totalPos)} games from this position${cacheNote}`));
   data.moves.slice(0, 8).forEach(function(m) {
     const white = Number(m.white) || 0;
     const draws = Number(m.draws) || 0;
@@ -5400,7 +5751,14 @@ $(function () {
   $('#btn-prev').on('click', () => goToMove(currentMoveIdx - 1));
   $('#btn-next').on('click', () => goToMove(currentMoveIdx + 1));
   $('#btn-start').on('click', () => goToMove(-1));
-  $('#btn-end').on('click', () => { if (currentOpening) goToMove(currentOpening.moves.length - 1); });
+  $('#btn-end').on('click', () => { if (currentOpening) goToMove(activeMoves().length - 1); });
+  $('#btn-review-misses').on('click', startQuizMistakeReview);
+
+  // Opening line selector
+  $(document).on('click', '.line-btn', function () {
+    const lineId = $(this).attr('data-line');
+    if (lineId && lineId !== currentLineId) switchOpeningLine(lineId);
+  });
 
   // Flip board
   $('#btn-flip').on('click', function () {
@@ -5733,6 +6091,7 @@ $(function () {
   // Explore: disconnect Lichess
   $('#btn-disconnect-lichess').on('click', function() {
     clearLichessToken();
+    exploreCache.clear();
     $('#lichess-token-input').val('');
     showExploreTokenState();
   });
@@ -5943,6 +6302,7 @@ $(function () {
 
   // ─── SR SIDEBAR INIT ────────────────────
   updateSRSidebar();
+  validateOpeningData();
 
   // ─── HYDRATE FROM URL ───────────────────
   const initial = readURL();
@@ -5951,7 +6311,7 @@ $(function () {
   } else if (initial.opening) {
     const op = OPENINGS.find(o => o.id === initial.opening);
     if (op) {
-      loadOpening(op.id);
+      loadOpening(op.id, initial.line || 'main');
       if (initial.mode === 'quiz') setMode('quiz');
       else if (initial.mode === 'explore') setMode('explore');
       else if (!isNaN(initial.move) && initial.move >= 0) goToMove(initial.move);
