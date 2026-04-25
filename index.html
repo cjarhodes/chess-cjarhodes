@@ -622,6 +622,56 @@
     }
     .coach-review-moves .label { color: var(--muted); }
     .coach-review-moves .value { color: var(--text); font-family: var(--font-reading); font-size: 0.95rem; }
+    /* Premove highlights — claret tint on the source + target squares while
+       the premove is queued. */
+    #coachBoard .coach-premove-from,
+    #coachBoard .coach-premove-to {
+      box-shadow: inset 0 0 0 3px rgba(162, 51, 70, 0.55);
+    }
+    .coach-premove-hint {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--accent-soft);
+      letter-spacing: 0.05em;
+      padding: 0.25rem 0.5rem;
+      border-left: 2px solid var(--accent-soft);
+      background: rgba(207, 109, 123, 0.08);
+      margin-top: 0.4rem;
+    }
+    .liveeval-chart {
+      width: 100%;
+      height: 44px;
+      display: block;
+    }
+    .liveeval-chart svg { width: 100%; height: 100%; display: block; }
+    .coach-review-alts {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      padding-top: 0.55rem;
+      border-top: 1px dashed var(--border);
+    }
+    .coach-review-alts-label {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .coach-review-alts-list { display: flex; flex-direction: column; gap: 0.25rem; }
+    .coach-review-alts-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 0.5rem;
+      align-items: baseline;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+    }
+    .coach-review-alts-row .alt-rank { color: var(--muted); width: 1.4em; }
+    .coach-review-alts-row .alt-line { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .coach-review-alts-row .alt-line .alt-san { color: var(--accent-soft); font-weight: 600; }
+    .coach-review-alts-row .alt-line .alt-cont { color: var(--muted); }
+    .coach-review-alts-row .alt-cp { color: var(--muted); font-variant-numeric: tabular-nums; }
     .coach-review-pv {
       font-size: 0.78rem;
       color: var(--muted);
@@ -910,6 +960,23 @@
 
     .field-group { display: flex; flex-direction: column; gap: 0.6rem; }
     .field-group .section-label { margin-bottom: 0; }
+    .field-group.toggle-row { padding-top: 0.2rem; }
+    .toggle-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+    }
+    .toggle-label input[type="checkbox"] {
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .toggle-label:hover { color: var(--text); }
+    .lifetime-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
 
     .strength-row {
       display: flex;
@@ -1127,6 +1194,7 @@
       align-items: baseline;
       gap: 0.5rem;
     }
+    .movelist-actions { display: inline-flex; gap: 0.4rem; }
     .movelist-copy {
       font-family: var(--font-mono);
       font-size: 0.68rem;
@@ -1702,6 +1770,13 @@
       <div class="fen-error" id="coach-fen-error" style="display:none;"></div>
     </div>
 
+    <div class="field-group toggle-row">
+      <label class="toggle-label" for="coach-sound-toggle">
+        <input type="checkbox" id="coach-sound-toggle" />
+        <span>Move sounds</span>
+      </label>
+    </div>
+
     <div class="field-group">
       <button class="ctrl-btn primary" id="btn-coach-newgame">▶ New game</button>
       <button class="ctrl-btn" id="btn-coach-resign" disabled>Resign &amp; review</button>
@@ -1745,6 +1820,7 @@
   <!-- COACH PANEL -->
   <aside class="coach-panel">
     <div id="coach-status" class="coach-status">Set a strength and start a new game.</div>
+    <div id="coach-premove-hint" class="coach-premove-hint" style="display:none;"></div>
 
     <div id="coach-review" class="coach-review" style="display:none">
       <div class="coach-review-header">
@@ -1757,6 +1833,10 @@
       </div>
       <div id="coach-explanation" style="font-size:0.82rem; color:var(--muted); line-height:1.45;"></div>
       <div class="coach-review-pv" id="coach-pv" style="display:none"></div>
+      <div class="coach-review-alts" id="coach-alts" style="display:none">
+        <div class="coach-review-alts-label">Better candidates</div>
+        <div class="coach-review-alts-list" id="coach-alts-list"></div>
+      </div>
     </div>
 
     <div class="coach-panel-section" id="threats-section" style="display:none;">
@@ -1776,10 +1856,18 @@
       </div>
     </div>
 
+    <div class="coach-panel-section" id="liveeval-section" style="display:none;">
+      <div class="section-label">Evaluation</div>
+      <div id="liveeval-chart" class="liveeval-chart"></div>
+    </div>
+
     <div class="coach-panel-section" id="movelist-section" style="display:none;">
       <div class="movelist-head">
         <span class="section-label">Move list</span>
-        <button id="btn-coach-copypgn" class="movelist-copy" title="Copy game as PGN">Copy PGN</button>
+        <span class="movelist-actions">
+          <button id="btn-coach-copyfen" class="movelist-copy" title="Copy current position as FEN">Copy FEN</button>
+          <button id="btn-coach-copypgn" class="movelist-copy" title="Copy game as PGN">Copy PGN</button>
+        </span>
       </div>
       <div id="movelist" class="movelist"></div>
     </div>
@@ -1796,6 +1884,19 @@
         <span class="k">Inaccuracies</span><span class="v" id="coach-tally-inacc">0</span>
         <span class="k">Mistakes</span><span class="v" id="coach-tally-mistake">0</span>
         <span class="k">Blunders</span><span class="v" id="coach-tally-blunder">0</span>
+      </div>
+    </div>
+
+    <div class="coach-panel-section" id="lifetime-section" style="display:none;">
+      <div class="lifetime-head">
+        <span class="section-label">Lifetime</span>
+        <button id="btn-coach-lifetime-reset" class="movelist-copy" title="Reset lifetime stats">Reset</button>
+      </div>
+      <div class="coach-summary">
+        <span class="k">Games played</span><span class="v" id="lifetime-games">0</span>
+        <span class="k">Moves analyzed</span><span class="v" id="lifetime-moves">0</span>
+        <span class="k">Avg accuracy</span><span class="v" id="lifetime-accuracy">—</span>
+        <span class="k">Total blunders</span><span class="v" id="lifetime-blunders">0</span>
       </div>
     </div>
   </aside>
@@ -3114,6 +3215,281 @@ let coachEndedAt = null;           // timestamp of game end, null while playing
 let coachReviewCursor = null;      // null = live; integer = ply index displayed on the board
 let coachLastEndMsg = null;        // headline from last game-over, used to reopen the review
 let candidateRequestId = 0;        // invalidates stale async candidate searches
+let coachPremove = null;           // queued premove while opponent is thinking
+
+// ─────────────────────────────────────────────
+// COACH GAME PERSISTENCE
+// ─────────────────────────────────────────────
+// Snapshot enough state to restore an in-progress (or freshly ended) game on
+// next page load. Saved on every move; cleared when the user starts a new
+// game or dismisses the review summary after a game ends.
+const COACH_STATE_KEY = 'coach:state:v1';
+
+function saveCoachState() {
+  try {
+    if (!coachGame) return;
+    const total = coachGame.history().length;
+    // Skip persisting empty initial state — nothing to recover.
+    if (total === 0 && !coachLastEndMsg) {
+      localStorage.removeItem(COACH_STATE_KEY);
+      return;
+    }
+    const snapshot = {
+      v: 1,
+      pgn: coachGame.pgn(),
+      startFen: coachStartFen,
+      userSide: coachUserSide,
+      engineElo: coachEngineElo,
+      reviewLog: coachReviewLog,
+      stats: coachStats,
+      ended: !coachGameActive,
+      lastEndMsg: coachLastEndMsg,
+      ts: Date.now()
+    };
+    localStorage.setItem(COACH_STATE_KEY, JSON.stringify(snapshot));
+  } catch (e) {
+    // Quota exceeded or storage blocked — fail silently; not critical.
+  }
+}
+function loadCoachState() {
+  try {
+    const raw = localStorage.getItem(COACH_STATE_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s || s.v !== 1) return null;
+    return s;
+  } catch (e) { return null; }
+}
+function clearCoachState() {
+  try { localStorage.removeItem(COACH_STATE_KEY); } catch (e) {}
+}
+
+// Restore a saved game (in-progress or just-ended) into the coach UI.
+// Returns true if a game was restored, false otherwise. Callers should fall
+// back to the empty-board "set a strength" state when this returns false.
+function tryRestoreCoachGame() {
+  const s = loadCoachState();
+  if (!s) return false;
+  try {
+    const g = new Chess(s.startFen || undefined);
+    if (s.pgn) g.load_pgn(s.pgn, { sloppy: true });
+    coachGame = g;
+    coachStartFen = s.startFen || g.fen();
+    coachUserSide = s.userSide || 'white';
+    coachEngineElo = typeof s.engineElo === 'number' ? s.engineElo : 1200;
+    coachReviewLog = Array.isArray(s.reviewLog) ? s.reviewLog : [];
+    coachStats = s.stats || { moves: 0, best: 0, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
+    coachLastReview = coachReviewLog.length ? coachReviewLog[coachReviewLog.length - 1] : null;
+    coachReviewCursor = null;
+    coachThinking = false;
+    coachLastEndMsg = s.lastEndMsg || null;
+    coachGameActive = !s.ended && !g.game_over();
+    coachEndedAt = s.ended ? (s.ts || Date.now()) : null;
+    // If we're restoring an ended game, lifetime totals were already rolled
+    // when the game ended — don't double-count if the user opens the review.
+    coachLifetimeRolledForThisGame = !!s.ended;
+    // Sync slider + tier label.
+    $('#coach-strength').val(coachEngineElo);
+    $('#coach-strength-value').text(coachEngineElo);
+    $('#coach-strength-tier').text(strengthTierLabel(coachEngineElo));
+    // Sync side toggle.
+    $('.side-toggle button').removeClass('active');
+    $('.side-toggle button[data-side="' + coachUserSide + '"]').addClass('active');
+    // Build the board oriented for the user.
+    coachBoardFlipped = (coachUserColor() === 'black');
+    createCoachBoard(g.fen(), coachBoardFlipped ? 'black' : 'white');
+    // Repopulate panels.
+    updateCapturedDisplay(g.fen());
+    updateMoveList();
+    updateOpeningLabel();
+    updateCoachSummary();
+    updateCoachControlsState();
+    // Status: live game vs ended game.
+    if (coachGameActive) {
+      const tier = strengthTierLabel(coachEngineElo);
+      setCoachStatus(coachIsUserTurn()
+        ? `Resumed — Stockfish ${coachEngineElo} (${tier}). Your move.`
+        : `Resumed — Stockfish ${coachEngineElo} (${tier}). Opponent thinking…`);
+      // Re-render last review card if we have one.
+      if (coachLastReview) renderCoachReview(coachLastReview);
+      // Pre-warm the engine and hand off to the opponent if it's their turn.
+      const timed = Promise.race([
+        engine.init(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('Engine load timed out')), 15000))
+      ]);
+      timed.then(() => {
+        if (!coachGameActive) return;
+        if (!coachIsUserTurn() && !g.game_over()) coachOpponentRespond();
+      }).catch((err) => showEngineLoadError(err));
+    } else {
+      // Game is over — show a status that nudges towards reopening the review.
+      setCoachStatus((coachLastEndMsg || 'Game over.') + ' Click Open review to revisit.');
+      if (coachLastReview) renderCoachReview(coachLastReview);
+    }
+    return true;
+  } catch (e) {
+    // Corrupted snapshot — drop it so the user gets a fresh start next time.
+    clearCoachState();
+    return false;
+  }
+}
+
+// ─────────────────────────────────────────────
+// LIFETIME STATS — accumulate across games in this browser
+// ─────────────────────────────────────────────
+const LIFETIME_KEY = 'coach:lifetime:v1';
+function emptyLifetime() {
+  return { games: 0, moves: 0, accuracySum: 0, blunders: 0, mistakes: 0,
+           inaccuracies: 0, best: 0, excellent: 0, good: 0 };
+}
+function loadLifetime() {
+  try {
+    const raw = localStorage.getItem(LIFETIME_KEY);
+    if (!raw) return emptyLifetime();
+    const v = JSON.parse(raw);
+    return Object.assign(emptyLifetime(), v || {});
+  } catch (e) { return emptyLifetime(); }
+}
+function saveLifetime(s) {
+  try { localStorage.setItem(LIFETIME_KEY, JSON.stringify(s)); } catch (e) {}
+}
+// Roll the just-finished game into lifetime totals. Idempotent guard via a
+// per-game flag so a refresh on the summary screen doesn't double-count.
+let coachLifetimeRolledForThisGame = false;
+function rollGameIntoLifetime() {
+  if (coachLifetimeRolledForThisGame) return;
+  if (!coachStats || coachStats.moves === 0) return;
+  const lt = loadLifetime();
+  const acc = accuracyFromTallies(coachStats, coachStats.moves);
+  lt.games += 1;
+  lt.moves += coachStats.moves;
+  if (acc !== null) lt.accuracySum += acc * coachStats.moves; // weighted by move count
+  lt.best += coachStats.best || 0;
+  lt.excellent += coachStats.excellent || 0;
+  lt.good += coachStats.good || 0;
+  lt.inaccuracies += coachStats.inaccuracy || 0;
+  lt.mistakes += coachStats.mistake || 0;
+  lt.blunders += coachStats.blunder || 0;
+  saveLifetime(lt);
+  coachLifetimeRolledForThisGame = true;
+  renderLifetime();
+}
+function renderLifetime() {
+  const lt = loadLifetime();
+  const $sec = $('#lifetime-section');
+  if (lt.games === 0) { $sec.hide(); return; }
+  $sec.show();
+  $('#lifetime-games').text(lt.games);
+  $('#lifetime-moves').text(lt.moves);
+  const acc = lt.moves > 0 ? Math.round(lt.accuracySum / lt.moves) : null;
+  $('#lifetime-accuracy').text(acc === null ? '—' : acc + '%');
+  $('#lifetime-blunders').text(lt.blunders);
+}
+
+// ─────────────────────────────────────────────
+// PREMOVE — queue your move while the engine is thinking
+// ─────────────────────────────────────────────
+function setPremoveSquares(from, to) {
+  $('#coachBoard .coach-premove-from').removeClass('coach-premove-from');
+  $('#coachBoard .coach-premove-to').removeClass('coach-premove-to');
+  if (from) $('#coachBoard .square-' + from).addClass('coach-premove-from');
+  if (to)   $('#coachBoard .square-' + to).addClass('coach-premove-to');
+}
+function setPremove(from, to) {
+  coachPremove = { from, to, promotion: 'q' };
+  setPremoveSquares(from, to);
+  $('#coach-premove-hint').text(`Premove queued: ${from}–${to} (click board to cancel)`).show();
+}
+function clearPremove() {
+  coachPremove = null;
+  setPremoveSquares(null, null);
+  $('#coach-premove-hint').hide().text('');
+}
+// Called after the opponent's move applies. If the queued premove is still
+// legal, dispatch it through the normal user-move pipeline.
+function tryApplyPremove() {
+  if (!coachPremove || !coachGame || !coachGameActive) return;
+  if (!coachIsUserTurn()) { clearPremove(); return; }
+  const pm = coachPremove;
+  const tmp = new Chess(coachGame.fen());
+  const mv = tmp.move({ from: pm.from, to: pm.to, promotion: pm.promotion });
+  clearPremove();
+  if (!mv) return; // illegal in the new position — silently drop
+  // Update the board immediately, then run classification asynchronously.
+  if (coachBoard) coachBoard.position(tmp.fen());
+  coachHandleUserMove(pm.from, pm.to);
+}
+
+// ─────────────────────────────────────────────
+// MOVE SOUNDS (Web Audio synthesized — no binary assets)
+// ─────────────────────────────────────────────
+// We synthesize three short percussive tones for move / capture / check.
+// AudioContext is created lazily on first play because most browsers block
+// audio creation outside a user gesture; the toggle checkbox click counts.
+const SOUND_PREF_KEY = 'coach:sound:v1';
+let coachSoundEnabled = false;
+let coachAudioCtx = null;
+
+function readSoundPref() {
+  try { return localStorage.getItem(SOUND_PREF_KEY) === '1'; } catch (e) { return false; }
+}
+function writeSoundPref(on) {
+  try { localStorage.setItem(SOUND_PREF_KEY, on ? '1' : '0'); } catch (e) {}
+}
+function ensureAudioCtx() {
+  if (coachAudioCtx) return coachAudioCtx;
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    coachAudioCtx = new Ctx();
+  } catch (e) { return null; }
+  return coachAudioCtx;
+}
+// Play a short envelope on a tone. type: 'sine'|'triangle'|'square'.
+function playTone(freq, durationMs, opts = {}) {
+  const ctx = ensureAudioCtx();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = opts.type || 'sine';
+  osc.frequency.setValueAtTime(freq, now);
+  if (opts.endFreq) {
+    osc.frequency.exponentialRampToValueAtTime(opts.endFreq, now + durationMs / 1000);
+  }
+  const peak = opts.gain == null ? 0.16 : opts.gain;
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(peak, now + 0.005);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + durationMs / 1000);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(now);
+  osc.stop(now + durationMs / 1000 + 0.02);
+}
+function playSound(kind) {
+  if (!coachSoundEnabled) return;
+  const ctx = ensureAudioCtx();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  if (kind === 'move') {
+    playTone(220, 60, { type: 'sine', endFreq: 140, gain: 0.12 });
+  } else if (kind === 'capture') {
+    playTone(160, 110, { type: 'triangle', endFreq: 80, gain: 0.18 });
+  } else if (kind === 'check') {
+    playTone(880, 70, { type: 'square', gain: 0.10 });
+    setTimeout(() => playTone(660, 90, { type: 'square', gain: 0.10 }), 70);
+  } else if (kind === 'gameover') {
+    playTone(330, 140, { type: 'triangle', endFreq: 220, gain: 0.16 });
+    setTimeout(() => playTone(220, 220, { type: 'triangle', endFreq: 110, gain: 0.16 }), 130);
+  }
+}
+// Pick the right sound for a chess.js move object.
+function soundForMove(mv, gameAfter) {
+  if (!mv) return null;
+  if (gameAfter && gameAfter.in_checkmate()) return 'gameover';
+  if (gameAfter && gameAfter.in_check()) return 'check';
+  if (mv.captured) return 'capture';
+  return 'move';
+}
 
 // ─────────────────────────────────────────────
 // STOCKFISH ENGINE WRAPPER
@@ -3374,6 +3750,18 @@ async function classifyMove(fenBefore, userUciMove, fenAfter) {
 
   const cls = classifyRankLoss(rank, loss);
 
+  // Build top-3 alternatives for the review card. Each line carries its first-move
+  // SAN (the candidate), its eval in centipawns, and a short PV preview.
+  const topAlternatives = lines.slice(0, 3).map((line) => {
+    const firstUci = line.pv && line.pv[0];
+    return {
+      uci: firstUci || null,
+      san: firstUci ? uciToSan(fenBefore, firstUci) : null,
+      cp: scoreToCp(line),
+      pvSan: pvToSan(fenBefore, line.pv || [], 4)
+    };
+  }).filter(a => a.san);
+
   return {
     tier: cls.tier,
     label: cls.label,
@@ -3384,6 +3772,7 @@ async function classifyMove(fenBefore, userUciMove, fenAfter) {
     bestSan: bestUci ? uciToSan(fenBefore, bestUci) : null,
     userSan: uciToSan(fenBefore, userUciMove),
     pvSan: bestLine ? pvToSan(fenBefore, bestLine.pv || [], 5) : [],
+    topAlternatives,
     evalBefore: bestLine || null,
     evalAfter: afterInfo
   };
@@ -3516,6 +3905,30 @@ function renderCoachReview(review) {
   } else {
     $('#coach-pv').hide();
   }
+  // Auto-surface the top-3 candidate alternatives for mistake/blunder so the
+  // user doesn't have to click "Candidates" — the data is already classified.
+  const showAlts = (review.tier === 'mistake' || review.tier === 'blunder')
+                   && review.topAlternatives && review.topAlternatives.length > 0;
+  if (showAlts) {
+    const $list = $('#coach-alts-list').empty();
+    review.topAlternatives.forEach((alt, i) => {
+      const cont = (alt.pvSan || []).slice(1).join(' ');
+      const cp = alt.cp == null ? '' : (alt.cp >= 10000 ? '#'
+                                       : alt.cp <= -10000 ? '−#'
+                                       : (alt.cp >= 0 ? '+' : '') + (alt.cp / 100).toFixed(2));
+      const $row = $('<div class="coach-review-alts-row"></div>');
+      $row.append(`<span class="alt-rank">#${i + 1}</span>`);
+      const $line = $('<span class="alt-line"></span>');
+      $line.append(`<span class="alt-san">${alt.san}</span>`);
+      if (cont) $line.append(` <span class="alt-cont">${cont}</span>`);
+      $row.append($line);
+      $row.append(`<span class="alt-cp">${cp}</span>`);
+      $list.append($row);
+    });
+    $('#coach-alts').show().css('display', 'flex');
+  } else {
+    $('#coach-alts').hide();
+  }
   $('#coach-review').show().css('display', 'flex');
   $('#btn-coach-showbest').prop('disabled', isBest || isUnknown || !review.bestUci);
 }
@@ -3535,7 +3948,9 @@ function resetCoachState(fen) {
   coachEndedAt = null;
   coachReviewCursor = null;
   coachLastEndMsg = null;
+  coachLifetimeRolledForThisGame = false;
   if (coachSummaryTimer) { clearTimeout(coachSummaryTimer); coachSummaryTimer = null; }
+  clearPremove();
   $('#coach-status').removeClass('status-ended');
   $('#summary-overlay').hide();
   $('#coach-review').hide();
@@ -3543,6 +3958,7 @@ function resetCoachState(fen) {
   $('#candidates-section').hide();
   $('#opening-section').hide();
   $('#movelist-section').hide();
+  $('#liveeval-section').hide();
   updateCoachSummary();
   updateCapturedDisplay(coachGame.fen());
   updateMoveList();
@@ -3576,14 +3992,18 @@ async function coachOpponentRespond() {
         coachBoard.position(coachGame.fen());
         updateCapturedDisplay(coachGame.fen());
       }
+      playSound(soundForMove(mv, coachGame));
       updateMoveList();
       updateOpeningLabel();
+      saveCoachState();
       if (coachGame.game_over()) { coachHandleGameOver(); return; }
       if (!coachIsReviewing()) {
         setCoachStatus('Your move.');
         showThreats();
       }
       updateCoachControlsState();
+      // Apply any queued premove now that it's the user's turn again.
+      tryApplyPremove();
     }, 300);
   } catch (err) {
     setCoachStatus('Engine error: ' + err.message);
@@ -3599,11 +4019,12 @@ async function coachHandleUserMove(source, target) {
   const move = tempGame.move({ from: source, to: target, promotion: 'q' });
   if (!move) return 'snapback';
 
-  coachGame.move({ from: source, to: target, promotion: 'q' });
+  const userMv = coachGame.move({ from: source, to: target, promotion: 'q' });
   candidateRequestId++;
   const fenAfter = coachGame.fen();
   const userUci = source + target + (move.promotion || '');
   updateCapturedDisplay(fenAfter);
+  playSound(soundForMove(userMv, coachGame));
 
   // Clear threats/candidates on new move
   $('#threats-section').hide();
@@ -3628,6 +4049,7 @@ async function coachHandleUserMove(source, target) {
     updateCoachControlsState();
     updateMoveList();
     updateOpeningLabel();
+    saveCoachState();
   } catch (err) {
     setCoachStatus('Engine error: ' + err.message);
     coachThinking = false;
@@ -3664,6 +4086,11 @@ function coachHandleGameOver() {
   else if (coachGame.in_draw()) msg = 'Draw.';
   setCoachStatus(msg);
   updateCoachControlsState();
+  // Persist the now-ended state so a refresh keeps the review reachable.
+  coachLastEndMsg = msg;
+  saveCoachState();
+  // Roll this game's stats into lifetime totals (guarded against double-count).
+  rollGameIntoLifetime();
   // Let the user take in the final position before the review overlay arrives.
   scheduleSummaryReveal(msg, 1200);
 }
@@ -4039,6 +4466,62 @@ function renderEvalChart(reviews) {
       ${markers}
     </svg>
   `;
+}
+
+// Compact eval sparkline shown next to the move list during play.
+// Same shape as renderEvalChart but smaller, no markers — just a line + zero rule.
+function renderLiveEvalChart(reviews) {
+  const pts = [];
+  for (const r of reviews) {
+    if (!r || r.tier === 'unknown') continue;
+    const cp = evalAfterUserCp(r);
+    if (cp === null) continue;
+    pts.push({ cp, r });
+  }
+  if (pts.length < 2) return '';
+  // Show only the trailing 24 plies so the line keeps moving instead of compressing.
+  const recent = pts.slice(-24);
+  const W = 280, H = 44, PAD = 2;
+  const CLAMP = 800;
+  const innerW = W - PAD * 2;
+  const innerH = H - PAD * 2;
+  const xStep = innerW / (recent.length - 1);
+  const midY = PAD + innerH / 2;
+  const yFor = (cp) => {
+    const c = Math.max(-CLAMP, Math.min(CLAMP, cp));
+    return midY - (c / CLAMP) * (innerH / 2);
+  };
+  let d = '';
+  recent.forEach((p, i) => {
+    const x = PAD + i * xStep;
+    const y = yFor(p.cp);
+    d += (i === 0 ? `M${x.toFixed(1)},${y.toFixed(1)}` : ` L${x.toFixed(1)},${y.toFixed(1)}`);
+  });
+  let area = '';
+  recent.forEach((p, i) => {
+    const x = PAD + i * xStep;
+    const y = yFor(p.cp);
+    area += (i === 0 ? `M${x.toFixed(1)},${midY.toFixed(1)} L${x.toFixed(1)},${y.toFixed(1)}` : ` L${x.toFixed(1)},${y.toFixed(1)}`);
+  });
+  area += ` L${(PAD + (recent.length - 1) * xStep).toFixed(1)},${midY.toFixed(1)} Z`;
+  return `
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Live evaluation">
+      <line x1="${PAD}" y1="${midY}" x2="${W - PAD}" y2="${midY}" stroke="#5a4a3b" stroke-dasharray="2,3" stroke-width="0.5"/>
+      <path d="${area}" fill="rgba(207, 109, 123, 0.12)"/>
+      <path d="${d}" fill="none" stroke="#cf6d7b" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>
+  `;
+}
+
+function updateLiveEvalChart() {
+  const html = renderLiveEvalChart(coachReviewLog || []);
+  if (!html) {
+    $('#liveeval-section').hide();
+    $('#liveeval-chart').empty();
+    return;
+  }
+  $('#liveeval-chart').html(html);
+  $('#liveeval-section').show();
 }
 
 // Human-readable coaching takeaway inferred from pattern in reviews.
@@ -4461,24 +4944,33 @@ function createCoachBoard(position, orientation) {
     pieceTheme: function(piece) { return COACH_PIECE_THEME[piece]; },
     onDragStart: function(source, piece) {
       if (!coachGameActive || !coachGame) return false;
-      if (coachThinking) return false;
       if (coachIsReviewing()) return false;
-      if (!coachIsUserTurn()) return false;
-      // Only allow picking up pieces of the user's colour
+      // Only allow picking up pieces of the user's colour, ever.
       const userPrefix = coachUserColor() === 'white' ? 'w' : 'b';
       if (piece[0] !== userPrefix) return false;
+      // Block during our own classification window — premoves wait for opponent's move.
+      if (coachThinking && coachIsUserTurn()) return false;
+      // Both regular drags (our turn) and premove drags (their turn) are allowed.
     },
     onDrop: function(source, target) {
       if (!coachGameActive || !coachGame) return 'snapback';
-      if (coachThinking) return 'snapback';
       if (coachIsReviewing()) return 'snapback';
-      if (!coachIsUserTurn()) return 'snapback';
-      // Synchronous legality check — chessboard.js needs a sync return value
-      const tempGame = new Chess(coachGame.fen());
-      const move = tempGame.move({ from: source, to: target, promotion: 'q' });
-      if (!move) return 'snapback';
-      // Legal move — dispatch async classification + opponent reply
-      coachHandleUserMove(source, target);
+      if (source === target) return 'snapback';
+      if (coachIsUserTurn()) {
+        if (coachThinking) return 'snapback';
+        // Synchronous legality check — chessboard.js needs a sync return value
+        const tempGame = new Chess(coachGame.fen());
+        const move = tempGame.move({ from: source, to: target, promotion: 'q' });
+        if (!move) return 'snapback';
+        // Legal move — dispatch async classification + opponent reply
+        coachHandleUserMove(source, target);
+        return;
+      }
+      // Opponent's turn → queue the move as a premove. The piece visually snaps
+      // back; the highlighted source/target squares + status hint show what's
+      // queued. We attempt to apply it as soon as the opponent moves.
+      setPremove(source, target);
+      return 'snapback';
     },
     onSnapEnd: function() {
       if (coachGame) coachBoard.position(coachGame.fen());
@@ -4499,14 +4991,23 @@ function switchView(view) {
     $coach.show().css('display', 'grid').attr('aria-hidden', 'false');
     $('#nav-library').removeClass('active').attr('aria-selected', 'false');
     $('#nav-coach').addClass('active').attr('aria-selected', 'true');
+    // Pre-warm Stockfish in the background so the first New Game starts faster.
+    // Errors here are swallowed; the real load gate is inside startCoachGame.
+    if (engine.status === 'idle') { engine.init().catch(() => {}); }
     // Initialize strength display
     $('#coach-strength-value').text(coachEngineElo);
     $('#coach-strength-tier').text(strengthTierLabel(coachEngineElo));
+    // Show lifetime stats if any are recorded.
+    renderLifetime();
     if (!coachGame) {
-      // Show an idle board so the user has visual context
-      $('#coachBoard-placeholder').hide();
-      createCoachBoard('start', 'white');
-      setCoachStatus('Set a strength and start a new game.');
+      // Try to restore an in-progress (or just-ended) game from localStorage.
+      const restored = tryRestoreCoachGame();
+      if (!restored) {
+        // Show an idle board so the user has visual context
+        $('#coachBoard-placeholder').hide();
+        createCoachBoard('start', 'white');
+        setCoachStatus('Set a strength and start a new game.');
+      }
     } else {
       // Returning to an existing game — resize the board and re-kick the
       // opponent if the previous respond was aborted by the view switch.
@@ -4555,25 +5056,45 @@ function startCoachGame() {
   resetCoachState(startFen);
   coachGameActive = true;
   $('#summary-overlay').hide();
+  // Replace any saved state from a prior game so a refresh before the first
+  // move doesn't restore the old session.
+  clearCoachState();
 
   // Orient board so user plays from bottom
   coachBoardFlipped = (coachUserColor() === 'black');
   createCoachBoard(coachGame.fen(), coachBoardFlipped ? 'black' : 'white');
 
+  const tier = strengthTierLabel(coachEngineElo);
   const opening = coachIsUserTurn()
-    ? `Playing ${coachUserColor() === 'white' ? 'White' : 'Black'} vs Stockfish ${coachEngineElo}. Your move.`
-    : `Playing ${coachUserColor() === 'white' ? 'White' : 'Black'} vs Stockfish ${coachEngineElo}. Opponent opens — thinking…`;
+    ? `Playing ${coachUserColor() === 'white' ? 'White' : 'Black'} vs Stockfish ${coachEngineElo} (${tier}). Your move.`
+    : `Playing ${coachUserColor() === 'white' ? 'White' : 'Black'} vs Stockfish ${coachEngineElo} (${tier}). Opponent opens — thinking…`;
   setCoachStatus(opening);
 
   updateCoachControlsState();
 
-  // Pre-warm engine, then kick off opponent if it's their turn
-  engine.init().then(() => {
+  // Pre-warm engine, then kick off opponent if it's their turn.
+  // Wrap in a 15s timeout so a stuck WASM load surfaces a retry instead of hanging.
+  const timed = Promise.race([
+    engine.init(),
+    new Promise((_, rej) => setTimeout(() => rej(new Error('Engine load timed out')), 15000))
+  ]);
+  timed.then(() => {
     if (!coachGameActive) return;
-    if (!coachIsUserTurn()) {
-      coachOpponentRespond();
-    }
+    if (!coachIsUserTurn()) coachOpponentRespond();
+  }).catch((err) => {
+    showEngineLoadError(err);
   });
+}
+
+// Display a recoverable error inline in the coach status when Stockfish can't load.
+function showEngineLoadError(err) {
+  const msg = (err && err.message) || 'Engine could not load.';
+  setCoachStatus(msg + ' — refresh to retry.');
+  // Also disable in-game actions that require the engine.
+  $('#btn-coach-resign').prop('disabled', true);
+  $('#btn-coach-takeback').prop('disabled', true);
+  $('#btn-coach-showbest').prop('disabled', true);
+  $('#btn-coach-candidates').prop('disabled', true);
 }
 
 // ─────────────────────────────────────────────
@@ -4979,6 +5500,8 @@ function coachGetPgn() {
 
 // Render the move list, highlighting the ply at cursor (or the latest).
 function updateMoveList() {
+  // Refresh the live eval sparkline alongside the move list — both reflect the same data.
+  updateLiveEvalChart();
   const $section = $('#movelist-section');
   const $list = $('#movelist');
   if (!coachGame || coachGame.history().length === 0) {
@@ -5794,6 +6317,29 @@ $(function () {
     $('#coach-fen-error').hide();
   });
 
+  // Lifetime stats reset.
+  $('#btn-coach-lifetime-reset').on('click', function() {
+    if (!confirm('Reset all lifetime stats? This cannot be undone.')) return;
+    saveLifetime(emptyLifetime());
+    renderLifetime();
+  });
+
+  // Sound toggle — restore prior preference, persist on change. The first
+  // change is also a user gesture so we can prime the AudioContext here.
+  coachSoundEnabled = readSoundPref();
+  $('#coach-sound-toggle').prop('checked', coachSoundEnabled);
+  $('#coach-sound-toggle').on('change', function() {
+    coachSoundEnabled = this.checked;
+    writeSoundPref(coachSoundEnabled);
+    if (coachSoundEnabled) {
+      // Prime the audio context with a near-silent test tone so a real
+      // sound fires immediately on the next move.
+      const ctx = ensureAudioCtx();
+      if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+      playTone(440, 30, { gain: 0.04 });
+    }
+  });
+
   $('#btn-coach-newgame').on('click', function() {
     startCoachGame();
   });
@@ -5801,6 +6347,7 @@ $(function () {
   $('#btn-coach-resign').on('click', function() {
     if (!coachGameActive) return;
     candidateRequestId++;
+    clearPremove();
     coachGameActive = false;
     coachEndedAt = Date.now();
     const loser = coachUserColor() === 'white' ? 'White' : 'Black';
@@ -5808,6 +6355,9 @@ $(function () {
     const msg = `Resigned — ${winner} wins.`;
     setCoachStatus(msg);
     updateCoachControlsState();
+    coachLastEndMsg = msg;
+    saveCoachState();
+    rollGameIntoLifetime();
     // User-initiated — keep it snappy but still buffer with a small beat + animation.
     scheduleSummaryReveal(msg, 350);
   });
@@ -5824,6 +6374,9 @@ $(function () {
     if (!coachMode || !coachGame) return;
     engine.cancel();
     candidateRequestId++;
+    clearPremove();
+    // Take back un-ends the game; future game-over should roll lifetime again.
+    coachLifetimeRolledForThisGame = false;
     // If the game just ended and the post-game summary is pending, abort it —
     // taking back un-ends the game.
     if (coachSummaryTimer) { clearTimeout(coachSummaryTimer); coachSummaryTimer = null; }
@@ -5856,6 +6409,7 @@ $(function () {
     updateOpeningLabel();
     setCoachStatus('Your move.');
     updateCoachControlsState();
+    saveCoachState();
   });
 
   // Coach: show best — replay the best move instead of the user's
@@ -5908,6 +6462,7 @@ $(function () {
     updateOpeningLabel();
     setCoachStatus('Opponent thinking…');
     updateCoachControlsState();
+    saveCoachState();
     if (coachGame.game_over()) { coachHandleGameOver(); return; }
     coachOpponentRespond();
   });
@@ -5937,25 +6492,29 @@ $(function () {
     coachGotoLive();
   });
 
+  // Generic clipboard helper used by every Copy * button in coach mode.
+  async function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+    // Fallback for browsers that don't expose async clipboard.
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
   // Coach: Copy PGN to clipboard
   $('#btn-coach-copypgn').on('click', async function() {
     const $btn = $(this);
     const pgn = coachGetPgn();
     if (!pgn) return;
     try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(pgn);
-      } else {
-        // Fallback: textarea + execCommand
-        const ta = document.createElement('textarea');
-        ta.value = pgn;
-        ta.style.position = 'fixed';
-        ta.style.opacity = '0';
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-      }
+      await copyToClipboard(pgn);
       $btn.addClass('copied').text('Copied!');
       setTimeout(() => $btn.removeClass('copied').text('Copy PGN'), 1500);
     } catch (e) {
@@ -5963,11 +6522,40 @@ $(function () {
       setTimeout(() => $btn.text('Copy PGN'), 1500);
     }
   });
+  // Coach: Copy FEN of the position currently displayed (respects review cursor).
+  $('#btn-coach-copyfen').on('click', async function() {
+    const $btn = $(this);
+    if (!coachGame) return;
+    let fen;
+    if (coachReviewCursor !== null) {
+      // Build a chess.js instance up to the cursor ply to read its FEN.
+      const tmp = new Chess(coachStartFen || undefined);
+      const sans = coachGame.history();
+      for (let i = 0; i < coachReviewCursor && i < sans.length; i++) tmp.move(sans[i]);
+      fen = tmp.fen();
+    } else {
+      fen = coachGame.fen();
+    }
+    try {
+      await copyToClipboard(fen);
+      $btn.addClass('copied').text('Copied!');
+      setTimeout(() => $btn.removeClass('copied').text('Copy FEN'), 1500);
+    } catch (e) {
+      $btn.text('Copy failed');
+      setTimeout(() => $btn.text('Copy FEN'), 1500);
+    }
+  });
 
   // Coach: click a ply in the move list to jump to that position.
   $(document).on('click', '#movelist .ply', function() {
     const ply = parseInt($(this).attr('data-ply'), 10);
     if (!isNaN(ply)) coachGotoPly(ply);
+  });
+
+  // Coach: click anywhere on the board to cancel a queued premove. Only fires
+  // when no drag is in progress (a real drop fires onDrop instead).
+  $(document).on('mousedown touchstart', '#coachBoard', function() {
+    if (coachPremove) clearPremove();
   });
 
   // Coach: keyboard shortcuts for history navigation.
