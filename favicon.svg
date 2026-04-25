@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Chess knight on a claret square">
+  <!-- Walnut rounded background -->
+  <rect width="64" height="64" rx="11" fill="#2a1f17"/>
+  <!-- Claret accent square at the bottom-right echoing the brand mark dot -->
+  <path d="M 32 32 H 64 V 53 Q 64 64 53 64 H 32 Z" fill="#a23346"/>
+  <!-- Knight glyph in parchment-cream, rendered via the system chess font.
+       Centered with a visual nudge so it sits on the optical center,
+       not the geometric one. -->
+  <text x="32" y="38" font-size="44" text-anchor="middle"
+        dominant-baseline="central" fill="#f1e4cc"
+        font-family="'Apple Color Emoji','Segoe UI Symbol','Noto Sans Symbols 2','Symbola',serif">♞</text>
+</svg>
