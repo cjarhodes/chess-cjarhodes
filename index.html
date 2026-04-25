@@ -1610,10 +1610,10 @@
       <div id="explore-token-setup" style="display:none;">
         <div class="section-label">Connect to Lichess</div>
         <div class="token-setup">
-          <p>Opening Explorer data requires a free Lichess API token. One-time setup, 30 seconds.</p>
+          <p>Opening Explorer data requires a free Lichess API token. It stays in this browser tab only.</p>
           <p><a href="https://lichess.org/account/oauth/token/create?description=Chess+Opening+Library" target="_blank">→ Generate a token on Lichess ↗</a><br><small style="opacity:0.6;">No scopes needed — just click Create.</small></p>
           <div class="token-input-row">
-            <input type="text" class="token-input" id="lichess-token-input" placeholder="lip_..." />
+            <input type="password" class="token-input" id="lichess-token-input" placeholder="lip_..." autocomplete="off" spellcheck="false" />
             <button class="ctrl-btn" id="btn-save-token">Connect</button>
           </div>
           <div class="token-error" id="token-error" style="display:none;"></div>
@@ -3034,6 +3034,7 @@ let coachGameActive = false;       // true once user hits New Game
 let coachEndedAt = null;           // timestamp of game end, null while playing
 let coachReviewCursor = null;      // null = live; integer = ply index displayed on the board
 let coachLastEndMsg = null;        // headline from last game-over, used to reopen the review
+let candidateRequestId = 0;        // invalidates stale async candidate searches
 
 // ─────────────────────────────────────────────
 // STOCKFISH ENGINE WRAPPER
@@ -3048,7 +3049,7 @@ const engine = {
   init() {
     if (this.status === 'ready') return Promise.resolve();
     if (this.status === 'loading') {
-      return new Promise(r => this._readyResolvers.push(r));
+      return new Promise((resolve, reject) => this._readyResolvers.push({ resolve, reject }));
     }
     this.status = 'loading';
     return new Promise((resolve, reject) => {
@@ -3059,11 +3060,13 @@ const engine = {
         reject(err);
         return;
       }
-      this._readyResolvers.push(resolve);
+      this._readyResolvers.push({ resolve, reject });
       this.worker.onmessage = (e) => this._onMessage(e.data);
       this.worker.onerror = (e) => {
+        const err = new Error('Engine failed: ' + (e.message || e.filename || 'worker error'));
         this.status = 'idle';
-        this._readyResolvers.forEach(r => r(new Error('Engine failed: ' + (e.message || e.filename))));
+        this.worker = null;
+        this._readyResolvers.forEach(waiter => waiter.reject(err));
         this._readyResolvers = [];
       };
       this.worker.postMessage('uci');
@@ -3075,7 +3078,7 @@ const engine = {
     if (msg === 'uciok') { this.worker.postMessage('isready'); return; }
     if (msg === 'readyok' && this.status === 'loading') {
       this.status = 'ready';
-      this._readyResolvers.forEach(r => r());
+      this._readyResolvers.forEach(waiter => waiter.resolve());
       this._readyResolvers = [];
       this._runNext();
       return;
@@ -3443,6 +3446,7 @@ function setCoachStatus(msg) {
 }
 
 function resetCoachState(fen) {
+  candidateRequestId++;
   coachGame = fen ? new Chess(fen) : new Chess();
   coachStartFen = coachGame.fen();
   coachStats = { moves: 0, best: 0, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
@@ -3488,6 +3492,7 @@ async function coachOpponentRespond() {
         promotion: result.bestmove[4] || undefined
       });
       if (!mv) return;
+      candidateRequestId++;
       if (!coachIsReviewing()) {
         coachBoard.position(coachGame.fen());
         updateCapturedDisplay(coachGame.fen());
@@ -3516,6 +3521,7 @@ async function coachHandleUserMove(source, target) {
   if (!move) return 'snapback';
 
   coachGame.move({ from: source, to: target, promotion: 'q' });
+  candidateRequestId++;
   const fenAfter = coachGame.fen();
   const userUci = source + target + (move.promotion || '');
   updateCapturedDisplay(fenAfter);
@@ -3779,6 +3785,7 @@ async function showCandidates() {
   if (coachThinking) return;
   if (!coachIsUserTurn()) return; // never compute candidates for opponent's turn
   const fen = coachGame.fen();
+  const requestId = ++candidateRequestId;
   const $section = $('#candidates-section').show();
   const $list = $('#candidates-list');
   $list.html('<div class="explore-loading">Computing top moves at depth 18…</div>');
@@ -3787,6 +3794,10 @@ async function showCandidates() {
     // deep. Depth 12 was leaving blunders on the board and producing candidates
     // that didn't actually win material when the user expected them to.
     const res = await engine.evaluate(fen, 18, { multipv: 3 });
+    if (requestId !== candidateRequestId || !coachMode || !coachGame || !coachGameActive ||
+        !coachIsUserTurn() || coachIsReviewing() || coachGame.fen() !== fen) {
+      return;
+    }
     $list.empty();
     if (!res.lines || res.lines.length === 0) {
       $list.html('<div class="explore-empty">No candidates found.</div>');
@@ -3822,6 +3833,7 @@ async function showCandidates() {
       }
     });
   } catch (err) {
+    if (requestId !== candidateRequestId) return;
     $list.html('<div class="token-error">Engine error: ' + err.message + '</div>');
   }
 }
@@ -5259,9 +5271,20 @@ function clearFeedback() {
 // ─────────────────────────────────────────────
 // EXPLORE MODE — LICHESS TOKEN + API
 // ─────────────────────────────────────────────
-function getLichessToken() { return localStorage.getItem('lichess_token'); }
-function setLichessToken(t) { localStorage.setItem('lichess_token', t); }
-function clearLichessToken() { localStorage.removeItem('lichess_token'); }
+const LICHESS_TOKEN_KEY = 'lichess_token';
+try { localStorage.removeItem(LICHESS_TOKEN_KEY); } catch (e) { /* ignore */ }
+function getLichessToken() {
+  try { return sessionStorage.getItem(LICHESS_TOKEN_KEY); }
+  catch (e) { return null; }
+}
+function setLichessToken(t) {
+  try { sessionStorage.setItem(LICHESS_TOKEN_KEY, t); return true; }
+  catch (e) { return false; }
+}
+function clearLichessToken() {
+  try { sessionStorage.removeItem(LICHESS_TOKEN_KEY); } catch (e) { /* ignore */ }
+  try { localStorage.removeItem(LICHESS_TOKEN_KEY); } catch (e) { /* ignore */ }
+}
 
 function showExploreTokenState() {
   if (getLichessToken()) {
@@ -5303,7 +5326,7 @@ function fetchExploreData() {
 
 function renderContinuations(data) {
   const list = $('#continuations-list');
-  const totalPos = (data.white || 0) + (data.draws || 0) + (data.black || 0);
+  const totalPos = (Number(data.white) || 0) + (Number(data.draws) || 0) + (Number(data.black) || 0);
 
   if (!data.moves || data.moves.length === 0) {
     const msg = totalPos === 0
@@ -5313,32 +5336,35 @@ function renderContinuations(data) {
     return;
   }
 
-  let html = `<div class="explore-total">${formatNum(totalPos)} games from this position</div>`;
+  list.empty();
+  list.append($('<div class="explore-total"></div>').text(`${formatNum(totalPos)} games from this position`));
   data.moves.slice(0, 8).forEach(function(m) {
-    const total = (m.white || 0) + (m.draws || 0) + (m.black || 0);
+    const white = Number(m.white) || 0;
+    const draws = Number(m.draws) || 0;
+    const black = Number(m.black) || 0;
+    const total = white + draws + black;
     if (total === 0) return;
-    const wPct = Math.round(m.white / total * 100);
-    const dPct = Math.round(m.draws / total * 100);
+    const wPct = Math.round(white / total * 100);
+    const dPct = Math.round(draws / total * 100);
     const bPct = 100 - wPct - dPct;
-    html += `<div class="continuation-row" data-san="${m.san}">
-      <div class="cont-move">${m.san}</div>
-      <div class="cont-bar-wrap">
-        <div class="cont-bar">
-          <div class="cont-bar-w" style="width:${wPct}%"></div>
-          <div class="cont-bar-d" style="width:${dPct}%"></div>
-          <div class="cont-bar-b" style="width:${bPct}%"></div>
-        </div>
-        <div class="cont-pct">${wPct}% · ${dPct}% · ${bPct}%</div>
-      </div>
-      <div class="cont-games">${formatNum(total)}</div>
-    </div>`;
+    const san = String(m.san || '');
+    const $bar = $('<div class="cont-bar"></div>')
+      .append($('<div class="cont-bar-w"></div>').css('width', wPct + '%'))
+      .append($('<div class="cont-bar-d"></div>').css('width', dPct + '%'))
+      .append($('<div class="cont-bar-b"></div>').css('width', bPct + '%'));
+    const $row = $('<div class="continuation-row"></div>')
+      .attr('data-san', san)
+      .append($('<div class="cont-move"></div>').text(san))
+      .append($('<div class="cont-bar-wrap"></div>')
+        .append($bar)
+        .append($('<div class="cont-pct"></div>').text(`${wPct}% · ${dPct}% · ${bPct}%`)))
+      .append($('<div class="cont-games"></div>').text(formatNum(total)));
+    list.append($row);
   });
 
-  list.html(html);
-
   // Click a continuation to play it
-  $('.continuation-row').on('click', function() {
-    const san = $(this).data('san');
+  list.find('.continuation-row').on('click', function() {
+    const san = $(this).attr('data-san');
     if (exploreGame.move(san)) {
       board.position(exploreGame.fen());
       fetchExploreData();
@@ -5416,6 +5442,7 @@ $(function () {
 
   $('#btn-coach-resign').on('click', function() {
     if (!coachGameActive) return;
+    candidateRequestId++;
     coachGameActive = false;
     coachEndedAt = Date.now();
     const loser = coachUserColor() === 'white' ? 'White' : 'Black';
@@ -5438,6 +5465,7 @@ $(function () {
   $('#btn-coach-takeback').on('click', function() {
     if (!coachMode || !coachGame) return;
     engine.cancel();
+    candidateRequestId++;
     // If the game just ended and the post-game summary is pending, abort it —
     // taking back un-ends the game.
     if (coachSummaryTimer) { clearTimeout(coachSummaryTimer); coachSummaryTimer = null; }
@@ -5483,6 +5511,7 @@ $(function () {
     // Play best move
     const bu = prev.bestUci;
     coachGame.move({ from: bu.slice(0, 2), to: bu.slice(2, 4), promotion: bu[4] || undefined });
+    candidateRequestId++;
     const newFenAfter = coachGame.fen();
     // Adjust stats: convert prior classification to 'best'
     if (coachStats) {
@@ -5683,8 +5712,11 @@ $(function () {
       dataType: 'json',
       headers: { 'Authorization': 'Bearer ' + token },
       success: function() {
-        setLichessToken(token);
         $btn.prop('disabled', false).text('Connect');
+        if (!setLichessToken(token)) {
+          $('#token-error').text('Could not store token for this tab. Check browser storage settings.').show();
+          return;
+        }
         showExploreTokenState();
         fetchExploreData();
       },
