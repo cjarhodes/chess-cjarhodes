@@ -3738,6 +3738,47 @@ function pvToSan(fen, pvArr, max) {
   return out;
 }
 
+function uciFromMove(mv) {
+  if (!mv) return null;
+  return mv.from + mv.to + (mv.promotion || '');
+}
+
+function materialValue(piece) {
+  return ({ p: 100, n: 300, b: 325, r: 500, q: 900, k: 0 })[piece] || 0;
+}
+
+function moveHeuristicScore(gameObj, mv) {
+  let score = Math.random() * 80;
+  if (mv.captured) score += materialValue(mv.captured) - materialValue(mv.piece) * 0.18;
+  if (mv.flags && mv.flags.includes('p')) score += materialValue(mv.promotion || 'q') - 100;
+  if (mv.san && mv.san.includes('+')) score += 120;
+  if (mv.san && mv.san.includes('#')) score += 5000;
+  if (['n', 'b'].includes(mv.piece)) score += 25;
+  if (mv.piece === 'q') score -= 20;
+  if (mv.piece === 'k' && !(mv.flags || '').includes('k') && !(mv.flags || '').includes('q')) score -= 35;
+  return score;
+}
+
+function chooseWeakOpponentMove(fen, elo) {
+  const g = new Chess(fen);
+  const moves = g.moves({ verbose: true });
+  if (!moves.length) return null;
+  if (elo <= 500) {
+    return uciFromMove(moves[Math.floor(Math.random() * moves.length)]);
+  }
+  const randomRate = elo < 700 ? 0.65 : (elo < 900 ? 0.42 : 0.22);
+  if (Math.random() < randomRate) {
+    return uciFromMove(moves[Math.floor(Math.random() * moves.length)]);
+  }
+  const noise = elo < 700 ? 650 : (elo < 900 ? 380 : 180);
+  const ranked = moves
+    .map(mv => ({ mv, score: moveHeuristicScore(g, mv) + (Math.random() * noise) }))
+    .sort((a, b) => b.score - a.score);
+  const poolSize = elo < 700 ? 8 : (elo < 900 ? 5 : 3);
+  const pool = ranked.slice(0, Math.min(poolSize, ranked.length));
+  return uciFromMove(pool[Math.floor(Math.random() * pool.length)].mv);
+}
+
 // ─────────────────────────────────────────────
 // COACH CLASSIFICATION
 // ─────────────────────────────────────────────
@@ -3753,6 +3794,47 @@ function classifyRankLoss(rank, loss) {
   if (loss < 120) return { tier: 'inaccuracy', label: 'Inaccuracy', emoji: '⚠' };
   if (loss < 250) return { tier: 'mistake',    label: 'Mistake',    emoji: '✗' };
   return            { tier: 'blunder',     label: 'Blunder',    emoji: '💥' };
+}
+
+function movePurposeText(fenBefore, bestUci, userUciMove, bestLine, afterInfo) {
+  if (!bestUci || !userUciMove || bestUci === userUciMove) return '';
+  const before = new Chess(fenBefore);
+  const best = before.move({
+    from: bestUci.slice(0, 2),
+    to: bestUci.slice(2, 4),
+    promotion: bestUci[4] || undefined
+  });
+  if (!best) return '';
+
+  const userBefore = new Chess(fenBefore);
+  const user = userBefore.move({
+    from: userUciMove.slice(0, 2),
+    to: userUciMove.slice(2, 4),
+    promotion: userUciMove[4] || undefined
+  });
+
+  const reasons = [];
+  if (best.san.includes('#')) reasons.push(`${best.san} delivers checkmate`);
+  else if (best.san.includes('+')) reasons.push(`${best.san} gives check and forces a response`);
+  if (best.captured) reasons.push(`${best.san} wins the ${PIECE_NAME[best.captured] ? PIECE_NAME[best.captured].toLowerCase() : 'piece'} on ${best.to}`);
+  if (best.promotion) reasons.push(`${best.san} promotes immediately`);
+  if (best.flags && (best.flags.includes('k') || best.flags.includes('q'))) reasons.push(`${best.san} castles and improves king safety`);
+
+  const bestPv = bestLine && bestLine.pv ? pvToSan(fenBefore, bestLine.pv, 4) : [];
+  if (bestPv.length >= 2) {
+    reasons.push(`the follow-up is ${bestPv.join(' ')}`);
+  }
+
+  const afterCp = afterInfo ? -scoreToCp(afterInfo) : null;
+  const beforeCp = bestLine ? scoreToCp(bestLine) : null;
+  if (beforeCp !== null && afterCp !== null && beforeCp - afterCp >= 120) {
+    reasons.push(`${user ? user.san : 'your move'} lets the position swing by ${(Math.min(beforeCp - afterCp, 1000) / 100).toFixed(1)} pawns`);
+  }
+
+  if (!reasons.length) {
+    return `${best.san} keeps the engine's preferred plan; your move gives the opponent a better version of the position.`;
+  }
+  return `${best.san} is better because ${reasons.slice(0, 2).join('; ')}.`;
 }
 
 // Side-to-move perspective: score is always in the mover's favor.
@@ -3812,6 +3894,7 @@ async function classifyMove(fenBefore, userUciMove, fenAfter) {
       pvSan: pvToSan(fenBefore, line.pv || [], 4)
     };
   }).filter(a => a.san);
+  const whyBetter = movePurposeText(fenBefore, bestUci, userUciMove, bestLine, afterInfo);
 
   return {
     tier: cls.tier,
@@ -3824,6 +3907,7 @@ async function classifyMove(fenBefore, userUciMove, fenAfter) {
     userSan: uciToSan(fenBefore, userUciMove),
     pvSan: bestLine ? pvToSan(fenBefore, bestLine.pv || [], 5) : [],
     topAlternatives,
+    whyBetter,
     evalBefore: bestLine || null,
     evalAfter: afterInfo
   };
@@ -3856,22 +3940,33 @@ function strengthTierLabel(elo) {
   return 'Master';
 }
 
-// Translate the slider's displayed Elo into real engine settings.
-// Stockfish's UCI_Elo floor is ~1320, so below 1200 we switch to Skill Level
-// (0–8, engine makes obvious blunders) combined with a very low search depth
-// so the opponent plays like a real beginner instead of a clamped-but-strong
-// club player.
+// Translate the slider's displayed Elo into opponent behavior. Very low levels
+// need explicit noisy move selection; shallow Stockfish still finds too many
+// forcing moves and does not feel like a 400-rated opponent.
 function coachStrengthOpts(elo) {
-  if (elo < 1200) {
-    // 400 → skill 0, depth 1 (absolute beginner)
-    // 1150 → skill 8, depth 4 (close to UCI_Elo handoff at 1200)
-    const t = Math.max(0, Math.min(1, (elo - 400) / 750));
-    const skill = Math.round(t * 8);
-    const depth = 1 + Math.round(t * 3);
+  if (elo < 1000) {
+    return { weak: true };
+  }
+  if (elo < 1320) {
+    // 1000 → skill 4, depth 3; 1300 → skill 9, depth 6.
+    const t = Math.max(0, Math.min(1, (elo - 1000) / 320));
+    const skill = 4 + Math.round(t * 5);
+    const depth = 3 + Math.round(t * 3);
     return { skill, depth };
   }
-  // 1200+: Stockfish's native Elo limiter, with depth tiered for realism.
-  const depth = elo < 1400 ? 8 : (elo < 2000 ? 12 : 16);
+  if (elo < 1400) {
+    // Stockfish's native UCI_Elo floor is around 1320.
+    const depth = 6;
+    return { elo: Math.max(1320, elo), depth };
+  }
+  if (elo < 1600) {
+    const t = Math.max(0, Math.min(1, (elo - 1400) / 200));
+    const skill = Math.round(t * 8);
+    const depth = 6 + Math.round(t * 2);
+    return { skill, depth };
+  }
+  // 1600+: Stockfish's native Elo limiter, with depth tiered for realism.
+  const depth = elo < 2000 ? 10 : 16;
   return { elo, depth };
 }
 
@@ -3949,6 +4044,7 @@ function renderCoachReview(review) {
     msg = `Top-3 engine move (#${review.rank}). ${review.bestSan} was #1 — you're in great company.`;
   } else {
     msg = `The engine prefers ${review.bestSan}. You lost ${(review.loss / 100).toFixed(2)} pawns of evaluation with ${review.userSan}.`;
+    if (review.whyBetter) msg += ' ' + review.whyBetter;
   }
   $('#coach-explanation').text(msg);
   if (review.pvSan && review.pvSan.length > 1) {
@@ -4023,19 +4119,25 @@ async function coachOpponentRespond() {
   setCoachStatus('Opponent thinking…');
   const fen = coachGame.fen();
   try {
-    // Opponent uses configured strength. Below 1200 we're past Stockfish's
-    // UCI_Elo floor, so fall back to Skill Level + low depth for genuine beginner play.
+    // Opponent uses configured strength. Below 1000, explicit noisy move
+    // selection is more realistic than asking Stockfish for a shallow best move.
     const opts = coachStrengthOpts(coachEngineElo);
-    const { depth, ...strength } = opts;
-    const result = await engine.evaluate(fen, depth, strength);
+    let bestmove;
+    if (opts.weak) {
+      bestmove = chooseWeakOpponentMove(fen, coachEngineElo);
+    } else {
+      const { depth, ...strength } = opts;
+      const result = await engine.evaluate(fen, depth, strength);
+      bestmove = result.bestmove;
+    }
     if (!coachMode || !coachGameActive) return;
-    if (!result.bestmove) { setCoachStatus('Your move.'); return; }
+    if (!bestmove) { setCoachStatus('Your move.'); return; }
     setTimeout(() => {
       if (!coachMode || !coachGameActive) return;
       const mv = coachGame.move({
-        from: result.bestmove.slice(0, 2),
-        to: result.bestmove.slice(2, 4),
-        promotion: result.bestmove[4] || undefined
+        from: bestmove.slice(0, 2),
+        to: bestmove.slice(2, 4),
+        promotion: bestmove[4] || undefined
       });
       if (!mv) return;
       candidateRequestId++;
