@@ -1793,7 +1793,7 @@
 
     <div class="field-group">
       <div class="strength-row">
-        <span class="strength-label">Engine strength</span>
+        <span class="strength-label">Opponent level</span>
         <span class="strength-value" id="coach-strength-value">1200</span>
       </div>
       <input type="range" class="strength-slider" id="coach-strength"
@@ -1866,7 +1866,7 @@
 
   <!-- COACH PANEL -->
   <aside class="coach-panel">
-    <div id="coach-status" class="coach-status">Set a strength and start a new game.</div>
+    <div id="coach-status" class="coach-status">Set a level and start a new game.</div>
     <div id="coach-premove-hint" class="coach-premove-hint" style="display:none;"></div>
 
     <div id="coach-review" class="coach-review" style="display:none">
@@ -3255,7 +3255,7 @@ let coachReviewLog = [];           // all reviews from current session (for summ
 let coachLastReview = null;        // most recent review (for take back / show best)
 let coachThinking = false;
 let coachUserSide = 'white';       // 'white' | 'black'
-let coachEngineElo = 1200;         // Stockfish UCI_Elo
+let coachEngineElo = 1200;         // displayed opponent level
 let coachBoard = null;             // separate Chessboard.js instance
 let coachBoardFlipped = false;
 let coachGameActive = false;       // true once user hits New Game
@@ -3314,7 +3314,7 @@ function clearCoachState() {
 
 // Restore a saved game (in-progress or just-ended) into the coach UI.
 // Returns true if a game was restored, false otherwise. Callers should fall
-// back to the empty-board "set a strength" state when this returns false.
+// back to the empty-board "set a level" state when this returns false.
 function tryRestoreCoachGame() {
   const s = loadCoachState();
   if (!s) return false;
@@ -3356,8 +3356,8 @@ function tryRestoreCoachGame() {
     if (coachGameActive) {
       const tier = strengthTierLabel(coachEngineElo);
       setCoachStatus(coachIsUserTurn()
-        ? `Resumed — Stockfish ${coachEngineElo} (${tier}). Your move.`
-        : `Resumed — Stockfish ${coachEngineElo} (${tier}). Opponent thinking…`);
+        ? `Resumed — Opponent ${coachEngineElo} (${tier}). Your move.`
+        : `Resumed — Opponent ${coachEngineElo} (${tier}). Opponent thinking…`);
       // Re-render last review card if we have one.
       if (coachLastReview) renderCoachReview(coachLastReview);
       // Pre-warm the engine and hand off to the opponent if it's their turn.
@@ -3759,24 +3759,86 @@ function moveHeuristicScore(gameObj, mv) {
   return score;
 }
 
-function chooseWeakOpponentMove(fen, elo) {
+function legalUciMoves(fen) {
   const g = new Chess(fen);
   const moves = g.moves({ verbose: true });
-  if (!moves.length) return null;
-  if (elo <= 500) {
-    return uciFromMove(moves[Math.floor(Math.random() * moves.length)]);
-  }
-  const randomRate = elo < 700 ? 0.65 : (elo < 900 ? 0.42 : 0.22);
-  if (Math.random() < randomRate) {
-    return uciFromMove(moves[Math.floor(Math.random() * moves.length)]);
-  }
-  const noise = elo < 700 ? 650 : (elo < 900 ? 380 : 180);
-  const ranked = moves
-    .map(mv => ({ mv, score: moveHeuristicScore(g, mv) + (Math.random() * noise) }))
+  return moves.map(uciFromMove).filter(Boolean);
+}
+
+function rankedHeuristicMoves(fen, noise) {
+  const g = new Chess(fen);
+  return g.moves({ verbose: true })
+    .map(mv => ({ uci: uciFromMove(mv), score: moveHeuristicScore(g, mv) + (Math.random() * noise) }))
+    .filter(x => x.uci)
     .sort((a, b) => b.score - a.score);
-  const poolSize = elo < 700 ? 8 : (elo < 900 ? 5 : 3);
-  const pool = ranked.slice(0, Math.min(poolSize, ranked.length));
-  return uciFromMove(pool[Math.floor(Math.random() * pool.length)].mv);
+}
+
+function sampleFrom(list) {
+  if (!list || !list.length) return null;
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+function chooseRandomLegalMove(fen) {
+  return sampleFrom(legalUciMoves(fen));
+}
+
+function chooseHeuristicMove(fen, elo) {
+  const noise = elo < 700 ? 700 : (elo < 1000 ? 420 : 220);
+  const ranked = rankedHeuristicMoves(fen, noise);
+  const poolSize = elo < 700 ? 10 : (elo < 1000 ? 6 : 4);
+  const pool = ranked.slice(0, Math.min(poolSize, ranked.length)).map(x => x.uci);
+  return sampleFrom(pool);
+}
+
+function chooseMistakeMove(fen, elo) {
+  const ranked = rankedHeuristicMoves(fen, 80);
+  if (!ranked.length) return null;
+  const start = elo < 700 ? Math.floor(ranked.length * 0.45) : Math.floor(ranked.length * 0.6);
+  const pool = ranked.slice(Math.min(start, ranked.length - 1)).map(x => x.uci);
+  return sampleFrom(pool);
+}
+
+function opponentProfile(elo) {
+  if (elo < 600)  return { random: 0.70, heuristic: 0.20, mistake: 0.05, engine: 0.05, depth: 1, multipv: 3 };
+  if (elo < 800)  return { random: 0.50, heuristic: 0.30, mistake: 0.10, engine: 0.10, depth: 2, multipv: 3 };
+  if (elo < 1000) return { random: 0.25, heuristic: 0.40, mistake: 0.10, engine: 0.25, depth: 3, multipv: 4 };
+  if (elo < 1200) return { random: 0.12, heuristic: 0.30, mistake: 0.08, engine: 0.50, depth: 4, multipv: 4 };
+  if (elo < 1400) return { random: 0.06, heuristic: 0.22, mistake: 0.05, engine: 0.67, depth: 6, multipv: 4 };
+  if (elo < 1600) return { random: 0.03, heuristic: 0.12, mistake: 0.03, engine: 0.82, depth: 8, multipv: 3 };
+  return null;
+}
+
+async function chooseEngineSampleMove(fen, profile) {
+  const res = await engine.evaluate(fen, profile.depth, { multipv: profile.multipv || 3 });
+  const moves = (res.lines || [])
+    .map(line => line.pv && line.pv[0])
+    .filter(Boolean);
+  if (moves.length) {
+    const topBias = Math.random();
+    if (topBias < 0.58) return moves[0];
+    if (topBias < 0.82 && moves[1]) return moves[1];
+    return sampleFrom(moves);
+  }
+  return res.bestmove || null;
+}
+
+async function chooseOpponentMoveByLevel(fen, elo) {
+  const profile = opponentProfile(elo);
+  if (!profile) {
+    const opts = coachStrengthOpts(elo);
+    const { depth, ...strength } = opts;
+    const result = await engine.evaluate(fen, depth, strength);
+    return result.bestmove;
+  }
+  const roll = Math.random();
+  if (roll < profile.random) return chooseRandomLegalMove(fen);
+  if (roll < profile.random + profile.heuristic) return chooseHeuristicMove(fen, elo);
+  if (roll < profile.random + profile.heuristic + profile.mistake) return chooseMistakeMove(fen, elo);
+  try {
+    return await chooseEngineSampleMove(fen, profile);
+  } catch (e) {
+    return chooseHeuristicMove(fen, elo) || chooseRandomLegalMove(fen);
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -3928,46 +3990,25 @@ function coachIsUserTurn() {
          (turn === 'b' && coachUserColor() === 'black');
 }
 
-// Opponent search depth matches review depth; strength is controlled by Elo.
+// Human-facing level labels. Sub-1600 levels use a blended move model instead
+// of raw Stockfish Elo, since Stockfish's native Elo floor is still too strong.
 function strengthTierLabel(elo) {
-  if (elo < 600)  return 'Absolute beginner';
-  if (elo < 800)  return 'Learning the rules';
-  if (elo < 1000) return 'Beginner';
-  if (elo < 1300) return 'Club novice';
-  if (elo < 1600) return 'Improving club';
+  if (elo < 600)  return 'New player';
+  if (elo < 800)  return 'Beginner';
+  if (elo < 1000) return 'Casual';
+  if (elo < 1200) return 'Developing';
+  if (elo < 1400) return 'Club novice';
+  if (elo < 1600) return 'Club regular';
   if (elo < 1900) return 'Strong club';
   if (elo < 2200) return 'Expert';
   return 'Master';
 }
 
-// Translate the slider's displayed Elo into opponent behavior. Very low levels
-// need explicit noisy move selection; shallow Stockfish still finds too many
-// forcing moves and does not feel like a 400-rated opponent.
+// Translate higher displayed levels into Stockfish's native strength limiter.
+// Lower levels are handled by chooseOpponentMoveByLevel().
 function coachStrengthOpts(elo) {
-  if (elo < 1000) {
-    return { weak: true };
-  }
-  if (elo < 1320) {
-    // 1000 → skill 4, depth 3; 1300 → skill 9, depth 6.
-    const t = Math.max(0, Math.min(1, (elo - 1000) / 320));
-    const skill = 4 + Math.round(t * 5);
-    const depth = 3 + Math.round(t * 3);
-    return { skill, depth };
-  }
-  if (elo < 1400) {
-    // Stockfish's native UCI_Elo floor is around 1320.
-    const depth = 6;
-    return { elo: Math.max(1320, elo), depth };
-  }
-  if (elo < 1600) {
-    const t = Math.max(0, Math.min(1, (elo - 1400) / 200));
-    const skill = Math.round(t * 8);
-    const depth = 6 + Math.round(t * 2);
-    return { skill, depth };
-  }
-  // 1600+: Stockfish's native Elo limiter, with depth tiered for realism.
   const depth = elo < 2000 ? 10 : 16;
-  return { elo, depth };
+  return { elo: Math.max(1320, elo), depth };
 }
 
 // Weight per classification tier for accuracy %.
@@ -4119,18 +4160,8 @@ async function coachOpponentRespond() {
   setCoachStatus('Opponent thinking…');
   const fen = coachGame.fen();
   try {
-    // Opponent uses configured strength. Below 1000, explicit noisy move
-    // selection is more realistic than asking Stockfish for a shallow best move.
-    const opts = coachStrengthOpts(coachEngineElo);
-    let bestmove;
-    if (opts.weak) {
-      bestmove = chooseWeakOpponentMove(fen, coachEngineElo);
-    } else {
-      const { depth, ...strength } = opts;
-      const result = await engine.evaluate(fen, depth, strength);
-      bestmove = result.bestmove;
-    }
-    if (!coachMode || !coachGameActive) return;
+    const bestmove = await chooseOpponentMoveByLevel(fen, coachEngineElo);
+    if (!coachMode || !coachGameActive || coachIsUserTurn() || coachGame.fen() !== fen) return;
     if (!bestmove) { setCoachStatus('Your move.'); return; }
     setTimeout(() => {
       if (!coachMode || !coachGameActive) return;
@@ -4725,13 +4756,13 @@ function showPostGameSummary(endMsg) {
   updateCoachControlsState();
   $('#summary-title').text(endMsg);
 
-  // Subtitle: strength + user color context
+  // Subtitle: opponent level + user color context
   const eloEl = document.getElementById('coach-strength-value');
   const elo = eloEl ? eloEl.textContent : '';
   const sideName = coachUserColor() === 'white' ? 'White' : 'Black';
   const subtitleParts = [];
   if (sideName) subtitleParts.push(`You played ${sideName}`);
-  if (elo) subtitleParts.push(`vs Stockfish ${elo}`);
+  if (elo) subtitleParts.push(`vs Opponent ${elo}`);
   if (subtitleParts.length) {
     $('#summary-subtitle').text(subtitleParts.join(' · ')).show();
   } else {
@@ -5172,7 +5203,7 @@ function switchView(view) {
         // Show an idle board so the user has visual context
         $('#coachBoard-placeholder').hide();
         createCoachBoard('start', 'white');
-        setCoachStatus('Set a strength and start a new game.');
+        setCoachStatus('Set a level and start a new game.');
       }
     } else {
       // Returning to an existing game — resize the board and re-kick the
@@ -5232,8 +5263,8 @@ function startCoachGame() {
 
   const tier = strengthTierLabel(coachEngineElo);
   const opening = coachIsUserTurn()
-    ? `Playing ${coachUserColor() === 'white' ? 'White' : 'Black'} vs Stockfish ${coachEngineElo} (${tier}). Your move.`
-    : `Playing ${coachUserColor() === 'white' ? 'White' : 'Black'} vs Stockfish ${coachEngineElo} (${tier}). Opponent opens — thinking…`;
+    ? `Playing ${coachUserColor() === 'white' ? 'White' : 'Black'} vs Opponent ${coachEngineElo} (${tier}). Your move.`
+    : `Playing ${coachUserColor() === 'white' ? 'White' : 'Black'} vs Opponent ${coachEngineElo} (${tier}). Opponent opens — thinking…`;
   setCoachStatus(opening);
 
   updateCoachControlsState();
@@ -5611,7 +5642,7 @@ function updateOpeningLabel() {
 // MOVE LIST / PGN
 // ─────────────────────────────────────────────
 // Build a minimal PGN from coachGame. Uses chess.js pgn() as the base and
-// only adds a couple of safe headers — the rest (result, strength) is inferred.
+// only adds a couple of safe headers — the rest (result, level) is inferred.
 function coachGetPgn() {
   if (!coachGame) return '';
   const today = new Date();
@@ -5641,8 +5672,8 @@ function coachGetPgn() {
     ['Event', 'Coach Mode training'],
     ['Site', 'chess.cjarhodes.com'],
     ['Date', `${yyyy}.${mm}.${dd}`],
-    ['White', coachUserColor() === 'white' ? 'Player' : `Stockfish ${coachEngineElo || ''}`.trim()],
-    ['Black', coachUserColor() === 'black' ? 'Player' : `Stockfish ${coachEngineElo || ''}`.trim()],
+    ['White', coachUserColor() === 'white' ? 'Player' : `Opponent ${coachEngineElo || ''}`.trim()],
+    ['Black', coachUserColor() === 'black' ? 'Player' : `Opponent ${coachEngineElo || ''}`.trim()],
     ['Result', result],
   ];
   if (autoTags.SetUp) headers.push(['SetUp', autoTags.SetUp]);
