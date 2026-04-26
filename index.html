@@ -1015,6 +1015,82 @@
     }
     .toggle-label:hover { color: var(--text); }
     .lifetime-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+    .insights-metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.4rem 0.75rem;
+      padding: 0.8rem 0.95rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+    }
+    .insights-metrics .k { color: var(--muted); letter-spacing: 0.02em; }
+    .insights-metrics .v { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+    .insight-primary {
+      padding: 0.75rem 0.85rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 2px solid var(--accent);
+      border-radius: 2px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .insight-primary .title {
+      color: var(--text);
+      font-family: var(--font-reading);
+      font-size: 0.98rem;
+      line-height: 1.25;
+    }
+    .insight-primary .detail,
+    .insight-empty {
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.45;
+    }
+    .insight-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+    .insight-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.25rem 0.6rem;
+      align-items: baseline;
+      padding: 0.55rem 0.7rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      font-size: 0.78rem;
+    }
+    .insight-row .name { color: var(--text); font-weight: 500; }
+    .insight-row .count {
+      color: var(--accent-soft);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .insight-row .example {
+      grid-column: 1 / -1;
+      color: var(--muted);
+      line-height: 1.35;
+      font-family: var(--font-reading);
+      font-size: 0.9rem;
+    }
+    .insight-theory {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .insight-theory-item {
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.45;
+      padding-left: 0.65rem;
+      border-left: 2px solid var(--rule-3);
+    }
 
     .strength-row {
       display: flex;
@@ -1945,6 +2021,24 @@
         <span class="k">Avg accuracy</span><span class="v" id="lifetime-accuracy">—</span>
         <span class="k">Total blunders</span><span class="v" id="lifetime-blunders">0</span>
       </div>
+    </div>
+
+    <div class="coach-panel-section" id="insights-section" style="display:none;">
+      <div class="lifetime-head">
+        <span class="section-label">Coach Insights</span>
+        <button id="btn-coach-insights-reset" class="movelist-copy" title="Reset coach insights">Reset</button>
+      </div>
+      <div class="insights-metrics">
+        <span class="k">Moves learned</span><span class="v" id="insights-moves">0</span>
+        <span class="k">Error patterns</span><span class="v" id="insights-errors">0</span>
+        <span class="k">Weakest phase</span><span class="v" id="insights-phase">-</span>
+      </div>
+      <div class="insight-primary" id="insights-primary">
+        <div class="title" id="insights-primary-title">Keep playing</div>
+        <div class="detail" id="insights-primary-detail">Insights appear after coach mode sees repeated inaccuracies, mistakes, or blunders.</div>
+      </div>
+      <div class="insight-list" id="insights-list"></div>
+      <div class="insight-theory" id="insights-theory"></div>
     </div>
   </aside>
 </section>
@@ -3435,6 +3529,330 @@ function renderLifetime() {
 }
 
 // ─────────────────────────────────────────────
+// COACH INSIGHTS — local-first mistake pattern memory
+// ─────────────────────────────────────────────
+const INSIGHTS_KEY = 'coach:insights:v1';
+const INSIGHTS_MAX_ENTRIES = 300;
+const INSIGHT_PROBLEM_TIERS = new Set(['inaccuracy', 'mistake', 'blunder']);
+const INSIGHT_TIER_WEIGHT = { inaccuracy: 1, mistake: 2, blunder: 3 };
+const INSIGHT_TAG_META = {
+  missed_mate: {
+    title: 'Missed mate threats',
+    practice: 'Start every candidate scan with forcing checks.',
+    theory: 'Forcing moves come first: checks, captures, threats. Mate threats outrank material.'
+  },
+  missed_check: {
+    title: 'Missed forcing checks',
+    practice: 'Before quiet moves, list every legal check for both sides.',
+    theory: 'Checks force the opponent to spend a tempo. Even when not best, they reveal tactical geometry.'
+  },
+  missed_capture: {
+    title: 'Missed material wins',
+    practice: 'Run a captures scan before committing to a positional move.',
+    theory: 'Loose pieces and overloaded defenders are tactical signals. Check whether a defender is pinned or distracted.'
+  },
+  missed_promotion: {
+    title: 'Missed promotion chances',
+    practice: 'In pawn races, calculate the queening square before any side move.',
+    theory: 'Passed pawns become stronger as pieces leave the board. The king and rook belong behind passed pawns.'
+  },
+  allowed_mate: {
+    title: 'Allowed mate threats',
+    practice: 'After choosing a move, ask what check the opponent wants next.',
+    theory: 'King safety is a concrete calculation problem: count checks, escape squares, and defenders.'
+  },
+  allowed_forcing: {
+    title: 'Missed opponent threats',
+    practice: 'Use a final blunder-check: their checks, captures, threats.',
+    theory: 'A move is only good if it survives the opponent response. Always calculate their most forcing reply.'
+  },
+  hung_material: {
+    title: 'Hung pieces',
+    practice: 'Before releasing a piece, verify whether the destination is defended enough.',
+    theory: 'A piece is safe when its defenders match the tactical reality, not just the attacker count.'
+  },
+  premature_queen: {
+    title: 'Premature queen moves',
+    practice: 'Delay queen activity until minor pieces are developed or there is a concrete tactic.',
+    theory: 'Early queen moves invite tempo gains. Develop knights and bishops before hunting pawns.'
+  },
+  development: {
+    title: 'Slow development',
+    practice: 'In the opening, prefer developing a new minor piece unless there is a tactic.',
+    theory: 'Opening time matters. Develop pieces, fight for the center, castle, then start operations.'
+  },
+  king_safety: {
+    title: 'King-safety looseners',
+    practice: 'Treat early f-, g-, and h-pawn moves as commitments that need a concrete reason.',
+    theory: 'Pawn moves near your king cannot retreat. Every pawn advance creates squares the opponent can use.'
+  },
+  opening_principles: {
+    title: 'Opening principle gaps',
+    practice: 'Check center, development, king safety, and only then pawn grabs.',
+    theory: 'The opening goal is not to win a pawn; it is to reach a playable middlegame with active pieces.'
+  },
+  endgame_technique: {
+    title: 'Endgame technique',
+    practice: 'Activate the king and calculate pawn races before trading.',
+    theory: 'Endgames reward king activity, outside passed pawns, opposition, and rook activity.'
+  },
+  candidate_moves: {
+    title: 'Candidate move selection',
+    practice: 'Compare at least two candidate moves before moving.',
+    theory: 'Strong move selection starts wide and narrows: candidate moves first, calculation second.'
+  }
+};
+
+function emptyInsights() {
+  return { v: 1, entries: [] };
+}
+
+function loadInsights() {
+  try {
+    const raw = localStorage.getItem(INSIGHTS_KEY);
+    if (!raw) return emptyInsights();
+    const parsed = JSON.parse(raw);
+    if (!parsed || parsed.v !== 1 || !Array.isArray(parsed.entries)) return emptyInsights();
+    return { v: 1, entries: parsed.entries.slice(-INSIGHTS_MAX_ENTRIES) };
+  } catch (e) {
+    return emptyInsights();
+  }
+}
+
+function saveInsights(state) {
+  try {
+    const safe = { v: 1, entries: (state.entries || []).slice(-INSIGHTS_MAX_ENTRIES) };
+    localStorage.setItem(INSIGHTS_KEY, JSON.stringify(safe));
+  } catch (e) {}
+}
+
+function clearInsights() {
+  try { localStorage.removeItem(INSIGHTS_KEY); } catch (e) {}
+}
+
+function isInsightProblem(tier) {
+  return INSIGHT_PROBLEM_TIERS.has(tier);
+}
+
+function moveFromUci(fen, uci) {
+  if (!fen || !uci) return null;
+  try {
+    const g = new Chess(fen);
+    return g.move({
+      from: uci.slice(0, 2),
+      to: uci.slice(2, 4),
+      promotion: uci[4] || undefined
+    });
+  } catch (e) {
+    return null;
+  }
+}
+
+function isCastlingMove(mv) {
+  return !!(mv && mv.flags && (mv.flags.includes('k') || mv.flags.includes('q')));
+}
+
+function undevelopedMinorCount(gameObj, color) {
+  const home = color === 'w'
+    ? [['b1', 'n'], ['g1', 'n'], ['c1', 'b'], ['f1', 'b']]
+    : [['b8', 'n'], ['g8', 'n'], ['c8', 'b'], ['f8', 'b']];
+  let count = 0;
+  for (const [square, type] of home) {
+    const piece = gameObj.get(square);
+    if (piece && piece.color === color && piece.type === type) count++;
+  }
+  return count;
+}
+
+function isEarlyKingPawnLoosener(mv) {
+  return mv && mv.piece === 'p' && ['f', 'g', 'h'].includes(mv.from[0]);
+}
+
+function insightTagsForReview(review) {
+  if (!review || !isInsightProblem(review.tier)) return [];
+  const tags = [];
+  const add = tag => {
+    if (INSIGHT_TAG_META[tag] && !tags.includes(tag)) tags.push(tag);
+  };
+  const loss = review.loss || 0;
+  const pairNum = review.pairNum || Math.ceil((review.ply || 1) / 2);
+  const phase = phaseOf(pairNum);
+  const userMove = moveFromUci(review.fenBefore, review.userUci);
+  const bestMove = moveFromUci(review.fenBefore, review.bestUci);
+  const replyUci = review.evalAfter && review.evalAfter.pv && review.evalAfter.pv[0];
+  const opponentReply = moveFromUci(review.fenAfter, replyUci);
+
+  if (bestMove) {
+    if (bestMove.san && bestMove.san.includes('#')) add('missed_mate');
+    else if (bestMove.san && bestMove.san.includes('+')) add('missed_check');
+    if (bestMove.captured) add('missed_capture');
+    if (bestMove.promotion) add('missed_promotion');
+    if (isCastlingMove(bestMove)) add('king_safety');
+  }
+
+  if (opponentReply && loss >= 120) {
+    if (opponentReply.san && opponentReply.san.includes('#')) add('allowed_mate');
+    else if (opponentReply.san && opponentReply.san.includes('+')) add('allowed_forcing');
+    if (opponentReply.captured && (materialValue(opponentReply.captured) >= 300 || loss >= 250)) add('hung_material');
+  }
+
+  if (userMove) {
+    const before = new Chess(review.fenBefore);
+    if (pairNum <= 12) {
+      if (userMove.piece === 'q' && !userMove.captured && !(userMove.san || '').match(/[+#]/)) add('premature_queen');
+      if (undevelopedMinorCount(before, userMove.color) >= 2 &&
+          !['n', 'b'].includes(userMove.piece) &&
+          !isCastlingMove(userMove) &&
+          !userMove.captured &&
+          loss >= 80) {
+        add('development');
+      }
+      if (isEarlyKingPawnLoosener(userMove) && !userMove.captured && !(bestMove && bestMove.captured) && loss >= 80) {
+        add('king_safety');
+      }
+    }
+    if (phase === 'endgame' && loss >= 120) add('endgame_technique');
+  }
+
+  if (tags.length === 0 && phase === 'opening' && loss >= 120) add('opening_principles');
+  if (tags.length === 0) add('candidate_moves');
+  return tags.slice(0, 3);
+}
+
+function currentCoachOpeningName() {
+  try {
+    if (!coachGame || typeof identifyOpening !== 'function') return null;
+    const info = identifyOpening(coachGame.history());
+    return info && info.match ? info.match.name : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function insightEntryFromReview(review) {
+  const pairNum = review.pairNum || Math.ceil((review.ply || 1) / 2);
+  const tags = insightTagsForReview(review);
+  return {
+    ts: Date.now(),
+    tier: review.tier,
+    loss: Math.round(review.loss || 0),
+    phase: phaseOf(pairNum),
+    tags,
+    pairNum,
+    ply: review.ply || pairNum * 2,
+    userSan: review.userSan || null,
+    bestSan: review.bestSan || null,
+    fenBefore: review.fenBefore || null,
+    userUci: review.userUci || null,
+    bestUci: review.bestUci || null,
+    opening: currentCoachOpeningName()
+  };
+}
+
+function recordCoachInsight(review) {
+  if (!review || !review.tier || review.tier === 'unknown') return;
+  const state = loadInsights();
+  state.entries.push(insightEntryFromReview(review));
+  saveInsights(state);
+  renderInsights();
+}
+
+function insightTagCounts(entries) {
+  const counts = {};
+  for (const entry of entries) {
+    if (!entry || !isInsightProblem(entry.tier)) continue;
+    const weight = INSIGHT_TIER_WEIGHT[entry.tier] || 1;
+    for (const tag of entry.tags || []) {
+      if (!counts[tag]) counts[tag] = { tag, count: 0, score: 0, loss: 0, latest: entry };
+      counts[tag].count += 1;
+      counts[tag].score += weight;
+      counts[tag].loss += Math.min(entry.loss || 0, ACPL_CAP);
+      counts[tag].latest = entry;
+    }
+  }
+  return Object.values(counts).sort((a, b) =>
+    b.score - a.score || b.count - a.count || b.loss - a.loss
+  );
+}
+
+function weakestInsightPhase(entries) {
+  const phaseName = { opening: 'Opening', middlegame: 'Middlegame', endgame: 'Endgame' };
+  const phases = {
+    opening: { phase: 'opening', count: 0, loss: 0 },
+    middlegame: { phase: 'middlegame', count: 0, loss: 0 },
+    endgame: { phase: 'endgame', count: 0, loss: 0 }
+  };
+  for (const entry of entries) {
+    if (!entry || !isInsightProblem(entry.tier)) continue;
+    const phase = phases[entry.phase] || phases.middlegame;
+    phase.count += 1;
+    phase.loss += Math.min(entry.loss || 0, ACPL_CAP);
+  }
+  const ranked = Object.values(phases)
+    .filter(p => p.count > 0)
+    .sort((a, b) => b.count - a.count || b.loss - a.loss);
+  if (!ranked.length) return null;
+  return { label: phaseName[ranked[0].phase], data: ranked[0] };
+}
+
+function formatInsightExample(entry) {
+  if (!entry) return '';
+  const ref = formatMoveRef(entry);
+  const best = entry.bestSan ? `; best was ${entry.bestSan}` : '';
+  const opening = entry.opening ? ` in ${entry.opening}` : '';
+  return `${ref}${best}${opening}`;
+}
+
+function renderInsights() {
+  const entries = loadInsights().entries.filter(e => e && e.tier && e.tier !== 'unknown');
+  const $section = $('#insights-section');
+  if (!entries.length) {
+    $section.hide();
+    return;
+  }
+
+  const problemEntries = entries.filter(e => isInsightProblem(e.tier));
+  const counts = insightTagCounts(problemEntries);
+  const weakPhase = weakestInsightPhase(problemEntries);
+  $section.show();
+  $('#insights-moves').text(entries.length);
+  $('#insights-errors').text(counts.length);
+  $('#insights-phase').text(weakPhase ? weakPhase.label : '-');
+
+  const $list = $('#insights-list').empty();
+  const $theory = $('#insights-theory').empty();
+
+  if (!counts.length) {
+    $('#insights-primary-title').text('No repeated problem yet');
+    $('#insights-primary-detail').text('Coach mode is storing your reviewed moves locally. The pattern view will sharpen once it sees inaccuracies, mistakes, or blunders.');
+    $list.append($('<div class="insight-empty"></div>').text('Current sample is clean. Keep playing enough moves to build a useful baseline.'));
+    return;
+  }
+
+  const top = counts[0];
+  const topMeta = INSIGHT_TAG_META[top.tag];
+  $('#insights-primary-title').text(topMeta.title);
+  $('#insights-primary-detail').text(`${top.count} recent occurrence${top.count === 1 ? '' : 's'}. Practice next: ${topMeta.practice}`);
+
+  counts.slice(0, 3).forEach(item => {
+    const meta = INSIGHT_TAG_META[item.tag];
+    const $row = $('<div class="insight-row"></div>');
+    $row.append($('<span class="name"></span>').text(meta.title));
+    $row.append($('<span class="count"></span>').text(`${item.count}x`));
+    $row.append($('<div class="example"></div>').text(formatInsightExample(item.latest)));
+    $list.append($row);
+  });
+
+  const usedTheory = new Set();
+  counts.slice(0, 3).forEach(item => {
+    const theory = INSIGHT_TAG_META[item.tag].theory;
+    if (usedTheory.has(theory)) return;
+    usedTheory.add(theory);
+    $theory.append($('<div class="insight-theory-item"></div>').text(theory));
+  });
+}
+
+// ─────────────────────────────────────────────
 // PREMOVE — queue your move while the engine is thinking
 // ─────────────────────────────────────────────
 function setPremoveSquares(from, to) {
@@ -4226,6 +4644,7 @@ async function coachHandleUserMove(source, target, promotion, opts) {
     const logged = Object.assign({}, review, { fenBefore, fenAfter, userUci, ply, pairNum });
     coachLastReview = logged;
     coachReviewLog.push(logged);
+    recordCoachInsight(logged);
     // Don't count engine-timeout ("unknown") reviews in stats or accuracy.
     if (review.tier !== 'unknown') {
       coachStats.moves++;
@@ -5196,6 +5615,7 @@ function switchView(view) {
     $('#coach-strength-tier').text(strengthTierLabel(coachEngineElo));
     // Show lifetime stats if any are recorded.
     renderLifetime();
+    renderInsights();
     if (!coachGame) {
       // Try to restore an in-progress (or just-ended) game from localStorage.
       const restored = tryRestoreCoachGame();
@@ -6595,6 +7015,12 @@ $(function () {
     if (!confirm('Reset all lifetime stats? This cannot be undone.')) return;
     saveLifetime(emptyLifetime());
     renderLifetime();
+  });
+
+  $('#btn-coach-insights-reset').on('click', function() {
+    if (!confirm('Reset coach insights for this browser? This cannot be undone.')) return;
+    clearInsights();
+    renderInsights();
   });
 
   // Sound toggle — restore prior preference, persist on change. The first
