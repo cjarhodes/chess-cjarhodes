@@ -1015,6 +1015,69 @@
     }
     .toggle-label:hover { color: var(--text); }
     .lifetime-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+    .auth-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 2px solid var(--accent);
+      border-radius: 2px;
+      padding: 0.8rem 0.9rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+    .auth-row {
+      display: flex;
+      gap: 0.45rem;
+      align-items: stretch;
+    }
+    .auth-input {
+      width: 100%;
+      min-width: 0;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      padding: 0.48rem 0.55rem;
+      outline: none;
+    }
+    .auth-input:focus { border-color: var(--accent); }
+    .auth-input::placeholder { color: var(--muted); opacity: 0.75; }
+    .auth-status,
+    .auth-user {
+      color: var(--muted);
+      font-size: 0.74rem;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+    .auth-user strong {
+      color: var(--text);
+      font-weight: 500;
+    }
+    .auth-actions {
+      display: flex;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+    }
+    .auth-actions .ctrl-btn,
+    .auth-row .ctrl-btn {
+      font-size: 0.72rem;
+      padding: 0.45rem 0.65rem;
+      white-space: nowrap;
+    }
+    .sync-badge {
+      display: inline-flex;
+      width: fit-content;
+      color: var(--success);
+      background: var(--success-bg);
+      border: 1px solid rgba(107, 130, 104, 0.35);
+      border-radius: 2px;
+      padding: 0.22rem 0.45rem;
+      font-size: 0.68rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
     .insights-metrics {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -1865,6 +1928,29 @@
     <div class="coach-hero">
       <div class="title">Coach</div>
       <div class="tagline">Sharpen your reactive play</div>
+    </div>
+
+    <div class="field-group">
+      <div class="section-label">Account</div>
+      <div class="auth-card" id="coach-auth-card">
+        <div id="coach-auth-local">
+          <div class="auth-status">Local mode</div>
+        </div>
+        <div id="coach-auth-form" style="display:none;">
+          <div class="auth-row">
+            <input type="email" class="auth-input" id="coach-auth-email" placeholder="email@example.com" autocomplete="email" />
+            <button class="ctrl-btn" id="btn-coach-login">Send link</button>
+          </div>
+        </div>
+        <div id="coach-auth-session" style="display:none;">
+          <div class="auth-user">Signed in as <strong id="coach-auth-user">-</strong></div>
+          <div class="auth-actions">
+            <button class="ctrl-btn" id="btn-coach-sync">Sync now</button>
+            <button class="ctrl-btn" id="btn-coach-logout">Sign out</button>
+          </div>
+        </div>
+        <div class="auth-status" id="coach-auth-status"></div>
+      </div>
     </div>
 
     <div class="field-group">
@@ -3358,6 +3444,21 @@ let coachReviewCursor = null;      // null = live; integer = ply index displayed
 let coachLastEndMsg = null;        // headline from last game-over, used to reopen the review
 let candidateRequestId = 0;        // invalidates stale async candidate searches
 let coachPremove = null;           // queued premove while opponent is thinking
+let coachRemoteGameId = null;      // Supabase coach_games.id for current game
+let coachAuthUser = null;
+let coachDbClient = null;
+let coachDbInitStarted = false;
+let coachDbInitPromise = null;
+let coachRemoteInsightEntries = null;
+let coachDbStatus = 'local';
+
+// Optional runtime config. Set these public Supabase values in the deployed
+// page when account-backed coach history is ready. Without config, Coach stays
+// local-first and uses the existing localStorage insights.
+window.COACH_SUPABASE_CONFIG = window.COACH_SUPABASE_CONFIG || {
+  url: '',
+  anonKey: ''
+};
 
 // ─────────────────────────────────────────────
 // COACH GAME PERSISTENCE
@@ -3372,7 +3473,7 @@ function saveCoachState() {
     if (!coachGame) return;
     const total = coachGame.history().length;
     // Skip persisting empty initial state — nothing to recover.
-    if (total === 0 && !coachLastEndMsg) {
+    if (total === 0 && !coachLastEndMsg && !coachRemoteGameId) {
       localStorage.removeItem(COACH_STATE_KEY);
       return;
     }
@@ -3382,6 +3483,7 @@ function saveCoachState() {
       startFen: coachStartFen,
       userSide: coachUserSide,
       engineElo: coachEngineElo,
+      remoteGameId: coachRemoteGameId,
       reviewLog: coachReviewLog,
       stats: coachStats,
       ended: !coachGameActive,
@@ -3419,6 +3521,7 @@ function tryRestoreCoachGame() {
     coachStartFen = s.startFen || g.fen();
     coachUserSide = s.userSide || 'white';
     coachEngineElo = typeof s.engineElo === 'number' ? s.engineElo : 1200;
+    coachRemoteGameId = s.remoteGameId || null;
     coachReviewLog = Array.isArray(s.reviewLog) ? s.reviewLog : [];
     coachStats = s.stats || { moves: 0, best: 0, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
     coachLastReview = coachReviewLog.length ? coachReviewLog[coachReviewLog.length - 1] : null;
@@ -3731,7 +3834,8 @@ function currentCoachOpeningName() {
 
 function insightEntryFromReview(review) {
   const pairNum = review.pairNum || Math.ceil((review.ply || 1) / 2);
-  const tags = insightTagsForReview(review);
+  const tags = review.insightTags || insightTagsForReview(review);
+  review.insightTags = tags;
   return {
     ts: Date.now(),
     tier: review.tier,
@@ -3751,6 +3855,7 @@ function insightEntryFromReview(review) {
 
 function recordCoachInsight(review) {
   if (!review || !review.tier || review.tier === 'unknown') return;
+  review.insightTags = review.insightTags || insightTagsForReview(review);
   const state = loadInsights();
   state.entries.push(insightEntryFromReview(review));
   saveInsights(state);
@@ -3804,7 +3909,12 @@ function formatInsightExample(entry) {
 }
 
 function renderInsights() {
-  const entries = loadInsights().entries.filter(e => e && e.tier && e.tier !== 'unknown');
+  const localEntries = loadInsights().entries.filter(e => e && e.tier && e.tier !== 'unknown');
+  const remoteEntries = Array.isArray(coachRemoteInsightEntries)
+    ? coachRemoteInsightEntries.filter(e => e && e.tier && e.tier !== 'unknown')
+    : [];
+  const entries = remoteEntries.length ? remoteEntries : localEntries;
+  const usingRemote = remoteEntries.length > 0;
   const $section = $('#insights-section');
   if (!entries.length) {
     $section.hide();
@@ -3824,7 +3934,9 @@ function renderInsights() {
 
   if (!counts.length) {
     $('#insights-primary-title').text('No repeated problem yet');
-    $('#insights-primary-detail').text('Coach mode is storing your reviewed moves locally. The pattern view will sharpen once it sees inaccuracies, mistakes, or blunders.');
+    $('#insights-primary-detail').text(usingRemote
+      ? 'Account history is syncing clean reviewed moves. The pattern view will sharpen once it sees inaccuracies, mistakes, or blunders.'
+      : 'Coach mode is storing your reviewed moves locally. The pattern view will sharpen once it sees inaccuracies, mistakes, or blunders.');
     $list.append($('<div class="insight-empty"></div>').text('Current sample is clean. Keep playing enough moves to build a useful baseline.'));
     return;
   }
@@ -3850,6 +3962,318 @@ function renderInsights() {
     usedTheory.add(theory);
     $theory.append($('<div class="insight-theory-item"></div>').text(theory));
   });
+}
+
+// ─────────────────────────────────────────────
+// ACCOUNT SYNC — optional Supabase-backed coach history
+// ─────────────────────────────────────────────
+function supabaseRuntimeConfig() {
+  const cfg = window.COACH_SUPABASE_CONFIG || {};
+  return {
+    url: (cfg.url || cfg.supabaseUrl || '').trim(),
+    anonKey: (cfg.anonKey || cfg.key || cfg.supabaseAnonKey || '').trim()
+  };
+}
+
+function isSupabaseConfigured() {
+  const cfg = supabaseRuntimeConfig();
+  return /^https:\/\/.+\.supabase\.co$/.test(cfg.url) &&
+         cfg.anonKey.length > 20 &&
+         !cfg.anonKey.includes('YOUR_');
+}
+
+function coachAuthStorage() {
+  return {
+    getItem(key) {
+      try { return sessionStorage.getItem(key); } catch (e) { return null; }
+    },
+    setItem(key, value) {
+      try { sessionStorage.setItem(key, value); } catch (e) {}
+    },
+    removeItem(key) {
+      try { sessionStorage.removeItem(key); } catch (e) {}
+    }
+  };
+}
+
+function setCoachAuthStatus(msg) {
+  $('#coach-auth-status').text(msg || '');
+}
+
+function setCoachDbStatus(msg) {
+  coachDbStatus = msg || '';
+  if (coachAuthUser) setCoachAuthStatus(msg || 'Account sync on.');
+}
+
+function renderCoachAuth() {
+  const configured = isSupabaseConfigured();
+  $('#coach-auth-local').toggle(!configured);
+  $('#coach-auth-form').toggle(configured && !coachAuthUser);
+  $('#coach-auth-session').toggle(configured && !!coachAuthUser);
+  if (!configured) {
+    setCoachAuthStatus('Add Supabase config to enable account history.');
+    return;
+  }
+  if (coachAuthUser) {
+    $('#coach-auth-user').text(coachAuthUser.email || coachAuthUser.id);
+    setCoachAuthStatus(coachDbStatus || 'Account sync on.');
+  } else {
+    setCoachAuthStatus(coachDbStatus === 'loading' ? 'Connecting...' : 'Sign in to sync games.');
+  }
+}
+
+function loadSupabaseScript() {
+  if (window.supabase && window.supabase.createClient) return Promise.resolve();
+  if (window.__coachSupabaseScriptPromise) return window.__coachSupabaseScriptPromise;
+  window.__coachSupabaseScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Supabase client failed to load'));
+    document.head.appendChild(script);
+  });
+  return window.__coachSupabaseScriptPromise;
+}
+
+async function initCoachDb() {
+  if (coachDbInitPromise) return coachDbInitPromise;
+  coachDbInitStarted = true;
+  coachDbInitPromise = (async () => {
+    renderCoachAuth();
+    if (!isSupabaseConfigured()) return;
+    coachDbStatus = 'loading';
+    renderCoachAuth();
+    try {
+      await loadSupabaseScript();
+      const cfg = supabaseRuntimeConfig();
+      coachDbClient = window.supabase.createClient(cfg.url, cfg.anonKey, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+          storage: coachAuthStorage()
+        }
+      });
+      const { data } = await coachDbClient.auth.getSession();
+      coachAuthUser = data && data.session ? data.session.user : null;
+      coachDbStatus = coachAuthUser ? 'Account sync on.' : '';
+      renderCoachAuth();
+      renderInsights();
+      if (coachAuthUser) {
+        refreshRemoteInsights({ silent: true }).catch(handleCoachDbError);
+        if (coachGameActive) ensureRemoteCoachGame().catch(handleCoachDbError);
+      }
+      coachDbClient.auth.onAuthStateChange((event, session) => {
+        coachAuthUser = session ? session.user : null;
+        coachRemoteInsightEntries = null;
+        coachDbStatus = coachAuthUser ? 'Account sync on.' : '';
+        renderCoachAuth();
+        renderInsights();
+        if (coachAuthUser) {
+          refreshRemoteInsights({ silent: true }).catch(handleCoachDbError);
+          if (coachGameActive) ensureRemoteCoachGame().catch(handleCoachDbError);
+        }
+      });
+    } catch (err) {
+      coachDbStatus = 'Account sync unavailable.';
+      setCoachAuthStatus((err && err.message) || coachDbStatus);
+    }
+  })();
+  return coachDbInitPromise;
+}
+
+function hasCoachDbSession() {
+  return !!(coachDbClient && coachAuthUser);
+}
+
+function handleCoachDbError(err) {
+  const msg = err && err.message ? err.message : 'Sync failed';
+  setCoachDbStatus('Sync issue: ' + msg);
+}
+
+async function sendCoachLoginLink() {
+  if (!coachDbClient) {
+    await initCoachDb();
+  }
+  if (!coachDbClient) return;
+  const email = ($('#coach-auth-email').val() || '').trim();
+  if (!email) {
+    setCoachAuthStatus('Enter an email address.');
+    return;
+  }
+  setCoachAuthStatus('Sending link...');
+  const redirectTo = location.origin + location.pathname + '?view=coach';
+  const { error } = await coachDbClient.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: redirectTo }
+  });
+  if (error) {
+    setCoachAuthStatus(error.message);
+  } else {
+    setCoachAuthStatus('Check your email for the sign-in link.');
+  }
+}
+
+async function signOutCoach() {
+  if (!coachDbClient) return;
+  await coachDbClient.auth.signOut();
+  coachAuthUser = null;
+  coachRemoteInsightEntries = null;
+  coachRemoteGameId = null;
+  coachDbStatus = '';
+  renderCoachAuth();
+  renderInsights();
+}
+
+function remoteGameResult(endReason) {
+  if (!coachGame) return '*';
+  if (coachGame.in_checkmate()) {
+    return coachGame.turn() === 'w' ? '0-1' : '1-0';
+  }
+  if (coachGame.in_stalemate() || coachGame.in_draw() || coachGame.in_threefold_repetition() || coachGame.insufficient_material()) {
+    return '1/2-1/2';
+  }
+  if (endReason && endReason.includes('Resigned')) {
+    return coachUserColor() === 'white' ? '0-1' : '1-0';
+  }
+  return '*';
+}
+
+function remoteGamePayload(endReason) {
+  const total = coachStats ? coachStats.moves : 0;
+  return {
+    user_id: coachAuthUser.id,
+    user_side: coachUserColor(),
+    opponent_level: coachEngineElo,
+    start_fen: coachStartFen || (coachGame ? coachGame.fen() : null),
+    final_fen: coachGame ? coachGame.fen() : null,
+    pgn: coachGame ? coachGetPgn() : '',
+    opening_name: currentCoachOpeningName(),
+    result: remoteGameResult(endReason),
+    end_reason: endReason || null,
+    ended_at: endReason ? new Date(coachEndedAt || Date.now()).toISOString() : null,
+    moves_count: total,
+    accuracy: total ? accuracyFromTallies(coachStats, total) : null,
+    acpl: coachReviewLog && coachReviewLog.length ? computeACPL(coachReviewLog) : null,
+    stats: coachStats || {},
+    updated_at: new Date().toISOString()
+  };
+}
+
+async function ensureRemoteCoachGame() {
+  if (!hasCoachDbSession() || !coachGame) return null;
+  if (coachRemoteGameId) return coachRemoteGameId;
+  const payload = remoteGamePayload(null);
+  const { data, error } = await coachDbClient
+    .from('coach_games')
+    .insert(payload)
+    .select('id')
+    .single();
+  if (error) throw error;
+  coachRemoteGameId = data.id;
+  saveCoachState();
+  setCoachDbStatus('Game sync started.');
+  return coachRemoteGameId;
+}
+
+async function updateRemoteCoachGame(endReason) {
+  if (!hasCoachDbSession() || !coachGame) return;
+  const gameId = await ensureRemoteCoachGame();
+  if (!gameId) return;
+  const { error } = await coachDbClient
+    .from('coach_games')
+    .update(remoteGamePayload(endReason || null))
+    .eq('id', gameId);
+  if (error) throw error;
+  setCoachDbStatus(endReason ? 'Game saved.' : 'Game synced.');
+}
+
+function remoteMovePayload(review, gameId) {
+  const tags = review.insightTags || insightTagsForReview(review);
+  review.insightTags = tags;
+  return {
+    user_id: coachAuthUser.id,
+    game_id: gameId,
+    ply: review.ply,
+    pair_num: review.pairNum,
+    phase: phaseOf(review.pairNum),
+    played_at: new Date().toISOString(),
+    fen_before: review.fenBefore,
+    fen_after: review.fenAfter,
+    user_uci: review.userUci,
+    user_san: review.userSan || null,
+    best_uci: review.bestUci || null,
+    best_san: review.bestSan || null,
+    classification: review.tier,
+    centipawn_loss: Math.round(review.loss || 0),
+    rank: review.rank || null,
+    tags,
+    explanation: review.whyBetter || null,
+    pv_san: review.pvSan || [],
+    top_alternatives: review.topAlternatives || [],
+    eval_before: review.evalBefore || null,
+    eval_after: review.evalAfter || null,
+    opening_name: currentCoachOpeningName()
+  };
+}
+
+async function syncRemoteCoachMove(review) {
+  if (!hasCoachDbSession() || !review || review.tier === 'unknown') return;
+  const gameId = await ensureRemoteCoachGame();
+  if (!gameId) return;
+  const { error } = await coachDbClient
+    .from('coach_moves')
+    .upsert(remoteMovePayload(review, gameId), { onConflict: 'game_id,ply' });
+  if (error) throw error;
+  await updateRemoteCoachGame(null);
+  refreshRemoteInsights({ silent: true }).catch(handleCoachDbError);
+}
+
+async function deleteRemoteCoachMove(review) {
+  if (!hasCoachDbSession() || !coachRemoteGameId || !review || !review.ply) return;
+  const { error } = await coachDbClient
+    .from('coach_moves')
+    .delete()
+    .eq('game_id', coachRemoteGameId)
+    .eq('ply', review.ply);
+  if (error) throw error;
+  await updateRemoteCoachGame(null);
+  refreshRemoteInsights({ silent: true }).catch(handleCoachDbError);
+}
+
+function remoteMoveToInsightEntry(row) {
+  return {
+    ts: row.played_at ? Date.parse(row.played_at) : Date.now(),
+    tier: row.classification,
+    loss: row.centipawn_loss || 0,
+    phase: row.phase || phaseOf(row.pair_num || Math.ceil((row.ply || 1) / 2)),
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    pairNum: row.pair_num || Math.ceil((row.ply || 1) / 2),
+    ply: row.ply || 1,
+    userSan: row.user_san || null,
+    bestSan: row.best_san || null,
+    opening: row.opening_name || null
+  };
+}
+
+async function refreshRemoteInsights(opts = {}) {
+  if (!hasCoachDbSession()) {
+    coachRemoteInsightEntries = null;
+    renderInsights();
+    return;
+  }
+  if (!opts.silent) setCoachDbStatus('Loading account insights...');
+  const { data, error } = await coachDbClient
+    .from('coach_moves')
+    .select('played_at,classification,centipawn_loss,phase,tags,pair_num,ply,user_san,best_san,opening_name')
+    .eq('user_id', coachAuthUser.id)
+    .order('played_at', { ascending: false })
+    .limit(300);
+  if (error) throw error;
+  coachRemoteInsightEntries = (data || []).slice().reverse().map(remoteMoveToInsightEntry);
+  if (!opts.silent) setCoachDbStatus('Account insights loaded.');
+  renderInsights();
 }
 
 // ─────────────────────────────────────────────
@@ -4622,6 +5046,7 @@ function resetCoachState(fen) {
   coachEndedAt = null;
   coachReviewCursor = null;
   coachLastEndMsg = null;
+  coachRemoteGameId = null;
   coachLifetimeRolledForThisGame = false;
   if (coachSummaryTimer) { clearTimeout(coachSummaryTimer); coachSummaryTimer = null; }
   clearPremove();
@@ -4713,6 +5138,7 @@ async function coachHandleUserMove(source, target, promotion, opts) {
     coachLastReview = logged;
     coachReviewLog.push(logged);
     recordCoachInsight(logged);
+    syncRemoteCoachMove(logged).catch(handleCoachDbError);
     // Don't count engine-timeout ("unknown") reviews in stats or accuracy.
     if (review.tier !== 'unknown') {
       coachStats.moves++;
@@ -4763,6 +5189,7 @@ function coachHandleGameOver() {
   // Persist the now-ended state so a refresh keeps the review reachable.
   coachLastEndMsg = msg;
   saveCoachState();
+  updateRemoteCoachGame(msg).catch(handleCoachDbError);
   // Roll this game's stats into lifetime totals (guarded against double-count).
   rollGameIntoLifetime();
   // Let the user take in the final position before the review overlay arrives.
@@ -5681,6 +6108,7 @@ function switchView(view) {
     // Initialize strength display
     $('#coach-strength-value').text(coachEngineElo);
     $('#coach-strength-tier').text(strengthTierLabel(coachEngineElo));
+    renderCoachAuth();
     // Show lifetime stats if any are recorded.
     renderLifetime();
     renderInsights();
@@ -5756,6 +6184,7 @@ function startCoachGame() {
   setCoachStatus(opening);
 
   updateCoachControlsState();
+  ensureRemoteCoachGame().catch(handleCoachDbError);
 
   // Pre-warm engine, then kick off opponent if it's their turn.
   // Wrap in a 15s timeout so a stuck WASM load surfaces a retry instead of hanging.
@@ -7007,6 +7436,7 @@ function formatNum(n) {
 // ─────────────────────────────────────────────
 $(function () {
   // Board is initialized lazily on first opening selection
+  initCoachDb();
 
   // Promotion picker
   $('#promotion-picker .promotion-choice').on('click', function() {
@@ -7078,6 +7508,23 @@ $(function () {
     $('#coach-fen-error').hide();
   });
 
+  $('#btn-coach-login').on('click', function() {
+    sendCoachLoginLink().catch(handleCoachDbError);
+  });
+  $('#coach-auth-email').on('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      sendCoachLoginLink().catch(handleCoachDbError);
+    }
+  });
+  $('#btn-coach-logout').on('click', function() {
+    signOutCoach().catch(handleCoachDbError);
+  });
+  $('#btn-coach-sync').on('click', function() {
+    refreshRemoteInsights().catch(handleCoachDbError);
+    updateRemoteCoachGame(coachGameActive ? null : coachLastEndMsg).catch(handleCoachDbError);
+  });
+
   // Lifetime stats reset.
   $('#btn-coach-lifetime-reset').on('click', function() {
     if (!confirm('Reset all lifetime stats? This cannot be undone.')) return;
@@ -7124,6 +7571,7 @@ $(function () {
     updateCoachControlsState();
     coachLastEndMsg = msg;
     saveCoachState();
+    updateRemoteCoachGame(msg).catch(handleCoachDbError);
     rollGameIntoLifetime();
     // User-initiated — keep it snappy but still buffer with a small beat + animation.
     scheduleSummaryReveal(msg, 350);
@@ -7140,6 +7588,7 @@ $(function () {
   $('#btn-coach-takeback').on('click', function() {
     if (!coachMode || !coachGame) return;
     engine.cancel();
+    const removedReview = coachLastReview;
     candidateRequestId++;
     clearPremove();
     // Take back un-ends the game; future game-over should roll lifetime again.
@@ -7177,6 +7626,7 @@ $(function () {
     setCoachStatus('Your move.');
     updateCoachControlsState();
     saveCoachState();
+    deleteRemoteCoachMove(removedReview).catch(handleCoachDbError);
   });
 
   // Coach: show best — replay the best move instead of the user's
@@ -7223,6 +7673,8 @@ $(function () {
       last.userUci = prev.bestUci;
       last.fenAfter = newFenAfter;
       last.loss = 0;
+      last.insightTags = [];
+      syncRemoteCoachMove(last).catch(handleCoachDbError);
     }
     updateCoachSummary();
     updateMoveList();
