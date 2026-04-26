@@ -1154,6 +1154,54 @@
       padding-left: 0.65rem;
       border-left: 2px solid var(--rule-3);
     }
+    .practice-list,
+    .theory-card-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+    .practice-row,
+    .theory-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 0.65rem 0.75rem;
+    }
+    .practice-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.45rem 0.65rem;
+      align-items: center;
+    }
+    .practice-title,
+    .theory-title {
+      color: var(--text);
+      font-weight: 500;
+      font-size: 0.8rem;
+      line-height: 1.3;
+    }
+    .practice-detail,
+    .theory-body {
+      color: var(--muted);
+      font-family: var(--font-reading);
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+    .practice-detail {
+      grid-column: 1 / -1;
+    }
+    .practice-tag {
+      display: inline-flex;
+      width: fit-content;
+      color: var(--accent-soft);
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .practice-load {
+      align-self: start;
+    }
 
     .strength-row {
       display: flex;
@@ -2126,6 +2174,19 @@
       <div class="insight-list" id="insights-list"></div>
       <div class="insight-theory" id="insights-theory"></div>
     </div>
+
+    <div class="coach-panel-section" id="practice-section" style="display:none;">
+      <div class="lifetime-head">
+        <span class="section-label">Practice Queue</span>
+        <span class="practice-tag" id="practice-count">0 due</span>
+      </div>
+      <div class="practice-list" id="practice-list"></div>
+    </div>
+
+    <div class="coach-panel-section" id="theory-section" style="display:none;">
+      <div class="section-label">Theory to Retain</div>
+      <div class="theory-card-list" id="theory-list"></div>
+    </div>
   </aside>
 </section>
 
@@ -2211,6 +2272,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+<script src="coach-config.js"></script>
 
 <script>
 // ─────────────────────────────────────────────
@@ -3654,6 +3716,11 @@ const INSIGHT_TAG_META = {
     practice: 'Run a captures scan before committing to a positional move.',
     theory: 'Loose pieces and overloaded defenders are tactical signals. Check whether a defender is pinned or distracted.'
   },
+  missed_recapture: {
+    title: 'Missed recaptures',
+    practice: 'After every capture, ask what changed and whether a recapture is forced.',
+    theory: 'Recaptures often restore material balance and remove an active enemy piece. Calculate them before looking for quiet improvements.'
+  },
   missed_promotion: {
     title: 'Missed promotion chances',
     practice: 'In pawn races, calculate the queening square before any side move.',
@@ -3669,10 +3736,30 @@ const INSIGHT_TAG_META = {
     practice: 'Use a final blunder-check: their checks, captures, threats.',
     theory: 'A move is only good if it survives the opponent response. Always calculate their most forcing reply.'
   },
+  back_rank: {
+    title: 'Back-rank exposure',
+    practice: 'Check whether your king has air before allowing heavy pieces onto the back rank.',
+    theory: 'Back-rank tactics appear when the king has no flight square and rooks or queens control the first or eighth rank.'
+  },
+  fork_risk: {
+    title: 'Forks and double attacks',
+    practice: 'Before ending calculation, scan knight jumps and queen checks that hit two targets.',
+    theory: 'Forks win because one move creates two problems. Loose kings and loose pieces make them more likely.'
+  },
   hung_material: {
     title: 'Hung pieces',
     practice: 'Before releasing a piece, verify whether the destination is defended enough.',
     theory: 'A piece is safe when its defenders match the tactical reality, not just the attacker count.'
+  },
+  piece_left_en_prise: {
+    title: 'Pieces left en prise',
+    practice: 'When you move a piece, check whether the opponent can simply take it next move.',
+    theory: 'A moved piece can become tactically loose even on a defended square when the defender is pinned, overloaded, or too valuable.'
+  },
+  unsafe_trade: {
+    title: 'Unsafe trades',
+    practice: 'Before trading, count the full sequence and who moves last.',
+    theory: 'A trade is favorable only after the whole capture sequence, not after the first exchange.'
   },
   premature_queen: {
     title: 'Premature queen moves',
@@ -3688,6 +3775,26 @@ const INSIGHT_TAG_META = {
     title: 'King-safety looseners',
     practice: 'Treat early f-, g-, and h-pawn moves as commitments that need a concrete reason.',
     theory: 'Pawn moves near your king cannot retreat. Every pawn advance creates squares the opponent can use.'
+  },
+  time_to_castle: {
+    title: 'Delayed castling',
+    practice: 'When the engine wants castling, treat king safety as the tactic.',
+    theory: 'Castling is development, king safety, and rook activation in one move. Delaying it requires a concrete reason.'
+  },
+  missed_center_break: {
+    title: 'Missed center breaks',
+    practice: 'In the opening, ask whether a central pawn break solves the position.',
+    theory: 'Center breaks challenge the opponent before they finish development and can open lines for better-placed pieces.'
+  },
+  pawn_structure: {
+    title: 'Pawn-structure concessions',
+    practice: 'Before a pawn move, identify the square it gives up and whether that weakness matters.',
+    theory: 'Pawn moves are permanent. Weak squares, backward pawns, and holes near the king often matter more than one tempo.'
+  },
+  pin_pressure: {
+    title: 'Pins and pressure',
+    practice: 'Look for pinned defenders before choosing a quiet move.',
+    theory: 'Pinned pieces may look like defenders but cannot legally or safely move. Pressure against a pinned piece often wins material.'
   },
   opening_principles: {
     title: 'Opening principle gaps',
@@ -3771,6 +3878,25 @@ function isEarlyKingPawnLoosener(mv) {
   return mv && mv.piece === 'p' && ['f', 'g', 'h'].includes(mv.from[0]);
 }
 
+function isCentralPawnMove(mv) {
+  return !!(mv && mv.piece === 'p' && ['c', 'd', 'e', 'f'].includes(mv.from[0]));
+}
+
+function isNonCapturePawnWeakener(mv) {
+  if (!mv || mv.piece !== 'p' || mv.captured) return false;
+  return ['a', 'b', 'f', 'g', 'h'].includes(mv.from[0]);
+}
+
+function isLikelyBackRankTactic(mv) {
+  if (!mv || !mv.san || !mv.san.includes('#')) return false;
+  return ['r', 'q'].includes(mv.piece) && ['1', '8'].includes(mv.to[1]);
+}
+
+function isLikelyPinPressure(mv) {
+  if (!mv || !mv.san) return false;
+  return ['b', 'r', 'q'].includes(mv.piece) && (mv.san.includes('+') || mv.san.includes('x'));
+}
+
 function insightTagsForReview(review) {
   if (!review || !isInsightProblem(review.tier)) return [];
   const tags = [];
@@ -3790,13 +3916,26 @@ function insightTagsForReview(review) {
     else if (bestMove.san && bestMove.san.includes('+')) add('missed_check');
     if (bestMove.captured) add('missed_capture');
     if (bestMove.promotion) add('missed_promotion');
-    if (isCastlingMove(bestMove)) add('king_safety');
+    if (isCastlingMove(bestMove)) {
+      add('time_to_castle');
+      add('king_safety');
+    }
+    if (phase === 'opening' && isCentralPawnMove(bestMove) && !(userMove && isCentralPawnMove(userMove))) {
+      add('missed_center_break');
+    }
+    if (isLikelyPinPressure(bestMove)) add('pin_pressure');
   }
 
   if (opponentReply && loss >= 120) {
     if (opponentReply.san && opponentReply.san.includes('#')) add('allowed_mate');
     else if (opponentReply.san && opponentReply.san.includes('+')) add('allowed_forcing');
     if (opponentReply.captured && (materialValue(opponentReply.captured) >= 300 || loss >= 250)) add('hung_material');
+    if (isLikelyBackRankTactic(opponentReply)) add('back_rank');
+    if (opponentReply.piece === 'n' && (opponentReply.captured || (opponentReply.san || '').includes('+'))) add('fork_risk');
+    if (userMove && opponentReply.captured && opponentReply.to === userMove.to) {
+      add('piece_left_en_prise');
+      if (userMove.captured) add('unsafe_trade');
+    }
   }
 
   if (userMove) {
@@ -3813,7 +3952,10 @@ function insightTagsForReview(review) {
       if (isEarlyKingPawnLoosener(userMove) && !userMove.captured && !(bestMove && bestMove.captured) && loss >= 80) {
         add('king_safety');
       }
+      if (isNonCapturePawnWeakener(userMove) && loss >= 120) add('pawn_structure');
     }
+    if (userMove.captured && loss >= 120) add('unsafe_trade');
+    if (bestMove && bestMove.captured && userMove.to === bestMove.from && loss >= 100) add('missed_recapture');
     if (phase === 'endgame' && loss >= 120) add('endgame_technique');
   }
 
@@ -3908,6 +4050,103 @@ function formatInsightExample(entry) {
   return `${ref}${best}${opening}`;
 }
 
+function insightTagForEntry(entry) {
+  const tags = entry && Array.isArray(entry.tags) ? entry.tags : [];
+  return tags.find(tag => INSIGHT_TAG_META[tag]) || 'candidate_moves';
+}
+
+function fenSideToUserSide(fen) {
+  const turn = (fen || '').split(/\s+/)[1];
+  return turn === 'b' ? 'black' : 'white';
+}
+
+function buildPracticeQueue(entries, counts) {
+  const used = new Set();
+  const keyForEntry = entry => (entry.id || entry.ts || entry.ply || '') + ':' + entry.fenBefore;
+  const rankedTags = (counts || []).map(c => c.tag);
+  const sorted = (entries || [])
+    .filter(e => e && isInsightProblem(e.tier) && e.fenBefore && e.bestUci)
+    .slice()
+    .sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const queue = [];
+
+  for (const tag of rankedTags) {
+    const entry = sorted.find(e => (e.tags || []).includes(tag) && !used.has(tag));
+    if (!entry) continue;
+    const key = keyForEntry(entry);
+    if (used.has(key)) continue;
+    used.add(tag);
+    used.add(key);
+    queue.push({ entry, tag });
+    if (queue.length >= 4) break;
+  }
+
+  for (const entry of sorted) {
+    if (queue.length >= 4) break;
+    const tag = insightTagForEntry(entry);
+    const key = keyForEntry(entry);
+    if (used.has(key)) continue;
+    used.add(key);
+    queue.push({ entry, tag });
+  }
+  return queue;
+}
+
+function formatPracticeContext(entry) {
+  const ref = formatMoveRef(entry);
+  const played = entry.userSan ? `You played ${entry.userSan}.` : 'Review the candidate moves.';
+  const opening = entry.opening ? ` ${entry.opening}.` : '';
+  return `${ref}: ${played}${opening}`;
+}
+
+function renderPracticeQueue(entries, counts) {
+  const queue = buildPracticeQueue(entries, counts);
+  const $section = $('#practice-section');
+  const $list = $('#practice-list').empty();
+  if (!queue.length) {
+    $section.hide();
+    return;
+  }
+  $('#practice-count').text(`${queue.length} due`);
+  queue.forEach(item => {
+    const entry = item.entry;
+    const meta = INSIGHT_TAG_META[item.tag] || INSIGHT_TAG_META.candidate_moves;
+    const $row = $('<div class="practice-row"></div>');
+    const $title = $('<div class="practice-title"></div>').text(meta.title);
+    const $button = $('<button type="button" class="movelist-copy practice-load"></button>')
+      .text('Load')
+      .attr('data-fen', entry.fenBefore)
+      .attr('data-side', fenSideToUserSide(entry.fenBefore));
+    $row.append($title);
+    $row.append($button);
+    $row.append($('<div class="practice-detail"></div>').text(`${meta.practice} ${formatPracticeContext(entry)}`));
+    $list.append($row);
+  });
+  $section.show();
+}
+
+function renderTheoryCards(entries, counts) {
+  const $section = $('#theory-section');
+  const $list = $('#theory-list').empty();
+  const used = new Set();
+  (counts || []).slice(0, 4).forEach(item => {
+    if (!INSIGHT_TAG_META[item.tag] || used.has(item.tag)) return;
+    used.add(item.tag);
+    const meta = INSIGHT_TAG_META[item.tag];
+    const $card = $('<div class="theory-card"></div>');
+    $card.append($('<div class="theory-title"></div>').text(meta.title));
+    $card.append($('<div class="theory-body"></div>').text(meta.theory));
+    $list.append($card);
+  });
+  if (!used.size && entries && entries.length) {
+    const $card = $('<div class="theory-card"></div>');
+    $card.append($('<div class="theory-title"></div>').text('Candidate move selection'));
+    $card.append($('<div class="theory-body"></div>').text(INSIGHT_TAG_META.candidate_moves.theory));
+    $list.append($card);
+  }
+  $section.toggle($list.children().length > 0);
+}
+
 function renderInsights() {
   const localEntries = loadInsights().entries.filter(e => e && e.tier && e.tier !== 'unknown');
   const remoteEntries = Array.isArray(coachRemoteInsightEntries)
@@ -3918,6 +4157,8 @@ function renderInsights() {
   const $section = $('#insights-section');
   if (!entries.length) {
     $section.hide();
+    $('#practice-section').hide();
+    $('#theory-section').hide();
     return;
   }
 
@@ -3938,6 +4179,8 @@ function renderInsights() {
       ? 'Account history is syncing clean reviewed moves. The pattern view will sharpen once it sees inaccuracies, mistakes, or blunders.'
       : 'Coach mode is storing your reviewed moves locally. The pattern view will sharpen once it sees inaccuracies, mistakes, or blunders.');
     $list.append($('<div class="insight-empty"></div>').text('Current sample is clean. Keep playing enough moves to build a useful baseline.'));
+    renderPracticeQueue(problemEntries, counts);
+    renderTheoryCards(problemEntries, counts);
     return;
   }
 
@@ -3962,6 +4205,8 @@ function renderInsights() {
     usedTheory.add(theory);
     $theory.append($('<div class="insight-theory-item"></div>').text(theory));
   });
+  renderPracticeQueue(problemEntries, counts);
+  renderTheoryCards(problemEntries, counts);
 }
 
 // ─────────────────────────────────────────────
@@ -4218,20 +4463,106 @@ function remoteMovePayload(review, gameId) {
   };
 }
 
+function learningArtifactPayloads(review, moveId) {
+  if (!review || !moveId || !isInsightProblem(review.tier) || !review.fenBefore) {
+    return { drills: [], cards: [] };
+  }
+  const tags = (review.insightTags || insightTagsForReview(review))
+    .filter(tag => INSIGHT_TAG_META[tag])
+    .slice(0, 2);
+  const now = new Date().toISOString();
+  const drills = [];
+  const cards = [];
+
+  tags.forEach(tag => {
+    const meta = INSIGHT_TAG_META[tag];
+    if (review.bestUci) {
+      drills.push({
+        user_id: coachAuthUser.id,
+        source_move_id: moveId,
+        tag,
+        fen: review.fenBefore,
+        best_uci: review.bestUci || null,
+        best_san: review.bestSan || null,
+        prompt: meta.practice,
+        due_at: now,
+        updated_at: now
+      });
+    }
+    cards.push({
+      user_id: coachAuthUser.id,
+      source_move_id: moveId,
+      tag,
+      title: meta.title,
+      body: meta.theory,
+      retained: false,
+      updated_at: now
+    });
+  });
+
+  return { drills, cards };
+}
+
+async function syncRemoteLearningArtifacts(review, moveId) {
+  if (!hasCoachDbSession()) return;
+  await deleteRemoteLearningArtifacts(moveId);
+
+  const artifacts = learningArtifactPayloads(review, moveId);
+  if (artifacts.drills.length) {
+    const { error } = await coachDbClient
+      .from('drill_queue')
+      .upsert(artifacts.drills, { onConflict: 'source_move_id,tag' });
+    if (error) throw error;
+  }
+  if (artifacts.cards.length) {
+    const { error } = await coachDbClient
+      .from('theory_cards')
+      .upsert(artifacts.cards, { onConflict: 'source_move_id,tag' });
+    if (error) throw error;
+  }
+}
+
+async function deleteRemoteLearningArtifacts(moveId) {
+  if (!hasCoachDbSession() || !moveId) return;
+  const drillDelete = await coachDbClient
+    .from('drill_queue')
+    .delete()
+    .eq('source_move_id', moveId)
+    .eq('user_id', coachAuthUser.id);
+  if (drillDelete.error) throw drillDelete.error;
+  const cardDelete = await coachDbClient
+    .from('theory_cards')
+    .delete()
+    .eq('source_move_id', moveId)
+    .eq('user_id', coachAuthUser.id);
+  if (cardDelete.error) throw cardDelete.error;
+}
+
 async function syncRemoteCoachMove(review) {
   if (!hasCoachDbSession() || !review || review.tier === 'unknown') return;
   const gameId = await ensureRemoteCoachGame();
   if (!gameId) return;
-  const { error } = await coachDbClient
+  const { data, error } = await coachDbClient
     .from('coach_moves')
-    .upsert(remoteMovePayload(review, gameId), { onConflict: 'game_id,ply' });
+    .upsert(remoteMovePayload(review, gameId), { onConflict: 'game_id,ply' })
+    .select('id')
+    .single();
   if (error) throw error;
+  if (data && data.id) await syncRemoteLearningArtifacts(review, data.id);
   await updateRemoteCoachGame(null);
   refreshRemoteInsights({ silent: true }).catch(handleCoachDbError);
 }
 
 async function deleteRemoteCoachMove(review) {
   if (!hasCoachDbSession() || !coachRemoteGameId || !review || !review.ply) return;
+  const existing = await coachDbClient
+    .from('coach_moves')
+    .select('id')
+    .eq('game_id', coachRemoteGameId)
+    .eq('ply', review.ply)
+    .maybeSingle();
+  if (existing.error) throw existing.error;
+  if (existing.data && existing.data.id) await deleteRemoteLearningArtifacts(existing.data.id);
   const { error } = await coachDbClient
     .from('coach_moves')
     .delete()
@@ -4244,6 +4575,7 @@ async function deleteRemoteCoachMove(review) {
 
 function remoteMoveToInsightEntry(row) {
   return {
+    id: row.id || null,
     ts: row.played_at ? Date.parse(row.played_at) : Date.now(),
     tier: row.classification,
     loss: row.centipawn_loss || 0,
@@ -4253,6 +4585,9 @@ function remoteMoveToInsightEntry(row) {
     ply: row.ply || 1,
     userSan: row.user_san || null,
     bestSan: row.best_san || null,
+    fenBefore: row.fen_before || null,
+    userUci: row.user_uci || null,
+    bestUci: row.best_uci || null,
     opening: row.opening_name || null
   };
 }
@@ -4266,7 +4601,7 @@ async function refreshRemoteInsights(opts = {}) {
   if (!opts.silent) setCoachDbStatus('Loading account insights...');
   const { data, error } = await coachDbClient
     .from('coach_moves')
-    .select('played_at,classification,centipawn_loss,phase,tags,pair_num,ply,user_san,best_san,opening_name')
+    .select('id,played_at,classification,centipawn_loss,phase,tags,pair_num,ply,fen_before,user_uci,user_san,best_uci,best_san,opening_name')
     .eq('user_id', coachAuthUser.id)
     .order('played_at', { ascending: false })
     .limit(300);
@@ -7536,6 +7871,21 @@ $(function () {
     if (!confirm('Reset coach insights for this browser? This cannot be undone.')) return;
     clearInsights();
     renderInsights();
+  });
+
+  $(document).on('click', '.practice-load', function() {
+    const fen = $(this).attr('data-fen') || '';
+    const side = $(this).attr('data-side') === 'black' ? 'black' : 'white';
+    if (!fen || !isValidFen(fen)) {
+      setCoachStatus('Practice position is no longer valid.');
+      return;
+    }
+    $('#coach-fen').val(fen);
+    $('.side-toggle button').removeClass('active');
+    $('.side-toggle button[data-side="' + side + '"]').addClass('active');
+    coachUserSide = side;
+    startCoachGame();
+    setCoachStatus('Practice position loaded. Find the best move.');
   });
 
   // Sound toggle — restore prior preference, persist on change. The first

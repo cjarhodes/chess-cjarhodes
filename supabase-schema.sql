@@ -1,6 +1,6 @@
 -- Supabase schema for account-backed Coach history and insights.
 -- Run this in the Supabase SQL editor for the project used by
--- window.COACH_SUPABASE_CONFIG in index.html.
+-- window.COACH_SUPABASE_CONFIG in coach-config.js.
 
 create extension if not exists pgcrypto;
 
@@ -101,6 +101,12 @@ create index if not exists coach_moves_user_tags_idx
 
 create index if not exists drill_queue_user_due_idx
   on public.drill_queue(user_id, due_at asc);
+
+create unique index if not exists drill_queue_source_tag_unique_idx
+  on public.drill_queue(source_move_id, tag);
+
+create unique index if not exists theory_cards_source_tag_unique_idx
+  on public.theory_cards(source_move_id, tag);
 
 alter table public.profiles enable row level security;
 alter table public.coach_games enable row level security;
