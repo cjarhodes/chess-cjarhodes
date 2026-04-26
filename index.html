@@ -398,6 +398,42 @@
       color: var(--accent-soft);
     }
 
+    /* Promotion picker */
+    .promotion-picker {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 10, 7, 0.68);
+      z-index: 50;
+    }
+    .promotion-panel {
+      display: flex;
+      gap: 0.5rem;
+      background: var(--surface);
+      border: 1px solid var(--rule-3);
+      padding: 0.65rem;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+    }
+    .promotion-choice {
+      width: 58px;
+      height: 58px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 2rem;
+      line-height: 1;
+      transition: all 0.15s;
+    }
+    .promotion-choice:hover,
+    .promotion-choice:focus {
+      border-color: var(--accent);
+      color: var(--accent-soft);
+      outline: none;
+    }
+
     /* Explanation box */
     .explanation-box {
       background: var(--surface);
@@ -1556,6 +1592,15 @@
     <button class="top-nav-btn" id="nav-coach" role="tab" aria-selected="false">Coach</button>
   </div>
 </header>
+
+<div id="promotion-picker" class="promotion-picker" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="promotion-panel" aria-label="Choose promotion piece">
+    <button type="button" class="promotion-choice" data-promotion="q" aria-label="Promote to queen" title="Queen"></button>
+    <button type="button" class="promotion-choice" data-promotion="r" aria-label="Promote to rook" title="Rook"></button>
+    <button type="button" class="promotion-choice" data-promotion="b" aria-label="Promote to bishop" title="Bishop"></button>
+    <button type="button" class="promotion-choice" data-promotion="n" aria-label="Promote to knight" title="Knight"></button>
+  </div>
+</div>
 
 <div class="app">
 
@@ -3198,6 +3243,7 @@ let quizReviewMode = false;
 let quizReviewQueue = [];
 let quizReviewCursor = 0;
 let tapSelected = null;      // square selected for tap-to-move, or null
+let pendingPromotionChoice = null;
 
 // Coach mode (standalone page)
 let appView = 'library';           // 'library' | 'coach'
@@ -3397,10 +3443,13 @@ function setPremoveSquares(from, to) {
   if (from) $('#coachBoard .square-' + from).addClass('coach-premove-from');
   if (to)   $('#coachBoard .square-' + to).addClass('coach-premove-to');
 }
-function setPremove(from, to) {
-  coachPremove = { from, to, promotion: 'q' };
+function setPremove(from, to, promotion) {
+  coachPremove = { from, to, promotion: promotion || 'q' };
   setPremoveSquares(from, to);
-  $('#coach-premove-hint').text(`Premove queued: ${from}–${to} (click board to cancel)`).show();
+  const suffix = coachPremove.promotion && coachPremove.promotion !== 'q'
+    ? '=' + coachPremove.promotion.toUpperCase()
+    : '';
+  $('#coach-premove-hint').text(`Premove queued: ${from}–${to}${suffix} (click board to cancel)`).show();
 }
 function clearPremove() {
   coachPremove = null;
@@ -3419,7 +3468,7 @@ function tryApplyPremove() {
   if (!mv) return; // illegal in the new position — silently drop
   // Update the board immediately, then run classification asynchronously.
   if (coachBoard) coachBoard.position(tmp.fen());
-  coachHandleUserMove(pm.from, pm.to);
+  coachHandleUserMove(pm.from, pm.to, pm.promotion);
 }
 
 // ─────────────────────────────────────────────
@@ -4012,19 +4061,21 @@ async function coachOpponentRespond() {
   }
 }
 
-async function coachHandleUserMove(source, target) {
+async function coachHandleUserMove(source, target, promotion) {
   if (!coachMode || !coachGameActive) return 'snapback';
   if (coachThinking) return 'snapback';
   if (!coachIsUserTurn()) return 'snapback';
+  promotion = promotion || 'q';
   const fenBefore = coachGame.fen();
   const tempGame = new Chess(fenBefore);
-  const move = tempGame.move({ from: source, to: target, promotion: 'q' });
+  const move = tempGame.move({ from: source, to: target, promotion });
   if (!move) return 'snapback';
 
-  const userMv = coachGame.move({ from: source, to: target, promotion: 'q' });
+  const userMv = coachGame.move({ from: source, to: target, promotion });
   candidateRequestId++;
   const fenAfter = coachGame.fen();
   const userUci = source + target + (move.promotion || '');
+  if (coachBoard && !coachIsReviewing()) coachBoard.position(fenAfter);
   updateCapturedDisplay(fenAfter);
   playSound(soundForMove(userMv, coachGame));
 
@@ -4960,18 +5011,28 @@ function createCoachBoard(position, orientation) {
       if (source === target) return 'snapback';
       if (coachIsUserTurn()) {
         if (coachThinking) return 'snapback';
+        if (requestPromotionChoice(coachGame, source, target, promotion => {
+          coachHandleUserMove(source, target, promotion);
+        }, true)) {
+          return 'snapback';
+        }
         // Synchronous legality check — chessboard.js needs a sync return value
         const tempGame = new Chess(coachGame.fen());
         const move = tempGame.move({ from: source, to: target, promotion: 'q' });
         if (!move) return 'snapback';
         // Legal move — dispatch async classification + opponent reply
-        coachHandleUserMove(source, target);
+        coachHandleUserMove(source, target, 'q');
         return;
       }
       // Opponent's turn → queue the move as a premove. The piece visually snaps
       // back; the highlighted source/target squares + status hint show what's
       // queued. We attempt to apply it as soon as the opponent moves.
-      setPremove(source, target);
+      if (requestPromotionChoice(coachGame, source, target, promotion => {
+        setPremove(source, target, promotion);
+      }, false)) {
+        return 'snapback';
+      }
+      setPremove(source, target, 'q');
       return 'snapback';
     },
     onSnapEnd: function() {
@@ -5560,6 +5621,47 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+function reachesPromotionRank(gameObj, source, target) {
+  if (!gameObj || !source || !target) return false;
+  const piece = gameObj.get(source);
+  if (!piece || piece.type !== 'p') return false;
+  return (piece.color === 'w' && target[1] === '8') ||
+         (piece.color === 'b' && target[1] === '1');
+}
+
+function isLegalPromotionMove(gameObj, source, target) {
+  if (!reachesPromotionRank(gameObj, source, target)) return false;
+  return gameObj.moves({ verbose: true }).some(m => m.from === source && m.to === target && m.promotion);
+}
+
+function showPromotionPicker(color, onPick) {
+  const glyphs = color === 'b'
+    ? { q: '♛', r: '♜', b: '♝', n: '♞' }
+    : { q: '♕', r: '♖', b: '♗', n: '♘' };
+  pendingPromotionChoice = onPick;
+  $('#promotion-picker .promotion-choice').each(function() {
+    const piece = $(this).attr('data-promotion');
+    $(this).text(glyphs[piece] || piece.toUpperCase());
+  });
+  $('#promotion-picker').css('display', 'flex').attr('aria-hidden', 'false');
+  $('#promotion-picker .promotion-choice[data-promotion="q"]').trigger('focus');
+}
+
+function closePromotionPicker() {
+  pendingPromotionChoice = null;
+  $('#promotion-picker').hide().attr('aria-hidden', 'true');
+}
+
+function requestPromotionChoice(gameObj, source, target, onPick, legalOnly) {
+  const shouldAsk = legalOnly
+    ? isLegalPromotionMove(gameObj, source, target)
+    : reachesPromotionRank(gameObj, source, target);
+  if (!shouldAsk) return false;
+  const piece = gameObj.get(source);
+  showPromotionPicker(piece ? piece.color : 'w', onPick);
+  return true;
+}
+
 function getOpeningLines(opening) {
   if (!opening) return [];
   return [{
@@ -5766,24 +5868,28 @@ function autoPlayOpponent() {
   }, 600);
 }
 
-function handleDrop(source, target) {
-  // Explore mode: free play, any legal move for either colour
-  if (exploreMode) {
-    const move = exploreGame.move({ from: source, to: target, promotion: 'q' });
-    if (!move) return 'snapback';
-    return; // board updated in handleSnapEnd
-  }
+function applyExploreMove(source, target, promotion) {
+  if (!exploreGame) return false;
+  const move = exploreGame.move({ from: source, to: target, promotion: promotion || 'q' });
+  if (!move) return false;
+  board.position(exploreGame.fen());
+  fetchExploreData();
+  return true;
+}
+
+function handleQuizDrop(source, target, promotion) {
   if (!quizMode || !currentOpening) return 'snapback';
+  promotion = promotion || 'q';
   const moves = activeMoves();
   const explanations = activeExplanations();
   if (quizReviewMode) {
     const expectedIdx = quizReviewQueue[quizReviewCursor];
     const expectedSAN = moves[expectedIdx];
     const tempGame = new Chess(game.fen());
-    const move = tempGame.move({ from: source, to: target, promotion: 'q' });
+    const move = tempGame.move({ from: source, to: target, promotion });
     if (!move) return 'snapback';
     if (move.san === expectedSAN) {
-      game.move({ from: source, to: target, promotion: 'q' });
+      game.move({ from: source, to: target, promotion });
       currentMoveIdx = expectedIdx;
       board.position(game.fen(), false);
       renderMoveList();
@@ -5808,11 +5914,11 @@ function handleDrop(source, target) {
 
   // Try the move on a temp game
   const tempGame = new Chess(game.fen());
-  const move = tempGame.move({ from: source, to: target, promotion: 'q' });
+  const move = tempGame.move({ from: source, to: target, promotion });
   if (!move) return 'snapback';
 
   if (move.san === expectedSAN) {
-    game.move({ from: source, to: target, promotion: 'q' });
+    game.move({ from: source, to: target, promotion });
     currentMoveIdx = nextIdx;
     quizAttempts = 0;
     const exp = explanations[nextIdx];
@@ -5838,10 +5944,29 @@ function handleDrop(source, target) {
   }
 }
 
+function handleDrop(source, target) {
+  // Explore mode: free play, any legal move for either colour
+  if (exploreMode) {
+    if (requestPromotionChoice(exploreGame, source, target, promotion => {
+      applyExploreMove(source, target, promotion);
+    }, true)) {
+      return 'snapback';
+    }
+    if (!applyExploreMove(source, target, 'q')) return 'snapback';
+    return;
+  }
+  if (!quizMode || !currentOpening) return 'snapback';
+  if (requestPromotionChoice(game, source, target, promotion => {
+    handleQuizDrop(source, target, promotion);
+  }, true)) {
+    return 'snapback';
+  }
+  return handleQuizDrop(source, target, 'q');
+}
+
 function handleSnapEnd() {
   if (exploreMode) {
     board.position(exploreGame.fen());
-    fetchExploreData();
     return;
   }
   if (!quizMode) return;
@@ -6259,6 +6384,17 @@ function formatNum(n) {
 // ─────────────────────────────────────────────
 $(function () {
   // Board is initialized lazily on first opening selection
+
+  // Promotion picker
+  $('#promotion-picker .promotion-choice').on('click', function() {
+    const promotion = $(this).attr('data-promotion');
+    const cb = pendingPromotionChoice;
+    closePromotionPicker();
+    if (cb) cb(promotion);
+  });
+  $('#promotion-picker').on('click', function(e) {
+    if (e.target === this) closePromotionPicker();
+  });
 
   // Library buttons
   $('.opening-btn').on('click', function () {
@@ -6744,6 +6880,11 @@ $(function () {
 
   // ─── KEYBOARD SHORTCUTS ─────────────────
   $(document).on('keydown', function (e) {
+    if (e.key === 'Escape' && $('#promotion-picker').is(':visible')) {
+      e.preventDefault();
+      closePromotionPicker();
+      return;
+    }
     const tag = (e.target.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea') {
       if (e.key === 'Escape') e.target.blur();
@@ -6815,10 +6956,15 @@ $(function () {
 
     if (tapSelected && tapSelected !== sq) {
       // Attempt move
-      const tryMove = { from: tapSelected, to: sq, promotion: 'q' };
       if (exploreMode) {
-        const mv = exploreGame.move(tryMove);
-        if (mv) { board.position(exploreGame.fen()); fetchExploreData(); }
+        const from = tapSelected;
+        if (requestPromotionChoice(exploreGame, from, sq, promotion => {
+          applyExploreMove(from, sq, promotion);
+        }, true)) {
+          clearTapSelection();
+          return;
+        }
+        applyExploreMove(from, sq, 'q');
       } else {
         // Quiz: delegate to handleDrop to reuse validation logic
         const result = handleDrop(tapSelected, sq);
@@ -6851,7 +6997,16 @@ $(function () {
     const sq = $(this).data('square');
     if (!sq) return;
     if (tapSelected && tapSelected !== sq) {
-      coachHandleUserMove(tapSelected, sq).then(() => {
+      const from = tapSelected;
+      if (requestPromotionChoice(coachGame, from, sq, promotion => {
+        coachHandleUserMove(from, sq, promotion).then(() => {
+          if (coachBoard) coachBoard.position(coachGame.fen());
+        });
+      }, true)) {
+        clearTapSelection();
+        return;
+      }
+      coachHandleUserMove(from, sq, 'q').then(() => {
         if (coachBoard) coachBoard.position(coachGame.fen());
       });
       clearTapSelection();
