@@ -3468,7 +3468,7 @@ function tryApplyPremove() {
   if (!mv) return; // illegal in the new position — silently drop
   // Update the board immediately, then run classification asynchronously.
   if (coachBoard) coachBoard.position(tmp.fen());
-  coachHandleUserMove(pm.from, pm.to, pm.promotion);
+  coachHandleUserMove(pm.from, pm.to, pm.promotion, { updateBoard: false });
 }
 
 // ─────────────────────────────────────────────
@@ -4163,10 +4163,11 @@ async function coachOpponentRespond() {
   }
 }
 
-async function coachHandleUserMove(source, target, promotion) {
+async function coachHandleUserMove(source, target, promotion, opts) {
   if (!coachMode || !coachGameActive) return 'snapback';
   if (coachThinking) return 'snapback';
   if (!coachIsUserTurn()) return 'snapback';
+  opts = opts || {};
   promotion = promotion || 'q';
   const fenBefore = coachGame.fen();
   const tempGame = new Chess(fenBefore);
@@ -4177,7 +4178,7 @@ async function coachHandleUserMove(source, target, promotion) {
   candidateRequestId++;
   const fenAfter = coachGame.fen();
   const userUci = source + target + (move.promotion || '');
-  if (coachBoard && !coachIsReviewing()) coachBoard.position(fenAfter);
+  if (opts.updateBoard !== false && coachBoard && !coachIsReviewing()) coachBoard.position(fenAfter);
   updateCapturedDisplay(fenAfter);
   playSound(soundForMove(userMv, coachGame));
 
@@ -5114,7 +5115,7 @@ function createCoachBoard(position, orientation) {
       if (coachIsUserTurn()) {
         if (coachThinking) return 'snapback';
         if (requestPromotionChoice(coachGame, source, target, promotion => {
-          coachHandleUserMove(source, target, promotion);
+          coachHandleUserMove(source, target, promotion, { updateBoard: true });
         }, true)) {
           return 'snapback';
         }
@@ -5123,7 +5124,7 @@ function createCoachBoard(position, orientation) {
         const move = tempGame.move({ from: source, to: target, promotion: 'q' });
         if (!move) return 'snapback';
         // Legal move — dispatch async classification + opponent reply
-        coachHandleUserMove(source, target, 'q');
+        coachHandleUserMove(source, target, 'q', { updateBoard: false });
         return;
       }
       // Opponent's turn → queue the move as a premove. The piece visually snaps
@@ -5970,11 +5971,12 @@ function autoPlayOpponent() {
   }, 600);
 }
 
-function applyExploreMove(source, target, promotion) {
+function applyExploreMove(source, target, promotion, opts) {
   if (!exploreGame) return false;
+  opts = opts || {};
   const move = exploreGame.move({ from: source, to: target, promotion: promotion || 'q' });
   if (!move) return false;
-  board.position(exploreGame.fen());
+  if (opts.updateBoard !== false) board.position(exploreGame.fen());
   fetchExploreData();
   return true;
 }
@@ -6050,11 +6052,11 @@ function handleDrop(source, target) {
   // Explore mode: free play, any legal move for either colour
   if (exploreMode) {
     if (requestPromotionChoice(exploreGame, source, target, promotion => {
-      applyExploreMove(source, target, promotion);
+      applyExploreMove(source, target, promotion, { updateBoard: true });
     }, true)) {
       return 'snapback';
     }
-    if (!applyExploreMove(source, target, 'q')) return 'snapback';
+    if (!applyExploreMove(source, target, 'q', { updateBoard: false })) return 'snapback';
     return;
   }
   if (!quizMode || !currentOpening) return 'snapback';
@@ -7061,12 +7063,12 @@ $(function () {
       if (exploreMode) {
         const from = tapSelected;
         if (requestPromotionChoice(exploreGame, from, sq, promotion => {
-          applyExploreMove(from, sq, promotion);
+          applyExploreMove(from, sq, promotion, { updateBoard: true });
         }, true)) {
           clearTapSelection();
           return;
         }
-        applyExploreMove(from, sq, 'q');
+        applyExploreMove(from, sq, 'q', { updateBoard: true });
       } else {
         // Quiz: delegate to handleDrop to reuse validation logic
         const result = handleDrop(tapSelected, sq);
@@ -7101,14 +7103,14 @@ $(function () {
     if (tapSelected && tapSelected !== sq) {
       const from = tapSelected;
       if (requestPromotionChoice(coachGame, from, sq, promotion => {
-        coachHandleUserMove(from, sq, promotion).then(() => {
+        coachHandleUserMove(from, sq, promotion, { updateBoard: true }).then(() => {
           if (coachBoard) coachBoard.position(coachGame.fen());
         });
       }, true)) {
         clearTapSelection();
         return;
       }
-      coachHandleUserMove(from, sq, 'q').then(() => {
+      coachHandleUserMove(from, sq, 'q', { updateBoard: true }).then(() => {
         if (coachBoard) coachBoard.position(coachGame.fen());
       });
       clearTapSelection();
