@@ -2,6 +2,18 @@
   "cleanUrls": true,
   "redirects": [
     {
+      "source": "/",
+      "has": [
+        {
+          "type": "header",
+          "key": "host",
+          "value": "www.chess.cjarhodes.com"
+        }
+      ],
+      "destination": "https://chess.cjarhodes.com/",
+      "permanent": true
+    },
+    {
       "source": "/:path*",
       "has": [
         {
