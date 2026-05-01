@@ -182,14 +182,50 @@ create policy "coach_moves delete own"
 drop policy if exists "drill_queue all own" on public.drill_queue;
 create policy "drill_queue all own"
   on public.drill_queue for all
-  using (user_id = auth.uid())
-  with check (user_id = auth.uid());
+  using (
+    user_id = auth.uid()
+    and (
+      source_move_id is null
+      or exists (
+        select 1 from public.coach_moves m
+        where m.id = source_move_id and m.user_id = auth.uid()
+      )
+    )
+  )
+  with check (
+    user_id = auth.uid()
+    and (
+      source_move_id is null
+      or exists (
+        select 1 from public.coach_moves m
+        where m.id = source_move_id and m.user_id = auth.uid()
+      )
+    )
+  );
 
 drop policy if exists "theory_cards all own" on public.theory_cards;
 create policy "theory_cards all own"
   on public.theory_cards for all
-  using (user_id = auth.uid())
-  with check (user_id = auth.uid());
+  using (
+    user_id = auth.uid()
+    and (
+      source_move_id is null
+      or exists (
+        select 1 from public.coach_moves m
+        where m.id = source_move_id and m.user_id = auth.uid()
+      )
+    )
+  )
+  with check (
+    user_id = auth.uid()
+    and (
+      source_move_id is null
+      or exists (
+        select 1 from public.coach_moves m
+        where m.id = source_move_id and m.user_id = auth.uid()
+      )
+    )
+  );
 
 create or replace function public.handle_new_user()
 returns trigger

@@ -7,8 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/favicon.svg">
   <meta name="theme-color" content="#2a1f17">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+  <link rel="stylesheet" href="vendor/chessboardjs/chessboard-1.0.0.min.css">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1943,7 +1942,7 @@
         <div class="section-label">Connect to Lichess</div>
         <div class="token-setup">
           <p>Opening Explorer data requires a free Lichess API token. It stays in this browser tab only.</p>
-          <p><a href="https://lichess.org/account/oauth/token/create?description=Chess+Opening+Library" target="_blank">→ Generate a token on Lichess ↗</a><br><small style="opacity:0.6;">No scopes needed — just click Create.</small></p>
+          <p><a href="https://lichess.org/account/oauth/token/create?description=Chess+Opening+Library" target="_blank" rel="noopener noreferrer">→ Generate a token on Lichess ↗</a><br><small style="opacity:0.6;">No scopes needed — just click Create.</small></p>
           <div class="token-input-row">
             <input type="password" class="token-input" id="lichess-token-input" placeholder="lip_..." autocomplete="off" spellcheck="false" />
             <button class="ctrl-btn" id="btn-save-token">Connect</button>
@@ -2269,9 +2268,9 @@
 </div>
 
 <!-- Scripts: jQuery first, then chess.js, then chessboard.js -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+<script src="vendor/jquery/jquery-3.6.0.min.js"></script>
+<script src="vendor/chess.js/chess-0.10.3.min.js"></script>
+<script src="vendor/chessboardjs/chessboard-1.0.0.min.js"></script>
 <script src="coach-config.js"></script>
 
 <script>
@@ -3529,6 +3528,7 @@ window.COACH_SUPABASE_CONFIG = window.COACH_SUPABASE_CONFIG || {
 // next page load. Saved on every move; cleared when the user starts a new
 // game or dismisses the review summary after a game ends.
 const COACH_STATE_KEY = 'coach:state:v1';
+const COACH_STATE_BACKUP_KEY = 'coach:state:corrupt:v1';
 
 function saveCoachState() {
   try {
@@ -3558,24 +3558,45 @@ function saveCoachState() {
   }
 }
 function loadCoachState() {
+  let raw = null;
   try {
-    const raw = localStorage.getItem(COACH_STATE_KEY);
-    if (!raw) return null;
+    raw = localStorage.getItem(COACH_STATE_KEY);
+    if (!raw) return { ok: false, missing: true };
     const s = JSON.parse(raw);
-    if (!s || s.v !== 1) return null;
-    return s;
-  } catch (e) { return null; }
+    if (!s || s.v !== 1) {
+      return { ok: false, reason: 'Saved game format is no longer supported.', raw };
+    }
+    return { ok: true, state: s, raw };
+  } catch (e) {
+    return { ok: false, reason: 'Saved game data was unreadable.', raw };
+  }
 }
 function clearCoachState() {
   try { localStorage.removeItem(COACH_STATE_KEY); } catch (e) {}
+}
+function backupCorruptCoachState(raw, reason) {
+  if (!raw) return;
+  try {
+    localStorage.setItem(COACH_STATE_BACKUP_KEY, JSON.stringify({
+      raw,
+      reason: reason || 'Unknown restore failure',
+      ts: Date.now()
+    }));
+  } catch (e) {}
 }
 
 // Restore a saved game (in-progress or just-ended) into the coach UI.
 // Returns true if a game was restored, false otherwise. Callers should fall
 // back to the empty-board "set a level" state when this returns false.
 function tryRestoreCoachGame() {
-  const s = loadCoachState();
-  if (!s) return false;
+  const loaded = loadCoachState();
+  if (!loaded.ok) {
+    if (loaded.missing) return { restored: false };
+    backupCorruptCoachState(loaded.raw, loaded.reason);
+    clearCoachState();
+    return { restored: false, warning: 'Previous game could not be restored; starting fresh.' };
+  }
+  const s = loaded.state;
   try {
     const g = new Chess(s.startFen || undefined);
     if (s.pgn) g.load_pgn(s.pgn, { sloppy: true });
@@ -3633,11 +3654,12 @@ function tryRestoreCoachGame() {
       setCoachStatus((coachLastEndMsg || 'Game over.') + ' Click Open review to revisit.');
       if (coachLastReview) renderCoachReview(coachLastReview);
     }
-    return true;
+    return { restored: true };
   } catch (e) {
     // Corrupted snapshot — drop it so the user gets a fresh start next time.
+    backupCorruptCoachState(loaded.raw, e && e.message);
     clearCoachState();
-    return false;
+    return { restored: false, warning: 'Previous game could not be restored; starting fresh.' };
   }
 }
 
@@ -4227,6 +4249,23 @@ function isSupabaseConfigured() {
          !cfg.anonKey.includes('YOUR_');
 }
 
+let coachAuthStoragePersistent = true;
+
+function createMemoryAuthStorage() {
+  const store = {};
+  return {
+    getItem(key) {
+      return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null;
+    },
+    setItem(key, value) {
+      store[key] = value;
+    },
+    removeItem(key) {
+      delete store[key];
+    }
+  };
+}
+
 function coachAuthStorage() {
   return {
     getItem(key) {
@@ -4239,6 +4278,25 @@ function coachAuthStorage() {
       try { sessionStorage.removeItem(key); } catch (e) {}
     }
   };
+}
+function checkCoachAuthStorage() {
+  const key = 'coach:auth-storage-test';
+  try {
+    sessionStorage.setItem(key, '1');
+    sessionStorage.removeItem(key);
+    coachAuthStoragePersistent = true;
+    return { ok: true, storage: coachAuthStorage() };
+  } catch (e) {
+    coachAuthStoragePersistent = false;
+    return { ok: false, storage: createMemoryAuthStorage(), error: e };
+  }
+}
+
+function coachAccountSyncStatus() {
+  if (!coachAuthStoragePersistent) {
+    return 'Account sync cannot persist in this browser session.';
+  }
+  return coachAuthUser ? 'Account sync on.' : '';
 }
 
 function setCoachAuthStatus(msg) {
@@ -4263,7 +4321,7 @@ function renderCoachAuth() {
     $('#coach-auth-user').text(coachAuthUser.email || coachAuthUser.id);
     setCoachAuthStatus(coachDbStatus || 'Account sync on.');
   } else {
-    setCoachAuthStatus(coachDbStatus === 'loading' ? 'Connecting...' : 'Sign in to sync games.');
+    setCoachAuthStatus(coachDbStatus === 'loading' ? 'Connecting...' : (coachDbStatus || 'Sign in to sync games.'));
   }
 }
 
@@ -4272,7 +4330,7 @@ function loadSupabaseScript() {
   if (window.__coachSupabaseScriptPromise) return window.__coachSupabaseScriptPromise;
   window.__coachSupabaseScriptPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+    script.src = 'vendor/supabase/supabase-2.105.1.js';
     script.async = true;
     script.onload = () => resolve();
     script.onerror = () => reject(new Error('Supabase client failed to load'));
@@ -4292,17 +4350,19 @@ async function initCoachDb() {
     try {
       await loadSupabaseScript();
       const cfg = supabaseRuntimeConfig();
+      const storageCheck = checkCoachAuthStorage();
+      if (!storageCheck.ok) coachDbStatus = coachAccountSyncStatus();
       coachDbClient = window.supabase.createClient(cfg.url, cfg.anonKey, {
         auth: {
           persistSession: true,
           autoRefreshToken: true,
           detectSessionInUrl: true,
-          storage: coachAuthStorage()
+          storage: storageCheck.storage
         }
       });
       const { data } = await coachDbClient.auth.getSession();
       coachAuthUser = data && data.session ? data.session.user : null;
-      coachDbStatus = coachAuthUser ? 'Account sync on.' : '';
+      coachDbStatus = coachAccountSyncStatus();
       renderCoachAuth();
       renderInsights();
       if (coachAuthUser) {
@@ -4312,7 +4372,7 @@ async function initCoachDb() {
       coachDbClient.auth.onAuthStateChange((event, session) => {
         coachAuthUser = session ? session.user : null;
         coachRemoteInsightEntries = null;
-        coachDbStatus = coachAuthUser ? 'Account sync on.' : '';
+        coachDbStatus = coachAccountSyncStatus();
         renderCoachAuth();
         renderInsights();
         if (coachAuthUser) {
@@ -4815,12 +4875,32 @@ const engine = {
       this.worker.onmessage = (e) => this._onMessage(e.data);
       this.worker.onerror = (e) => {
         const err = new Error('Engine failed: ' + (e.message || e.filename || 'worker error'));
-        this.status = 'idle';
-        this.worker = null;
-        this._readyResolvers.forEach(waiter => waiter.reject(err));
-        this._readyResolvers = [];
+        this.failAll(err);
       };
       this.worker.postMessage('uci');
+    });
+  },
+
+  failAll(err) {
+    if (this.current && this.current.timeoutId) {
+      clearTimeout(this.current.timeoutId);
+      this.current.timeoutId = null;
+    }
+    const pending = [];
+    if (this.current) pending.push(this.current);
+    pending.push(...this.queue);
+    this.current = null;
+    this.queue = [];
+    this.status = 'idle';
+    if (this.worker) {
+      try { this.worker.terminate(); } catch (e) {}
+    }
+    this.worker = null;
+    this._readyResolvers.forEach(waiter => waiter.reject(err));
+    this._readyResolvers = [];
+    pending.forEach(task => {
+      if (task.timeoutId) clearTimeout(task.timeoutId);
+      if (task.reject) task.reject(err);
     });
   },
 
@@ -4870,11 +4950,12 @@ const engine = {
   },
 
   evaluate(fen, depth, opts) {
-    return this.init().then(() => new Promise((resolve) => {
+    return this.init().then(() => new Promise((resolve, reject) => {
       const task = {
         fen,
         depth,
         resolve,
+        reject: reject,
         lastInfo: null,
         skill: (opts && typeof opts.skill === 'number') ? opts.skill : null,
         elo: (opts && typeof opts.elo === 'number') ? opts.elo : null,
@@ -5329,6 +5410,13 @@ function setCoachStatus(msg) {
   $('#coach-status').text(msg);
 }
 
+function showCoachRetryStatus(msg) {
+  const $status = $('#coach-status').empty();
+  $status.append(document.createTextNode(msg + ' '));
+  $('<button type="button" class="movelist-copy" id="btn-coach-retry-opponent">Retry</button>')
+    .appendTo($status);
+}
+
 function resetCoachState(fen) {
   candidateRequestId++;
   coachGame = fen ? new Chess(fen) : new Chess();
@@ -5379,30 +5467,38 @@ async function coachOpponentRespond() {
     if (!coachMode || !coachGameActive || coachIsUserTurn() || coachGame.fen() !== fen) return;
     if (!bestmove) { setCoachStatus('Your move.'); return; }
     setTimeout(() => {
-      if (!coachMode || !coachGameActive) return;
-      const mv = coachGame.move({
-        from: bestmove.slice(0, 2),
-        to: bestmove.slice(2, 4),
-        promotion: bestmove[4] || undefined
-      });
-      if (!mv) return;
-      candidateRequestId++;
-      if (!coachIsReviewing()) {
-        coachBoard.position(coachGame.fen());
-        updateCapturedDisplay(coachGame.fen());
+      try {
+        if (!coachMode || !coachGameActive) return;
+        const mv = coachGame.move({
+          from: bestmove.slice(0, 2),
+          to: bestmove.slice(2, 4),
+          promotion: bestmove[4] || undefined
+        });
+        if (!mv) throw new Error('Opponent move was not legal.');
+        candidateRequestId++;
+        if (!coachIsReviewing()) {
+          if (!coachBoard) throw new Error('Coach board is not ready.');
+          coachBoard.position(coachGame.fen());
+          updateCapturedDisplay(coachGame.fen());
+        }
+        playSound(soundForMove(mv, coachGame));
+        updateMoveList();
+        updateOpeningLabel();
+        saveCoachState();
+        if (coachGame.game_over()) { coachHandleGameOver(); return; }
+        if (!coachIsReviewing()) {
+          setCoachStatus('Your move.');
+          showThreats();
+        }
+        updateCoachControlsState();
+        // Apply any queued premove now that it's the user's turn again.
+        tryApplyPremove();
+      } catch (err) {
+        clearPremove();
+        coachThinking = false;
+        updateCoachControlsState();
+        showCoachRetryStatus('Opponent move failed — retry or take back.');
       }
-      playSound(soundForMove(mv, coachGame));
-      updateMoveList();
-      updateOpeningLabel();
-      saveCoachState();
-      if (coachGame.game_over()) { coachHandleGameOver(); return; }
-      if (!coachIsReviewing()) {
-        setCoachStatus('Your move.');
-        showThreats();
-      }
-      updateCoachControlsState();
-      // Apply any queued premove now that it's the user's turn again.
-      tryApplyPremove();
     }, 300);
   } catch (err) {
     setCoachStatus('Engine error: ' + err.message);
@@ -5642,10 +5738,12 @@ async function detectMateThreat(fen) {
   try {
     const res = await engine.evaluate(flipped, 12);
     if (res.info && res.info.mate !== null && res.info.mate !== undefined && res.info.mate > 0) {
-      return res.info.mate;
+      return { status: 'ok', mateIn: res.info.mate };
     }
-  } catch (e) { /* ignore */ }
-  return null;
+  } catch (e) {
+    return { status: 'unavailable', error: e };
+  }
+  return { status: 'ok', mateIn: null };
 }
 
 async function showThreats() {
@@ -5654,10 +5752,12 @@ async function showThreats() {
   const $list = $('#threats-list');
   $list.empty();
   const hangs = detectHangingPieces(coachGame, coachUserColor());
-  const mateIn = await detectMateThreat(coachGame.fen());
+  const mateThreat = await detectMateThreat(coachGame.fen());
   const items = [];
-  if (mateIn !== null) {
-    items.push({ kind: 'mate', text: `Mate-in-${mateIn} threat — you must defend now.` });
+  if (mateThreat.status === 'unavailable') {
+    items.push({ kind: 'scan', text: 'Mate scan unavailable — engine could not check forcing threats.' });
+  } else if (mateThreat.mateIn !== null) {
+    items.push({ kind: 'mate', text: `Mate-in-${mateThreat.mateIn} threat — you must defend now.` });
   }
   hangs.forEach(h => {
     const name = PIECE_NAME[h.piece];
@@ -6153,7 +6253,12 @@ function loadSR() {
   catch(e) { return {}; }
 }
 function saveSR(data) {
-  localStorage.setItem(SR_KEY, JSON.stringify(data));
+  try {
+    localStorage.setItem(SR_KEY, JSON.stringify(data));
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error };
+  }
 }
 function getSRRecord(id) {
   const data = loadSR();
@@ -6184,7 +6289,7 @@ function srRecordQuiz(id, quality) {
   rec.lastReviewed = Date.now();
   rec.nextDue = Date.now() + rec.interval * DAY_MS;
   data[id] = rec;
-  saveSR(data);
+  return saveSR(data);
 }
 function updateSRSidebar() {
   $('.opening-btn').each(function() {
@@ -6418,12 +6523,12 @@ function switchView(view) {
     renderInsights();
     if (!coachGame) {
       // Try to restore an in-progress (or just-ended) game from localStorage.
-      const restored = tryRestoreCoachGame();
-      if (!restored) {
+      const restore = tryRestoreCoachGame();
+      if (!restore.restored) {
         // Show an idle board so the user has visual context
         $('#coachBoard-placeholder').hide();
         createCoachBoard('start', 'white');
-        setCoachStatus('Set a level and start a new game.');
+        setCoachStatus(restore.warning || 'Set a level and start a new game.');
       }
     } else {
       // Returning to an existing game — resize the board and re-kick the
@@ -7185,11 +7290,14 @@ function finishQuiz() {
   if (!currentOpening) return;
   const m = quizSessionMisses;
   const quality = m === 0 ? 5 : (m <= 2 ? 4 : (m <= 4 ? 3 : 2));
-  srRecordQuiz(currentOpening.id, quality);
+  const saveResult = srRecordQuiz(currentOpening.id, quality);
   const summary = m === 0
     ? '🎉 Opening complete — perfect run!'
     : `🎉 Opening complete — ${m} miss${m === 1 ? '' : 'es'}.`;
-  showFeedback('correct', summary);
+  const saveWarning = saveResult && saveResult.ok === false
+    ? ' Progress could not be saved in this browser.'
+    : '';
+  showFeedback('correct', summary + saveWarning);
   if (quizMissedMoves.length > 0) $('#btn-review-misses').show();
   updateSRSidebar();
   updateSRPanel();
@@ -7824,9 +7932,27 @@ $(function () {
   $('#btn-coach-logout').on('click', function() {
     signOutCoach().catch(handleCoachDbError);
   });
-  $('#btn-coach-sync').on('click', function() {
-    refreshRemoteInsights().catch(handleCoachDbError);
-    updateRemoteCoachGame(coachGameActive ? null : coachLastEndMsg).catch(handleCoachDbError);
+  $('#btn-coach-sync').on('click', async function() {
+    if (!hasCoachDbSession()) {
+      setCoachDbStatus('Sign in to sync games.');
+      return;
+    }
+    setCoachDbStatus('Syncing...');
+    const [insightsResult, gameResult] = await Promise.allSettled([
+      refreshRemoteInsights(),
+      updateRemoteCoachGame(coachGameActive ? null : coachLastEndMsg)
+    ]);
+    const insightError = insightsResult.status === 'rejected' ? insightsResult.reason : null;
+    const gameError = gameResult.status === 'rejected' ? gameResult.reason : null;
+    if (insightError && gameError) {
+      setCoachDbStatus('Sync failed: ' + ((gameError && gameError.message) || (insightError && insightError.message) || 'Unknown error'));
+    } else if (insightError) {
+      setCoachDbStatus('Game saved, insights failed: ' + ((insightError && insightError.message) || 'Unknown error'));
+    } else if (gameError) {
+      setCoachDbStatus('Insights loaded, game save failed: ' + ((gameError && gameError.message) || 'Unknown error'));
+    } else {
+      setCoachDbStatus('Game and insights synced.');
+    }
   });
 
   // Lifetime stats reset.
@@ -7875,6 +8001,15 @@ $(function () {
 
   $('#btn-coach-newgame').on('click', function() {
     startCoachGame();
+  });
+
+  $(document).on('click', '#btn-coach-retry-opponent', function() {
+    if (!coachMode || !coachGameActive || !coachGame) return;
+    if (coachIsUserTurn()) {
+      setCoachStatus('Your move.');
+      return;
+    }
+    coachOpponentRespond();
   });
 
   $('#btn-coach-resign').on('click', function() {
@@ -8187,7 +8322,11 @@ $(function () {
   // Explore: token save
   $('#btn-save-token').on('click', function() {
     const token = $('#lichess-token-input').val().trim();
-    if (!token) return;
+    if (!token) {
+      $('#token-error').text('Paste a Lichess token first.').show();
+      $('#lichess-token-input').trigger('focus');
+      return;
+    }
     $('#token-error').hide();
     const $btn = $(this).prop('disabled', true).text('Checking…');
     $.ajax({
