@@ -3517,6 +3517,81 @@ let remoteGameUpdateTimer = null;
 let pendingRemoteGameEndReason = null;
 const REMOTE_GAME_SYNC_DEBOUNCE_MS = 2500;
 
+const libraryState = {
+  get board() { return board; },
+  set board(value) { board = value; },
+  get game() { return game; },
+  set game(value) { game = value; },
+  get currentOpening() { return currentOpening; },
+  set currentOpening(value) { currentOpening = value; },
+  get currentLine() { return currentLine; },
+  set currentLine(value) { currentLine = value; },
+  get currentLineId() { return currentLineId; },
+  set currentLineId(value) { currentLineId = value; },
+  get currentMoveIdx() { return currentMoveIdx; },
+  set currentMoveIdx(value) { currentMoveIdx = value; },
+  get quizMode() { return quizMode; },
+  set quizMode(value) { quizMode = value; },
+  get exploreMode() { return exploreMode; },
+  set exploreMode(value) { exploreMode = value; },
+  get exploreGame() { return exploreGame; },
+  set exploreGame(value) { exploreGame = value; },
+  get currentDb() { return currentDb; },
+  set currentDb(value) { currentDb = value; }
+};
+
+const coachState = {
+  get phase() { return CoachController.phase; },
+  set phase(value) { CoachController.setPhase(value); },
+  get game() { return coachGame; },
+  set game(value) { coachGame = value; },
+  get active() { return coachGameActive; },
+  set active(value) { coachGameActive = value; },
+  get thinking() { return coachThinking; },
+  set thinking(value) { coachThinking = value; },
+  get reviewCursor() { return coachReviewCursor; },
+  set reviewCursor(value) { coachReviewCursor = value; },
+  get lastReview() { return coachLastReview; },
+  set lastReview(value) { coachLastReview = value; }
+};
+
+const syncState = {
+  get user() { return coachAuthUser; },
+  set user(value) { coachAuthUser = value; },
+  get client() { return coachDbClient; },
+  set client(value) { coachDbClient = value; },
+  get remoteGameId() { return coachRemoteGameId; },
+  set remoteGameId(value) { coachRemoteGameId = value; },
+  get remoteInsights() { return coachRemoteInsightEntries; },
+  set remoteInsights(value) { coachRemoteInsightEntries = value; },
+  get status() { return coachDbStatus; },
+  set status(value) { coachDbStatus = value; }
+};
+
+const uiState = {
+  get appView() { return appView; },
+  set appView(value) { appView = value; },
+  get tapSelected() { return tapSelected; },
+  set tapSelected(value) { tapSelected = value; },
+  get pendingPromotionChoice() { return pendingPromotionChoice; },
+  set pendingPromotionChoice(value) { pendingPromotionChoice = value; },
+  get feedbackTimeout() { return feedbackTimeout; },
+  set feedbackTimeout(value) { feedbackTimeout = value; }
+};
+
+const CoachController = {
+  phase: 'idle',
+  setPhase(phase) {
+    this.phase = phase;
+    return this.phase;
+  },
+  markUserTurn() { return this.setPhase('userTurn'); },
+  markAnalyzing() { return this.setPhase('analyzing'); },
+  markOpponentThinking() { return this.setPhase('opponentThinking'); },
+  markReviewing() { return this.setPhase('reviewing'); },
+  markEnded() { return this.setPhase('ended'); }
+};
+
 // Optional runtime config. Set these public Supabase values in the deployed
 // page when account-backed coach history is ready. Without config, Coach stays
 // local-first and uses the existing localStorage insights.
@@ -3646,7 +3721,7 @@ function tryRestoreCoachGame() {
       if (coachLastReview) renderCoachReview(coachLastReview);
       // Pre-warm the engine and hand off to the opponent if it's their turn.
       const timed = Promise.race([
-        engine.init(),
+        engineClient.init(),
         new Promise((_, rej) => setTimeout(() => rej(new Error('Engine load timed out')), 15000))
       ]);
       timed.then(() => {
@@ -4370,7 +4445,7 @@ async function initCoachDb() {
       renderCoachAuth();
       renderInsights();
       if (coachAuthUser) {
-        refreshRemoteInsights({ silent: true }).catch(handleCoachDbError);
+        coachSync.loadInsights({ silent: true }).catch(handleCoachDbError);
         if (coachGameActive) ensureRemoteCoachGame().catch(handleCoachDbError);
       }
       coachDbClient.auth.onAuthStateChange((event, session) => {
@@ -4380,7 +4455,7 @@ async function initCoachDb() {
         renderCoachAuth();
         renderInsights();
         if (coachAuthUser) {
-          refreshRemoteInsights({ silent: true }).catch(handleCoachDbError);
+          coachSync.loadInsights({ silent: true }).catch(handleCoachDbError);
           if (coachGameActive) ensureRemoteCoachGame().catch(handleCoachDbError);
         }
       });
@@ -4403,7 +4478,7 @@ function handleCoachDbError(err) {
 
 async function sendCoachLoginLink() {
   if (!coachDbClient) {
-    await initCoachDb();
+    await coachSync.init();
   }
   if (!coachDbClient) return;
   const email = ($('#coach-auth-email').val() || '').trim();
@@ -4727,6 +4802,24 @@ async function refreshRemoteInsights(opts = {}) {
   renderInsights();
 }
 
+const coachSync = {
+  init() {
+    return initCoachDb();
+  },
+  saveMove(review) {
+    return syncRemoteCoachMove(review);
+  },
+  deleteMove(review) {
+    return deleteRemoteCoachMove(review);
+  },
+  saveGame(endReason) {
+    return updateRemoteCoachGame(endReason);
+  },
+  loadInsights(opts) {
+    return refreshRemoteInsights(opts || {});
+  }
+};
+
 // ─────────────────────────────────────────────
 // PREMOVE — queue your move while the engine is thinking
 // ─────────────────────────────────────────────
@@ -4906,7 +4999,7 @@ function soundForMove(mv, gameAfter) {
 // ─────────────────────────────────────────────
 // STOCKFISH ENGINE WRAPPER
 // ─────────────────────────────────────────────
-const engine = {
+const engineClient = {
   worker: null,
   status: 'idle',   // idle | loading | ready
   queue: [],
@@ -5069,6 +5162,7 @@ const engine = {
     this.queue = [];
   }
 };
+const engine = engineClient;
 
 function parseInfo(msg) {
   const depthMatch = msg.match(/\bdepth (\d+)/);
@@ -5223,8 +5317,8 @@ function movePurposeText(fenBefore, bestUci, userUciMove, bestLine, afterInfo) {
 // We pull MultiPV=3 before the move so we know if the user picked #1/#2/#3.
 async function classifyMove(fenBefore, userUciMove, fenAfter) {
   const [beforeEval, afterEval] = await Promise.all([
-    engine.evaluate(fenBefore, COACH_DEPTH, { multipv: 3 }),
-    engine.evaluate(fenAfter, COACH_DEPTH)
+    engineClient.evaluate(fenBefore, COACH_DEPTH, { multipv: 3 }),
+    engineClient.evaluate(fenAfter, COACH_DEPTH)
   ]);
   const lines = beforeEval.lines || [];
   const bestLine = lines[0];
@@ -5474,6 +5568,7 @@ function showCoachRetryStatus(msg) {
 }
 
 function resetCoachState(fen) {
+  CoachController.setPhase('idle');
   candidateRequestId++;
   coachGame = fen ? new Chess(fen) : new Chess();
   coachStartFen = coachGame.fen();
@@ -5507,6 +5602,7 @@ async function coachOpponentRespond() {
   if (!coachMode || !coachGameActive) return;
   if (coachGame.game_over()) { coachHandleGameOver(); return; }
   if (coachIsUserTurn()) return;
+  CoachController.setPhase('opponentThinking');
   setCoachStatus('Opponent thinking…');
   const fen = coachGame.fen();
   try {
@@ -5518,7 +5614,7 @@ async function coachOpponentRespond() {
       bestmove = chooseWeakOpponentMove(fen, coachEngineElo);
     } else {
       const { depth, ...strength } = opts;
-      const result = await engine.evaluate(fen, depth, strength);
+      const result = await engineClient.evaluate(fen, depth, strength);
       bestmove = result.bestmove;
     }
     if (!coachMode || !coachGameActive || coachIsUserTurn() || coachGame.fen() !== fen) return;
@@ -5544,6 +5640,7 @@ async function coachOpponentRespond() {
         saveCoachState();
         if (coachGame.game_over()) { coachHandleGameOver(); return; }
         if (!coachIsReviewing()) {
+          CoachController.setPhase('userTurn');
           setCoachStatus('Your move.');
           showThreats();
         }
@@ -5586,6 +5683,7 @@ async function coachHandleUserMove(source, target, promotion, opts) {
   $('#candidates-section').hide();
 
   coachThinking = true;
+  CoachController.setPhase('analyzing');
   setCoachStatus('Analyzing your move…');
   try {
     const review = await classifyMove(fenBefore, userUci, fenAfter);
@@ -5595,7 +5693,7 @@ async function coachHandleUserMove(source, target, promotion, opts) {
     coachLastReview = logged;
     coachReviewLog.push(logged);
     recordCoachInsight(logged);
-    syncRemoteCoachMove(logged).catch(handleCoachDbError);
+    coachSync.saveMove(logged).catch(handleCoachDbError);
     // Don't count engine-timeout ("unknown") reviews in stats or accuracy.
     if (review.tier !== 'unknown') {
       coachStats.moves++;
@@ -5610,6 +5708,7 @@ async function coachHandleUserMove(source, target, promotion, opts) {
   } catch (err) {
     setCoachStatus('Engine error: ' + err.message);
     coachThinking = false;
+    CoachController.setPhase('userTurn');
     return;
   }
   coachThinking = false;
@@ -5632,6 +5731,7 @@ function scheduleSummaryReveal(msg, delayMs) {
 
 function coachHandleGameOver() {
   if (!coachGameActive) return;
+  CoachController.setPhase('ended');
   coachGameActive = false;
   coachEndedAt = Date.now();
   let msg = 'Game over.';
@@ -5647,7 +5747,7 @@ function coachHandleGameOver() {
   coachLastEndMsg = msg;
   saveCoachState();
   clearQueuedRemoteCoachGameUpdate();
-  updateRemoteCoachGame(msg).catch(handleCoachDbError);
+  coachSync.saveGame(msg).catch(handleCoachDbError);
   // Roll this game's stats into lifetime totals (guarded against double-count).
   rollGameIntoLifetime();
   // Let the user take in the final position before the review overlay arrives.
@@ -5794,7 +5894,7 @@ async function detectMateThreat(fen) {
   parts[3] = '-';
   const flipped = parts.join(' ');
   try {
-    const res = await engine.evaluate(flipped, 12);
+    const res = await engineClient.evaluate(flipped, 12);
     if (res.info && res.info.mate !== null && res.info.mate !== undefined && res.info.mate > 0) {
       return { status: 'ok', mateIn: res.info.mate };
     }
@@ -5884,7 +5984,7 @@ async function showCandidates() {
     // Depth 18 with MultiPV=3 is strong enough to see most tactics up to ~9 moves
     // deep. Depth 12 was leaving blunders on the board and producing candidates
     // that didn't actually win material when the user expected them to.
-    const res = await engine.evaluate(fen, 18, { multipv: 3 });
+    const res = await engineClient.evaluate(fen, 18, { multipv: 3 });
     if (requestId !== candidateRequestId || !coachMode || !coachGame || !coachGameActive ||
         !coachIsUserTurn() || coachIsReviewing() || coachGame.fen() !== fen) {
       return;
@@ -6593,7 +6693,7 @@ function switchView(view) {
     $('#nav-coach').addClass('active').attr('aria-selected', 'true');
     // Pre-warm Stockfish in the background so the first New Game starts faster.
     // Errors here are swallowed; the real load gate is inside startCoachGame.
-    if (engine.status === 'idle') { engine.init().catch(() => {}); }
+    if (engineClient.status === 'idle') { engineClient.init().catch(() => {}); }
     // Initialize strength display
     $('#coach-strength-value').text(coachEngineElo);
     $('#coach-strength-tier').text(strengthTierLabel(coachEngineElo));
@@ -6657,6 +6757,7 @@ function startCoachGame() {
 
   resetCoachState(startFen);
   coachGameActive = true;
+  CoachController.setPhase(coachIsUserTurn() ? 'userTurn' : 'opponentThinking');
   $('#summary-overlay').hide();
   // Replace any saved state from a prior game so a refresh before the first
   // move doesn't restore the old session.
@@ -6678,7 +6779,7 @@ function startCoachGame() {
   // Pre-warm engine, then kick off opponent if it's their turn.
   // Wrap in a 15s timeout so a stuck WASM load surfaces a retry instead of hanging.
   const timed = Promise.race([
-    engine.init(),
+    engineClient.init(),
     new Promise((_, rej) => setTimeout(() => rej(new Error('Engine load timed out')), 15000))
   ]);
   timed.then(() => {
@@ -6763,6 +6864,7 @@ function coachGotoPly(n) {
   const fen = coachFenAtPly(n);
   if (coachBoard && fen) coachBoard.position(fen);
   if (coachIsReviewing()) {
+    CoachController.setPhase('reviewing');
     $('#threats-section').hide();
     $('#candidates-section').hide();
     setCoachStatus(`Reviewing move ${n} of ${total} — click Live to return.`);
@@ -6772,6 +6874,9 @@ function coachGotoPly(n) {
     if (r) renderCoachReview(r); else $('#coach-review').hide();
   } else {
     // Back to live — restore the latest review.
+    CoachController.setPhase(coachGameActive
+      ? (coachIsUserTurn() ? 'userTurn' : 'opponentThinking')
+      : 'ended');
     if (coachLastReview) renderCoachReview(coachLastReview);
   }
   updateCoachControlsState();
@@ -6785,6 +6890,9 @@ function coachGotoLive() {
   coachReviewCursor = null;
   if (coachBoard) coachBoard.position(coachGame.fen());
   if (coachLastReview) renderCoachReview(coachLastReview);
+  CoachController.setPhase(coachGameActive
+    ? (coachIsUserTurn() ? 'userTurn' : 'opponentThinking')
+    : 'ended');
   updateCoachControlsState();
   updateCapturedDisplay(coachGame.fen());
   updateMoveList();
@@ -7928,7 +8036,10 @@ function formatNum(n) {
 // ─────────────────────────────────────────────
 $(function () {
   // Board is initialized lazily on first opening selection
-  initCoachDb();
+  coachSync.init();
+  let applySearch;
+
+  function bindLibraryEvents() {
 
   // Promotion picker
   $('#promotion-picker .promotion-choice').on('click', function() {
@@ -7977,6 +8088,9 @@ $(function () {
   $('#btn-study').on('click', () => setMode('study'));
   $('#btn-quiz').on('click', () => { if (currentOpening) setMode('quiz'); });
   $('#btn-explore').on('click', () => setMode('explore'));
+  }
+
+  function bindCoachEvents() {
 
   // ─── Header nav (Library / Coach) ───────
   $('#nav-library').on('click', () => switchView('library'));
@@ -8019,8 +8133,8 @@ $(function () {
     }
     setCoachDbStatus('Syncing...');
     const [insightsResult, gameResult] = await Promise.allSettled([
-      refreshRemoteInsights(),
-      updateRemoteCoachGame(coachGameActive ? null : coachLastEndMsg)
+      coachSync.loadInsights(),
+      coachSync.saveGame(coachGameActive ? null : coachLastEndMsg)
     ]);
     const insightError = insightsResult.status === 'rejected' ? insightsResult.reason : null;
     const gameError = gameResult.status === 'rejected' ? gameResult.reason : null;
@@ -8094,6 +8208,7 @@ $(function () {
 
   $('#btn-coach-resign').on('click', function() {
     if (!coachGameActive) return;
+    CoachController.setPhase('ended');
     candidateRequestId++;
     clearPremove();
     coachGameActive = false;
@@ -8105,7 +8220,7 @@ $(function () {
     updateCoachControlsState();
     coachLastEndMsg = msg;
     saveCoachState();
-    updateRemoteCoachGame(msg).catch(handleCoachDbError);
+    coachSync.saveGame(msg).catch(handleCoachDbError);
     rollGameIntoLifetime();
     // User-initiated — keep it snappy but still buffer with a small beat + animation.
     scheduleSummaryReveal(msg, 350);
@@ -8121,7 +8236,7 @@ $(function () {
   // Coach: take back (undo user move + opponent reply if present)
   $('#btn-coach-takeback').on('click', function() {
     if (!coachMode || !coachGame) return;
-    engine.cancel();
+    engineClient.cancel();
     const removedReview = coachLastReview;
     candidateRequestId++;
     clearPremove();
@@ -8145,6 +8260,7 @@ $(function () {
     coachLastReview = null;
     coachThinking = false;
     coachGameActive = true;
+    CoachController.setPhase('userTurn');
     coachReviewCursor = null;
     if (coachBoard) coachBoard.position(coachGame.fen());
     updateCapturedDisplay(coachGame.fen());
@@ -8160,13 +8276,13 @@ $(function () {
     setCoachStatus('Your move.');
     updateCoachControlsState();
     saveCoachState();
-    deleteRemoteCoachMove(removedReview).catch(handleCoachDbError);
+    coachSync.deleteMove(removedReview).catch(handleCoachDbError);
   });
 
   // Coach: show best — replay the best move instead of the user's
   $('#btn-coach-showbest').on('click', function() {
     if (!coachMode || !coachGame || !coachLastReview || !coachLastReview.bestUci) return;
-    engine.cancel();
+    engineClient.cancel();
     const prev = coachLastReview;
     // Undo opponent reply (if played) + user move
     if (coachGame.fen() !== prev.fenAfter) coachGame.undo();
@@ -8208,11 +8324,12 @@ $(function () {
       last.fenAfter = newFenAfter;
       last.loss = 0;
       last.insightTags = [];
-      syncRemoteCoachMove(last).catch(handleCoachDbError);
+      coachSync.saveMove(last).catch(handleCoachDbError);
     }
     updateCoachSummary();
     updateMoveList();
     updateOpeningLabel();
+    CoachController.setPhase('opponentThinking');
     setCoachStatus('Opponent thinking…');
     updateCoachControlsState();
     saveCoachState();
@@ -8390,6 +8507,9 @@ $(function () {
       updateCoachControlsState();
     }
   });
+  }
+
+  function bindExploreEvents() {
 
   // Explore: database toggle
   $('.db-btn').on('click', function() {
@@ -8457,9 +8577,12 @@ $(function () {
     board.position(exploreStartFen);
     fetchExploreData();
   });
+  }
+
+  function bindGlobalInputEvents() {
 
   // ─── SEARCH ─────────────────────────────
-  function applySearch(q) {
+  applySearch = function(q) {
     q = (q || '').trim().toLowerCase();
     const activeCat = $('.cat-tab.active').data('cat') || 'all';
     let visibleCount = 0;
@@ -8484,7 +8607,7 @@ $(function () {
     // Hide the SR due section while searching
     if (q) $('#sr-due-section').hide();
     else updateSRSidebar();
-  }
+  };
   $('#library-search-input').on('input', function() { applySearch($(this).val()); });
 
   // ─── SHARE LINK ─────────────────────────
@@ -8663,10 +8786,10 @@ $(function () {
     if (dx < 0) { if (!$('#btn-next').prop('disabled')) goToMove(currentMoveIdx + 1); }
     else { if (!$('#btn-prev').prop('disabled')) goToMove(currentMoveIdx - 1); }
   });
+  }
 
   // ─── SR SIDEBAR INIT ────────────────────
-  updateSRSidebar();
-  validateOpeningData();
+  function hydrateFromUrl() {
 
   // ─── HYDRATE FROM URL ───────────────────
   const initial = readURL();
@@ -8683,6 +8806,15 @@ $(function () {
   } else if (initial.mode === 'explore') {
     setMode('explore');
   }
+  }
+
+  bindLibraryEvents();
+  bindCoachEvents();
+  bindExploreEvents();
+  bindGlobalInputEvents();
+  updateSRSidebar();
+  validateOpeningData();
+  hydrateFromUrl();
 });
 </script>
 
