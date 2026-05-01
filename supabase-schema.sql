@@ -117,88 +117,88 @@ alter table public.theory_cards enable row level security;
 drop policy if exists "profiles select own" on public.profiles;
 create policy "profiles select own"
   on public.profiles for select
-  using (id = auth.uid());
+  using (id = (select auth.uid()));
 
 drop policy if exists "profiles update own" on public.profiles;
 create policy "profiles update own"
   on public.profiles for update
-  using (id = auth.uid())
-  with check (id = auth.uid());
+  using (id = (select auth.uid()))
+  with check (id = (select auth.uid()));
 
 drop policy if exists "coach_games select own" on public.coach_games;
 create policy "coach_games select own"
   on public.coach_games for select
-  using (user_id = auth.uid());
+  using (user_id = (select auth.uid()));
 
 drop policy if exists "coach_games insert own" on public.coach_games;
 create policy "coach_games insert own"
   on public.coach_games for insert
-  with check (user_id = auth.uid());
+  with check (user_id = (select auth.uid()));
 
 drop policy if exists "coach_games update own" on public.coach_games;
 create policy "coach_games update own"
   on public.coach_games for update
-  using (user_id = auth.uid())
-  with check (user_id = auth.uid());
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
 
 drop policy if exists "coach_games delete own" on public.coach_games;
 create policy "coach_games delete own"
   on public.coach_games for delete
-  using (user_id = auth.uid());
+  using (user_id = (select auth.uid()));
 
 drop policy if exists "coach_moves select own" on public.coach_moves;
 create policy "coach_moves select own"
   on public.coach_moves for select
-  using (user_id = auth.uid());
+  using (user_id = (select auth.uid()));
 
 drop policy if exists "coach_moves insert own" on public.coach_moves;
 create policy "coach_moves insert own"
   on public.coach_moves for insert
   with check (
-    user_id = auth.uid()
+    user_id = (select auth.uid())
     and exists (
       select 1 from public.coach_games g
-      where g.id = game_id and g.user_id = auth.uid()
+      where g.id = game_id and g.user_id = (select auth.uid())
     )
   );
 
 drop policy if exists "coach_moves update own" on public.coach_moves;
 create policy "coach_moves update own"
   on public.coach_moves for update
-  using (user_id = auth.uid())
+  using (user_id = (select auth.uid()))
   with check (
-    user_id = auth.uid()
+    user_id = (select auth.uid())
     and exists (
       select 1 from public.coach_games g
-      where g.id = game_id and g.user_id = auth.uid()
+      where g.id = game_id and g.user_id = (select auth.uid())
     )
   );
 
 drop policy if exists "coach_moves delete own" on public.coach_moves;
 create policy "coach_moves delete own"
   on public.coach_moves for delete
-  using (user_id = auth.uid());
+  using (user_id = (select auth.uid()));
 
 drop policy if exists "drill_queue all own" on public.drill_queue;
 create policy "drill_queue all own"
   on public.drill_queue for all
   using (
-    user_id = auth.uid()
+    user_id = (select auth.uid())
     and (
       source_move_id is null
       or exists (
         select 1 from public.coach_moves m
-        where m.id = source_move_id and m.user_id = auth.uid()
+        where m.id = source_move_id and m.user_id = (select auth.uid())
       )
     )
   )
   with check (
-    user_id = auth.uid()
+    user_id = (select auth.uid())
     and (
       source_move_id is null
       or exists (
         select 1 from public.coach_moves m
-        where m.id = source_move_id and m.user_id = auth.uid()
+        where m.id = source_move_id and m.user_id = (select auth.uid())
       )
     )
   );
@@ -207,22 +207,22 @@ drop policy if exists "theory_cards all own" on public.theory_cards;
 create policy "theory_cards all own"
   on public.theory_cards for all
   using (
-    user_id = auth.uid()
+    user_id = (select auth.uid())
     and (
       source_move_id is null
       or exists (
         select 1 from public.coach_moves m
-        where m.id = source_move_id and m.user_id = auth.uid()
+        where m.id = source_move_id and m.user_id = (select auth.uid())
       )
     )
   )
   with check (
-    user_id = auth.uid()
+    user_id = (select auth.uid())
     and (
       source_move_id is null
       or exists (
         select 1 from public.coach_moves m
-        where m.id = source_move_id and m.user_id = auth.uid()
+        where m.id = source_move_id and m.user_id = (select auth.uid())
       )
     )
   );

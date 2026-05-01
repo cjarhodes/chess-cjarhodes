@@ -3504,6 +3504,7 @@ let coachEndedAt = null;           // timestamp of game end, null while playing
 let coachReviewCursor = null;      // null = live; integer = ply index displayed on the board
 let coachLastEndMsg = null;        // headline from last game-over, used to reopen the review
 let candidateRequestId = 0;        // invalidates stale async candidate searches
+let threatRequestId = 0;           // invalidates stale async threat scans
 let coachPremove = null;           // queued premove while opponent is thinking
 let coachRemoteGameId = null;      // Supabase coach_games.id for current game
 let coachAuthUser = null;
@@ -3512,6 +3513,9 @@ let coachDbInitStarted = false;
 let coachDbInitPromise = null;
 let coachRemoteInsightEntries = null;
 let coachDbStatus = 'local';
+let remoteGameUpdateTimer = null;
+let pendingRemoteGameEndReason = null;
+const REMOTE_GAME_SYNC_DEBOUNCE_MS = 2500;
 
 // Optional runtime config. Set these public Supabase values in the deployed
 // page when account-backed coach history is ready. Without config, Coach stays
@@ -4422,6 +4426,7 @@ async function sendCoachLoginLink() {
 
 async function signOutCoach() {
   if (!coachDbClient) return;
+  clearQueuedRemoteCoachGameUpdate();
   await coachDbClient.auth.signOut();
   coachAuthUser = null;
   coachRemoteInsightEntries = null;
@@ -4565,36 +4570,43 @@ function learningArtifactPayloads(review, moveId) {
 
 async function syncRemoteLearningArtifacts(review, moveId) {
   if (!hasCoachDbSession()) return;
+  const artifacts = learningArtifactPayloads(review, moveId);
+
+  if (!artifacts.drills.length && !artifacts.cards.length) return;
   await deleteRemoteLearningArtifacts(moveId);
 
-  const artifacts = learningArtifactPayloads(review, moveId);
+  const writes = [];
   if (artifacts.drills.length) {
-    const { error } = await coachDbClient
+    writes.push(coachDbClient
       .from('drill_queue')
-      .upsert(artifacts.drills, { onConflict: 'source_move_id,tag' });
-    if (error) throw error;
+      .upsert(artifacts.drills, { onConflict: 'source_move_id,tag' }));
   }
   if (artifacts.cards.length) {
-    const { error } = await coachDbClient
+    writes.push(coachDbClient
       .from('theory_cards')
-      .upsert(artifacts.cards, { onConflict: 'source_move_id,tag' });
-    if (error) throw error;
+      .upsert(artifacts.cards, { onConflict: 'source_move_id,tag' }));
+  }
+  const results = await Promise.all(writes);
+  for (const result of results) {
+    if (result.error) throw result.error;
   }
 }
 
 async function deleteRemoteLearningArtifacts(moveId) {
   if (!hasCoachDbSession() || !moveId) return;
-  const drillDelete = await coachDbClient
-    .from('drill_queue')
-    .delete()
-    .eq('source_move_id', moveId)
-    .eq('user_id', coachAuthUser.id);
+  const [drillDelete, cardDelete] = await Promise.all([
+    coachDbClient
+      .from('drill_queue')
+      .delete()
+      .eq('source_move_id', moveId)
+      .eq('user_id', coachAuthUser.id),
+    coachDbClient
+      .from('theory_cards')
+      .delete()
+      .eq('source_move_id', moveId)
+      .eq('user_id', coachAuthUser.id)
+  ]);
   if (drillDelete.error) throw drillDelete.error;
-  const cardDelete = await coachDbClient
-    .from('theory_cards')
-    .delete()
-    .eq('source_move_id', moveId)
-    .eq('user_id', coachAuthUser.id);
   if (cardDelete.error) throw cardDelete.error;
 }
 
@@ -4609,8 +4621,8 @@ async function syncRemoteCoachMove(review) {
     .single();
   if (error) throw error;
   if (data && data.id) await syncRemoteLearningArtifacts(review, data.id);
-  await updateRemoteCoachGame(null);
-  refreshRemoteInsights({ silent: true }).catch(handleCoachDbError);
+  if (data && data.id) upsertRemoteInsightEntry(remoteInsightEntryFromReview(review, data.id));
+  queueRemoteCoachGameUpdate(null);
 }
 
 async function deleteRemoteCoachMove(review) {
@@ -4629,8 +4641,8 @@ async function deleteRemoteCoachMove(review) {
     .eq('game_id', coachRemoteGameId)
     .eq('ply', review.ply);
   if (error) throw error;
-  await updateRemoteCoachGame(null);
-  refreshRemoteInsights({ silent: true }).catch(handleCoachDbError);
+  if (existing.data && existing.data.id) removeRemoteInsightEntry(existing.data.id);
+  queueRemoteCoachGameUpdate(null);
 }
 
 function remoteMoveToInsightEntry(row) {
@@ -4650,6 +4662,50 @@ function remoteMoveToInsightEntry(row) {
     bestUci: row.best_uci || null,
     opening: row.opening_name || null
   };
+}
+
+function remoteInsightEntryFromReview(review, id) {
+  const entry = insightEntryFromReview(review);
+  entry.id = id || entry.id || null;
+  return entry;
+}
+
+function upsertRemoteInsightEntry(entry) {
+  if (!entry || !entry.id) return;
+  if (!Array.isArray(coachRemoteInsightEntries)) coachRemoteInsightEntries = [];
+  const idx = coachRemoteInsightEntries.findIndex(existing => existing && existing.id === entry.id);
+  if (idx >= 0) coachRemoteInsightEntries[idx] = entry;
+  else coachRemoteInsightEntries.push(entry);
+  coachRemoteInsightEntries = coachRemoteInsightEntries
+    .filter(e => e && e.tier && e.tier !== 'unknown')
+    .slice(-INSIGHTS_MAX_ENTRIES);
+  renderInsights();
+}
+
+function removeRemoteInsightEntry(id) {
+  if (!id || !Array.isArray(coachRemoteInsightEntries)) return;
+  coachRemoteInsightEntries = coachRemoteInsightEntries.filter(entry => entry && entry.id !== id);
+  renderInsights();
+}
+
+function clearQueuedRemoteCoachGameUpdate() {
+  if (remoteGameUpdateTimer) {
+    clearTimeout(remoteGameUpdateTimer);
+    remoteGameUpdateTimer = null;
+  }
+  pendingRemoteGameEndReason = null;
+}
+
+function queueRemoteCoachGameUpdate(endReason) {
+  if (!hasCoachDbSession() || !coachGame) return;
+  if (endReason) pendingRemoteGameEndReason = endReason;
+  if (remoteGameUpdateTimer) clearTimeout(remoteGameUpdateTimer);
+  remoteGameUpdateTimer = setTimeout(() => {
+    remoteGameUpdateTimer = null;
+    const reason = pendingRemoteGameEndReason;
+    pendingRemoteGameEndReason = null;
+    updateRemoteCoachGame(reason).catch(handleCoachDbError);
+  }, REMOTE_GAME_SYNC_DEBOUNCE_MS);
 }
 
 async function refreshRemoteInsights(opts = {}) {
@@ -5430,6 +5486,7 @@ function resetCoachState(fen) {
   coachLastEndMsg = null;
   coachRemoteGameId = null;
   coachLifetimeRolledForThisGame = false;
+  clearQueuedRemoteCoachGameUpdate();
   if (coachSummaryTimer) { clearTimeout(coachSummaryTimer); coachSummaryTimer = null; }
   clearPremove();
   $('#coach-status').removeClass('status-ended');
@@ -5589,6 +5646,7 @@ function coachHandleGameOver() {
   // Persist the now-ended state so a refresh keeps the review reachable.
   coachLastEndMsg = msg;
   saveCoachState();
+  clearQueuedRemoteCoachGameUpdate();
   updateRemoteCoachGame(msg).catch(handleCoachDbError);
   // Roll this game's stats into lifetime totals (guarded against double-count).
   rollGameIntoLifetime();
@@ -5746,19 +5804,29 @@ async function detectMateThreat(fen) {
   return { status: 'ok', mateIn: null };
 }
 
-async function showThreats() {
-  if (!coachMode || !coachGameActive || !coachGame) return;
+function renderThreatItems(items) {
   const $section = $('#threats-section');
   const $list = $('#threats-list');
   $list.empty();
-  const hangs = detectHangingPieces(coachGame, coachUserColor());
-  const mateThreat = await detectMateThreat(coachGame.fen());
-  const items = [];
-  if (mateThreat.status === 'unavailable') {
-    items.push({ kind: 'scan', text: 'Mate scan unavailable — engine could not check forcing threats.' });
-  } else if (mateThreat.mateIn !== null) {
-    items.push({ kind: 'mate', text: `Mate-in-${mateThreat.mateIn} threat — you must defend now.` });
+  if (items.length === 0) {
+    $list.append($('<div class="threats-empty">No immediate threats. Look for active moves.</div>'));
+  } else {
+    items.forEach(it => {
+      const $card = $('<div class="threat-card"></div>').addClass(it.kind === 'mate' ? 'mate' : '');
+      if (it.glyph) $card.append($('<span class="piece"></span>').text(it.glyph));
+      $card.append($('<span class="text"></span>').text(it.text));
+      $list.append($card);
+    });
   }
+  $section.show();
+}
+
+async function showThreats() {
+  if (!coachMode || !coachGameActive || !coachGame) return;
+  const requestId = ++threatRequestId;
+  const fen = coachGame.fen();
+  const hangs = detectHangingPieces(coachGame, coachUserColor());
+  const items = [];
   hangs.forEach(h => {
     const name = PIECE_NAME[h.piece];
     const glyph = PIECE_GLYPH[h.piece];
@@ -5775,17 +5843,29 @@ async function showThreats() {
       text: `${severity}: ${name} on ${h.square} — defend or move (~${pawns} pawns).`
     });
   });
-  if (items.length === 0) {
-    $list.append($('<div class="threats-empty">No immediate threats. Look for active moves.</div>'));
-  } else {
-    items.forEach(it => {
-      const $card = $('<div class="threat-card"></div>').addClass(it.kind === 'mate' ? 'mate' : '');
-      if (it.glyph) $card.append($('<span class="piece"></span>').text(it.glyph));
-      $card.append($('<span class="text"></span>').text(it.text));
-      $list.append($card);
-    });
-  }
-  $section.show();
+  renderThreatItems(items);
+  detectMateThreat(fen).then(mateThreat => {
+    if (requestId !== threatRequestId || !coachMode || !coachGameActive || !coachGame ||
+        coachGame.fen() !== fen || !coachIsUserTurn()) {
+      return;
+    }
+    const nextItems = items.slice();
+    if (mateThreat.status === 'unavailable') {
+      nextItems.unshift({ kind: 'scan', text: 'Mate scan unavailable — engine could not check forcing threats.' });
+    } else if (mateThreat.mateIn !== null) {
+      nextItems.unshift({ kind: 'mate', text: `Mate-in-${mateThreat.mateIn} threat — you must defend now.` });
+    }
+    renderThreatItems(nextItems);
+  }).catch(() => {
+    if (requestId !== threatRequestId || !coachMode || !coachGameActive || !coachGame ||
+        coachGame.fen() !== fen || !coachIsUserTurn()) {
+      return;
+    }
+    renderThreatItems([
+      { kind: 'scan', text: 'Mate scan unavailable — engine could not check forcing threats.' },
+      ...items
+    ]);
+  });
 }
 
 // ─────────────────────────────────────────────
