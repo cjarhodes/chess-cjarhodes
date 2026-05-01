@@ -19,6 +19,10 @@ if (/https:\/\/cdnjs\.cloudflare\.com|https:\/\/cdn\.jsdelivr\.net/.test(html)) 
   fail('index.html still loads executable scripts from public CDNs');
 }
 
+if (/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?\S[\s\S]*?<\/script>/i.test(html)) {
+  fail('index.html must not contain inline runtime scripts');
+}
+
 if (/<a\b[^>]*target="_blank"(?![^>]*rel="[^"]*\bnoopener\b)/i.test(html)) {
   fail('external target=_blank links must include rel="noopener noreferrer"');
 }
@@ -33,6 +37,12 @@ for (const required of [
   'x-frame-options'
 ]) {
   if (!headerNames.has(required)) fail(`missing security header: ${required}`);
+}
+
+const csp = ((rootHeaders && rootHeaders.headers || []).find(h => h.key.toLowerCase() === 'content-security-policy') || {}).value || '';
+const scriptSrc = (csp.match(/(?:^|;\s*)script-src\s+([^;]+)/) || [])[1] || '';
+if (scriptSrc.includes("'unsafe-inline'")) {
+  fail('script-src must not allow unsafe-inline');
 }
 
 for (const table of ['drill_queue', 'theory_cards']) {

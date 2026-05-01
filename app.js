@@ -1,0 +1,6435 @@
+// ─────────────────────────────────────────────
+// OPENING DATA
+// ─────────────────────────────────────────────
+const OPENINGS = [
+  {
+    id: 'italian',
+    name: 'Italian Game',
+    eco: 'C50',
+    category: 'white',
+    tagline: 'Classical development and early f7 pressure',
+    description: 'One of the oldest openings in chess, dating to the 16th century. The Italian Game focuses on rapid development, central control with e4+d3, and long-term structural advantages. The Bc4 bishop eyes the f7 pawn — Black\'s most vulnerable point early in the game. The Modern Italian (c3 + d3) is the current top-level choice for White.',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Bc5', 'c3', 'Nf6', 'd3', 'd6', 'O-O', 'O-O', 'Re1', 'a6', 'a4', 'Ba7', 'h3', 'h6', 'Nbd2', 'Re8', 'Nf1', 'Be6', 'Bxe6', 'Rxe6', 'Ng3', 'Qd7'],
+    explanations: [
+      { label: '1. e4 — White', text: 'The King\'s Pawn — the most popular first move in all of chess. It immediately stakes a claim in the center, opens lines for the queen and bishop, and prepares rapid castling. Bobby Fischer called it "best by test."' },
+      { label: '1... e5 — Black', text: 'The symmetrical response. Black mirrors White\'s central claim, contesting the center immediately. This is one of Black\'s most solid and time-tested replies — known as Open Game territory.' },
+      { label: '2. Nf3 — White', text: 'The knight develops to its most natural square, simultaneously attacking Black\'s e5 pawn and preparing to castle kingside. Following the classical principle: "Knights before bishops."' },
+      { label: '2... Nc6 — Black', text: 'The most natural defense — the knight defends e5 and comes to a strong central square. Black develops with purpose.' },
+      { label: '3. Bc4 — White', text: 'The Italian bishop! White aims at f7 — the weakest square in Black\'s position (defended only by the king). This bishop is tremendously active.' },
+      { label: '3... Bc5 — Black', text: 'Black mirrors White\'s development, placing the bishop on the powerful c5 diagonal. This symmetrical setup leads to the Giuoco Piano ("quiet game") — though it\'s far from quiet!' },
+      { label: '4. c3 — White', text: 'The Modern Italian begins. White prepares d4 to grab the center. c3 also gives the queen a potential square on c2, and the pawn will support the d4 advance.' },
+      { label: '4... Nf6 — Black', text: 'Black continues development rather than allowing d4 immediately. The Nf6 attacks e4, forcing White to defend it.' },
+      { label: '5. d3 — White', text: 'White chooses the "slow" Italian setup — d3 instead of d4. This leads to a more positional battle. White will maneuver pieces to ideal squares before launching any pawn breaks.' },
+      { label: '5... d6 — Black', text: 'Solid and sensible — Black supports the e5 pawn and prepares to complete development. The position is solid and roughly balanced.' },
+      { label: '6. O-O — White', text: 'White castles, bringing the king to safety. Now all of White\'s development is focused on the kingside. The rook on f1 will be useful on the e-file after Re1.' },
+      { label: '6... O-O — Black', text: 'Black also castles. Both kings are safe. The real battle begins now — slow maneuvering for ideal piece placement.' },
+      { label: '7. Re1 — White', text: 'The rook eyes the e5 pawn. This classic move puts pressure on the e-file and supports the e4 pawn, preparing for future central action. Typical Italian plan.' },
+      { label: '7... a6 — Black', text: 'A prophylactic move — Black prevents Bb5 (or Ba4-b3 ideas) and prepares to kick the bishop with ...b5 if needed. Typical Bc5 bishop defense.' },
+      { label: '8. a4 — White', text: 'White stops ...b5 and prevents Black from pushing the bishop back. White also gains queenside space and creates pressure on the a5 square.' },
+      { label: '8... Ba7 — Black', text: 'The bishop retreats to a7, a safe square outside the pawn chain. From a7, it doesn\'t do much, but it\'s also not easily attacked. Black must find other ways to activate.' },
+      { label: '9. h3 — White', text: 'Prophylaxis! White prevents ...Bg4 (which would pin the Nf3 and add pressure). This quiet move is typical in slow Italian positions — secure everything before advancing.' },
+      { label: '9... h6 — Black', text: 'Mirroring White\'s prophylaxis — Black prevents Bg5. Both sides are playing carefully, avoiding any weaknesses before the middlegame battle begins.' },
+      { label: '10. Nbd2 — White', text: 'The knight comes to d2, heading for f1 and then e3 or g3. This "knight maneuver" is the hallmark of the Modern Italian — the knight will become a powerful piece.' },
+      { label: '10... Re8 — Black', text: 'Black centralizes the rook, adding support to the e5 pawn and preparing for potential activity on the e-file. Both sides continue improving piece placement.' },
+      { label: '11. Nf1 — White', text: 'The second step of White\'s knight maneuver. The Nd2 went to f1, and from here it can go to e3, g3, or even h2-g4. White\'s knights are heading to the kingside for an attack.' },
+      { label: '11... Be6 — Black', text: 'Black\'s bishop becomes active, eying the c4 bishop and fighting for the d5 square. This also prepares ...d5 as a central break if conditions are right.' },
+      { label: '12. Bxe6 — White', text: 'White exchanges the Italian bishop for Black\'s active Be6. This simplifies somewhat and removes the potentially dangerous bishop. White gets the bishop pair advantage.' },
+      { label: '12... Rxe6 — Black', text: 'The rook recaptures on e6, becoming centralized and active. The rook on e6 is powerful — it can shift to d6, f6, or just maintain pressure.' },
+      { label: '13. Ng3 — White', text: 'The knight arrives at g3, completing the maneuver. From g3, it controls f5 and h5, and can jump to f5 if Black allows it. This is the standard Italian knight setup — both knights (g3 and f3) aim at f5.' },
+      { label: '13... Qd7 — Black', text: 'Black prepares queenside operations and potential ...Rae8 doubling rooks. The queen also eyes d5 and keeps an eye on g4. A tense middlegame battle awaits.' }
+    ],
+    keyIdeas: [
+      'Modern Italian: c3 + d3 — slow but deep positional pressure',
+      'White\'s knight maneuver: Nbd2-f1-g3 (or e3) aims at f5',
+      'Re1 supports e4 and pressures e5 — a typical Italian rook move',
+      'Key break: d4 when ready — challenges Black\'s central pawn structure'
+    ]
+  },
+  {
+    id: 'ruy-lopez',
+    name: 'Ruy López',
+    eco: 'C60',
+    category: 'white',
+    tagline: 'The gold standard of 1.e4 openings',
+    description: 'Named after a 16th-century Spanish priest, the Ruy López is one of the most deeply studied openings in chess history — hundreds of years of theory! It puts immediate pressure on the Nc6 that defends e5, creating long-term strategic tension. The Breyer Variation shown here is Magnus Carlsen\'s favorite.',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'a6', 'Ba4', 'Nf6', 'O-O', 'Be7', 'Re1', 'b5', 'Bb3', 'd6', 'c3', 'O-O', 'h3', 'Nb8', 'd4', 'Nbd7', 'Nbd2', 'Bb7', 'Bc2', 'Re8', 'Nf1', 'Bf8'],
+    explanations: [
+      { label: '1. e4 — White', text: 'The King\'s Pawn — White stakes a central claim immediately, opening lines for rapid piece development and kingside castling.' },
+      { label: '1... e5 — Black', text: 'Black responds symmetrically, taking equal central space. A principled, classical response that leads to rich middlegame play.' },
+      { label: '2. Nf3 — White', text: 'The knight attacks e5, develops naturally, and prepares to castle.' },
+      { label: '2... Nc6 — Black', text: 'The most natural defense to e5 — the knight develops to an active central square and covers the pawn.' },
+      { label: '3. Bb5 — White', text: 'The Ruy López! The bishop threatens Bxc6 followed by Nxe5, winning the e5 pawn. It\'s not an immediate tactic — it\'s a long-term positional pressure move.' },
+      { label: '3... a6 — Black', text: 'The Morphy Defense — Black asks the bishop to declare its intentions. It\'s the most popular response, leading to the richest theory in all of chess.' },
+      { label: '4. Ba4 — White', text: 'The bishop retreats to a4, maintaining the pin (or semi-pin) on the Nc6. Now if Black pushes ...b5, the bishop retreats to b3, and the battle continues.' },
+      { label: '4... Nf6 — Black', text: 'Black develops the knight, attacks e4, and prepares to castle. This is the start of the main Ruy López tabiya.' },
+      { label: '5. O-O — White', text: 'White castles immediately — a key move. Rather than protecting e4 (which is not immediately threatened), White castles and creates more threats. This is the "main line" move.' },
+      { label: '5... Be7 — Black', text: 'Solid development — the bishop prepares to castle and defends the kingside. Black is building a rock-solid structure.' },
+      { label: '6. Re1 — White', text: 'The classic Ruy López rook move! Re1 supports the e4 pawn and prepares for central action. White is building up pressure slowly and solidly.' },
+      { label: '6... b5 — Black', text: 'Black kicks the bishop back and gains queenside space. This is a key moment — Black gains space but slightly weakens the c5 square.' },
+      { label: '7. Bb3 — White', text: 'The bishop retreats to b3, where it remains active on the a2-g8 diagonal. From b3, the bishop eyes f7 and stays involved in the game.' },
+      { label: '7... d6 — Black', text: 'Black solidifies the center, supporting e5. This leads to the "Closed Ruy López" — a strategic battle involving piece maneuvering.' },
+      { label: '8. c3 — White', text: 'White prepares d4. The c3 pawn will support a strong d4 advance, giving White central control. White is in no hurry — the position is slowly built up.' },
+      { label: '8... O-O — Black', text: 'Black castles, bringing the king to safety. Now the real maneuvering begins. Both sides have completed basic development.' },
+      { label: '9. h3 — White', text: 'Prophylaxis — preventing ...Bg4 which would pin the Nf3. White takes away this resource before pushing d4.' },
+      { label: '9... Nb8 — Black', text: 'The Breyer Variation! The knight retreats all the way to b8, preparing to reroute to d7. This surprising move is the most sophisticated and dynamic reply. The knight will become powerfully placed on d7.' },
+      { label: '10. d4 — White', text: 'White finally plays the central thrust. With the Nc6 gone (it\'s on b8), White doesn\'t need to worry about Nd4 counterplay.' },
+      { label: '10... Nbd7 — Black', text: 'The Breyer knight completes its journey from c6 to b8 to d7. From d7, it supports e5 and prepares ...Nf8 or ...Nb6 maneuvering. This is beautiful chess.' },
+      { label: '11. Nbd2 — White', text: 'White\'s queenside knight develops to d2, supporting the center. From d2, it can go to f1 and then e3 or g3 — the same knight maneuver as in the Italian.' },
+      { label: '11... Bb7 — Black', text: 'The bishop develops to b7, pointing at the center along the long diagonal. This is typical Ruy López structure — Black\'s pieces are finding ideal squares.' },
+      { label: '12. Bc2 — White', text: 'The bishop retreats to c2, keeping the a2-g8 diagonal while getting out of potential ...c5 attacks. White prepares a queenside expansion.' },
+      { label: '12... Re8 — Black', text: 'The rook moves to e8, supporting the e5 pawn. This is a key defensive move — the e5 pawn is the cornerstone of Black\'s position.' },
+      { label: '13. Nf1 — White', text: 'The first step of White\'s knight maneuver. The knight heads toward g3 or e3, preparing to attack.' },
+      { label: '13... Bf8 — Black', text: 'The bishop retreats to f8, a key defensive move in the Breyer. From f8, the bishop can go to g7 (fianchetto-style) or come to e7. The position is an intricate maneuvering game with chances for both sides.' }
+    ],
+    keyIdeas: [
+      'Breyer Variation: 9...Nb8-d7 — the most dynamic Black system',
+      'White\'s knight maneuver: Nbd2-f1-g3/e3 — copying the Italian theme',
+      'Key tension: d4 vs e5 — who controls the center?',
+      'Long-term: White aims for queenside expansion, Black attacks on the kingside'
+    ]
+  },
+  {
+    id: 'queens-gambit',
+    name: "Queen's Gambit",
+    eco: 'D06',
+    category: 'white',
+    tagline: 'Classical central dominance from the d-file',
+    description: 'One of the oldest and most respected openings in chess. White offers the c4 pawn — a "gambit" in name, but it\'s actually very safe since the pawn is usually regained. The line shown is the QGD with Bg5 — the classical main line that has been played for over a century at the highest levels.',
+    moves: ['d4', 'd5', 'c4', 'e6', 'Nc3', 'Nf6', 'Bg5', 'Be7', 'e3', 'O-O', 'Nf3', 'h6', 'Bh4', 'b6', 'Bd3', 'dxc4', 'Bxc4', 'Bb7', 'O-O', 'Nbd7', 'Qe2', 'c5', 'Rfd1', 'Qc7'],
+    explanations: [
+      { label: '1. d4 — White', text: 'The Queen\'s Pawn opening. Controls the center from the d-file side and opens the diagonal for the dark-squared bishop. Unlike 1.e4, this leads to more positional, strategic battles.' },
+      { label: '1... d5 — Black', text: 'Black responds symmetrically, taking equal central space. A principled response that leads to the Queen\'s Gambit complex.' },
+      { label: '2. c4 — White', text: 'The Queen\'s Gambit! White offers a pawn to deflect Black\'s d5 pawn. This is "not really a gambit" — White almost always regains the pawn with superior central control.' },
+      { label: '2... e6 — Black', text: 'The Queen\'s Gambit Declined! Black supports d5 with e6, giving up the light-squared bishop\'s diagonal but building a rock-solid center. This leads to rich, strategic play.' },
+      { label: '3. Nc3 — White', text: 'White develops the knight, supporting d4 and preparing to add pressure on d5. Nc3 is the most aggressive setup, leading to the main lines.' },
+      { label: '3... Nf6 — Black', text: 'Black continues development, contesting the center with the knight. The classical QGD main line.' },
+      { label: '4. Bg5 — White', text: 'White pins the Nf6 to the queen! This is the Classical QGD. The pin creates pressure — if Black isn\'t careful, the d5 pawn can fall. This move also prepares e3 and Nf3.' },
+      { label: '4... Be7 — Black', text: 'Black breaks the pin with the bishop. Be7 is the most solid response — Black unpins and prepares to castle.' },
+      { label: '5. e3 — White', text: 'White solidifies the center with e3 and prepares to develop the f1 bishop. The structure is very solid — d4, c4, e3 form a powerful triangle.' },
+      { label: '5... O-O — Black', text: 'Black castles, bringing the king to safety. Development is nearly complete for Black.' },
+      { label: '6. Nf3 — White', text: 'White completes development. Now White has all pieces developed except the bishops.' },
+      { label: '6... h6 — Black', text: 'Black asks the bishop to declare its intentions. This prophylactic move prevents Bxf6 and also prepares potential ...b6 and ...Bb7 development.' },
+      { label: '7. Bh4 — White', text: 'White retreats the bishop rather than exchanging. Bh4 keeps the pin alive — from h4, the bishop still eyes f6 and g3 if needed.' },
+      { label: '7... b6 — Black', text: 'Black prepares to fianchetto the light-squared bishop on b7. This is a common plan — ...Bb7 will create counterplay along the long diagonal.' },
+      { label: '8. Bd3 — White', text: 'White develops the f1 bishop to an active square, pointing at h7. This bishop will be key in White\'s attacking plans on the kingside.' },
+      { label: '8... dxc4 — Black', text: 'Black takes the gambit pawn! This is the Queen\'s Gambit Accepted move order — Black accepts the pawn to relieve central tension and gain time.' },
+      { label: '9. Bxc4 — White', text: 'White recaptures, now with the bishop on c4 instead of d3. This bishop eyes f7 and is more active.' },
+      { label: '9... Bb7 — Black', text: 'The bishop arrives at b7, completing the fianchetto. From b7, it pressures the long diagonal and eyes e4.' },
+      { label: '10. O-O — White', text: 'White castles. Development is complete. Now the strategic battle begins — White has the bishop pair and central space, Black has solid structure.' },
+      { label: '10... Nbd7 — Black', text: 'The queenside knight develops to d7, supporting the center and preparing ...c5 or ...e5 breaks.' },
+      { label: '11. Qe2 — White', text: 'The queen moves to e2, eyeing the e-file and preparing Rfd1. White is building up central pressure.' },
+      { label: '11... c5 — Black', text: 'Black launches the central break! ...c5 is Black\'s main counter in the QGD — it challenges White\'s d4 pawn and activates Black\'s pieces.' },
+      { label: '12. Rfd1 — White', text: 'The rook goes to d1, supporting d4 and preparing for central action. White must respond carefully to the c5 break.' },
+      { label: '12... Qc7 — Black', text: 'Black prepares to complete development and contests the center. The queen supports ...c4 ideas and eyes the c-file. A rich strategic middlegame awaits both sides.' }
+    ],
+    keyIdeas: [
+      'Classical QGD: Bg5 pin creates long-term pressure on Black\'s position',
+      'Black\'s plan: ...b6, ...Bb7 — fianchetto to contest the long diagonal',
+      'White\'s plan: Bd3 + e4 push — activate pieces and attack the kingside',
+      'Key break: ...c5 by Black challenges White\'s center at the right moment'
+    ]
+  },
+  {
+    id: 'london',
+    name: 'London System',
+    eco: 'D02',
+    category: 'white',
+    tagline: 'Solid, flexible, and low on theory',
+    description: 'The London System is a reliable, low-theory approach beloved by everyone from club players to Magnus Carlsen. White builds a solid pawn structure with the bishop developed to f4 BEFORE playing e3 — the key move order. White\'s plans are clear and safe; the position requires good maneuvering.',
+    moves: ['d4', 'd5', 'Nf3', 'Nf6', 'Bf4', 'e6', 'e3', 'Bd6', 'Bg3', 'O-O', 'Nbd2', 'c5', 'c3', 'Nc6', 'Bd3', 'Bxg3', 'hxg3', 'Qe7', 'O-O', 'b6', 'Ne5', 'Bb7', 'Qf3', 'Rfd8'],
+    explanations: [
+      { label: '1. d4 — White', text: 'White opens with the Queen\'s Pawn, controlling the center and preparing a solid setup. Less sharp than 1.e4, but deeply strategic.' },
+      { label: '1... d5 — Black', text: 'Black takes central space. The symmetrical 1...d5 is a principled response.' },
+      { label: '2. Nf3 — White', text: 'Natural development. Move order matters: White plays Nf3 before deciding on the bishop.' },
+      { label: '2... Nf6 — Black', text: 'Black mirrors with Nf6 — natural development, contesting the e4 square.' },
+      { label: '3. Bf4 — White', text: 'The defining London move! The bishop develops to f4 BEFORE playing e3. This is critical — once e3 is played, the c1 bishop gets locked in. White wants active piece play.' },
+      { label: '3... e6 — Black', text: 'Black supports d5 with e6. A solid, classical response that leads to a positional battle.' },
+      { label: '4. e3 — White', text: 'Now White plays e3, completing the London triangle (d4, e3, c3 will come). Notice that the bishop on f4 is already developed — that\'s the whole point of the London move order.' },
+      { label: '4... Bd6 — Black', text: 'Black challenges the Bf4 directly. The bishop on d6 eyes the f4 bishop and prepares to exchange it, potentially weakening White\'s pawn structure.' },
+      { label: '5. Bg3 — White', text: 'White retreats the bishop to g3. Now if Black exchanges (Bxg3), White recaptures with h2xg3, doubling the h/g pawns but opening the h-file for the rook.' },
+      { label: '5... O-O — Black', text: 'Black castles, king to safety. The fight over the light squares will continue after castle.' },
+      { label: '6. Nbd2 — White', text: 'White develops the queenside knight to d2, supporting the center. From d2 it can go to f1, b3, or stay to support e4.' },
+      { label: '6... c5 — Black', text: 'Black attacks d4. This is the main counter in the London — Black wants to challenge White\'s central pawn before White consolidates.' },
+      { label: '7. c3 — White', text: 'White solidifies d4, completing the London triangle: d4, e3, c3. This structure is very hard to break down — White\'s center is rock-solid.' },
+      { label: '7... Nc6 — Black', text: 'Black develops the knight to c6, increasing pressure on d4. The knight on c6 supports potential ...e5 or ...c4 breaks.' },
+      { label: '8. Bd3 — White', text: 'White\'s f1 bishop develops to d3, aiming at h7. From d3, the bishop is very powerful, and White now threatens to follow up with Qc2 and then e4.' },
+      { label: '8... Bxg3 — Black', text: 'Black exchanges the bishops. By trading the Bd6 for the Bg3, Black removes White\'s important bishop but concedes the h-file opening.' },
+      { label: '9. hxg3 — White', text: 'White recaptures with the h-pawn, creating a half-open h-file. This is an important dynamic — White can use the h-file for attacking chances with Rh1.' },
+      { label: '9... Qe7 — Black', text: 'Black develops the queen to e7, preparing to challenge White\'s center with ...e5 or contest the bishop on d3.' },
+      { label: '10. O-O — White', text: 'White castles kingside. The king goes to g1, and White\'s setup is complete. Now the game enters a positional middlegame.' },
+      { label: '10... b6 — Black', text: 'Black prepares ...Bb7, creating counterplay along the long diagonal. This fianchetto plan is Black\'s most active response to the London.' },
+      { label: '11. Ne5 — White', text: 'The knight jumps to e5 — a very powerful central outpost. From e5, the knight dominates the board and creates threats against f7. This is a typical London attacking move.' },
+      { label: '11... Bb7 — Black', text: 'The bishop arrives on b7, completing the fianchetto. Black now has counterplay along the long diagonal, pressuring White\'s center.' },
+      { label: '12. Qf3 — White', text: 'White brings the queen to f3, eyeing the h-file (Qh3 threat) and supporting the Ne5. White is building up an attacking setup.' },
+      { label: '12... Rfd8 — Black', text: 'Black centralizes the rook to d8, contesting the d-file and preparing for potential ...cxd4 or ...e5 breaks. The position is dynamically balanced with chances for both sides.' }
+    ],
+    keyIdeas: [
+      'Always play Bf4 BEFORE e3 — the critical London move order',
+      'Build the triangle: d4, e3, c3 for a rock-solid structure',
+      'Ne5 is a key attacking outpost — aim to get the knight there',
+      'After hxg3: the h-file is half-open, giving White attacking chances'
+    ]
+  },
+  {
+    id: 'sicilian',
+    name: 'Sicilian Defense',
+    eco: 'B20',
+    category: 'black',
+    tagline: "Black's sharpest and most popular weapon against 1.e4",
+    description: 'The most played opening in chess at all levels. The Sicilian creates an asymmetrical pawn structure from move one. The line shown is the Najdorf Variation — the most theoretically rich opening in chess, favored by Fischer, Kasparov, and Carlsen. Black gets queenside counterplay while White attacks on the kingside.',
+    moves: ['e4', 'c5', 'Nf3', 'd6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'a6', 'Be2', 'e5', 'Nb3', 'Be7', 'O-O', 'O-O', 'Be3', 'Be6', 'Qd2', 'Nbd7', 'f3', 'b5', 'a4', 'b4'],
+    explanations: [
+      { label: '1. e4 — White', text: 'White opens with the King\'s Pawn, claiming central space and preparing rapid development. White will typically aim for a kingside attack.' },
+      { label: '1... c5 — Black', text: 'The Sicilian! Instead of matching White\'s central pawn with 1...e5, Black plays c5 — controlling d4 without giving White a central pawn duo. This asymmetry is the engine of the most complex chess in history.' },
+      { label: '2. Nf3 — White', text: 'White develops the knight and prepares d4 — the key pawn thrust that opens the Sicilian into its full complexity.' },
+      { label: '2... d6 — Black', text: 'Black supports the e5 square (after ...e5 later) and prepares the Najdorf. Black builds a flexible structure.' },
+      { label: '3. d4 — White', text: 'The key move! White opens the center. After 3...cxd4 4.Nxd4, the Sicilian proper begins — White has more central space, Black has the c-file for counterplay.' },
+      { label: '3... cxd4 — Black', text: 'Black captures, eliminating White\'s c-pawn equivalence. Now the pawn structure is asymmetrical: White has an e-pawn, Black has a d-pawn. This imbalance drives the entire game.' },
+      { label: '4. Nxd4 — White', text: 'White recaptures with the knight, centralizing it. The knight on d4 is a powerful piece, but Black will try to undermine it.' },
+      { label: '4... Nf6 — Black', text: 'Black attacks e4, developing a key piece. The Nf6 is Black\'s best move — it contests the center and prepares for the upcoming battle.' },
+      { label: '5. Nc3 — White', text: 'White defends e4 with the knight, completing basic development. Now the Najdorf tabiya is set with White\'s next move choice.' },
+      { label: '5... a6 — Black', text: 'The Najdorf! The signature move — 5...a6. This prevents Bb5+, prepares ...b5 expansion, and keeps options flexible. Fischer called the Najdorf "best by test" for Black.' },
+      { label: '6. Be2 — White', text: 'The English Attack alternative — White plays Be2, avoiding the razor-sharp 6.Bg5 lines. This solid system leads to strategic battles.' },
+      { label: '6... e5 — Black', text: 'Black stakes a claim in the center. 6...e5 kicks the Nd4, gains space, and prepares to develop with ...Be7, ...Be6, and ...0-0. The central tension defines the middlegame.' },
+      { label: '7. Nb3 — White', text: 'The knight retreats to b3, keeping an eye on d4 and c5. White accepts a slightly passive knight in exchange for long-term structural pressure.' },
+      { label: '7... Be7 — Black', text: 'Solid development — the bishop prepares to castle. Be7 is the backbone of the Najdorf with 6...e5 — a safe, flexible piece.' },
+      { label: '8. O-O — White', text: 'White castles, completing development. Now the strategic battle begins in earnest.' },
+      { label: '8... O-O — Black', text: 'Black also castles. Both kings are safe, and the battle will be fought in the center and on both wings.' },
+      { label: '9. Be3 — White', text: 'White develops the bishop to e3, eyeing the d4 and b6 squares. White prepares the Qd2 + f3 setup, known as the English Attack in Sicilian positions.' },
+      { label: '9... Be6 — Black', text: 'Black\'s bishop to e6, contesting White\'s Be3 and preparing to fight for the d5 and c4 squares. The bishops will likely be exchanged.' },
+      { label: '10. Qd2 — White', text: 'White prepares the classic Sicilian plan: Qd2 + f3 + g4. White is setting up for a queenside pawn storm (a4, f3, g4) while Black plans a queenside expansion.' },
+      { label: '10... Nbd7 — Black', text: 'Black develops the knight, supporting e5 and preparing ...Nc5 (attacking Nb3) or ...Nb6. The knight on d7 is flexible.' },
+      { label: '11. f3 — White', text: 'White plays f3, supporting e4 and preparing g4. This is the hallmark of the English Attack — White is going to launch a kingside pawn storm.' },
+      { label: '11... b5 — Black', text: 'Black begins queenside counterplay. The b5 push is typical Sicilian — Black expands on the queenside while White attacks the kingside. This race is the heart of the Sicilian.' },
+      { label: '12. a4 — White', text: 'White challenges Black\'s queenside expansion. a4 attacks the b5 pawn and slows Black\'s counter. This creates a critical race.' },
+      { label: '12... b4 — Black', text: 'Black pushes the pawn, gaining space and forcing White to deal with the b4 pawn. White cannot capture (axb5 would allow ...axb5 with a strong queenside majority). The race is on — White storms the kingside, Black storms the queenside.' }
+    ],
+    keyIdeas: [
+      'Najdorf: 5...a6 prevents Bb5+ and prepares queenside expansion',
+      'English Attack: Be3 + Qd2 + f3 — White storms the kingside',
+      'Black\'s plan: ...b5-b4, ...Nc5 — queenside counterplay and piece activity',
+      'The race: White attacks the kingside BEFORE Black breaks through queenside'
+    ]
+  },
+  {
+    id: 'french',
+    name: 'French Defense',
+    eco: 'C00',
+    category: 'black',
+    tagline: 'Solid and counterattacking with ...c5',
+    description: 'The French Defense is a strategic, counterattacking system. Black builds a solid structure and prepares the ...c5 break to challenge White\'s center. The Advance Variation shown (3.e5) gives White space but Black counterattacks with ...c5. Clear plans for both sides make this an excellent learning opening.',
+    moves: ['e4', 'e6', 'd4', 'd5', 'e5', 'c5', 'c3', 'Nc6', 'Nf3', 'Qb6', 'a3', 'c4', 'g3', 'Na5', 'Nbd2', 'Bd7', 'Bg2', 'Ne7', 'O-O', 'h6', 'Re1', 'Nf5', 'Nf1', 'Be7'],
+    explanations: [
+      { label: '1. e4 — White', text: 'White opens with the King\'s Pawn, claiming central space.' },
+      { label: '1... e6 — Black', text: 'The French Defense! Black prepares to challenge the center with ...d5 on the next move. The e6 pawn makes the position very solid.' },
+      { label: '2. d4 — White', text: 'White builds a classical pawn center. Now Black must challenge it.' },
+      { label: '2... d5 — Black', text: 'The defining French move — Black challenges the center head-on. Now a central tension exists that will define the game.' },
+      { label: '3. e5 — White', text: 'The Advance Variation! White advances the pawn, gaining space and a space advantage but giving Black a clear target: the d4 pawn and the e5 pawn. This is a dynamic and rich variation.' },
+      { label: '3... c5 — Black', text: 'Immediate counterattack! Black attacks the base of White\'s pawn chain (d4) right away. This is the most principled response — attack what White advances.' },
+      { label: '4. c3 — White', text: 'White supports d4 with c3. This solid move keeps the center intact. White is going for a slow positional game.' },
+      { label: '4... Nc6 — Black', text: 'Black develops the knight to c6, increasing pressure on d4 and preparing for further counterplay. The knight on c6 is very active.' },
+      { label: '5. Nf3 — White', text: 'White develops the knight, further supporting d4 and preparing to castle. White\'s setup is solid but somewhat passive.' },
+      { label: '5... Qb6 — Black', text: 'The queen comes to b6, attacking both d4 and b2. This is an aggressive and effective move — White must be careful with both weaknesses.' },
+      { label: '6. a3 — White', text: 'White plays a3, preventing ...Bb4 (which would add pressure to c3) and preparing for queenside expansion. A slow but necessary prophylactic move.' },
+      { label: '6... c4 — Black', text: 'Black locks the center with c4, fixing the queenside structure. Now the game becomes about the kingside and the activity of the pieces.' },
+      { label: '7. g3 — White', text: 'White prepares to fianchetto the bishop. This is a modern approach — the Bg2 will be a powerful piece behind the pawn chain.' },
+      { label: '7... Na5 — Black', text: 'The knight maneuvers to a5, targeting the b3 square and preparing to go to b3 itself (if White allows) or support ...a5 expansion. Typical French maneuvering.' },
+      { label: '8. Nbd2 — White', text: 'White develops the knight to d2, preparing Nf1-e3 or h3. From d2, the knight can go to f1 heading to e3 to support the center.' },
+      { label: '8... Bd7 — Black', text: 'Black develops the bishop to d7 — not the most glamorous square, but it prepares ...Be8-h5 or ...Bb5 potential. In the French, developing the pieces is the key challenge.' },
+      { label: '9. Bg2 — White', text: 'White completes the fianchetto. The Bg2 is a powerful piece behind the pawn chain, supporting the e4-e5 advance and eyeing d5 if it ever opens.' },
+      { label: '9... Ne7 — Black', text: 'Black\'s knight heads to f5, a key outpost in the Advance French. The Ne7 prepares Nf5, where it will be a powerful blockader.' },
+      { label: '10. O-O — White', text: 'White castles, bringing the king to safety. Now White\'s pieces are all in their ideal positions.' },
+      { label: '10... h6 — Black', text: 'Prophylaxis — Black prevents Bg5 (which would pin the Ne7). This quiet move secures the kingside.' },
+      { label: '11. Re1 — White', text: 'The rook moves to e1, supporting the e5 pawn and preparing for central action. White is building up on the kingside.' },
+      { label: '11... Nf5 — Black', text: 'The knight arrives at f5, Black\'s ideal outpost in the French Advance. From f5, the knight controls e3, g3, d4, and h4 — a fantastic piece! This square is the heart of Black\'s counterplay.' },
+      { label: '12. Nf1 — White', text: 'White maneuvers the knight from d2 to f1, heading to e3 to challenge the Nf5 outpost.' },
+      { label: '12... Be7 — Black', text: 'Black prepares to castle and solidifies the position. The Be7 defends f6 and prepares to activate. The position is roughly balanced with both sides having clear plans.' }
+    ],
+    keyIdeas: [
+      'Advance Variation: attack d4 with ...c5 right away — that\'s the plan',
+      '...Qb6 attacks d4 AND b2 simultaneously — a powerful dual threat',
+      'The Nf5 outpost is Black\'s dream square — fight to reach it',
+      'White\'s Bg2 fianchetto aims down the long diagonal at Black\'s queenside'
+    ]
+  },
+  {
+    id: 'caro-kann',
+    name: 'Caro-Kann Defense',
+    eco: 'B10',
+    category: 'black',
+    tagline: 'Solid, free bishop, and strong endgames',
+    description: 'The Caro-Kann is Black\'s most solid defense against 1.e4. Like the French, Black prepares ...d5 — but with c6 instead of e6. The key difference: Black\'s light-squared bishop remains free, avoiding the French\'s main weakness. The Classical Variation shown here is Karpov\'s favorite.',
+    moves: ['e4', 'c6', 'd4', 'd5', 'Nc3', 'dxe4', 'Nxe4', 'Bf5', 'Ng3', 'Bg6', 'h4', 'h6', 'Nf3', 'e6', 'Ne5', 'Bh7', 'Bd3', 'Bxd3', 'Qxd3', 'Nd7', 'Bf4', 'Bb4+', 'c3', 'Be7', 'O-O', 'Ngf6'],
+    explanations: [
+      { label: '1. e4 — White', text: 'White opens with the King\'s Pawn, claiming the center and preparing rapid development.' },
+      { label: '1... c6 — Black', text: 'The Caro-Kann! Black prepares ...d5 using the c-pawn to support it. Unlike the French (1...e6), the light-squared bishop on c8 remains completely free — one of the Caro-Kann\'s main virtues.' },
+      { label: '2. d4 — White', text: 'White builds the classical center. Now Black challenges it directly.' },
+      { label: '2... d5 — Black', text: 'The Caro-Kann tabiya. Black challenges the center immediately. The c6 pawn supports d5 without blocking the c8 bishop.' },
+      { label: '3. Nc3 — White', text: 'White supports e4 with the knight. The Classical Variation — White contests the center aggressively.' },
+      { label: '3... dxe4 — Black', text: 'Black captures the e4 pawn. This Classical line exchange gives Black a very solid position and an extra central pawn for a moment.' },
+      { label: '4. Nxe4 — White', text: 'White recaptures with the knight, centralizing it powerfully. The knight on e4 is very strong — it controls d6, f6, c5, and g5.' },
+      { label: '4... Bf5 — Black', text: 'Activate the bishop immediately! This is the whole point of the Caro-Kann — the light-squared bishop comes out BEFORE the pawn chain locks it in. 4...Bf5 is the most classical and principled response.' },
+      { label: '5. Ng3 — White', text: 'White attacks the Bf5 with the knight. The bishop must move. White gains a tempo but the knight on g3 is not as powerful as it was on e4.' },
+      { label: '5... Bg6 — Black', text: 'The bishop retreats to g6, a safe and active square. From g6, the bishop is hard to attack and still controls important squares.' },
+      { label: '6. h4 — White', text: 'White attacks the Bg6 with a pawn. This aggressive move creates threats — if Black doesn\'t respond, h5 will kick the bishop again.' },
+      { label: '6... h6 — Black', text: 'Black stops h5 with h6. Now the bishop on g6 is safe. This pawn move also supports a potential ...g5 advance if needed.' },
+      { label: '7. Nf3 — White', text: 'White develops the knight to f3, completing the opening setup. Now the pieces are ready for castling.' },
+      { label: '7... e6 — Black', text: 'Black plays e6, supporting d5 (or d4 if there is one) and preparing to develop the f8 bishop. The structure is solid.' },
+      { label: '8. Ne5 — White', text: 'White jumps the knight to e5, the powerful central outpost. From e5, the knight attacks Bg6 and creates pressure on f7.' },
+      { label: '8... Bh7 — Black', text: 'The bishop retreats to h7, a safe square. From h7, it\'s out of danger and supports Black\'s position quietly.' },
+      { label: '9. Bd3 — White', text: 'White develops the bishop to d3, aiming at h7. White is building up an attacking setup with Ne5 and Bd3.' },
+      { label: '9... Bxd3 — Black', text: 'Black exchanges the bishops. By taking on d3, Black removes White\'s powerful attacking bishop and slightly relieves the pressure.' },
+      { label: '10. Qxd3 — White', text: 'White recaptures with the queen, which is now centrally placed and eyes h7. The queen on d3 is very active.' },
+      { label: '10... Nd7 — Black', text: 'Black develops the knight to d7, challenging the Ne5 and preparing to complete development. The knight on d7 supports the center.' },
+      { label: '11. Bf4 — White', text: 'White develops the remaining bishop to f4, maintaining piece activity. The bishop on f4 controls e5 (supporting the knight) and d6.' },
+      { label: '11... Bb4+ — Black', text: 'Black gives check with the f8 bishop! This forces White to respond and gains a tempo. The Bb4+ is a common Caro-Kann resource.' },
+      { label: '12. c3 — White', text: 'White blocks the check with c3. This also supports d4 and prepares to kick the bishop back.' },
+      { label: '12... Be7 — Black', text: 'The bishop retreats to e7, where it prepares to castle. Black has completed the opening phase successfully.' },
+      { label: '13. O-O — White', text: 'White castles, bringing the king to safety. White\'s position is active and slightly threatening.' },
+      { label: '13... Ngf6 — Black', text: 'Black develops the kingside knight to f6, attacking the Ne5 and preparing to castle. The position is roughly equal — Black has a solid structure and active pieces.' }
+    ],
+    keyIdeas: [
+      '4...Bf5 — activate the bishop IMMEDIATELY, before it gets locked in',
+      'The Caro-Kann gives solid, healthy pawn structures — great for endgames',
+      '...h6 stops h5 and prevents the bishop from being chased further',
+      'Classical goal: complete development solidly, then equalize with ...Ngf6 and O-O'
+    ]
+  },
+  {
+    id: 'kings-indian',
+    name: "King's Indian Defense",
+    eco: 'E60',
+    category: 'black',
+    tagline: "Black's most dynamic weapon against 1.d4",
+    description: 'The King\'s Indian is an aggressive, dynamic defense favored by Fischer, Kasparov, and Bronstein. Black allows White to build a large central pawn mass, then attacks it from the flanks. The Classical Variation shown — with ...e5, ...Nc6, d5, ...Ne7 — is the most important and deeply studied line.',
+    moves: ['d4', 'Nf6', 'c4', 'g6', 'Nc3', 'Bg7', 'e4', 'd6', 'Nf3', 'O-O', 'Be2', 'e5', 'O-O', 'Nc6', 'd5', 'Ne7', 'Ne1', 'Nd7', 'Nd3', 'f5', 'Bd2', 'Nf6', 'f3', 'c6'],
+    explanations: [
+      { label: '1. d4 — White', text: 'White opens with the Queen\'s Pawn, aiming for central control and a solid queenside setup.' },
+      { label: '1... Nf6 — Black', text: 'Black develops the knight to f6, immediately contesting the e4 square and preparing to fianchetto the kingside bishop.' },
+      { label: '2. c4 — White', text: 'White expands, building a large central presence. White is going for a dominant center.' },
+      { label: '2... g6 — Black', text: 'The signal! Black prepares to fianchetto the bishop. This is the King\'s Indian — Black allows White the center and attacks from the flanks.' },
+      { label: '3. Nc3 — White', text: 'White develops the knight, supporting d4 and controlling e4.' },
+      { label: '3... Bg7 — Black', text: 'The King\'s Indian bishop! On g7, this piece becomes enormously powerful when the center opens. Black will castle kingside then launch counterplay.' },
+      { label: '4. e4 — White', text: 'White builds the maximum center — two pawns on d4 and e4. Black will now challenge this center from the flanks.' },
+      { label: '4... d6 — Black', text: 'Black supports the e5 break and prepares to complete development. The d6 pawn is a key structural element.' },
+      { label: '5. Nf3 — White', text: 'White develops the knight, supporting d4 and e4. Natural and strong development.' },
+      { label: '5... O-O — Black', text: 'Black castles early, bringing the king to safety. The Bg7 is now protected and the h-file could become a weapon.' },
+      { label: '6. Be2 — White', text: 'White develops the bishop to e2, preparing to castle. This is the Classical Variation — solid and principled.' },
+      { label: '6... e5 — Black', text: 'The Classical King\'s Indian move! Black challenges the center immediately. This creates the main tabiya: White has d4 and c4, Black has e5. The battle is for d5.' },
+      { label: '7. O-O — White', text: 'White castles. Now both sides are castled and the central battle begins in earnest.' },
+      { label: '7... Nc6 — Black', text: 'Black develops the knight, supporting e5 and threatening ...Nd4. The knight on c6 is a key piece.' },
+      { label: '8. d5 — White', text: 'White closes the center with d5. This is the most principled response — White grabs space and starts a race: White attacks on the queenside, Black attacks on the kingside.' },
+      { label: '8... Ne7 — Black', text: 'The knight retreats to e7 — typical King\'s Indian! The knight will reroute to either d7 (supporting f5) or f5 (attacking). This is the start of Black\'s kingside attack plan.' },
+      { label: '9. Ne1 — White', text: 'White\'s knight retreats to e1, the first step of White\'s knight maneuver (Ne1-d3-c5 or Ne1-d3-f2-g4-f6). White is preparing queenside action.' },
+      { label: '9... Nd7 — Black', text: 'Black\'s knight reroutes to d7, preparing ...f5. The pawn push ...f5 is the heart of Black\'s kingside attack in the Classical King\'s Indian.' },
+      { label: '10. Nd3 — White', text: 'White\'s knight comes to d3, an excellent central square. From d3, it supports e5 (if Black plays ...Nxd3) and prepares Nc5 or Nb4.' },
+      { label: '10... f5 — Black', text: 'Black launches the kingside attack with f5! This is Black\'s plan — push f5, then f4, and storm the kingside. The Bg7 will become devastating when the center opens.' },
+      { label: '11. Bd2 — White', text: 'White develops the bishop to d2, preparing to expand on the queenside with b4-b5. White\'s queenside attack mirrors Black\'s kingside attack.' },
+      { label: '11... Nf6 — Black', text: 'The knight returns to f6, heading to f4 or g4 for the attack. Black\'s pieces are aligning for a direct kingside assault.' },
+      { label: '12. f3 — White', text: 'White plays f3, solidifying the center and preparing g4 to stop Black\'s f5-f4 advance. White contests the kingside.' },
+      { label: '12... c6 — Black', text: 'Black challenges White\'s d5 pawn! The ...c6 break is the other King\'s Indian plan — when f5 isn\'t immediately decisive, Black can open the center with ...c6. A tense double-edged position awaits.' }
+    ],
+    keyIdeas: [
+      'Black allows White\'s big center, then attacks it from the flanks',
+      'The Bg7 "Dragon bishop" is Black\'s main weapon — open lines for it',
+      'Black\'s plan: ...f5-f4 kingside storm; White\'s plan: b4-b5 queenside push',
+      'The race: who breaks through first — Black on the kingside or White on the queenside?'
+    ]
+  },
+  {
+    id: 'kings-gambit',
+    name: "King's Gambit",
+    eco: 'C30',
+    category: 'gambit',
+    tagline: 'The most romantic gambit in chess history',
+    description: 'The King\'s Gambit was the most popular opening for hundreds of years. White sacrifices the f4 pawn to gain a powerful center and open lines for attack. The line shown — Accepted with 3...d5 — is a principled counter to the gambit: Black gives back the pawn to equalize quickly.',
+    moves: ['e4', 'e5', 'f4', 'exf4', 'Nf3', 'd5', 'exd5', 'Nf6', 'Bb5+', 'c6', 'dxc6', 'bxc6', 'Bc4', 'Nd5', 'O-O', 'Bd6', 'd4', 'O-O', 'Bxd5', 'cxd5', 'c4', 'dxc4', 'Qa4', 'Be6', 'Qxc4', 'Nc6'],
+    explanations: [
+      { label: '1. e4 — White', text: 'White opens with the King\'s Pawn, claiming central space and preparing rapid development.' },
+      { label: '1... e5 — Black', text: 'Black takes equal central space — the natural and principled response.' },
+      { label: '2. f4 — White', text: 'The King\'s Gambit! White sacrifices the f4 pawn to gain center and open the f-file for attack. This was the most popular opening for 200+ years — Morphy, Anderssen, and countless Romantic-era masters loved it.' },
+      { label: '2... exf4 — Black', text: 'Black accepts the gambit. 2...exf4 is the King\'s Gambit Accepted — Black takes the pawn and dares White to prove compensation.' },
+      { label: '3. Nf3 — White', text: 'White develops the knight, attacks e5 (well, that\'s gone now), and prepares d4. White will try to build a strong center with d4.' },
+      { label: '3... d5 — Black', text: 'The counter-gambit! Black offers to return the pawn for quick development and equal footing. 3...d5 is one of the most principled responses to the King\'s Gambit — Black just strikes back in the center.' },
+      { label: '4. exd5 — White', text: 'White captures, accepting the pawn trade. Now both sides have open lines and piece activity.' },
+      { label: '4... Nf6 — Black', text: 'Black develops the knight, attacks d5 (indirectly), and continues classical development. The Nf6 is always the right piece to develop first.' },
+      { label: '5. Bb5+ — White', text: 'White gives check with the bishop! This tempo-gaining move disrupts Black\'s development and creates complications. White hopes to win back the f4 pawn while keeping attacking chances.' },
+      { label: '5... c6 — Black', text: 'Black blocks the check with c6. This also attacks the bishop and will open lines after dxc6 bxc6.' },
+      { label: '6. dxc6 — White', text: 'White captures on c6, opening the position further. The c-file will open after ...bxc6.' },
+      { label: '6... bxc6 — Black', text: 'Black recaptures with the b-pawn, opening the b-file for the rook. Black now has active piece play despite being a pawn down.' },
+      { label: '7. Bc4 — White', text: 'White\'s bishop retreats to c4, aiming at f7. Now White threatens Nxd4 ideas and has an active setup.' },
+      { label: '7... Nd5 — Black', text: 'The knight jumps to d5, a powerful central square. From d5, it controls many key squares and defends the c-pawn. This is a strong equalizing move.' },
+      { label: '8. O-O — White', text: 'White castles, bringing the king to safety. White is hoping to gain compensation for the piece with active play.' },
+      { label: '8... Bd6 — Black', text: 'Black develops the bishop to d6, completing the pieces and preparing to castle. Black is catching up in development.' },
+      { label: '9. d4 — White', text: 'White builds the center with d4, restoring some central presence and creating pressure on the d5 knight.' },
+      { label: '9... O-O — Black', text: 'Black castles! The king is now safe. Black has completed development with an extra pawn — excellent play.' },
+      { label: '10. Bxd5 — White', text: 'White exchanges the powerful Nd5. By taking the knight, White activates the c6 pawn as a target and opens lines.' },
+      { label: '10... cxd5 — Black', text: 'Black recaptures with the c-pawn, creating a central pawn pair. Black has active central pawns.' },
+      { label: '11. c4 — White', text: 'White attacks the d5 pawn, trying to open lines and regain material. The position is sharp and double-edged.' },
+      { label: '11... dxc4 — Black', text: 'Black captures, accepting the pawn. Now Black has two extra pawns (f4 and c4) but White has active piece play.' },
+      { label: '12. Qa4 — White', text: 'White plays the queen to a4, eyeing the c4 pawn and creating dual threats. White has active compensation for the pawns.' },
+      { label: '12... Be6 — Black', text: 'Black defends with Be6, protecting c4 and activating the bishop. Black must be careful — White has real attacking potential.' },
+      { label: '13. Qxc4 — White', text: 'White wins back the c4 pawn, regaining material balance. The position is now roughly equal with both sides having active pieces.' },
+      { label: '13... Nc6 — Black', text: 'Black completes development with Nc6. The game has become a balanced middlegame — White has regained the pawn, Black has a solid position. A rich struggle awaits.' }
+    ],
+    keyIdeas: [
+      '2...exf4: accept the gambit and challenge White to prove compensation',
+      '3...d5: the counter-gambit — give back the pawn to equalize quickly',
+      'White gets: open f-file, central pawns; Black gets: extra pawn, solid center',
+      'The Immortal Game (Anderssen vs Kieseritsky 1851) was a King\'s Gambit'
+    ]
+  },
+  {
+    id: 'evans-gambit',
+    name: 'Evans Gambit',
+    eco: 'C51',
+    category: 'gambit',
+    tagline: 'A b-pawn sacrifice for explosive development',
+    description: 'The Evans Gambit arises from the Italian Game when White sacrifices the b4 pawn to gain a powerful center and rapid development. It was a favorite of Paul Morphy and was revived by Garry Kasparov in 1995. When it works, White gets fantastic piece activity and attacking chances.',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Bc5', 'b4', 'Bxb4', 'c3', 'Ba5', 'd4', 'exd4', 'O-O', 'Nge7', 'cxd4', 'd5', 'exd5', 'Nxd5', 'Nbd2', 'Be6', 'Bxd5', 'Bxd5', 'Re1+', 'Be4', 'Ng5', 'O-O'],
+    explanations: [
+      { label: '1. e4 — White', text: 'White opens with the King\'s Pawn, claiming the center immediately.' },
+      { label: '1... e5 — Black', text: 'The classical symmetrical response — Black takes equal central space.' },
+      { label: '2. Nf3 — White', text: 'The knight develops naturally to f3, attacking e5 and preparing to castle.' },
+      { label: '2... Nc6 — Black', text: 'Natural development — the knight defends e5 and develops to a strong central square.' },
+      { label: '3. Bc4 — White', text: 'The Italian bishop — aiming at f7 and setting up the Evans Gambit. White is entering Italian/Evans territory.' },
+      { label: '3... Bc5 — Black', text: 'Black develops symmetrically — the bishop goes to c5, aiming at f2 and mirroring White\'s setup. This is exactly what White wants for the Evans!' },
+      { label: '4. b4 — White', text: 'The Evans Gambit! White offers the b4 pawn to deflect the Bc5. The idea: after 4...Bxb4 5.c3 Ba5 6.d4, White has a huge center with d4+e4. Compensation is clear.' },
+      { label: '4... Bxb4 — Black', text: 'Black accepts the gambit. Taking the pawn is critical — declining the Evans (4...Bb6) gives White a pleasant Italian Game for free.' },
+      { label: '5. c3 — White', text: 'White attacks the bishop and prepares d4. This is the key Evans plan: c3 forces the bishop to move, then d4 builds a huge center.' },
+      { label: '5... Ba5 — Black', text: 'The bishop retreats to a5. From a5, it\'s safe but somewhat passive. White will now play d4 and build a powerful center.' },
+      { label: '6. d4 — White', text: 'White plays d4! Now White has two central pawns (d4 and e4) and a lead in development. This is the Evans compensation — excellent piece activity for the sacrificed pawn.' },
+      { label: '6... exd4 — Black', text: 'Black captures the d4 pawn, accepting the position. Now White recaptures and maintains central pressure.' },
+      { label: '7. O-O — White', text: 'White castles rather than recapturing immediately! This is the Compromised Defense — White sacrifices ANOTHER pawn for lead in development and attacking chances. Pure Romantic chess.' },
+      { label: '7... Nge7 — Black', text: 'Black develops the knight to e7, defending the center and preparing to consolidate. Black must be careful — White has tremendous compensation.' },
+      { label: '8. cxd4 — White', text: 'White recaptures on d4, restoring the pawn count. Now White has d4 and e4 — a powerful center.' },
+      { label: '8... d5 — Black', text: 'Black counterattacks with d5! This is the principled response — Black challenges White\'s center and tries to free the position.' },
+      { label: '9. exd5 — White', text: 'White captures, opening lines. The position is now sharp and tactical.' },
+      { label: '9... Nxd5 — Black', text: 'Black\'s knight takes d5, a powerful central square. The knight on d5 is a strong piece.' },
+      { label: '10. Nbd2 — White', text: 'White develops the queenside knight to d2, preparing to reroute pieces. White has excellent piece activity as compensation.' },
+      { label: '10... Be6 — Black', text: 'Black develops the bishop to e6, fighting for the central squares and activating pieces. Black must develop quickly to deal with White\'s pressure.' },
+      { label: '11. Bxd5 — White', text: 'White exchanges the powerful Nd5. This removes Black\'s best piece and opens lines for White\'s rooks.' },
+      { label: '11... Bxd5 — Black', text: 'Black recaptures with the bishop. The position is sharp but approximately balanced.' },
+      { label: '12. Re1+ — White', text: 'Check! The rook goes to e1, checking Black\'s king on e8. The entire e-file is open — a dramatic moment showing White\'s piece activity.' },
+      { label: '12... Be4 — Black', text: 'Black blocks the check with Be4, defending with the bishop. The bishop on e4 is active and defends the king.' },
+      { label: '13. Ng5 — White', text: 'White attacks f7 with the knight! From g5, the knight threatens Nxf7 (the classic Italian fork). White has fantastic piece activity.' },
+      { label: '13... O-O — Black', text: 'Black castles, getting the king to safety. After all the complications, Black has managed to castle. The position is dynamically balanced — White has piece activity and pressure, Black has extra material. A complex middlegame battle awaits.' }
+    ],
+    keyIdeas: [
+      'After 4...Bxb4 5.c3 Ba5 6.d4 — White gets a huge center for the pawn',
+      'Evans compensation: two central pawns + rapid development + open lines',
+      'Kasparov used the Evans vs Anand (1995) for a brilliant win',
+      'Key idea: if Black tries to consolidate, White generates attacks on f7'
+    ]
+  },
+
+  // ── NEW OPENINGS ──────────────────────────────
+
+  {
+    id: 'scotch',
+    name: 'Scotch Game',
+    eco: 'C45',
+    category: 'white',
+    tagline: 'Open and active — White fights for the center immediately',
+    description: 'The Scotch Game (1.e4 e5 2.Nf3 Nc6 3.d4) was popularized by Garry Kasparov who used it to sidestep the mountains of Ruy López theory. By striking at the center immediately on move 3, White creates open, dynamic positions. After 5.Nxc6 bxc6 6.e5, Black\'s queen goes on a wild journey through the center while White tries to build a powerful pawn structure.',
+    moves: ['e4','e5','Nf3','Nc6','d4','exd4','Nxd4','Nf6','Nxc6','bxc6','e5','Qe7','Qe2','Nd5','c4','Nb6','Nc3','Qe6','Qe4','f5','exf6','Qxe4+','Nxe4','gxf6','f4','d6'],
+    explanations: [
+      { label: '1. e4 — White', text: 'The King\'s Pawn — White stakes a central claim and opens lines for quick piece development.' },
+      { label: '1... e5 — Black', text: 'The classical symmetrical response — Black takes equal space in the center.' },
+      { label: '2. Nf3 — White', text: 'The knight develops, attacks e5, and prepares to castle.' },
+      { label: '2... Nc6 — Black', text: 'The most natural defense to e5, developing the knight to a strong central square.' },
+      { label: '3. d4 — White', text: 'The Scotch Game! White immediately challenges Black\'s center rather than building up slowly. This creates an open, dynamic game.' },
+      { label: '3... exd4 — Black', text: 'Black accepts the pawn trade, opening the e-file. The resulting open position suits both sides\' active play.' },
+      { label: '4. Nxd4 — White', text: 'White recaptures with the knight, establishing it on d4. The knight is well-centralized but can be challenged.' },
+      { label: '4... Nf6 — Black', text: 'Black develops the knight and attacks the e4 pawn. This is the most principled response to the Scotch.' },
+      { label: '5. Nxc6 — White', text: 'White takes the Nc6, preparing to advance e5 and dislodge Black\'s Nf6. This pawn structure battle is the heart of the Scotch.' },
+      { label: '5... bxc6 — Black', text: 'Black recaptures with the b-pawn, creating a half-open b-file. This is the most popular recapture, accepting doubled pawns for active piece play.' },
+      { label: '6. e5 — White', text: 'Attacking the Nf6! White gains space and forces Black to deal with the e5 pawn threat.' },
+      { label: '6... Qe7 — Black', text: 'Black defends the Nf6 with the queen and prepares to castle queenside. A flexible move that keeps options open.' },
+      { label: '7. Qe2 — White', text: 'White\'s queen goes to e2, supporting the e5 pawn and eyeing the e-file. White also connects well with the queenside development.' },
+      { label: '7... Nd5 — Black', text: 'The knight retreats to d5, attacking c4 and eyeing the center. From d5, the knight is powerfully placed.' },
+      { label: '8. c4 — White', text: 'White challenges the Nd5, pushing it away and grabbing more central space. This gains territory but creates some queenside weaknesses.' },
+      { label: '8... Nb6 — Black', text: 'The knight retreats to b6, where it keeps pressure on c4 and prepares ...Ba6, ...Bb7, or ...c5 ideas.' },
+      { label: '9. Nc3 — White', text: 'White develops the queenside knight, completing development and supporting the center. Nc3 also eyes d5 for potential knight jumps.' },
+      { label: '9... Qe6 — Black', text: 'The queen moves to e6, contesting the center and preparing ...d6 or ...Ba6 ideas. Black\'s queen is active in the center.' },
+      { label: '10. Qe4 — White', text: 'White\'s queen goes to e4, pressuring the c6 pawn and controlling the center. White is building up for a kingside push.' },
+      { label: '10... f5 — Black', text: 'Black strikes back with f5! This attacks White\'s queen and gains space. It\'s a bold, committal move creating dynamic play.' },
+      { label: '11. exf6 — White', text: 'White takes en passant on f6 (or captures f5 square)! The f6-square becomes a target and Black\'s king loses some shelter.' },
+      { label: '11... Qxe4+ — Black', text: 'Black takes the e4 queen with check — the queens are exchanged! Both sides simplify into an endgame where Black has the extra pawn from exf6 but White has activity.' },
+      { label: '12. Nxe4 — White', text: 'White recaptures. Now the game is queenless — White has the Ne4 centrally placed and will try to target the weak c6 and f6 pawns.' },
+      { label: '12... gxf6 — Black', text: 'Black recaptures on f6, creating a passed f-pawn. The position is unbalanced with both sides having structural strengths and weaknesses.' },
+      { label: '13. f4 — White', text: 'White advances f4, controlling the center and preparing Be3, Nf6+, or a queenside push. White\'s pieces are very active despite the queen trade.' },
+      { label: '13... d6 — Black', text: 'Black challenges White\'s center and tries to free the position. The game is rich and double-edged — both sides have targets to play against.' }
+    ],
+    keyIdeas: [
+      'Scotch key idea: open the center early to fight for activity, not slow maneuvering',
+      'After Nxc6 bxc6 e5: the pawn advance creates immediate tension and gains space',
+      'Watch the c6 pawn chain — White will target it throughout the game',
+      'Kasparov revived the Scotch in the 1990s as a surprise against Karpov'
+    ]
+  },
+
+  {
+    id: 'english',
+    name: 'English Opening',
+    eco: 'A10',
+    category: 'white',
+    tagline: 'Flexible hypermodern control from the flank',
+    description: 'The English Opening (1.c4) is a hypermodern classic — rather than occupying the center with pawns, White controls it from the flank. It leads to rich positional battles and can transpose into many other openings. The English is favored by positional players who want to sidestep Black\'s prepared systems while building long-term pressure.',
+    moves: ['c4','e5','Nc3','Nf6','Nf3','Nc6','g3','d5','cxd5','Nxd5','Bg2','Nb6','O-O','Be7','d3','O-O','Be3','Be6','Qd2','f6','Rfd1','Qd7','a3','a5','Rac1','Nd4'],
+    explanations: [
+      { label: '1. c4 — White', text: 'The English Opening! White controls d5 from the flank without immediately occupying the center. This flexible move allows many different setups.' },
+      { label: '1... e5 — Black', text: 'The most direct response — Black occupies the center immediately. This leads to the "Reversed Sicilian" structure where Black gets the dynamic Sicilian positions with an extra tempo.' },
+      { label: '2. Nc3 — White', text: 'White develops the knight to c3, supporting the c4 pawn and preparing to challenge Black\'s center. Natural development.' },
+      { label: '2... Nf6 — Black', text: 'Black develops the knight, fighting for central control. Nf6 is an active, flexible response.' },
+      { label: '3. Nf3 — White', text: 'The kingside knight develops, completing White\'s minor piece setup and preparing to fianchetto with g3.' },
+      { label: '3... Nc6 — Black', text: 'Black completes the minor piece development, supporting e5. Both sides are building naturally.' },
+      { label: '4. g3 — White', text: 'White prepares the fianchetto. The Bg2 will control the long diagonal and provide solid kingside defense. This is the most common setup in the English.' },
+      { label: '4... d5 — Black', text: 'Black strikes back in the center! This is a critical move — Black challenges White\'s space advantage. The tension must be resolved.' },
+      { label: '5. cxd5 — White', text: 'White takes on d5, opening the c-file and the position. The resulting isolated pawn positions favor active piece play.' },
+      { label: '5... Nxd5 — Black', text: 'Black recaptures with the knight, centralizing it on d5. This is the most active recapture.' },
+      { label: '6. Bg2 — White', text: 'The bishop arrives at g2, completing the fianchetto. From g2, the bishop controls the long a1-h8 diagonal and supports the center.' },
+      { label: '6... Nb6 — Black', text: 'The knight retreats to b6, avoiding exchanges and going to a safe square where it eyeing c4 and d5.' },
+      { label: '7. O-O — White', text: 'White castles, bringing the king to safety. The fianchettoed bishop makes the kingside very solid.' },
+      { label: '7... Be7 — Black', text: 'Black develops the bishop, preparing to castle. Be7 is a solid, classical development.' },
+      { label: '8. d3 — White', text: 'White plays d3, supporting the center and preparing to develop the queen\'s bishop. The d3 pawn solidifies White\'s structure.' },
+      { label: '8... O-O — Black', text: 'Black castles, completing basic development. Now the strategic battle begins — Black will try to use the e5 pawn as a strength.' },
+      { label: '9. Be3 — White', text: 'The queen\'s bishop develops to e3, where it supports the center and prepares queenside activity. White is building up slowly but effectively.' },
+      { label: '9... Be6 — Black', text: 'Black\'s bishop develops to e6, contesting the long diagonal and fighting for the d5 square. Solid and natural.' },
+      { label: '10. Qd2 — White', text: 'White\'s queen comes to d2, completing the "London-style" setup on the queenside. The queen supports d3 and prepares Rfd1.' },
+      { label: '10... f6 — Black', text: 'Black plays f6, defending e5 and preparing ...Nd5 or ...Qd7. This solidifies the e5 pawn but slightly weakens the kingside.' },
+      { label: '11. Rfd1 — White', text: 'White centralizes the rook to d1, increasing pressure on the d-file and supporting potential d4 advances.' },
+      { label: '11... Qd7 — Black', text: 'Black\'s queen comes to d7, connecting the rooks and preparing queenside counterplay. Both sides are building up steadily.' },
+      { label: '12. a3 — White', text: 'Prophylaxis! White prevents ...Nb4 and prepares b4 to gain queenside space. Small moves like these are typical in positional English games.' },
+      { label: '12... a5 — Black', text: 'Black prevents b4 and grabs queenside space. The game is now a strategic battle over the queenside.' },
+      { label: '13. Rac1 — White', text: 'The rook comes to c1, controlling the c-file and preparing for queenside action. Both rooks are active.' },
+      { label: '13... Nd4 — Black', text: 'Black\'s knight jumps to d4! From d4, it controls many key squares and is very hard to challenge. This is a typical outpost in the English — the game has reached a rich strategic middlegame.' }
+    ],
+    keyIdeas: [
+      'English fianchetto: g3 + Bg2 creates long-term diagonal pressure and solid kingside',
+      'Typical plan: cxd5, Bg2, O-O, d3, Be3, Qd2, Rfd1 — build up slowly',
+      'Watch for Black\'s ...Nd4 outpost — it can be very powerful in these structures',
+      'The English often transposes into Queen\'s Gambit or King\'s Indian structures'
+    ]
+  },
+
+  {
+    id: 'reti',
+    name: 'Réti Opening',
+    eco: 'A05',
+    category: 'white',
+    tagline: 'Hypermodern king\'s knight — control without occupation',
+    description: 'Named after Czech grandmaster Richard Réti, this hypermodern opening starts with 1.Nf3 rather than a pawn. White delays central pawn occupation, instead controlling the center from the flanks with knights and bishops. The Réti is extremely flexible and can transpose into many different structures. It was revolutionary in the 1920s and remains popular today.',
+    moves: ['Nf3','d5','g3','Nf6','Bg2','c6','O-O','Bf5','d3','e6','Nbd2','h6','Qe1','Be7','e4','dxe4','dxe4','Bg4','h3','Bxf3','Bxf3','Nbd7','e5','Nd5','c4','Nxe5','Qxe5','Bd6','Qd4','f5'],
+    explanations: [
+      { label: '1. Nf3 — White', text: 'The Réti! White develops the knight without committing to a pawn center. This delays revealing White\'s strategy and keeps maximum flexibility.' },
+      { label: '1... d5 — Black', text: 'Black takes central space immediately. A principled response — Black occupies the center while White has not yet done so.' },
+      { label: '2. g3 — White', text: 'White prepares the fianchetto with Bg2. This is the "pure Réti" — White will control d5 from afar with the bishop rather than with pawns.' },
+      { label: '2... Nf6 — Black', text: 'Black develops the knight, contesting the center. A natural, flexible response.' },
+      { label: '3. Bg2 — White', text: 'The Réti bishop arrives at g2, pointing at Black\'s queenside and center. This bishop is a powerful long-range weapon.' },
+      { label: '3... c6 — Black', text: 'Black solidifies d5 with c6 — the Slav-like setup. This ensures the d5 pawn is well-supported and creates a solid structure.' },
+      { label: '4. O-O — White', text: 'White castles quickly, getting the king safe before deciding on the pawn structure. The Réti often involves very flexible development before committing.' },
+      { label: '4... Bf5 — Black', text: 'Black develops the bishop to f5 — an active square outside the pawn chain. This is the London System setup from the Black side.' },
+      { label: '5. d3 — White', text: 'White plays d3 rather than d4, supporting the center modestly. This is the hypermodern approach — avoid locking in the structure too early.' },
+      { label: '5... e6 — Black', text: 'Black solidifies further with e6. The pawn structure is solid but the light-squared bishop is now hemmed in.' },
+      { label: '6. Nbd2 — White', text: 'White\'s queenside knight develops to d2. From d2, it can go to f1 or b3, and supports the center.' },
+      { label: '6... h6 — Black', text: 'A prophylactic move — Black prevents Ng5 ideas and secures the bishop on f5. Typical in these solid setups.' },
+      { label: '7. Qe1 — White', text: 'White\'s queen moves to e1, preparing e4. This mysterious queen move is a key Réti idea — the queen will support the e4 advance.' },
+      { label: '7... Be7 — Black', text: 'Black develops the dark-squared bishop to e7, preparing to castle. Black\'s position is solid and complete.' },
+      { label: '8. e4 — White', text: 'The central break! White strikes in the center, using the Qe1-Nbd2 setup to support this advance. The position opens up.' },
+      { label: '8... dxe4 — Black', text: 'Black trades pawns in the center, opening the position. This is principled — Black relieves central tension.' },
+      { label: '9. dxe4 — White', text: 'White recaptures, now with a pawn on e4 giving space advantage. The position is open and dynamic.' },
+      { label: '9... Bg4 — Black', text: 'Black\'s bishop develops to g4, pinning the Nf3 knight. This creates immediate tactical pressure and fights for the initiative.' },
+      { label: '10. h3 — White', text: 'White asks the bishop to declare its intentions. This typical prophylactic move tests Black — exchange the bishop or retreat?' },
+      { label: '10... Bxf3 — Black', text: 'Black exchanges the bishop for the knight. This gives White the bishop pair but eliminates the Nf3 and potentially weakens White\'s kingside.' },
+      { label: '11. Bxf3 — White', text: 'White recaptures with the Bg2, now on f3. The bishop pair is a long-term advantage, and White controls the center.' },
+      { label: '11... Nbd7 — Black', text: 'Black develops the queenside knight, completing development. From d7, it can go to b6, c5, or e5.' },
+      { label: '12. e5 — White', text: 'White advances e5, gaining central space and attacking the Nf6. This pawn advance is the Réti\'s typical aggressive central action.' },
+      { label: '12... Nd5 — Black', text: 'The Nf6 retreats to d5 — a powerful central outpost! From d5, the knight controls many important squares.' },
+      { label: '13. c4 — White', text: 'White challenges the Nd5 with c4. The pawn advance gains more central space and opens lines for White\'s bishops.' },
+      { label: '13... Nxe5 — Black', text: 'Black\'s Nd7 knight takes the e5 pawn! An active sacrifice — Black wins material but White gets compensation with active pieces.' },
+      { label: '14. Qxe5 — White', text: 'White\'s queen recaptures on e5, dominating the center. The queen is very active from e5.' },
+      { label: '14... Bd6 — Black', text: 'Black develops the bishop to d6, attacking the queen and activating pieces. Black\'s position is rich despite material considerations.' },
+      { label: '15. Qd4 — White', text: 'The queen retreats to d4, maintaining central dominance while avoiding exchanges. White has a dynamic middlegame advantage.' },
+      { label: '15... f5 — Black', text: 'Black plays f5 — an ambitious pawn advance gaining space on the kingside. The game is sharp and double-edged with complex play ahead.' }
+    ],
+    keyIdeas: [
+      'Réti hypermodernism: control the center from afar with Nf3 + Bg2 rather than occupying it',
+      'The Qe1 + e4 maneuver is the key attacking plan — often surprising opponents',
+      'Bishop pair in open positions: after Bxf3, White\'s two bishops are long-term assets',
+      'Can transpose into King\'s Indian Attack (KIA) or Queen\'s Gambit structures'
+    ]
+  },
+
+  {
+    id: 'sicilian-dragon',
+    name: 'Sicilian Dragon',
+    eco: 'B70',
+    category: 'black',
+    tagline: 'Fire on the board — Black\'s most aggressive Sicilian',
+    description: 'The Dragon is the most feared and exciting Sicilian variation. Black fianchettoes the kingside bishop on g7, creating a "dragon" formation of pawns, and unleashes it down the long diagonal. Both sides attack on opposite wings — White goes after the Black king with the Yugoslav Attack (f3 + g4 + h4), while Black counterattacks down the c-file. Games are razor-sharp and beautiful.',
+    moves: ['e4','c5','Nf3','d6','d4','cxd4','Nxd4','Nf6','Nc3','g6','Be3','Bg7','f3','O-O','Qd2','Nc6','Bc4','Bd7','O-O-O','Rc8','Bb3','Ne5','h4','Nc4','Bxc4','Rxc4'],
+    explanations: [
+      { label: '1. e4 — White', text: 'The King\'s Pawn — the starting move for the Open Sicilian, the most analyzed opening in chess history.' },
+      { label: '1... c5 — Black', text: 'The Sicilian Defense! Black attacks d4 from the flank. This asymmetrical response creates rich, imbalanced positions where both sides can fight for the win.' },
+      { label: '2. Nf3 — White', text: 'The most common continuation — White will typically follow with d4 to open the center.' },
+      { label: '2... d6 — Black', text: 'Black prepares to develop the dark-squared bishop (it will go to g7 in the Dragon) and supports the e5 square.' },
+      { label: '3. d4 — White', text: 'The Open Sicilian! White strikes in the center, and after cxd4 Nxd4, the game becomes incredibly complex.' },
+      { label: '3... cxd4 — Black', text: 'Black trades the c-pawn for White\'s d-pawn — a Sicilian hallmark. Black gets a half-open c-file for later counterplay.' },
+      { label: '4. Nxd4 — White', text: 'White recaptures with the knight. The Nd4 is centralized but can be challenged by Black pieces.' },
+      { label: '4... Nf6 — Black', text: 'Black develops the knight and attacks e4 — immediately pressuring White\'s center.' },
+      { label: '5. Nc3 — White', text: 'White defends e4 and develops the queenside knight. White\'s setup is now pointing toward f5, a key attacking square.' },
+      { label: '5... g6 — Black', text: 'The Dragon move! Black prepares the fianchetto with ...Bg7. The bishop on g7 will be a monster on the long diagonal.' },
+      { label: '6. Be3 — White', text: 'White prepares the Yugoslav Attack with Be3, f3, Qd2, O-O-O. This is White\'s most aggressive system against the Dragon.' },
+      { label: '6... Bg7 — Black', text: 'The Dragon bishop arrives at g7. This bishop is Black\'s most powerful piece — from g7 it x-rays all the way to a1 and supports the counterattack.' },
+      { label: '7. f3 — White', text: 'A key Yugoslav Attack move! f3 supports e4, prepares g4-g5 kingside assault, and stops ...Ng4. White is preparing a pawn storm.' },
+      { label: '7... O-O — Black', text: 'Black castles kingside — into the teeth of White\'s coming g4-g5-h5 pawn storm. Black relies on the counterattack down the c-file.' },
+      { label: '8. Qd2 — White', text: 'The queen comes to d2, completing the Yugoslav Attack setup. White prepares O-O-O and then h4-h5-g4 to attack Black\'s king.' },
+      { label: '8... Nc6 — Black', text: 'Black develops the knight, attacking the Nd4 and preparing ...d5 or ...Ne5. The knight on c6 is a key piece in the Dragon counterplay.' },
+      { label: '9. Bc4 — White', text: 'The bishop to c4 — White eyes d5 and f7. This aggressive bishop placement adds to White\'s attacking forces.' },
+      { label: '9... Bd7 — Black', text: 'Black develops the bishop to d7, preparing to double rooks on the c-file (...Rc8) and planning ...Ne5 to challenge the Bc4.' },
+      { label: '10. O-O-O — White', text: 'White castles queenside! The kings are now on opposite wings — both sides will attack. This creates the ultimate double-edged Dragon fight.' },
+      { label: '10... Rc8 — Black', text: 'Black\'s rook goes to c8 — the c-file is Black\'s main attacking route. The rook will support ...Rxc4 or ...c5-c4 advances.' },
+      { label: '11. Bb3 — White', text: 'The bishop retreats to b3, where it\'s safe from ...Ne5 attacks and still eyes d5. This is a key regrouping move in the Yugoslav.' },
+      { label: '11... Ne5 — Black', text: 'The knight jumps to e5 — an excellent central outpost. From e5, it attacks the Bb3 and supports ...Nc4 ideas.' },
+      { label: '12. h4 — White', text: 'White launches the kingside pawn storm! h4 is the beginning of h4-h5-g4-g5 — a classic Dragon attack on Black\'s king.' },
+      { label: '12... Nc4 — Black', text: 'Black\'s Ne5 jumps to c4, attacking the Bb3 and preparing to trade it off. This removes a key attacking piece from White\'s setup.' },
+      { label: '13. Bxc4 — White', text: 'White exchanges the bishop for the knight rather than retreating. The position simplifies somewhat, but White still has the kingside attack.' },
+      { label: '13... Rxc4 — Black', text: 'Black recaptures with the rook, activating it powerfully on the c-file. Black is ready to double rooks and create devastating pressure. The Dragon counterattack is in full swing.' }
+    ],
+    keyIdeas: [
+      'Dragon key idea: Black\'s Bg7 and open c-file create massive counterplay against White\'s queenside',
+      'Yugoslav Attack: White plays f3, Be3, Qd2, O-O-O then storms with h4-h5-g4-g5',
+      'Both sides attack on opposite wings — who gets there first? Pure chess warfare',
+      'Critical: Black must counterattack; passive play invites White\'s overwhelming kingside assault'
+    ]
+  },
+
+  {
+    id: 'sicilian-schev',
+    name: 'Sicilian Scheveningen',
+    eco: 'B80',
+    category: 'black',
+    tagline: 'The flexible Sicilian — Black builds a solid formation',
+    description: 'The Scheveningen Variation is one of the most respected Sicilian systems. Named after the Dutch beach resort where it was first played systematically, Black builds a solid structure with pawns on d6 and e6, keeping maximum flexibility. Kasparov and Fischer both used it. White typically attacks on the kingside while Black counters on the queenside and center.',
+    moves: ['e4','c5','Nf3','d6','d4','cxd4','Nxd4','Nf6','Nc3','e6','Be2','a6','O-O','Be7','f4','Qc7','Kh1','O-O','Be3','Nc6','Qe1','Nxd4','Bxd4','b5','a3','Bb7'],
+    explanations: [
+      { label: '1. e4 — White', text: 'The Open Game — White stakes out the center and begins what will become a complex battle.' },
+      { label: '1... c5 — Black', text: 'The Sicilian Defense. Black fights for the center from the flank, creating rich asymmetrical positions.' },
+      { label: '2. Nf3 — White', text: 'Natural development heading toward d4.' },
+      { label: '2... d6 — Black', text: 'Black prepares the Scheveningen setup — the d6 pawn will support e5 and give the knight on f6 room to maneuver.' },
+      { label: '3. d4 — White', text: 'The Open Sicilian thrust — White opens the center and takes control of d4.' },
+      { label: '3... cxd4 — Black', text: 'Black trades pawns, gaining the half-open c-file for future counterplay.' },
+      { label: '4. Nxd4 — White', text: 'The knight takes d4, centralizing and setting up the tension.' },
+      { label: '4... Nf6 — Black', text: 'The knight develops and attacks e4, forcing White to defend or advance.' },
+      { label: '5. Nc3 — White', text: 'Development and defense of e4 — White is ready for an attacking setup.' },
+      { label: '5... e6 — Black', text: 'The defining Scheveningen move! Black plays e6 rather than g6, creating a solid "small center" with d6+e6 pawns. The light-squared bishop is temporarily locked in, but the structure is very solid.' },
+      { label: '6. Be2 — White', text: 'White chooses the Classical Scheveningen setup with Be2, avoiding the sharper Keres Attack. Be2 leads to rich strategic play.' },
+      { label: '6... a6 — Black', text: 'The Najdorf move order! a6 prevents Bb5+ and prepares queenside expansion with ...b5. This flexible move is essential in many Sicilian systems.' },
+      { label: '7. O-O — White', text: 'White castles, bringing the king to safety before launching the f4-f5 pawn storm.' },
+      { label: '7... Be7 — Black', text: 'Black develops the bishop, preparing to castle. Be7 is the solid, classical approach in the Scheveningen.' },
+      { label: '8. f4 — White', text: 'The English Attack begins! f4 prepares f5, aiming to attack the kingside. White will follow up with f5 to break open Black\'s kingside pawn structure.' },
+      { label: '8... Qc7 — Black', text: 'The queen centralizes to c7, preparing ...O-O and supporting the c-file counterplay. Qc7 is a typical Sicilian queen move connecting rooks.' },
+      { label: '9. Kh1 — White', text: 'A prophylactic king move — White gets the king off the g1-a7 diagonal before castling queenside or continuing the f-file attack.' },
+      { label: '9... O-O — Black', text: 'Black castles — the king goes to safety before White can launch g4-g5-f5.' },
+      { label: '10. Be3 — White', text: 'The bishop develops to e3, supporting d4 and preparing Qe1-Qg3 attacking ideas. The position is full of tension.' },
+      { label: '10... Nc6 — Black', text: 'Black develops the queenside knight, attacking the Nd4. This forces White to decide what to do with the centralized knight.' },
+      { label: '11. Qe1 — White', text: 'A key prophylactic move — White\'s queen goes to e1 to support g4-f5 ideas and avoids potential knight forks on d4.' },
+      { label: '11... Nxd4 — Black', text: 'Black captures on d4, simplifying the position. Trading off White\'s centralized knight is a common Sicilian plan.' },
+      { label: '12. Bxd4 — White', text: 'White recaptures with the bishop, maintaining a strong presence on d4 and controlling the long diagonal.' },
+      { label: '12... b5 — Black', text: 'Black advances b5 — the queenside counterattack begins! This is the typical Sicilian counterplay: Black attacks on the queenside while White storms on the kingside.' },
+      { label: '13. a3 — White', text: 'White prevents ...b4 which would attack the Nc3. Small preventive moves like this are crucial in tight Sicilian battles.' },
+      { label: '13... Bb7 — Black', text: 'The bishop arrives at b7, pointing at the center and the White king area along the long diagonal. Black\'s position is solid with good counterplay. A rich strategic battle lies ahead.' }
+    ],
+    keyIdeas: [
+      'Scheveningen structure: d6+e6 pawns = solid but flexible; bishop on c8 can develop both ways',
+      'White\'s plan: f4-f5 kingside attack, or Keres Attack (e5 early), or positional English Attack',
+      'Black\'s plan: ...b5-b4 queenside counterattack + ...d5 central break at the right moment',
+      'The "hedgehog" quality: Black looks passive but springs to life — never underestimate it'
+    ]
+  },
+
+  {
+    id: 'nimzo-indian',
+    name: 'Nimzo-Indian Defense',
+    eco: 'E20',
+    category: 'black',
+    tagline: 'Pin and break — Nimzowitsch\'s revolutionary hypermodern weapon',
+    description: 'The Nimzo-Indian (1.d4 Nf6 2.c4 e6 3.Nc3 Bb4) is one of the most respected defenses in chess. Black immediately pins White\'s Nc3 with the bishop, preventing e4 and creating long-term structural pressure. The key question: will Black\'s bishop pair disadvantage or White\'s doubled pawns prove more important? Kasparov, Fischer, and countless world champions played this opening.',
+    moves: ['d4','Nf6','c4','e6','Nc3','Bb4','e3','O-O','Bd3','d5','Nf3','c5','O-O','Nc6','a3','Bxc3','bxc3','dxc4','Bxc4','Qc7','Bd3','e5','dxe5','Nxe5','Nxe5','Qxe5'],
+    explanations: [
+      { label: '1. d4 — White', text: 'The Queen\'s Pawn — White opens with d4, leading to strategic battles quite different from the open 1.e4 games.' },
+      { label: '1... Nf6 — Black', text: 'Black\'s most flexible response — the knight develops to f6, fighting for the center and keeping all options open.' },
+      { label: '2. c4 — White', text: 'White grabs space with c4, extending the center. This leads to the Queen\'s Gambit complex or Indian Defenses.' },
+      { label: '2... e6 — Black', text: 'Black prepares either the Queen\'s Gambit (with ...d5) or Nimzo-Indian (with ...Bb4). Flexible and solid.' },
+      { label: '3. Nc3 — White', text: 'White\'s knight develops to c3, preparing e4 and supporting d4. This invites the Nimzo-Indian.' },
+      { label: '3... Bb4 — Black', text: 'The Nimzo-Indian! The bishop pins the Nc3, preventing e4 and creating immediate imbalance. This is one of the most principled moves in chess.' },
+      { label: '4. e3 — White', text: 'The Classical Variation — solid and reliable. White unpins the knight (the bishop no longer threatens to take c3 effectively after e3).' },
+      { label: '4... O-O — Black', text: 'Black castles early, getting the king to safety before the strategic complications begin.' },
+      { label: '5. Bd3 — White', text: 'White develops the bishop to d3, eyeing h7 and preparing for a kingside attack. Bd3 is active and aggressive.' },
+      { label: '5... d5 — Black', text: 'Black claims central space with d5, challenging White\'s c4 pawn. This is the most principled response in the Classical Nimzo.' },
+      { label: '6. Nf3 — White', text: 'Natural development — the knight develops and prepares to castle.' },
+      { label: '6... c5 — Black', text: 'Black attacks d4! This central break is the key counterplay in the Nimzo-Indian — Black challenges White\'s pawn center.' },
+      { label: '7. O-O — White', text: 'White castles, getting the king safe before the center tension resolves.' },
+      { label: '7... Nc6 — Black', text: 'The queenside knight develops, increasing pressure on d4 and supporting the c5 break.' },
+      { label: '8. a3 — White', text: 'White tests the bishop — a3 forces Black to decide between retreating or exchanging on c3.' },
+      { label: '8... Bxc3 — Black', text: 'Black exchanges the bishop for the knight! This gives White doubled c-pawns but eliminates the powerful Nc3 and gives Black the bishop pair temporarily.' },
+      { label: '9. bxc3 — White', text: 'White recaptures with the b-pawn, creating doubled c-pawns (c3 and c4). This weakens White\'s queenside but opens the b-file.' },
+      { label: '9... dxc4 — Black', text: 'Black takes the c4 pawn! After Bxc4, Black exchanges the bishop, and the structure clarifies.' },
+      { label: '10. Bxc4 — White', text: 'White recaptures with the bishop. Now White has a bishop pair and semi-open b-file, while Black has a solid structure with no weaknesses.' },
+      { label: '10... Qc7 — Black', text: 'The queen comes to c7, eyeing the e5 break and preparing to contest the center. Black is ready to equalize.' },
+      { label: '11. Bd3 — White', text: 'The bishop retreats to d3, maintaining pressure on h7 and supporting potential e4 advances.' },
+      { label: '11... e5 — Black', text: 'Black\'s central break! ...e5 challenges White\'s d4 pawn, opening the position and activating Black\'s pieces.' },
+      { label: '12. dxe5 — White', text: 'White captures on e5, opening the d-file. Now both sides must play precisely.' },
+      { label: '12... Nxe5 — Black', text: 'The Nc6 takes on e5, centralizing powerfully. The knight on e5 is a magnificent outpost — well-protected and very active.' },
+      { label: '13. Nxe5 — White', text: 'White exchanges the centralized knight. After Qxe5, Black has a very active queen and piece play.' },
+      { label: '13... Qxe5 — Black', text: 'Black recaptures with the queen! From e5, the queen is extremely active — threatening multiple ideas. Black has fully equalized and has excellent counterplay in this Nimzo-Indian structure.' }
+    ],
+    keyIdeas: [
+      'The Nimzo pin: Bb4 prevents White\'s e4 immediately — Black buys time for development',
+      'Structural battle: Black creates doubled c-pawns for White; White gets the bishop pair',
+      '...e5 break: the key central strike that Black always eyes in the Nimzo-Indian',
+      'Kasparov considered the Nimzo-Indian the "most correct" defense to 1.d4'
+    ]
+  },
+
+  {
+    id: 'grunfeld',
+    name: 'Grünfeld Defense',
+    eco: 'D70',
+    category: 'black',
+    tagline: 'Give White the center — then destroy it',
+    description: 'The Grünfeld Defense is one of the most theoretically sharp and intellectually exciting openings in chess. Black invites White to build a massive pawn center (d4+e4) then systematically undermines it with ...c5, ...cxd4, and the powerful Bg7 bishop. Bobby Fischer called it "the hypermodern paradox." Modern computers have proven it completely sound — Black was right all along!',
+    moves: ['d4','Nf6','c4','g6','Nc3','d5','cxd5','Nxd5','e4','Nxc3','bxc3','Bg7','Bc4','c5','Ne2','Nc6','Be3','O-O','O-O','cxd4','cxd4','Bg4','f3','Na5','Bd3','Be6'],
+    explanations: [
+      { label: '1. d4 — White', text: 'The Queen\'s Pawn opening — White occupies the center with d4, starting a strategic battle.' },
+      { label: '1... Nf6 — Black', text: 'Black\'s flexible response, keeping all Indian Defense options open.' },
+      { label: '2. c4 — White', text: 'White extends the center grab with c4. Together with d4, this builds a powerful central pawn duo.' },
+      { label: '2... g6 — Black', text: 'Black prepares the fianchetto — the Bg7 will be the weapon that targets White\'s entire center.' },
+      { label: '3. Nc3 — White', text: 'White develops the knight to c3, supporting d4 and preparing e4.' },
+      { label: '3... d5 — Black', text: 'The Grünfeld move! Black challenges the center directly rather than building a flank attack. This leads to the sharpest positions.' },
+      { label: '4. cxd5 — White', text: 'White captures on d5, building toward the massive center that the Grünfeld invites.' },
+      { label: '4... Nxd5 — Black', text: 'Black recaptures with the knight, attacking the Nc3. The exchange on c3 is coming, giving White the center but opening lines for the Bg7.' },
+      { label: '5. e4 — White', text: 'White builds the "ideal" pawn center with e4+d4! This is exactly what White wants — a huge space advantage. But Black has a plan to destroy it.' },
+      { label: '5... Nxc3 — Black', text: 'Black trades the knight for the Nc3, which forces White to recapture and gives the Bg7 a clear diagonal toward d4.' },
+      { label: '6. bxc3 — White', text: 'White recaptures with the b-pawn. Now White has pawns on c3, d4, and e4 — a imposing center. But those are targets, not strengths!' },
+      { label: '6... Bg7 — Black', text: 'The Dragon bishop arrives at g7, immediately pressuring the entire long diagonal. This bishop is the star of the Grünfeld — it x-rays d4 from g7.' },
+      { label: '7. Bc4 — White', text: 'White develops the bishop aggressively to c4, eyeing f7 and supporting the center. White\'s position looks imposing.' },
+      { label: '7... c5 — Black', text: 'Black strikes at the center with c5! This is the key Grünfeld counter — attacking d4 and opening lines for Black\'s pieces.' },
+      { label: '8. Ne2 — White', text: 'The knight retreats to e2, getting out of the way of potential ...Bg4 pins and preparing to support the center.' },
+      { label: '8... Nc6 — Black', text: 'The knight develops to c6, increasing pressure on d4 and threatening ...cxd4 followed by ...Qa5.' },
+      { label: '9. Be3 — White', text: 'White develops the bishop to e3, supporting d4 and preparing for the strategic battle over the center.' },
+      { label: '9... O-O — Black', text: 'Black castles, getting the king safe. The Bg7 becomes fully active now that the king has moved.' },
+      { label: '10. O-O — White', text: 'White castles as well. Now both sides are fully developed — the strategic fight over d4 begins in earnest.' },
+      { label: '10... cxd4 — Black', text: 'Black captures on d4, forcing White to deal with the recapture. This is a key tension-releasing move.' },
+      { label: '11. cxd4 — White', text: 'White recaptures with the c-pawn, maintaining the center. The d4 pawn is now potentially isolated but very strong.' },
+      { label: '11... Bg4 — Black', text: 'Black\'s other bishop develops to g4, pinning the Ne2 and adding pressure. Black is fighting hard against the center.' },
+      { label: '12. f3 — White', text: 'White breaks the pin with f3. This solidifies the center and kicks the bishop, but slightly weakens the kingside.' },
+      { label: '12... Na5 — Black', text: 'The knight leaps to a5, attacking the Bc4. Black will win the bishop pair or force another concession from White.' },
+      { label: '13. Bd3 — White', text: 'The bishop retreats to d3, maintaining pressure on h7. White is keeping the center while Black has active piece play.' },
+      { label: '13... Be6 — Black', text: 'Black\'s bishop develops to e6, contesting the center and fighting for the d5 outpost. The Grünfeld creates a rich strategic middlegame where both sides have genuine winning chances.' }
+    ],
+    keyIdeas: [
+      'Grünfeld paradox: give White the huge center (d4+e4), then destroy it with ...c5 + Bg7',
+      'The Bg7 dragon: once Black castles, this bishop becomes a monster — it targets d4 constantly',
+      'Black\'s goal: eliminate d4 pawn or make it isolated (blockade it), then exploit the weakness',
+      'Used by Kasparov, Spassky, Fischer — proof that the counterattack can beat the center'
+    ]
+  },
+
+  {
+    id: 'slav',
+    name: 'Slav Defense',
+    eco: 'D10',
+    category: 'black',
+    tagline: 'Solid and active — the most popular QGD variation',
+    description: 'The Slav Defense is Black\'s most popular response to the Queen\'s Gambit. By playing 2...c6 (instead of 2...e6), Black supports d5 while keeping the light-squared bishop free to develop to f5 or g4 — unlike in the QGD proper. The Slav is solid yet active, and is favored by Anand, Kramnik, and Carlsen for its excellent structural properties.',
+    moves: ['d4','d5','c4','c6','Nf3','Nf6','Nc3','dxc4','a4','Bf5','e3','e6','Bxc4','Bb4','O-O','O-O','Qe2','Nbd7','e4','Bg6','Bd3','Bh5','g4','Bg6','h4','h6','Ne5','Nxe5','dxe5','Nd5','f4','c5'],
+    explanations: [
+      { label: '1. d4 — White', text: 'The Queen\'s Pawn — White builds a central presence and starts a strategic battle.' },
+      { label: '1... d5 — Black', text: 'The classical response — Black takes equal central space.' },
+      { label: '2. c4 — White', text: 'The Queen\'s Gambit! White offers to trade the c-pawn for central dominance.' },
+      { label: '2... c6 — Black', text: 'The Slav Defense! Rather than declining with 2...e6 (QGD), Black supports d5 with c6. The crucial advantage: the Bc8 can now develop to f5 or g4 without being locked in.' },
+      { label: '3. Nf3 — White', text: 'Natural development — White prepares Nc3 and avoids giving Black easy queenside counterplay immediately.' },
+      { label: '3... Nf6 — Black', text: 'The knight develops, fighting for the center and preparing to castle.' },
+      { label: '4. Nc3 — White', text: 'White develops the queenside knight, now threatening 5.cxd5 followed by 6.e4.' },
+      { label: '4... dxc4 — Black', text: 'Black takes the gambit pawn! This is the accepted Slav. Black will try to hold c4 temporarily while White tries to regain it.' },
+      { label: '5. a4 — White', text: 'White plays a4 to prevent ...b5 which would defend the extra c-pawn. This gives White queenside space but weakens b4.' },
+      { label: '5... Bf5 — Black', text: 'The bishop develops to f5! This is the key Slav advantage over the QGD — the bishop is active outside the pawn chain. Black is ready to develop freely.' },
+      { label: '6. e3 — White', text: 'White solidifies the center with e3. This will allow Bxc4 to regain the pawn while keeping the position solid.' },
+      { label: '6... e6 — Black', text: 'Black finishes development with e6, supporting the center and preparing to castle.' },
+      { label: '7. Bxc4 — White', text: 'White recaptures the gambited pawn. Now White has two bishops and central control, while Black has a solid structure.' },
+      { label: '7... Bb4 — Black', text: 'Black pins the Nc3, echoing the Nimzo-Indian! This creates immediate tactical pressure on White\'s knight and d4.' },
+      { label: '8. O-O — White', text: 'White castles, getting the king safe and avoiding the pin complications for now.' },
+      { label: '8... O-O — Black', text: 'Black castles as well — both kings are safe. The real strategic battle begins.' },
+      { label: '9. Qe2 — White', text: 'The queen comes to e2, supporting e4 and preparing to fight for central space. White wants to play e4 soon.' },
+      { label: '9... Nbd7 — Black', text: 'The queenside knight develops to d7, where it supports the center and prepares ...e5 breaks.' },
+      { label: '10. e4 — White', text: 'White advances e4, seizing central space and challenging Black\'s bishops. This is White\'s main plan in the Slav.' },
+      { label: '10... Bg6 — Black', text: 'The Bf5 retreats to g6 to avoid being pushed back by e5. From g6, it still controls important squares.' },
+      { label: '11. Bd3 — White', text: 'White develops the bishop to d3, aiming at h7 and supporting the center. White\'s pieces are coordinating well.' },
+      { label: '11... Bh5 — Black', text: 'The bishop retreats to h5, where it keeps pressure on the Nf3 (via the g4 square later). Black is trying to maintain the bishop\'s activity.' },
+      { label: '12. g4 — White', text: 'White attacks the bishop with g4! This bold pawn advance starts a kingside storm, but also creates some weaknesses around the White king.' },
+      { label: '12... Bg6 — Black', text: 'The bishop retreats again to g6. Each bishop move by Black has been forced — but the bishop is still active.' },
+      { label: '13. h4 — White', text: 'White continues the kingside advance with h4. The threat is h5 to kick the bishop further. White is pushing hard on the kingside.' },
+      { label: '13... h6 — Black', text: 'Black plays h6, preventing h5 and keeping the bishop on g6. Black is defending calmly.' },
+      { label: '14. Ne5 — White', text: 'White\'s knight jumps to e5 — a powerful outpost in the center. From e5, it threatens many pieces and dominates the board.' },
+      { label: '14... Nxe5 — Black', text: 'Black exchanges on e5 to remove the powerful knight. After dxe5, White has a strong passed e-pawn.' },
+      { label: '15. dxe5 — White', text: 'White recaptures with the d-pawn, creating a strong passed pawn on e5. White\'s pawn structure is very imposing.' },
+      { label: '15... Nd5 — Black', text: 'The knight jumps to d5 — a powerful central outpost. Black uses the weakening of the white center to create a strong knight.' },
+      { label: '16. f4 — White', text: 'White continues the kingside push with f4, preparing f5. The king-side storm is building up.' },
+      { label: '16... c5 — Black', text: 'Black finally activates the queenside with c5! This breaks the tension in the center and creates counterplay. The game is highly complex with mutual chances.' }
+    ],
+    keyIdeas: [
+      'Slav key: 2...c6 keeps the light-squared bishop free — unlike the Queen\'s Gambit Declined',
+      'The Bf5 is Black\'s pride — keep it active; White will constantly try to chase it',
+      'Black\'s central plan: establish Nd5 as an outpost and play ...c5 for queenside counterplay',
+      'After e4 by White: watch for the typical kingside expansion g4-h4-f4 attacking sequence'
+    ]
+  },
+
+  {
+    id: 'queens-indian',
+    name: "Queen's Indian Defense",
+    eco: 'E12',
+    category: 'black',
+    tagline: 'Nimzowitsch\'s other weapon — the fianchetto variation',
+    description: 'The Queen\'s Indian Defense (1.d4 Nf6 2.c4 e6 3.Nf3 b6) is the companion to the Nimzo-Indian. When White plays 3.Nf3 instead of 3.Nc3, Black plays b6 and fianchettoes the bishop on b7, controlling d5 and e4 from the flank. This leads to rich, positional battles. Kramnik won multiple world championship games with it, and Carlsen regularly employs it.',
+    moves: ['d4','Nf6','c4','e6','Nf3','b6','g3','Bb7','Bg2','Be7','O-O','O-O','Nc3','Ne4','Qc2','Nxc3','Qxc3','d6','b4','Nd7','Bb2','a5','bxa5','bxa5','Rfd1','c5'],
+    explanations: [
+      { label: '1. d4 — White', text: 'The Queen\'s Pawn — White aims for a strategic battle.' },
+      { label: '1... Nf6 — Black', text: 'The flexible knight development — keeping Indian Defense options alive.' },
+      { label: '2. c4 — White', text: 'White extends the pawn center, challenging Black to decide on a defense.' },
+      { label: '2... e6 — Black', text: 'Black prepares for the Queen\'s Indian (if White plays Nf3) or Nimzo-Indian (if Nc3). Very flexible.' },
+      { label: '3. Nf3 — White', text: 'White plays Nf3 rather than Nc3, avoiding the Nimzo-Indian pin. This invites the Queen\'s Indian.' },
+      { label: '3... b6 — Black', text: 'The Queen\'s Indian! Black prepares ...Bb7, fianchettoing the bishop to control the long diagonal and contest d5 and e4.' },
+      { label: '4. g3 — White', text: 'White also fianchettoes! The g3 + Bg2 setup leads to a "battle of the bishops" down the long diagonals.' },
+      { label: '4... Bb7 — Black', text: 'The queen\'s bishop arrives at b7 — this powerful piece controls the a8-h1 diagonal and will fight against White\'s Bg2.' },
+      { label: '5. Bg2 — White', text: 'White\'s bishop reaches g2, completing the fianchetto. The two bishops face each other down the long diagonal — a fascinating strategic duel.' },
+      { label: '5... Be7 — Black', text: 'Black develops the king\'s bishop to e7, preparing to castle. A solid, classical development.' },
+      { label: '6. O-O — White', text: 'White castles, completing the kingside setup. White\'s fianchettoed position is very solid.' },
+      { label: '6... O-O — Black', text: 'Black castles as well — both kings are safe. Now the real positional battle begins.' },
+      { label: '7. Nc3 — White', text: 'White develops the queenside knight to c3. Now the position resembles a Catalan/QID hybrid with many strategic subtleties.' },
+      { label: '7... Ne4 — Black', text: 'Black\'s knight jumps to e4! This active move challenges White\'s control of the center and invites simplification.' },
+      { label: '8. Qc2 — White', text: 'White plays Qc2, attacking the Ne4 and offering a trade. This is the most principled response.' },
+      { label: '8... Nxc3 — Black', text: 'Black exchanges the knight. After Qxc3, the queens come off and Black has a solid position without weaknesses.' },
+      { label: '9. Qxc3 — White', text: 'White recaptures with the queen. Now White has the queen on c3 and a slight space advantage, while Black has good piece coordination.' },
+      { label: '9... d6 — Black', text: 'Black solidifies the center with d6. This prevents e4 and keeps a solid, unbreachable position.' },
+      { label: '10. b4 — White', text: 'White launches queenside expansion with b4! This gains space and prepares Bb2 to reinforce the long diagonal battle.' },
+      { label: '10... Nd7 — Black', text: 'The knight retreats to d7, where it supports c5 and can go to f6 or e5. Black is regrouping.' },
+      { label: '11. Bb2 — White', text: 'The bishop develops to b2, engaging in the long diagonal battle with Black\'s Bb7. This is a key strategic moment.' },
+      { label: '11... a5 — Black', text: 'Black challenges the queenside expansion with a5! This fights for space and creates tension on the b-file.' },
+      { label: '12. bxa5 — White', text: 'White captures on a5, opening the b-file. This forces Black to recapture and creates some structural tension.' },
+      { label: '12... bxa5 — Black', text: 'Black recaptures on a5, now with a passed a-pawn. The pawn on a5 will be a long-term strategic asset.' },
+      { label: '13. Rfd1 — White', text: 'White centralizes the rook to d1, supporting d4 and preparing for central action. Both sides are maneuvering for optimal positions.' },
+      { label: '13... c5 — Black', text: 'Black strikes in the center with c5! This challenges d4 directly. After the dust settles, Black has a solid position with active counterplay and no weaknesses — a typical Queen\'s Indian achievement.' }
+    ],
+    keyIdeas: [
+      'QID key: Bb7 controls the long a8-h1 diagonal — fighting against White\'s Bg2 for central influence',
+      'The "battle of fianchettoes": both bishops on g2 and b7 eye the same long diagonal',
+      'Black\'s queenside counterplay: ...a5 and ...c5 to challenge White\'s space advantage',
+      'Very solid — Black has no structural weaknesses and always has counterplay ideas'
+    ]
+  },
+
+  {
+    id: 'four-knights',
+    name: 'Four Knights Game',
+    eco: 'C47',
+    category: 'black',
+    tagline: 'Symmetry shattered — the Italian-Spanish hybrid',
+    description: 'The Four Knights Game begins with the symmetrical 1.e4 e5 2.Nf3 Nc6 3.Nc3 Nf6, but quickly becomes asymmetrical. After 4.Bb5, White pins Black\'s Nc6 (Spanish setup). The resulting play can be sharp and tactical, as shown by Rubinstein\'s famous games. The line shown features a knight sacrifice with Nxe5 that leads to wild complications.',
+    moves: ['e4','e5','Nf3','Nc6','Nc3','Nf6','Bb5','Nd4','Bc4','Bc5','Nxe5','Qe7','Nf3','Nxf3+','Qxf3','d6','O-O','O-O','d3','c6','Bg5','Qxe4','Bxf6','gxf6','Nxe4','Bg4'],
+    explanations: [
+      { label: '1. e4 — White', text: 'The King\'s Pawn opening — White begins the classical fight for the center.' },
+      { label: '1... e5 — Black', text: 'The symmetrical response — Black mirrors White and takes equal space.' },
+      { label: '2. Nf3 — White', text: 'Development and attack on e5 — the most principled continuation.' },
+      { label: '2... Nc6 — Black', text: 'The knight defends e5 and develops actively.' },
+      { label: '3. Nc3 — White', text: 'The Four Knights begins! White develops the queenside knight symmetrically.' },
+      { label: '3... Nf6 — Black', text: 'Black mirrors with Nf6. Now we have the classic Four Knights position — all four knights are developed.' },
+      { label: '4. Bb5 — White', text: 'White plays Bb5 — the Spanish Four Knights (or "Halloween Gambit" territory approaches!). White pins the Nc6.' },
+      { label: '4... Nd4 — Black', text: 'Black plays the unusual Nd4 — attacking the Bb5 and preparing to exchange it. This is a sharp variation that leads to complications.' },
+      { label: '5. Bc4 — White', text: 'The bishop retreats to c4, setting a trap. If 5...Nxf3+? 6.Qxf3 Nxe4?? 7.Qxf7# would be quick checkmate! Instead play continues...' },
+      { label: '5... Bc5 — Black', text: 'Black develops the bishop to c5 — a natural active square. Now both sides are eyeing f7.' },
+      { label: '6. Nxe5 — White', text: 'White sacrifices the Nf3 to e5, taking the e5 pawn! This is a bold gambit — if Black is not careful, White gets a devastating attack on f7.' },
+      { label: '6... Qe7 — Black', text: 'Black plays Qe7, defending the e5 piece (the Nd4) and preventing the Nxf7 fork (Re7 would give back the knight). A critical defensive move.' },
+      { label: '7. Nf3 — White', text: 'White retreats the knight to f3 — the gambit is declined. White keeps the extra pawn and a slight initiative.' },
+      { label: '7... Nxf3+ — Black', text: 'Black captures on f3 with check! This forces the queen to recapture and opens lines in White\'s position.' },
+      { label: '8. Qxf3 — White', text: 'White recaptures with the queen. Now White has the powerful queen on f3, aiming at f7 and controlling the center.' },
+      { label: '8... d6 — Black', text: 'Black plays d6, developing and preventing Bc4 from attacking f7 immediately. A solid, defensive move.' },
+      { label: '9. O-O — White', text: 'White castles, getting the king safe and activating the rook on f1.' },
+      { label: '9... O-O — Black', text: 'Black castles as well. Now the position is sharp — White has the queen pair and piece activity, Black is solid.' },
+      { label: '10. d3 — White', text: 'White plays d3, solidifying the center and preparing to develop the dark-squared bishop. The position is slowly building toward an attack.' },
+      { label: '10... c6 — Black', text: 'Black plays c6, strengthening the center and preparing to challenge White\'s pieces.' },
+      { label: '11. Bg5 — White', text: 'White\'s bishop develops to g5, pinning Black\'s Qe7? Wait — the queen is on e7. Bg5 pins the queen and adds pressure.' },
+      { label: '11... Qxe4 — Black', text: 'Black boldly captures on e4! But this is a trap — after Bxf6 gxf6, White plays Nxe4 winning the queen back with a great position.' },
+      { label: '12. Bxf6 — White', text: 'White takes the Nf6, discovered attack on the queen. Black must recapture.' },
+      { label: '12... gxf6 — Black', text: 'Black must take with the g-pawn, creating serious kingside weaknesses. The f6 pawn is doubled and weak.' },
+      { label: '13. Nxe4 — White', text: 'White takes back the queen with Nxe4. White now has excellent compensation: the bishop pair, open lines, and Black\'s shattered kingside.' },
+      { label: '13... Bg4 — Black', text: 'Black plays Bg4, pinning the Qf3 and trying to complicate. The position remains sharp and dynamic — Black has the two bishops and some counterplay, but White\'s structure is better.' }
+    ],
+    keyIdeas: [
+      'Four Knights: symmetry breaks quickly after 4.Bb5 Nd4 — each side plays asymmetrically',
+      'The Nxe5 gambit idea: always watch for this knight sacrifice in Italian/Spanish structures',
+      'After the queen trade sequence: White gets structural compensation for material equality',
+      'Black\'s kingside weakness after gxf6 is a long-term strategic target for White'
+    ]
+  },
+
+  // ── TRAPS ──────────────────────────────────────
+
+  {
+    id: 'scholars-mate',
+    name: "Scholar's Mate",
+    eco: null,
+    category: 'trap',
+    tagline: 'The fastest trap — beginner beware!',
+    description: "Scholar's Mate is the most famous beginner trap in chess. White attacks f7 with the queen and bishop, and if Black doesn't see it coming, it's checkmate in just 4 moves! The key lesson: don't move the queen too early, and always watch for Qxf7# threats. Almost every strong player fell for this at least once as a beginner.",
+    moves: ['e4','e5','Bc4','Nc6','Qh5','Nf6','Qxf7'],
+    explanations: [
+      { label: '1. e4 — White', text: 'White opens with e4 — but the Scholar\'s Mate is already being planned. White will try to attack f7 as fast as possible.' },
+      { label: '1... e5 — Black', text: 'Black plays e5, a natural response. But Black needs to be very careful about the f7 square — it\'s only defended by the king.' },
+      { label: '2. Bc4 — White', text: 'The Italian bishop develops to c4, immediately targeting f7! This bishop is now on the most dangerous diagonal aimed at Black\'s weakest point.' },
+      { label: '2... Nc6 — Black', text: 'Black develops the knight — a natural move, but Black has missed White\'s plan. The correct response would be 2...Nf6 to stop Qh5, or 2...d6 for solid defense.' },
+      { label: '3. Qh5 — White', text: 'The queen leaps to h5, threatening Qxf7# immediately! This is the Scholar\'s Mate threat. Black must respond correctly or get checkmated.' },
+      { label: '3... Nf6?? — Black', text: 'Black plays Nf6, attacking the queen — but this is a BLUNDER! The correct move was g6 to drive the queen away. Now White delivers checkmate.' },
+      { label: '4. Qxf7# — White', text: 'CHECKMATE! The queen takes f7 — the king on e8 is in check with no escape. The Bc4 covers d5, and the queen covers e8 and f7. A painful lesson for the beginner who falls for this!' }
+    ],
+    keyIdeas: [
+      'f7 is Black\'s most vulnerable square — defended only by the king in the opening',
+      'To defend: play g6 when the queen reaches h5, or develop Nf6 BEFORE Qh5 can threaten',
+      'White lesson: this works only against beginners — don\'t rely on it against prepared players',
+      'Key principle: don\'t bring the queen out too early — but watch for opponents who do!'
+    ]
+  },
+
+  {
+    id: 'fools-mate',
+    name: "Fool's Mate",
+    eco: null,
+    category: 'trap',
+    tagline: 'Checkmate in 2 — the fastest game possible',
+    description: "Fool's Mate is the fastest possible checkmate in chess — just 2 moves! White plays the weakest possible opening (f3 + g4), opening lines toward the king, and Black delivers Qh4#. While no strong player will ever fall for it, it illustrates a crucial lesson: never weaken your king unnecessarily in the opening.",
+    moves: ['f3','e5','g4','Qh4'],
+    explanations: [
+      { label: '1. f3 — White', text: 'A terrible opening move! f3 weakens the e1 king and does nothing for development. This move is almost never played, but demonstrates the danger of opening pawn moves near your king.' },
+      { label: '1... e5 — Black', text: 'Black takes central space and opens lines. E5 is a natural, strong move that also helps set up the checkmate threat.' },
+      { label: '2. g4?? — White', text: 'Another disastrous move — g4 further weakens the kingside and opens the h4-e1 diagonal. White has created the perfect conditions for an immediate checkmate.' },
+      { label: '2... Qh4# — Black', text: 'CHECKMATE on move 2! The queen delivers the quickest possible checkmate in all of chess. The White king on e1 is in check from Qh4 via the diagonal, and cannot escape: f2 is not covered (f3 pawn has moved away), and there are no pieces to block. Game over!' }
+    ],
+    keyIdeas: [
+      'Never move f and g pawns simultaneously in the opening — this fatally weakens your king',
+      'The h4-e1 diagonal is extremely dangerous when f3 and g4 are played — any queen or bishop can use it',
+      'Principle: don\'t create weaknesses around your king in the opening',
+      'This checkmate illustrates why "developing pawns near your king" is so dangerous'
+    ]
+  },
+
+  {
+    id: 'legal-trap',
+    name: "Legal's Trap",
+    eco: null,
+    category: 'trap',
+    tagline: 'The brilliant queen sacrifice leading to smothered mate',
+    description: "Legal's Trap is a beautiful queen sacrifice that leads to a brilliant checkmate. White appears to hang the queen (allowing Bxd1), but after Bxf7+ Ke7, the knight on d5 delivers checkmate! The lesson: always check if a piece sacrifice leads to a forced checkmate before capturing. Named after 18th century French master Sire de Legal.",
+    moves: ['e4','e5','Nf3','Nc6','Bc4','d6','Nc3','Bg4','Nxe5','Bxd1','Bxf7+','Ke7','Nd5'],
+    explanations: [
+      { label: '1. e4 — White', text: 'The standard King\'s Pawn opening.' },
+      { label: '1... e5 — Black', text: 'Black mirrors in the center — the game begins with classical symmetry.' },
+      { label: '2. Nf3 — White', text: 'The knight develops and attacks e5.' },
+      { label: '2... Nc6 — Black', text: 'The knight defends e5. Both sides are developing normally.' },
+      { label: '3. Bc4 — White', text: 'The Italian Bishop to c4 — this targets f7 and sets up the trap that\'s coming.' },
+      { label: '3... d6 — Black', text: 'A solid move supporting e5. Nothing suspicious yet.' },
+      { label: '4. Nc3 — White', text: 'White develops the queenside knight, building toward the trap. The key ingredient: White needs Nc3 to jump to d5 later.' },
+      { label: '4... Bg4 — Black', text: 'Black pins the Nf3! The bishop on g4 attacks the knight defending e4. Black threatens to double White\'s pawns if the knight moves. This looks clever — but it walks right into the trap!' },
+      { label: '5. Nxe5! — White', text: 'WHITE SACRIFICES THE QUEEN! The knight takes e5, apparently hanging the queen (since Bxd1 would win it). But White has calculated the forced mate. This move is the heart of the Legal Trap!' },
+      { label: '5... Bxd1 — Black', text: 'Black greedily takes the queen on d1. This looks like a huge material gain — but it\'s a catastrophic mistake! Black\'s queen has never moved, so the bishop takes White\'s queen. The king is now on e8 about to walk into a mating net.' },
+      { label: '6. Bxf7+ — White', text: 'CHECK! The bishop takes f7, giving check to the Black king on e8. The king must move — there are no other legal moves to escape this check.' },
+      { label: '6... Ke7 — Black', text: 'The king is forced to move to e7. This seems like escaping, but it walks right into the final checkmate. Every escape square will be covered.' },
+      { label: '7. Nd5# — White', text: 'CHECKMATE! The knight from c3 jumps to d5, and it\'s over. The king on e7 has no escape: d6 has Black\'s own pawn, d8 has Black\'s own queen, e8 is attacked by Bxf7, f8 has Black\'s own bishop (Bf8), e6 is attacked by Bf7, f6 is attacked by Nd5 itself, and f7 has the White bishop. A beautiful smothered mate!' }
+    ],
+    keyIdeas: [
+      'The Legal Trap: Nxe5 looks like a blunder (queen is en prise) but leads to forced checkmate',
+      'Key lesson: always check whether taking a piece leads to checkmate before capturing!',
+      'The Bg4 pin is a mistake — it walks into this trap. Better: don\'t pin Nf3 here',
+      'After Nxe5 Bxd1, the forced sequence Bxf7+ Ke7 Nd5# is unstoppable — memorize the mating pattern'
+    ]
+  },
+
+  {
+    id: 'fried-liver',
+    name: 'Fried Liver Attack',
+    eco: null,
+    category: 'trap',
+    tagline: 'The knife into f7 — a legendary knight sacrifice',
+    description: "The Fried Liver Attack is one of chess's most spectacular sacrificial attacks. Arising from the Two Knights Defense, White sacrifices the knight on f7 (6.Nxf7!) to drag the Black king into the center. With the king exposed, White launches a devastating attack. It\'s named because Black's position gets 'fried.' Very popular at club level where Black is not well-prepared.",
+    moves: ['e4','e5','Nf3','Nc6','Bc4','Nf6','Ng5','d5','exd5','Nxd5','Nxf7','Kxf7','Qf3+','Ke6','Nc3','Nb4','Qe4','c6','a3','Na6','d4','Bd7','O-O','Nc7'],
+    explanations: [
+      { label: '1. e4 — White', text: 'Standard King\'s Pawn opening.' },
+      { label: '1... e5 — Black', text: 'Black takes central space.' },
+      { label: '2. Nf3 — White', text: 'The knight develops, attacking e5.' },
+      { label: '2... Nc6 — Black', text: 'The knight defends e5.' },
+      { label: '3. Bc4 — White', text: 'The Italian bishop develops, setting up the Two Knights Defense. The bishop eyes f7.' },
+      { label: '3... Nf6 — Black', text: 'Black plays Nf6, entering the Two Knights Defense. This creates the conditions for the Fried Liver!' },
+      { label: '4. Ng5 — White', text: 'The knight attacks f7 with Ng5! Along with the Bc4, White is threatening Nxf7, winning the exchange. Black must respond carefully.' },
+      { label: '4... d5 — Black', text: 'Black strikes back with d5! The best response — Black counterattacks in the center rather than defending passively. If 4...Bc5 instead, White plays Nxf7 anyway.' },
+      { label: '5. exd5 — White', text: 'White captures on d5 — the center opens up.' },
+      { label: '5... Nxd5 — Black', text: 'Black takes back with the knight, centralizing it powerfully on d5. This looks natural but walks into the sacrifice.' },
+      { label: '6. Nxf7! — White', text: 'THE FRIED LIVER SACRIFICE! The knight takes f7, giving check! Black\'s king must take the knight — and then it gets dragged into the center. This sacrifice has been played since the 16th century.' },
+      { label: '6... Kxf7 — Black', text: 'The king takes the knight on f7. Black has no choice — it must capture. Now the king is exposed in the center, and White has a powerful attack for the sacrificed knight.' },
+      { label: '7. Qf3+ — White', text: 'Check! The queen comes to f3 with a devastating check. The king is forced to move further into the center.' },
+      { label: '7... Ke6 — Black', text: 'The king retreats to e6 — in the center of the board! This is dangerous, but Ke8 loses immediately too. Black must try to survive.' },
+      { label: '8. Nc3 — White', text: 'White develops the knight with tempo, preparing Nd5+ or Ne4 ideas to continue the attack.' },
+      { label: '8... Nb4 — Black', text: 'Black\'s Nd5 retreats to b4, attacking the Bc4 and trying to trade off White\'s attacking pieces. Black needs to simplify to survive.' },
+      { label: '9. Qe4 — White', text: 'The queen centralizes to e4, threatening d4 and keeping the pressure on Black\'s exposed king. White\'s attack continues.' },
+      { label: '9... c6 — Black', text: 'Black plays c6, trying to establish some central stability. The king needs pawn cover desperately.' },
+      { label: '10. a3 — White', text: 'White forces the Nb4 to declare its intentions. After Na6, the knight is sidelined.' },
+      { label: '10... Na6 — Black', text: 'The knight retreats to a6 — a passive but forced move. Black\'s pieces are not coordinating well under the pressure.' },
+      { label: '11. d4 — White', text: 'White advances d4, opening more lines and creating threats against the exposed king. The initiative remains firmly with White.' },
+      { label: '11... Bd7 — Black', text: 'Black develops the bishop to d7, preparing to coordinate the pieces and potentially castle queenside to get the king to safety.' },
+      { label: '12. O-O — White', text: 'White castles, bringing the rook into the game. White is fully developed and the attack on Black\'s king will continue.' },
+      { label: '12... Nc7 — Black', text: 'The knight reroutes to c7, defending and preparing ...Nd5 or ...Ne6. Black is trying desperately to organize a defense, but White has an enormous advantage in activity. This is the power of the Fried Liver!' }
+    ],
+    keyIdeas: [
+      'The Fried Liver works: Nxf7 sacrifices a piece to drag the Black king into the center',
+      'After Kxf7, White plays Qf3+ forcing Ke6 — the king is trapped in the middle of the board',
+      'White gets enormous compensation: open lines, centralized pieces, exposed king',
+      'Defense: Black should play 5...Na5 (attacking Bc4) instead of 5...Nxd5 to avoid the sacrifice'
+    ]
+  },
+
+  {
+    id: 'elephant-trap',
+    name: 'Elephant Trap',
+    eco: null,
+    category: 'trap',
+    tagline: 'Win the queen in the Queen\'s Gambit Declined',
+    description: "The Elephant Trap is one of the most important opening traps to know in the Queen's Gambit Declined. After 5.cxd5 exd5 6.Nxd5??, Black wins the queen with the brilliant Bb4+! White cannot avoid losing material — the queen is trapped. The lesson: be very careful about premature captures in the QGD.",
+    moves: ['d4','d5','c4','e6','Nc3','Nf6','Bg5','Nbd7','cxd5','exd5','Nxd5','Nxd5','Bxd8','Bb4+','Qd2','Bxd2+','Kxd2','Kxd8'],
+    explanations: [
+      { label: '1. d4 — White', text: 'The Queen\'s Pawn opening begins.' },
+      { label: '1... d5 — Black', text: 'Black claims central space with d5.' },
+      { label: '2. c4 — White', text: 'The Queen\'s Gambit! White offers the c-pawn.' },
+      { label: '2... e6 — Black', text: 'The Queen\'s Gambit Declined. Black solidifies d5 with e6.' },
+      { label: '3. Nc3 — White', text: 'White develops the knight.' },
+      { label: '3... Nf6 — Black', text: 'Black develops the kingside knight.' },
+      { label: '4. Bg5 — White', text: 'White pins the Nf6 with Bg5. This is the Classical QGD — White creates pressure on Black\'s position.' },
+      { label: '4... Nbd7 — Black', text: 'Black develops the queenside knight to d7 rather than c6, maintaining the pressure on the Bg5 pin without blocking the c-pawn.' },
+      { label: '5. cxd5 — White', text: 'White trades pawns. This relieves the central tension, but now comes the trap...' },
+      { label: '5... exd5 — Black', text: 'Black recaptures with the e-pawn. Now d5 is defended by the Nf6, and the Nbd7 is protecting the Nf6. This seemingly simple position contains a deadly trap.' },
+      { label: '6. Nxd5?? — White', text: 'WHITE FALLS INTO THE TRAP! The knight takes d5, apparently winning a pawn and forking the Nf6 and Nbd7. But this loses the queen! White should play e3, Nf3, or Qc2 instead.' },
+      { label: '6... Nxd5 — Black', text: 'Black takes back with the knight on d5 — the queen on d1 is now unprotected! And the next move will expose this beautifully.' },
+      { label: '7. Bxd8 — White', text: 'White takes the Black queen... but waits for the brilliant reply that wins the game.' },
+      { label: '7... Bb4+ — Black', text: 'CHECK! The bishop comes to b4, giving check to the White king AND defending the Nd5. White cannot take the bishop because the queen would hang. The White queen is trapped on d8!' },
+      { label: '8. Qd2 — White', text: 'White must interpose with Qd2 to block the check. But now the queen is on d2, not defending anything useful, and Black wins it back.' },
+      { label: '8... Bxd2+ — Black', text: 'Check again! Black takes the Qd2 with check. White must take back.' },
+      { label: '9. Kxd2 — White', text: 'White\'s king takes the bishop. White has the queens off the board, but Black recovers the queen on d8.' },
+      { label: '9... Kxd8 — Black', text: 'Black takes White\'s queen on d8! Black has won a queen for a bishop and knight — a huge material advantage. The Elephant Trap catches so many unsuspecting players at club level!' }
+    ],
+    keyIdeas: [
+      'Elephant Trap: after cxd5 exd5, the move Nxd5 loses to Nxd5 Bxd8 Bb4+! winning the queen',
+      'Key sequence: 6...Nxd5 7.Bxd8 Bb4+ 8.Qd2 Bxd2+ 9.Kxd2 Kxd8 — Black wins a queen for two pieces',
+      'White lesson: after cxd5 exd5, the d5 square is solidly defended — don\'t try to grab it',
+      'Prevention: White should play e3, Nf3, or Qc2 instead of the greedy Nxd5'
+    ]
+  },
+
+  {
+    id: 'stafford-gambit',
+    name: 'Stafford Gambit',
+    eco: null,
+    category: 'trap',
+    tagline: 'The reckless gambit that has trapped thousands',
+    description: "The Stafford Gambit (1.e4 e5 2.Nf3 Nf6 3.Nxe5 Nc6) is a swashbuckling gambit where Black sacrifices a pawn to get wild attacking chances. After 4.Nxc6 dxc6 5.e5 Ne4, Black creates chaos with piece activity and tactical tricks. White needs to be well-prepared — many attacking lines win for Black if White plays carelessly.",
+    moves: ['e4','e5','Nf3','Nf6','Nxe5','Nc6','Nxc6','dxc6','e5','Ne4','Nc3','Bc5','Qf3','Nxc3','bxc3','Qd4','Qg3','Be6','Ba3','O-O-O','Bxc5','Qxc5','d4','Qa5'],
+    explanations: [
+      { label: '1. e4 — White', text: 'Standard King\'s Pawn opening.' },
+      { label: '1... e5 — Black', text: 'Black takes central space.' },
+      { label: '2. Nf3 — White', text: 'The knight develops and attacks e5.' },
+      { label: '2... Nf6 — Black', text: 'The Petrov/Russian variation — or is it? Black is about to play the Stafford Gambit!' },
+      { label: '3. Nxe5 — White', text: 'White takes the e5 pawn.' },
+      { label: '3... Nc6 — Black', text: 'The Stafford Gambit! Black develops the knight rather than recapturing the pawn. If White is greedy and takes on c6, the complications will favor Black.' },
+      { label: '4. Nxc6 — White', text: 'White takes the Nc6. This is exactly what Black wants — the position becomes wildly complex and full of traps.' },
+      { label: '4... dxc6 — Black', text: 'Black recaptures with the d-pawn, opening the d-file and giving the queen access to d4. The gambit pawn is gone, but Black has huge piece activity.' },
+      { label: '5. e5 — White', text: 'White advances e5, attacking the Nf6. This looks natural but the game gets very sharp.' },
+      { label: '5... Ne4 — Black', text: 'Black\'s knight jumps to e4 — a powerful central outpost. The knight threatens to come to d2 or f2, creating immediate problems for White.' },
+      { label: '6. Nc3 — White', text: 'White develops the knight, trying to challenge the Ne4. If Black takes Nxc3, the b-pawn recaptures and White gets a solid center.' },
+      { label: '6... Bc5 — Black', text: 'Black develops the bishop to c5 — a powerful diagonal aiming at f2. Along with the Ne4, Black has serious attacking threats.' },
+      { label: '7. Qf3 — White', text: 'White plays Qf3, defending f2 (protecting against Bxf2+) and attacking the Ne4. White is trying to consolidate.' },
+      { label: '7... Nxc3 — Black', text: 'Black takes the Nc3. After bxc3, White\'s pawn structure is damaged and the b-file is open.' },
+      { label: '8. bxc3 — White', text: 'White recaptures with the b-pawn — forced. Now Black has an important tactical resource.' },
+      { label: '8... Qd4 — Black', text: 'The queen jumps to d4! A powerful centralizing move that attacks c4, pressures f2, and threatens to take on c3 or e5. White must respond carefully.' },
+      { label: '9. Qg3 — White', text: 'White retreats the queen to g3 to avoid exchanges and maintain some attacking potential.' },
+      { label: '9... Be6 — Black', text: 'Black develops the bishop to e6, preparing to castle queenside and connect the rooks. Black is building a dangerous attacking setup.' },
+      { label: '10. Ba3 — White', text: 'White plays Ba3, trying to develop and create some counterplay. The position is extremely complex.' },
+      { label: '10... O-O-O — Black', text: 'Black castles queenside! The king goes to safety and the rook comes to d8. Black\'s pieces are all active and coordinated — the Stafford Gambit has provided rich compensation.' },
+      { label: '11. Bxc5 — White', text: 'White exchanges the bishop, simplifying somewhat. After Qxc5, both sides continue fighting.' },
+      { label: '11... Qxc5 — Black', text: 'Black recaptures with the queen. Black has a very active queen and rooks pointing at White\'s center.' },
+      { label: '12. d4 — White', text: 'White pushes d4, fighting for central space. White needs to challenge Black\'s control.' },
+      { label: '12... Qa5 — Black', text: 'The queen goes to a5, eyeing the queenside and potentially c3. Black continues to create multiple threats simultaneously — the Stafford\'s hallmark is keeping White off balance.' }
+    ],
+    keyIdeas: [
+      'Stafford Gambit: sacrifice the e5 pawn for wild piece activity and tactical tricks',
+      'Key threat: Ne4 + Bc5 combo targets f2 constantly — White must always watch for Bxf2+ tactics',
+      'White lesson: play 6.d3 or 6.Qe2 carefully — grabbing material with Nxc6 leads to trouble',
+      'Black\'s compensation: open d-file, active pieces, the c5 bishop + Ne4 combo creates constant threats'
+    ]
+  },
+
+  {
+    id: 'blackburne-shilling',
+    name: 'Blackburne Shilling Gambit',
+    eco: null,
+    category: 'trap',
+    tagline: 'Swindling knight trick — wins a shilling from careless players',
+    description: "The Blackburne Shilling Gambit (named because Joseph Blackburne would supposedly win a shilling from amateurs with this trick) is a sharp trap in the Italian Game. After 3...Nd4, Black offers the e5 pawn. If White grabs it greedily with 4.Nxe5 Qg5! 5.Nxf7 Qxg2 6.Rf1 Qxe4+, the game ends dramatically. If White plays 7.Be2, the crushing Nf3# delivers checkmate!",
+    moves: ['e4','e5','Nf3','Nc6','Bc4','Nd4','Nxe5','Qg5','Nxf7','Qxg2','Rf1','Qxe4+','Be2','Nf3#'],
+    explanations: [
+      { label: '1. e4 — White', text: 'Standard King\'s Pawn opening.' },
+      { label: '1... e5 — Black', text: 'Black mirrors in the center.' },
+      { label: '2. Nf3 — White', text: 'Natural development attacking e5.' },
+      { label: '2... Nc6 — Black', text: 'Black defends e5.' },
+      { label: '3. Bc4 — White', text: 'The Italian Bishop — aimed at f7, the weakest point in Black\'s position.' },
+      { label: '3... Nd4!? — Black', text: 'The Blackburne Shilling Gambit! Black places the knight on d4, attacking the Nf3. This looks active but actually sets a beautiful trap for White.' },
+      { label: '4. Nxe5? — White', text: 'White grabs the e5 pawn — falling into the trap! After Nxe5, White thinks they\'re winning material. But the attack that follows is devastating.' },
+      { label: '4... Qg5! — Black', text: 'The queen jumps to g5, attacking both the Ne5 and the g2 pawn simultaneously! White cannot defend both.' },
+      { label: '5. Nxf7 — White', text: 'White takes f7 with a fork (threatening Nxh8 + rook), but falls deeper into the trap. White is still trying to grab material while Black\'s attack builds.' },
+      { label: '5... Qxg2 — Black', text: 'Black\'s queen takes g2, threatening the Rh1! After Rf1, the trap is almost sprung.' },
+      { label: '6. Rf1 — White', text: 'White plays Rf1 to save the rook. This looks like a reasonable defensive move, but the position is now lost for White.' },
+      { label: '6... Qxe4+ — Black', text: 'CHECK! Black\'s queen comes back with a devastating check on e4. White must interpose.' },
+      { label: '7. Be2 — White', text: 'White blocks with Be2 — forced. But now the final blow falls.' },
+      { label: '7... Nf3# — Black', text: 'CHECKMATE! The knight from d4 delivers checkmate on f3. The king cannot escape: e3 is protected by the queen on e4, e1 is blocked by Be2, f1 has the rook. A stunning smothered checkmate — the Blackburne Shilling Gambit strikes!' }
+    ],
+    keyIdeas: [
+      'The Blackburne trap: after 3...Nd4 4.Nxe5 Qg5! 5.Nxf7 Qxg2 6.Rf1 Qxe4+ 7.Be2 Nf3#',
+      'White must avoid Nxe5 — better moves are Nxd4 or c3 to challenge the Nd4',
+      'Key pattern: queen on g2 threatens the rook, and the Nd4-f3 checkmate is the finale',
+      'The trap works because White greedily takes too many pawns while Black builds the mating net'
+    ]
+  },
+
+  {
+    id: 'budapest-gambit',
+    name: 'Budapest Gambit',
+    eco: null,
+    category: 'trap',
+    tagline: 'e5 pawn gambit — active piece play vs. White\'s center',
+    description: "The Budapest Gambit (1.d4 Nf6 2.c4 e5) is a lively gambit where Black sacrifices a pawn for active piece play. After 3.dxe5 Ng4, Black pressures the e5 pawn immediately. White must play precisely to hold the material advantage — one slip and Black's active pieces overwhelm the position. It's a great surprise weapon at club level.",
+    moves: ['d4','Nf6','c4','e5','dxe5','Ng4','Nf3','Bc5','e3','Nc6','Be2','Ngxe5','Nxe5','Nxe5','O-O','O-O'],
+    explanations: [
+      { label: '1. d4 — White', text: 'White opens with d4, aiming for a positional battle.' },
+      { label: '1... Nf6 — Black', text: 'The knight develops, keeping multiple options open.' },
+      { label: '2. c4 — White', text: 'White grabs central space with c4.' },
+      { label: '2... e5!? — Black', text: 'The Budapest Gambit! Black sacrifices the e5 pawn immediately for active piece play. This is a surprise weapon — White is often unprepared for it.' },
+      { label: '3. dxe5 — White', text: 'White takes the gambit pawn. This is the most principled response — White accepts the challenge.' },
+      { label: '3... Ng4 — Black', text: 'The knight immediately attacks the e5 pawn, demanding that White defend it. Black will regain the pawn or win compensation in activity.' },
+      { label: '4. Nf3 — White', text: 'White defends the e5 pawn. This is the safest continuation — White holds the extra pawn and tries to develop.' },
+      { label: '4... Bc5 — Black', text: 'Black develops the bishop to c5, a powerful active square. The bishop eyes f2 and creates pressure from the outset.' },
+      { label: '5. e3 — White', text: 'White solidifies the center and prepares to develop the dark-squared bishop. White is playing cautiously to hold the extra pawn.' },
+      { label: '5... Nc6 — Black', text: 'The knight develops to c6, increasing pressure on e5 and eyeing the d4 square. Black now threatens ...Ngxe5 to win back the pawn.' },
+      { label: '6. Be2 — White', text: 'White develops the bishop, preparing to castle. After castling, White hopes to consolidate the extra pawn.' },
+      { label: '6... Ngxe5 — Black', text: 'Black takes the e5 pawn back! The gambit pawn is regained. But Black could also try the speculative ...Nxe5 immediately, which leads to more complex play.' },
+      { label: '7. Nxe5 — White', text: 'White takes the Ne5 — trading the extra pawn. The position has simplified somewhat but is still rich.' },
+      { label: '7... Nxe5 — Black', text: 'Black recaptures on e5 with the Nc6. Now we have a balanced position where Black has fully equalized.' },
+      { label: '8. O-O — White', text: 'White castles, bringing the king to safety. The game enters a middlegame where both sides have solid positions.' },
+      { label: '8... O-O — Black', text: 'Black castles as well. The Budapest Gambit has achieved its main goal: Black has active piece play, no structural weaknesses, and good counterplay from the very start. The gambit is a complete success in terms of dynamism.' }
+    ],
+    keyIdeas: [
+      'Budapest Gambit: sacrifice e5 for immediate piece activity and disruption of White\'s plans',
+      'Key idea: Ng4 immediately pressures the e5 pawn — Black threatens to regain it right away',
+      'White must play precisely — any slip allows Black to get a lead in development with the open e-file',
+      'Best for White: 3.dxe5 Ng4 4.Bf4! — the strongest response, maintaining the pawn advantage safely'
+    ]
+  }
+];
+
+function attachOpeningVariations() {
+  const byId = {};
+  OPENINGS.forEach(o => { byId[o.id] = o; });
+  const link = (id, name, note) => {
+    const op = byId[id];
+    if (!op) return null;
+    return {
+      id,
+      name: name || op.name,
+      note: note || op.tagline || '',
+      description: op.description,
+      tagline: op.tagline,
+      moves: op.moves,
+      explanations: op.explanations,
+      keyIdeas: op.keyIdeas
+    };
+  };
+  const italian = byId.italian;
+  if (italian) {
+    italian.variations = [
+      link('evans-gambit', 'Evans Gambit', '4.b4 branch from the Italian'),
+      link('fried-liver', 'Fried Liver Attack', 'Ng5 tactical branch'),
+      link('blackburne-shilling', 'Blackburne Shilling', '3...Nd4 trap branch')
+    ].filter(Boolean);
+  }
+  const queensGambit = byId['queens-gambit'];
+  if (queensGambit) {
+    queensGambit.variations = [
+      link('slav', 'Slav Defense', '2...c6 branch'),
+      link('elephant-trap', 'Elephant Trap', 'QGD trap branch')
+    ].filter(Boolean);
+  }
+  const sicilian = byId.sicilian;
+  if (sicilian) {
+    sicilian.variations = [
+      link('sicilian-dragon', 'Dragon', 'g6 setup'),
+      link('sicilian-schev', 'Scheveningen', 'e6 setup')
+    ].filter(Boolean);
+  }
+}
+attachOpeningVariations();
+
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+let board = null;
+let game = new Chess();
+let currentOpening = null;
+let currentLine = null;
+let currentLineId = 'main';
+let currentMoveIdx = -1;  // -1 = starting position
+let quizMode = false;
+let exploreMode = false;
+let exploreGame = null;
+let exploreStartFen = null;
+let exploreRequestId = 0;
+let currentDb = 'lichess';
+let boardFlipped = false;
+let quizAttempts = 0;
+let feedbackTimeout = null;
+let quizSessionMisses = 0;  // misses in current quiz session (before completion)
+let quizMissedMoves = [];
+let quizReviewMode = false;
+let quizReviewQueue = [];
+let quizReviewCursor = 0;
+let tapSelected = null;      // square selected for tap-to-move, or null
+let pendingPromotionChoice = null;
+
+// Coach mode (standalone page)
+let appView = 'library';           // 'library' | 'coach'
+let coachMode = false;             // true when coach view is active
+let coachGame = null;
+let coachStartFen = null;
+let coachStats = null;
+let coachReviewLog = [];           // all reviews from current session (for summary turning point)
+let coachLastReview = null;        // most recent review (for take back / show best)
+let coachThinking = false;
+let coachUserSide = 'white';       // 'white' | 'black'
+let coachEngineElo = 1200;         // displayed opponent level
+let coachBoard = null;             // separate Chessboard.js instance
+let coachBoardFlipped = false;
+let coachGameActive = false;       // true once user hits New Game
+let coachEndedAt = null;           // timestamp of game end, null while playing
+let coachReviewCursor = null;      // null = live; integer = ply index displayed on the board
+let coachLastEndMsg = null;        // headline from last game-over, used to reopen the review
+let candidateRequestId = 0;        // invalidates stale async candidate searches
+let threatRequestId = 0;           // invalidates stale async threat scans
+let coachPremove = null;           // queued premove while opponent is thinking
+let coachRemoteGameId = null;      // Supabase coach_games.id for current game
+let coachAuthUser = null;
+let coachDbClient = null;
+let coachDbInitStarted = false;
+let coachDbInitPromise = null;
+let coachRemoteInsightEntries = null;
+let coachDbStatus = 'local';
+let remoteGameUpdateTimer = null;
+let pendingRemoteGameEndReason = null;
+const REMOTE_GAME_SYNC_DEBOUNCE_MS = 2500;
+
+const CoachController = {
+  phase: 'idle',
+  setPhase(phase) {
+    this.phase = phase;
+    return this.phase;
+  }
+};
+
+// Optional runtime config. Set these public Supabase values in the deployed
+// page when account-backed coach history is ready. Without config, Coach stays
+// local-first and uses the existing localStorage insights.
+window.COACH_SUPABASE_CONFIG = window.COACH_SUPABASE_CONFIG || {
+  url: '',
+  anonKey: ''
+};
+
+// ─────────────────────────────────────────────
+// COACH GAME PERSISTENCE
+// ─────────────────────────────────────────────
+// Snapshot enough state to restore an in-progress (or freshly ended) game on
+// next page load. Saved on every move; cleared when the user starts a new
+// game or dismisses the review summary after a game ends.
+const COACH_STATE_KEY = 'coach:state:v1';
+const COACH_STATE_BACKUP_KEY = 'coach:state:corrupt:v1';
+
+function saveCoachState() {
+  try {
+    if (!coachGame) return;
+    const total = coachGame.history().length;
+    // Skip persisting empty initial state — nothing to recover.
+    if (total === 0 && !coachLastEndMsg && !coachRemoteGameId) {
+      localStorage.removeItem(COACH_STATE_KEY);
+      return;
+    }
+    const snapshot = {
+      v: 1,
+      pgn: coachGame.pgn(),
+      startFen: coachStartFen,
+      userSide: coachUserSide,
+      engineElo: coachEngineElo,
+      remoteGameId: coachRemoteGameId,
+      reviewLog: coachReviewLog,
+      stats: coachStats,
+      ended: !coachGameActive,
+      lastEndMsg: coachLastEndMsg,
+      ts: Date.now()
+    };
+    localStorage.setItem(COACH_STATE_KEY, JSON.stringify(snapshot));
+  } catch (e) {
+    // Quota exceeded or storage blocked — fail silently; not critical.
+  }
+}
+function loadCoachState() {
+  let raw = null;
+  try {
+    raw = localStorage.getItem(COACH_STATE_KEY);
+    if (!raw) return { ok: false, missing: true };
+    const s = JSON.parse(raw);
+    if (!s || s.v !== 1) {
+      return { ok: false, reason: 'Saved game format is no longer supported.', raw };
+    }
+    return { ok: true, state: s, raw };
+  } catch (e) {
+    return { ok: false, reason: 'Saved game data was unreadable.', raw };
+  }
+}
+function clearCoachState() {
+  try { localStorage.removeItem(COACH_STATE_KEY); } catch (e) {}
+}
+function backupCorruptCoachState(raw, reason) {
+  if (!raw) return;
+  try {
+    localStorage.setItem(COACH_STATE_BACKUP_KEY, JSON.stringify({
+      raw,
+      reason: reason || 'Unknown restore failure',
+      ts: Date.now()
+    }));
+  } catch (e) {}
+}
+
+// Restore a saved game (in-progress or just-ended) into the coach UI.
+// Returns true if a game was restored, false otherwise. Callers should fall
+// back to the empty-board "set a level" state when this returns false.
+function tryRestoreCoachGame() {
+  const loaded = loadCoachState();
+  if (!loaded.ok) {
+    if (loaded.missing) return { restored: false };
+    backupCorruptCoachState(loaded.raw, loaded.reason);
+    clearCoachState();
+    return { restored: false, warning: 'Previous game could not be restored; starting fresh.' };
+  }
+  const s = loaded.state;
+  try {
+    const g = new Chess(s.startFen || undefined);
+    if (s.pgn) g.load_pgn(s.pgn, { sloppy: true });
+    coachGame = g;
+    coachStartFen = s.startFen || g.fen();
+    coachUserSide = s.userSide || 'white';
+    coachEngineElo = typeof s.engineElo === 'number' ? s.engineElo : 1200;
+    coachRemoteGameId = s.remoteGameId || null;
+    coachReviewLog = Array.isArray(s.reviewLog) ? s.reviewLog : [];
+    coachStats = s.stats || { moves: 0, best: 0, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
+    coachLastReview = coachReviewLog.length ? coachReviewLog[coachReviewLog.length - 1] : null;
+    coachReviewCursor = null;
+    coachThinking = false;
+    coachLastEndMsg = s.lastEndMsg || null;
+    coachGameActive = !s.ended && !g.game_over();
+    coachEndedAt = s.ended ? (s.ts || Date.now()) : null;
+    // If we're restoring an ended game, lifetime totals were already rolled
+    // when the game ended — don't double-count if the user opens the review.
+    coachLifetimeRolledForThisGame = !!s.ended;
+    // Sync slider + tier label.
+    $('#coach-strength').val(coachEngineElo);
+    $('#coach-strength-value').text(coachEngineElo);
+    $('#coach-strength-tier').text(strengthTierLabel(coachEngineElo));
+    // Sync side toggle.
+    $('.side-toggle button').removeClass('active');
+    $('.side-toggle button[data-side="' + coachUserSide + '"]').addClass('active');
+    // Build the board oriented for the user.
+    coachBoardFlipped = (coachUserColor() === 'black');
+    createCoachBoard(g.fen(), coachBoardFlipped ? 'black' : 'white');
+    // Repopulate panels.
+    updateCapturedDisplay(g.fen());
+    updateMoveList();
+    updateOpeningLabel();
+    updateCoachSummary();
+    updateCoachControlsState();
+    // Status: live game vs ended game.
+    if (coachGameActive) {
+      const tier = strengthTierLabel(coachEngineElo);
+      setCoachStatus(coachIsUserTurn()
+        ? `Resumed — Opponent ${coachEngineElo} (${tier}). Your move.`
+        : `Resumed — Opponent ${coachEngineElo} (${tier}). Opponent thinking…`);
+      // Re-render last review card if we have one.
+      if (coachLastReview) renderCoachReview(coachLastReview);
+      // Pre-warm the engine and hand off to the opponent if it's their turn.
+      const timed = Promise.race([
+        engineClient.init(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('Engine load timed out')), 15000))
+      ]);
+      timed.then(() => {
+        if (!coachGameActive) return;
+        if (!coachIsUserTurn() && !g.game_over()) coachOpponentRespond();
+      }).catch((err) => showEngineLoadError(err));
+    } else {
+      // Game is over — show a status that nudges towards reopening the review.
+      setCoachStatus((coachLastEndMsg || 'Game over.') + ' Click Open review to revisit.');
+      if (coachLastReview) renderCoachReview(coachLastReview);
+    }
+    return { restored: true };
+  } catch (e) {
+    // Corrupted snapshot — drop it so the user gets a fresh start next time.
+    backupCorruptCoachState(loaded.raw, e && e.message);
+    clearCoachState();
+    return { restored: false, warning: 'Previous game could not be restored; starting fresh.' };
+  }
+}
+
+// ─────────────────────────────────────────────
+// LIFETIME STATS — accumulate across games in this browser
+// ─────────────────────────────────────────────
+const LIFETIME_KEY = 'coach:lifetime:v1';
+function emptyLifetime() {
+  return { games: 0, moves: 0, accuracySum: 0, blunders: 0, mistakes: 0,
+           inaccuracies: 0, best: 0, excellent: 0, good: 0 };
+}
+function loadLifetime() {
+  try {
+    const raw = localStorage.getItem(LIFETIME_KEY);
+    if (!raw) return emptyLifetime();
+    const v = JSON.parse(raw);
+    return Object.assign(emptyLifetime(), v || {});
+  } catch (e) { return emptyLifetime(); }
+}
+function saveLifetime(s) {
+  try { localStorage.setItem(LIFETIME_KEY, JSON.stringify(s)); } catch (e) {}
+}
+// Roll the just-finished game into lifetime totals. Idempotent guard via a
+// per-game flag so a refresh on the summary screen doesn't double-count.
+let coachLifetimeRolledForThisGame = false;
+function rollGameIntoLifetime() {
+  if (coachLifetimeRolledForThisGame) return;
+  if (!coachStats || coachStats.moves === 0) return;
+  const lt = loadLifetime();
+  const acc = accuracyFromTallies(coachStats, coachStats.moves);
+  lt.games += 1;
+  lt.moves += coachStats.moves;
+  if (acc !== null) lt.accuracySum += acc * coachStats.moves; // weighted by move count
+  lt.best += coachStats.best || 0;
+  lt.excellent += coachStats.excellent || 0;
+  lt.good += coachStats.good || 0;
+  lt.inaccuracies += coachStats.inaccuracy || 0;
+  lt.mistakes += coachStats.mistake || 0;
+  lt.blunders += coachStats.blunder || 0;
+  saveLifetime(lt);
+  coachLifetimeRolledForThisGame = true;
+  renderLifetime();
+}
+function renderLifetime() {
+  const lt = loadLifetime();
+  const $sec = $('#lifetime-section');
+  if (lt.games === 0) { $sec.hide(); return; }
+  $sec.show();
+  $('#lifetime-games').text(lt.games);
+  $('#lifetime-moves').text(lt.moves);
+  const acc = lt.moves > 0 ? Math.round(lt.accuracySum / lt.moves) : null;
+  $('#lifetime-accuracy').text(acc === null ? '—' : acc + '%');
+  $('#lifetime-blunders').text(lt.blunders);
+}
+
+// ─────────────────────────────────────────────
+// COACH INSIGHTS — local-first mistake pattern memory
+// ─────────────────────────────────────────────
+const INSIGHTS_KEY = 'coach:insights:v1';
+const INSIGHTS_MAX_ENTRIES = 300;
+const INSIGHT_PROBLEM_TIERS = new Set(['inaccuracy', 'mistake', 'blunder']);
+const INSIGHT_TIER_WEIGHT = { inaccuracy: 1, mistake: 2, blunder: 3 };
+const INSIGHT_TAG_META = {
+  missed_mate: {
+    title: 'Missed mate threats',
+    practice: 'Start every candidate scan with forcing checks.',
+    theory: 'Forcing moves come first: checks, captures, threats. Mate threats outrank material.'
+  },
+  missed_check: {
+    title: 'Missed forcing checks',
+    practice: 'Before quiet moves, list every legal check for both sides.',
+    theory: 'Checks force the opponent to spend a tempo. Even when not best, they reveal tactical geometry.'
+  },
+  missed_capture: {
+    title: 'Missed material wins',
+    practice: 'Run a captures scan before committing to a positional move.',
+    theory: 'Loose pieces and overloaded defenders are tactical signals. Check whether a defender is pinned or distracted.'
+  },
+  missed_recapture: {
+    title: 'Missed recaptures',
+    practice: 'After every capture, ask what changed and whether a recapture is forced.',
+    theory: 'Recaptures often restore material balance and remove an active enemy piece. Calculate them before looking for quiet improvements.'
+  },
+  missed_promotion: {
+    title: 'Missed promotion chances',
+    practice: 'In pawn races, calculate the queening square before any side move.',
+    theory: 'Passed pawns become stronger as pieces leave the board. The king and rook belong behind passed pawns.'
+  },
+  allowed_mate: {
+    title: 'Allowed mate threats',
+    practice: 'After choosing a move, ask what check the opponent wants next.',
+    theory: 'King safety is a concrete calculation problem: count checks, escape squares, and defenders.'
+  },
+  allowed_forcing: {
+    title: 'Missed opponent threats',
+    practice: 'Use a final blunder-check: their checks, captures, threats.',
+    theory: 'A move is only good if it survives the opponent response. Always calculate their most forcing reply.'
+  },
+  back_rank: {
+    title: 'Back-rank exposure',
+    practice: 'Check whether your king has air before allowing heavy pieces onto the back rank.',
+    theory: 'Back-rank tactics appear when the king has no flight square and rooks or queens control the first or eighth rank.'
+  },
+  fork_risk: {
+    title: 'Forks and double attacks',
+    practice: 'Before ending calculation, scan knight jumps and queen checks that hit two targets.',
+    theory: 'Forks win because one move creates two problems. Loose kings and loose pieces make them more likely.'
+  },
+  hung_material: {
+    title: 'Hung pieces',
+    practice: 'Before releasing a piece, verify whether the destination is defended enough.',
+    theory: 'A piece is safe when its defenders match the tactical reality, not just the attacker count.'
+  },
+  piece_left_en_prise: {
+    title: 'Pieces left en prise',
+    practice: 'When you move a piece, check whether the opponent can simply take it next move.',
+    theory: 'A moved piece can become tactically loose even on a defended square when the defender is pinned, overloaded, or too valuable.'
+  },
+  unsafe_trade: {
+    title: 'Unsafe trades',
+    practice: 'Before trading, count the full sequence and who moves last.',
+    theory: 'A trade is favorable only after the whole capture sequence, not after the first exchange.'
+  },
+  premature_queen: {
+    title: 'Premature queen moves',
+    practice: 'Delay queen activity until minor pieces are developed or there is a concrete tactic.',
+    theory: 'Early queen moves invite tempo gains. Develop knights and bishops before hunting pawns.'
+  },
+  development: {
+    title: 'Slow development',
+    practice: 'In the opening, prefer developing a new minor piece unless there is a tactic.',
+    theory: 'Opening time matters. Develop pieces, fight for the center, castle, then start operations.'
+  },
+  king_safety: {
+    title: 'King-safety looseners',
+    practice: 'Treat early f-, g-, and h-pawn moves as commitments that need a concrete reason.',
+    theory: 'Pawn moves near your king cannot retreat. Every pawn advance creates squares the opponent can use.'
+  },
+  time_to_castle: {
+    title: 'Delayed castling',
+    practice: 'When the engine wants castling, treat king safety as the tactic.',
+    theory: 'Castling is development, king safety, and rook activation in one move. Delaying it requires a concrete reason.'
+  },
+  missed_center_break: {
+    title: 'Missed center breaks',
+    practice: 'In the opening, ask whether a central pawn break solves the position.',
+    theory: 'Center breaks challenge the opponent before they finish development and can open lines for better-placed pieces.'
+  },
+  pawn_structure: {
+    title: 'Pawn-structure concessions',
+    practice: 'Before a pawn move, identify the square it gives up and whether that weakness matters.',
+    theory: 'Pawn moves are permanent. Weak squares, backward pawns, and holes near the king often matter more than one tempo.'
+  },
+  pin_pressure: {
+    title: 'Pins and pressure',
+    practice: 'Look for pinned defenders before choosing a quiet move.',
+    theory: 'Pinned pieces may look like defenders but cannot legally or safely move. Pressure against a pinned piece often wins material.'
+  },
+  opening_principles: {
+    title: 'Opening principle gaps',
+    practice: 'Check center, development, king safety, and only then pawn grabs.',
+    theory: 'The opening goal is not to win a pawn; it is to reach a playable middlegame with active pieces.'
+  },
+  endgame_technique: {
+    title: 'Endgame technique',
+    practice: 'Activate the king and calculate pawn races before trading.',
+    theory: 'Endgames reward king activity, outside passed pawns, opposition, and rook activity.'
+  },
+  candidate_moves: {
+    title: 'Candidate move selection',
+    practice: 'Compare at least two candidate moves before moving.',
+    theory: 'Strong move selection starts wide and narrows: candidate moves first, calculation second.'
+  }
+};
+
+function emptyInsights() {
+  return { v: 1, entries: [] };
+}
+
+function loadInsights() {
+  try {
+    const raw = localStorage.getItem(INSIGHTS_KEY);
+    if (!raw) return emptyInsights();
+    const parsed = JSON.parse(raw);
+    if (!parsed || parsed.v !== 1 || !Array.isArray(parsed.entries)) return emptyInsights();
+    return { v: 1, entries: parsed.entries.slice(-INSIGHTS_MAX_ENTRIES) };
+  } catch (e) {
+    return emptyInsights();
+  }
+}
+
+function saveInsights(state) {
+  try {
+    const safe = { v: 1, entries: (state.entries || []).slice(-INSIGHTS_MAX_ENTRIES) };
+    localStorage.setItem(INSIGHTS_KEY, JSON.stringify(safe));
+  } catch (e) {}
+}
+
+function clearInsights() {
+  try { localStorage.removeItem(INSIGHTS_KEY); } catch (e) {}
+}
+
+function isInsightProblem(tier) {
+  return INSIGHT_PROBLEM_TIERS.has(tier);
+}
+
+function moveFromUci(fen, uci) {
+  if (!fen || !uci) return null;
+  try {
+    const g = new Chess(fen);
+    return g.move({
+      from: uci.slice(0, 2),
+      to: uci.slice(2, 4),
+      promotion: uci[4] || undefined
+    });
+  } catch (e) {
+    return null;
+  }
+}
+
+function isCastlingMove(mv) {
+  return !!(mv && mv.flags && (mv.flags.includes('k') || mv.flags.includes('q')));
+}
+
+function undevelopedMinorCount(gameObj, color) {
+  const home = color === 'w'
+    ? [['b1', 'n'], ['g1', 'n'], ['c1', 'b'], ['f1', 'b']]
+    : [['b8', 'n'], ['g8', 'n'], ['c8', 'b'], ['f8', 'b']];
+  let count = 0;
+  for (const [square, type] of home) {
+    const piece = gameObj.get(square);
+    if (piece && piece.color === color && piece.type === type) count++;
+  }
+  return count;
+}
+
+function isEarlyKingPawnLoosener(mv) {
+  return mv && mv.piece === 'p' && ['f', 'g', 'h'].includes(mv.from[0]);
+}
+
+function isCentralPawnMove(mv) {
+  return !!(mv && mv.piece === 'p' && ['c', 'd', 'e', 'f'].includes(mv.from[0]));
+}
+
+function isNonCapturePawnWeakener(mv) {
+  if (!mv || mv.piece !== 'p' || mv.captured) return false;
+  return ['a', 'b', 'f', 'g', 'h'].includes(mv.from[0]);
+}
+
+function isLikelyBackRankTactic(mv) {
+  if (!mv || !mv.san || !mv.san.includes('#')) return false;
+  return ['r', 'q'].includes(mv.piece) && ['1', '8'].includes(mv.to[1]);
+}
+
+function isLikelyPinPressure(mv) {
+  if (!mv || !mv.san) return false;
+  return ['b', 'r', 'q'].includes(mv.piece) && (mv.san.includes('+') || mv.san.includes('x'));
+}
+
+function insightTagsForReview(review) {
+  if (!review || !isInsightProblem(review.tier)) return [];
+  const tags = [];
+  const add = tag => {
+    if (INSIGHT_TAG_META[tag] && !tags.includes(tag)) tags.push(tag);
+  };
+  const loss = review.loss || 0;
+  const pairNum = review.pairNum || Math.ceil((review.ply || 1) / 2);
+  const phase = phaseOf(pairNum);
+  const userMove = moveFromUci(review.fenBefore, review.userUci);
+  const bestMove = moveFromUci(review.fenBefore, review.bestUci);
+  const replyUci = review.evalAfter && review.evalAfter.pv && review.evalAfter.pv[0];
+  const opponentReply = moveFromUci(review.fenAfter, replyUci);
+
+  if (bestMove) {
+    if (bestMove.san && bestMove.san.includes('#')) add('missed_mate');
+    else if (bestMove.san && bestMove.san.includes('+')) add('missed_check');
+    if (bestMove.captured) add('missed_capture');
+    if (bestMove.promotion) add('missed_promotion');
+    if (isCastlingMove(bestMove)) {
+      add('time_to_castle');
+      add('king_safety');
+    }
+    if (phase === 'opening' && isCentralPawnMove(bestMove) && !(userMove && isCentralPawnMove(userMove))) {
+      add('missed_center_break');
+    }
+    if (isLikelyPinPressure(bestMove)) add('pin_pressure');
+  }
+
+  if (opponentReply && loss >= 120) {
+    if (opponentReply.san && opponentReply.san.includes('#')) add('allowed_mate');
+    else if (opponentReply.san && opponentReply.san.includes('+')) add('allowed_forcing');
+    if (opponentReply.captured && (materialValue(opponentReply.captured) >= 300 || loss >= 250)) add('hung_material');
+    if (isLikelyBackRankTactic(opponentReply)) add('back_rank');
+    if (opponentReply.piece === 'n' && (opponentReply.captured || (opponentReply.san || '').includes('+'))) add('fork_risk');
+    if (userMove && opponentReply.captured && opponentReply.to === userMove.to) {
+      add('piece_left_en_prise');
+      if (userMove.captured) add('unsafe_trade');
+    }
+  }
+
+  if (userMove) {
+    const before = new Chess(review.fenBefore);
+    if (pairNum <= 12) {
+      if (userMove.piece === 'q' && !userMove.captured && !(userMove.san || '').match(/[+#]/)) add('premature_queen');
+      if (undevelopedMinorCount(before, userMove.color) >= 2 &&
+          !['n', 'b'].includes(userMove.piece) &&
+          !isCastlingMove(userMove) &&
+          !userMove.captured &&
+          loss >= 80) {
+        add('development');
+      }
+      if (isEarlyKingPawnLoosener(userMove) && !userMove.captured && !(bestMove && bestMove.captured) && loss >= 80) {
+        add('king_safety');
+      }
+      if (isNonCapturePawnWeakener(userMove) && loss >= 120) add('pawn_structure');
+    }
+    if (userMove.captured && loss >= 120) add('unsafe_trade');
+    if (bestMove && bestMove.captured && userMove.to === bestMove.from && loss >= 100) add('missed_recapture');
+    if (phase === 'endgame' && loss >= 120) add('endgame_technique');
+  }
+
+  if (tags.length === 0 && phase === 'opening' && loss >= 120) add('opening_principles');
+  if (tags.length === 0) add('candidate_moves');
+  return tags.slice(0, 3);
+}
+
+function currentCoachOpeningName() {
+  try {
+    if (!coachGame || typeof identifyOpening !== 'function') return null;
+    const info = identifyOpening(coachGame.history());
+    return info && info.match ? info.match.name : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function insightEntryFromReview(review) {
+  const pairNum = review.pairNum || Math.ceil((review.ply || 1) / 2);
+  const tags = review.insightTags || insightTagsForReview(review);
+  review.insightTags = tags;
+  return {
+    ts: Date.now(),
+    tier: review.tier,
+    loss: Math.round(review.loss || 0),
+    phase: phaseOf(pairNum),
+    tags,
+    pairNum,
+    ply: review.ply || pairNum * 2,
+    userSan: review.userSan || null,
+    bestSan: review.bestSan || null,
+    fenBefore: review.fenBefore || null,
+    userUci: review.userUci || null,
+    bestUci: review.bestUci || null,
+    opening: currentCoachOpeningName()
+  };
+}
+
+function recordCoachInsight(review) {
+  if (!review || !review.tier || review.tier === 'unknown') return;
+  review.insightTags = review.insightTags || insightTagsForReview(review);
+  const state = loadInsights();
+  state.entries.push(insightEntryFromReview(review));
+  saveInsights(state);
+  renderInsights();
+}
+
+function insightTagCounts(entries) {
+  const counts = {};
+  for (const entry of entries) {
+    if (!entry || !isInsightProblem(entry.tier)) continue;
+    const weight = INSIGHT_TIER_WEIGHT[entry.tier] || 1;
+    for (const tag of entry.tags || []) {
+      if (!counts[tag]) counts[tag] = { tag, count: 0, score: 0, loss: 0, latest: entry };
+      counts[tag].count += 1;
+      counts[tag].score += weight;
+      counts[tag].loss += Math.min(entry.loss || 0, ACPL_CAP);
+      counts[tag].latest = entry;
+    }
+  }
+  return Object.values(counts).sort((a, b) =>
+    b.score - a.score || b.count - a.count || b.loss - a.loss
+  );
+}
+
+function weakestInsightPhase(entries) {
+  const phaseName = { opening: 'Opening', middlegame: 'Middlegame', endgame: 'Endgame' };
+  const phases = {
+    opening: { phase: 'opening', count: 0, loss: 0 },
+    middlegame: { phase: 'middlegame', count: 0, loss: 0 },
+    endgame: { phase: 'endgame', count: 0, loss: 0 }
+  };
+  for (const entry of entries) {
+    if (!entry || !isInsightProblem(entry.tier)) continue;
+    const phase = phases[entry.phase] || phases.middlegame;
+    phase.count += 1;
+    phase.loss += Math.min(entry.loss || 0, ACPL_CAP);
+  }
+  const ranked = Object.values(phases)
+    .filter(p => p.count > 0)
+    .sort((a, b) => b.count - a.count || b.loss - a.loss);
+  if (!ranked.length) return null;
+  return { label: phaseName[ranked[0].phase], data: ranked[0] };
+}
+
+function formatInsightExample(entry) {
+  if (!entry) return '';
+  const ref = formatMoveRef(entry);
+  const best = entry.bestSan ? `; best was ${entry.bestSan}` : '';
+  const opening = entry.opening ? ` in ${entry.opening}` : '';
+  return `${ref}${best}${opening}`;
+}
+
+function insightTagForEntry(entry) {
+  const tags = entry && Array.isArray(entry.tags) ? entry.tags : [];
+  return tags.find(tag => INSIGHT_TAG_META[tag]) || 'candidate_moves';
+}
+
+function fenSideToUserSide(fen) {
+  const turn = (fen || '').split(/\s+/)[1];
+  return turn === 'b' ? 'black' : 'white';
+}
+
+function buildPracticeQueue(entries, counts) {
+  const used = new Set();
+  const keyForEntry = entry => (entry.id || entry.ts || entry.ply || '') + ':' + entry.fenBefore;
+  const rankedTags = (counts || []).map(c => c.tag);
+  const sorted = (entries || [])
+    .filter(e => e && isInsightProblem(e.tier) && e.fenBefore && e.bestUci)
+    .slice()
+    .sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const queue = [];
+
+  for (const tag of rankedTags) {
+    const entry = sorted.find(e => (e.tags || []).includes(tag) && !used.has(tag));
+    if (!entry) continue;
+    const key = keyForEntry(entry);
+    if (used.has(key)) continue;
+    used.add(tag);
+    used.add(key);
+    queue.push({ entry, tag });
+    if (queue.length >= 4) break;
+  }
+
+  for (const entry of sorted) {
+    if (queue.length >= 4) break;
+    const tag = insightTagForEntry(entry);
+    const key = keyForEntry(entry);
+    if (used.has(key)) continue;
+    used.add(key);
+    queue.push({ entry, tag });
+  }
+  return queue;
+}
+
+function formatPracticeContext(entry) {
+  const ref = formatMoveRef(entry);
+  const played = entry.userSan ? `You played ${entry.userSan}.` : 'Review the candidate moves.';
+  const opening = entry.opening ? ` ${entry.opening}.` : '';
+  return `${ref}: ${played}${opening}`;
+}
+
+function renderPracticeQueue(entries, counts) {
+  const queue = buildPracticeQueue(entries, counts);
+  const $section = $('#practice-section');
+  const $list = $('#practice-list').empty();
+  if (!queue.length) {
+    $section.hide();
+    return;
+  }
+  $('#practice-count').text(`${queue.length} due`);
+  queue.forEach(item => {
+    const entry = item.entry;
+    const meta = INSIGHT_TAG_META[item.tag] || INSIGHT_TAG_META.candidate_moves;
+    const $row = $('<div class="practice-row"></div>');
+    const $title = $('<div class="practice-title"></div>').text(meta.title);
+    const $button = $('<button type="button" class="movelist-copy practice-load"></button>')
+      .text('Load')
+      .attr('data-fen', entry.fenBefore)
+      .attr('data-side', fenSideToUserSide(entry.fenBefore));
+    $row.append($title);
+    $row.append($button);
+    $row.append($('<div class="practice-detail"></div>').text(`${meta.practice} ${formatPracticeContext(entry)}`));
+    $list.append($row);
+  });
+  $section.show();
+}
+
+function renderTheoryCards(entries, counts) {
+  const $section = $('#theory-section');
+  const $list = $('#theory-list').empty();
+  const used = new Set();
+  (counts || []).slice(0, 4).forEach(item => {
+    if (!INSIGHT_TAG_META[item.tag] || used.has(item.tag)) return;
+    used.add(item.tag);
+    const meta = INSIGHT_TAG_META[item.tag];
+    const $card = $('<div class="theory-card"></div>');
+    $card.append($('<div class="theory-title"></div>').text(meta.title));
+    $card.append($('<div class="theory-body"></div>').text(meta.theory));
+    $list.append($card);
+  });
+  if (!used.size && entries && entries.length) {
+    const $card = $('<div class="theory-card"></div>');
+    $card.append($('<div class="theory-title"></div>').text('Candidate move selection'));
+    $card.append($('<div class="theory-body"></div>').text(INSIGHT_TAG_META.candidate_moves.theory));
+    $list.append($card);
+  }
+  $section.toggle($list.children().length > 0);
+}
+
+function renderInsights() {
+  const localEntries = loadInsights().entries.filter(e => e && e.tier && e.tier !== 'unknown');
+  const remoteEntries = Array.isArray(coachRemoteInsightEntries)
+    ? coachRemoteInsightEntries.filter(e => e && e.tier && e.tier !== 'unknown')
+    : [];
+  const entries = remoteEntries.length ? remoteEntries : localEntries;
+  const usingRemote = remoteEntries.length > 0;
+  const $section = $('#insights-section');
+  if (!entries.length) {
+    $section.hide();
+    $('#practice-section').hide();
+    $('#theory-section').hide();
+    return;
+  }
+
+  const problemEntries = entries.filter(e => isInsightProblem(e.tier));
+  const counts = insightTagCounts(problemEntries);
+  const weakPhase = weakestInsightPhase(problemEntries);
+  $section.show();
+  $('#insights-moves').text(entries.length);
+  $('#insights-errors').text(counts.length);
+  $('#insights-phase').text(weakPhase ? weakPhase.label : '-');
+
+  const $list = $('#insights-list').empty();
+  const $theory = $('#insights-theory').empty();
+
+  if (!counts.length) {
+    $('#insights-primary-title').text('No repeated problem yet');
+    $('#insights-primary-detail').text(usingRemote
+      ? 'Account history is syncing clean reviewed moves. The pattern view will sharpen once it sees inaccuracies, mistakes, or blunders.'
+      : 'Coach mode is storing your reviewed moves locally. The pattern view will sharpen once it sees inaccuracies, mistakes, or blunders.');
+    $list.append($('<div class="insight-empty"></div>').text('Current sample is clean. Keep playing enough moves to build a useful baseline.'));
+    renderPracticeQueue(problemEntries, counts);
+    renderTheoryCards(problemEntries, counts);
+    return;
+  }
+
+  const top = counts[0];
+  const topMeta = INSIGHT_TAG_META[top.tag];
+  $('#insights-primary-title').text(topMeta.title);
+  $('#insights-primary-detail').text(`${top.count} recent occurrence${top.count === 1 ? '' : 's'}. Practice next: ${topMeta.practice}`);
+
+  counts.slice(0, 3).forEach(item => {
+    const meta = INSIGHT_TAG_META[item.tag];
+    const $row = $('<div class="insight-row"></div>');
+    $row.append($('<span class="name"></span>').text(meta.title));
+    $row.append($('<span class="count"></span>').text(`${item.count}x`));
+    $row.append($('<div class="example"></div>').text(formatInsightExample(item.latest)));
+    $list.append($row);
+  });
+
+  const usedTheory = new Set();
+  counts.slice(0, 3).forEach(item => {
+    const theory = INSIGHT_TAG_META[item.tag].theory;
+    if (usedTheory.has(theory)) return;
+    usedTheory.add(theory);
+    $theory.append($('<div class="insight-theory-item"></div>').text(theory));
+  });
+  renderPracticeQueue(problemEntries, counts);
+  renderTheoryCards(problemEntries, counts);
+}
+
+// ─────────────────────────────────────────────
+// ACCOUNT SYNC — optional Supabase-backed coach history
+// ─────────────────────────────────────────────
+function supabaseRuntimeConfig() {
+  const cfg = window.COACH_SUPABASE_CONFIG || {};
+  return {
+    url: (cfg.url || cfg.supabaseUrl || '').trim(),
+    anonKey: (cfg.anonKey || cfg.key || cfg.supabaseAnonKey || '').trim()
+  };
+}
+
+function isSupabaseConfigured() {
+  const cfg = supabaseRuntimeConfig();
+  return /^https:\/\/.+\.supabase\.co$/.test(cfg.url) &&
+         cfg.anonKey.length > 20 &&
+         !cfg.anonKey.includes('YOUR_');
+}
+
+let coachAuthStoragePersistent = true;
+
+function createMemoryAuthStorage() {
+  const store = {};
+  return {
+    getItem(key) {
+      return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null;
+    },
+    setItem(key, value) {
+      store[key] = value;
+    },
+    removeItem(key) {
+      delete store[key];
+    }
+  };
+}
+
+function coachAuthStorage() {
+  return {
+    getItem(key) {
+      try { return sessionStorage.getItem(key); } catch (e) { return null; }
+    },
+    setItem(key, value) {
+      try { sessionStorage.setItem(key, value); } catch (e) {}
+    },
+    removeItem(key) {
+      try { sessionStorage.removeItem(key); } catch (e) {}
+    }
+  };
+}
+function checkCoachAuthStorage() {
+  const key = 'coach:auth-storage-test';
+  try {
+    sessionStorage.setItem(key, '1');
+    sessionStorage.removeItem(key);
+    coachAuthStoragePersistent = true;
+    return { ok: true, storage: coachAuthStorage() };
+  } catch (e) {
+    coachAuthStoragePersistent = false;
+    return { ok: false, storage: createMemoryAuthStorage(), error: e };
+  }
+}
+
+function coachAccountSyncStatus() {
+  if (!coachAuthStoragePersistent) {
+    return 'Account sync cannot persist in this browser session.';
+  }
+  return coachAuthUser ? 'Account sync on.' : '';
+}
+
+function setCoachAuthStatus(msg) {
+  $('#coach-auth-status').text(msg || '');
+}
+
+function setCoachDbStatus(msg) {
+  coachDbStatus = msg || '';
+  if (coachAuthUser) setCoachAuthStatus(msg || 'Account sync on.');
+}
+
+function renderCoachAuth() {
+  const configured = isSupabaseConfigured();
+  $('#coach-auth-local').toggle(!configured);
+  $('#coach-auth-form').toggle(configured && !coachAuthUser);
+  $('#coach-auth-session').toggle(configured && !!coachAuthUser);
+  if (!configured) {
+    setCoachAuthStatus('Add Supabase config to enable account history.');
+    return;
+  }
+  if (coachAuthUser) {
+    $('#coach-auth-user').text(coachAuthUser.email || coachAuthUser.id);
+    setCoachAuthStatus(coachDbStatus || 'Account sync on.');
+  } else {
+    setCoachAuthStatus(coachDbStatus === 'loading' ? 'Connecting...' : (coachDbStatus || 'Sign in to sync games.'));
+  }
+}
+
+function loadSupabaseScript() {
+  if (window.supabase && window.supabase.createClient) return Promise.resolve();
+  if (window.__coachSupabaseScriptPromise) return window.__coachSupabaseScriptPromise;
+  window.__coachSupabaseScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'vendor/supabase/supabase-2.105.1.js';
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Supabase client failed to load'));
+    document.head.appendChild(script);
+  });
+  return window.__coachSupabaseScriptPromise;
+}
+
+async function initCoachDb() {
+  if (coachDbInitPromise) return coachDbInitPromise;
+  coachDbInitStarted = true;
+  coachDbInitPromise = (async () => {
+    renderCoachAuth();
+    if (!isSupabaseConfigured()) return;
+    coachDbStatus = 'loading';
+    renderCoachAuth();
+    try {
+      await loadSupabaseScript();
+      const cfg = supabaseRuntimeConfig();
+      const storageCheck = checkCoachAuthStorage();
+      if (!storageCheck.ok) coachDbStatus = coachAccountSyncStatus();
+      coachDbClient = window.supabase.createClient(cfg.url, cfg.anonKey, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+          storage: storageCheck.storage
+        }
+      });
+      const { data } = await coachDbClient.auth.getSession();
+      coachAuthUser = data && data.session ? data.session.user : null;
+      coachDbStatus = coachAccountSyncStatus();
+      renderCoachAuth();
+      renderInsights();
+      if (coachAuthUser) {
+        coachSync.loadInsights({ silent: true }).catch(handleCoachDbError);
+        if (coachGameActive) ensureRemoteCoachGame().catch(handleCoachDbError);
+      }
+      coachDbClient.auth.onAuthStateChange((event, session) => {
+        coachAuthUser = session ? session.user : null;
+        coachRemoteInsightEntries = null;
+        coachDbStatus = coachAccountSyncStatus();
+        renderCoachAuth();
+        renderInsights();
+        if (coachAuthUser) {
+          coachSync.loadInsights({ silent: true }).catch(handleCoachDbError);
+          if (coachGameActive) ensureRemoteCoachGame().catch(handleCoachDbError);
+        }
+      });
+    } catch (err) {
+      coachDbStatus = 'Account sync unavailable.';
+      setCoachAuthStatus((err && err.message) || coachDbStatus);
+    }
+  })();
+  return coachDbInitPromise;
+}
+
+function hasCoachDbSession() {
+  return !!(coachDbClient && coachAuthUser);
+}
+
+function handleCoachDbError(err) {
+  const msg = err && err.message ? err.message : 'Sync failed';
+  setCoachDbStatus('Sync issue: ' + msg);
+}
+
+async function sendCoachLoginLink() {
+  if (!coachDbClient) {
+    await coachSync.init();
+  }
+  if (!coachDbClient) return;
+  const email = ($('#coach-auth-email').val() || '').trim();
+  if (!email) {
+    setCoachAuthStatus('Enter an email address.');
+    return;
+  }
+  setCoachAuthStatus('Sending link...');
+  const redirectTo = location.origin + location.pathname + '?view=coach';
+  const { error } = await coachDbClient.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: redirectTo }
+  });
+  if (error) {
+    setCoachAuthStatus(error.message);
+  } else {
+    setCoachAuthStatus('Check your email for the sign-in link.');
+  }
+}
+
+async function signOutCoach() {
+  if (!coachDbClient) return;
+  clearQueuedRemoteCoachGameUpdate();
+  await coachDbClient.auth.signOut();
+  coachAuthUser = null;
+  coachRemoteInsightEntries = null;
+  coachRemoteGameId = null;
+  coachDbStatus = '';
+  renderCoachAuth();
+  renderInsights();
+}
+
+function remoteGameResult(endReason) {
+  if (!coachGame) return '*';
+  if (coachGame.in_checkmate()) {
+    return coachGame.turn() === 'w' ? '0-1' : '1-0';
+  }
+  if (coachGame.in_stalemate() || coachGame.in_draw() || coachGame.in_threefold_repetition() || coachGame.insufficient_material()) {
+    return '1/2-1/2';
+  }
+  if (endReason && endReason.includes('Resigned')) {
+    return coachUserColor() === 'white' ? '0-1' : '1-0';
+  }
+  return '*';
+}
+
+function remoteGamePayload(endReason) {
+  const total = coachStats ? coachStats.moves : 0;
+  return {
+    user_id: coachAuthUser.id,
+    user_side: coachUserColor(),
+    opponent_level: coachEngineElo,
+    start_fen: coachStartFen || (coachGame ? coachGame.fen() : null),
+    final_fen: coachGame ? coachGame.fen() : null,
+    pgn: coachGame ? coachGetPgn() : '',
+    opening_name: currentCoachOpeningName(),
+    result: remoteGameResult(endReason),
+    end_reason: endReason || null,
+    ended_at: endReason ? new Date(coachEndedAt || Date.now()).toISOString() : null,
+    moves_count: total,
+    accuracy: total ? accuracyFromTallies(coachStats, total) : null,
+    acpl: coachReviewLog && coachReviewLog.length ? computeACPL(coachReviewLog) : null,
+    stats: coachStats || {},
+    updated_at: new Date().toISOString()
+  };
+}
+
+async function ensureRemoteCoachGame() {
+  if (!hasCoachDbSession() || !coachGame) return null;
+  if (coachRemoteGameId) return coachRemoteGameId;
+  const payload = remoteGamePayload(null);
+  const { data, error } = await coachDbClient
+    .from('coach_games')
+    .insert(payload)
+    .select('id')
+    .single();
+  if (error) throw error;
+  coachRemoteGameId = data.id;
+  saveCoachState();
+  setCoachDbStatus('Game sync started.');
+  return coachRemoteGameId;
+}
+
+async function updateRemoteCoachGame(endReason) {
+  if (!hasCoachDbSession() || !coachGame) return;
+  const gameId = await ensureRemoteCoachGame();
+  if (!gameId) return;
+  const { error } = await coachDbClient
+    .from('coach_games')
+    .update(remoteGamePayload(endReason || null))
+    .eq('id', gameId);
+  if (error) throw error;
+  setCoachDbStatus(endReason ? 'Game saved.' : 'Game synced.');
+}
+
+function remoteMovePayload(review, gameId) {
+  const tags = review.insightTags || insightTagsForReview(review);
+  review.insightTags = tags;
+  return {
+    user_id: coachAuthUser.id,
+    game_id: gameId,
+    ply: review.ply,
+    pair_num: review.pairNum,
+    phase: phaseOf(review.pairNum),
+    played_at: new Date().toISOString(),
+    fen_before: review.fenBefore,
+    fen_after: review.fenAfter,
+    user_uci: review.userUci,
+    user_san: review.userSan || null,
+    best_uci: review.bestUci || null,
+    best_san: review.bestSan || null,
+    classification: review.tier,
+    centipawn_loss: Math.round(review.loss || 0),
+    rank: review.rank || null,
+    tags,
+    explanation: review.whyBetter || null,
+    pv_san: review.pvSan || [],
+    top_alternatives: review.topAlternatives || [],
+    eval_before: review.evalBefore || null,
+    eval_after: review.evalAfter || null,
+    opening_name: currentCoachOpeningName()
+  };
+}
+
+function learningArtifactPayloads(review, moveId) {
+  if (!review || !moveId || !isInsightProblem(review.tier) || !review.fenBefore) {
+    return { drills: [], cards: [] };
+  }
+  const tags = (review.insightTags || insightTagsForReview(review))
+    .filter(tag => INSIGHT_TAG_META[tag])
+    .slice(0, 2);
+  const now = new Date().toISOString();
+  const drills = [];
+  const cards = [];
+
+  tags.forEach(tag => {
+    const meta = INSIGHT_TAG_META[tag];
+    if (review.bestUci) {
+      drills.push({
+        user_id: coachAuthUser.id,
+        source_move_id: moveId,
+        tag,
+        fen: review.fenBefore,
+        best_uci: review.bestUci || null,
+        best_san: review.bestSan || null,
+        prompt: meta.practice,
+        due_at: now,
+        updated_at: now
+      });
+    }
+    cards.push({
+      user_id: coachAuthUser.id,
+      source_move_id: moveId,
+      tag,
+      title: meta.title,
+      body: meta.theory,
+      retained: false,
+      updated_at: now
+    });
+  });
+
+  return { drills, cards };
+}
+
+async function syncRemoteLearningArtifacts(review, moveId) {
+  if (!hasCoachDbSession()) return;
+  const artifacts = learningArtifactPayloads(review, moveId);
+
+  if (!artifacts.drills.length && !artifacts.cards.length) return;
+  await deleteRemoteLearningArtifacts(moveId);
+
+  const writes = [];
+  if (artifacts.drills.length) {
+    writes.push(coachDbClient
+      .from('drill_queue')
+      .upsert(artifacts.drills, { onConflict: 'source_move_id,tag' }));
+  }
+  if (artifacts.cards.length) {
+    writes.push(coachDbClient
+      .from('theory_cards')
+      .upsert(artifacts.cards, { onConflict: 'source_move_id,tag' }));
+  }
+  const results = await Promise.all(writes);
+  for (const result of results) {
+    if (result.error) throw result.error;
+  }
+}
+
+async function deleteRemoteLearningArtifacts(moveId) {
+  if (!hasCoachDbSession() || !moveId) return;
+  const [drillDelete, cardDelete] = await Promise.all([
+    coachDbClient
+      .from('drill_queue')
+      .delete()
+      .eq('source_move_id', moveId)
+      .eq('user_id', coachAuthUser.id),
+    coachDbClient
+      .from('theory_cards')
+      .delete()
+      .eq('source_move_id', moveId)
+      .eq('user_id', coachAuthUser.id)
+  ]);
+  if (drillDelete.error) throw drillDelete.error;
+  if (cardDelete.error) throw cardDelete.error;
+}
+
+async function syncRemoteCoachMove(review) {
+  if (!hasCoachDbSession() || !review || review.tier === 'unknown') return;
+  const gameId = await ensureRemoteCoachGame();
+  if (!gameId) return;
+  const { data, error } = await coachDbClient
+    .from('coach_moves')
+    .upsert(remoteMovePayload(review, gameId), { onConflict: 'game_id,ply' })
+    .select('id')
+    .single();
+  if (error) throw error;
+  if (data && data.id) await syncRemoteLearningArtifacts(review, data.id);
+  if (data && data.id) upsertRemoteInsightEntry(remoteInsightEntryFromReview(review, data.id));
+  queueRemoteCoachGameUpdate(null);
+}
+
+async function deleteRemoteCoachMove(review) {
+  if (!hasCoachDbSession() || !coachRemoteGameId || !review || !review.ply) return;
+  const existing = await coachDbClient
+    .from('coach_moves')
+    .select('id')
+    .eq('game_id', coachRemoteGameId)
+    .eq('ply', review.ply)
+    .maybeSingle();
+  if (existing.error) throw existing.error;
+  if (existing.data && existing.data.id) await deleteRemoteLearningArtifacts(existing.data.id);
+  const { error } = await coachDbClient
+    .from('coach_moves')
+    .delete()
+    .eq('game_id', coachRemoteGameId)
+    .eq('ply', review.ply);
+  if (error) throw error;
+  if (existing.data && existing.data.id) removeRemoteInsightEntry(existing.data.id);
+  queueRemoteCoachGameUpdate(null);
+}
+
+function remoteMoveToInsightEntry(row) {
+  return {
+    id: row.id || null,
+    ts: row.played_at ? Date.parse(row.played_at) : Date.now(),
+    tier: row.classification,
+    loss: row.centipawn_loss || 0,
+    phase: row.phase || phaseOf(row.pair_num || Math.ceil((row.ply || 1) / 2)),
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    pairNum: row.pair_num || Math.ceil((row.ply || 1) / 2),
+    ply: row.ply || 1,
+    userSan: row.user_san || null,
+    bestSan: row.best_san || null,
+    fenBefore: row.fen_before || null,
+    userUci: row.user_uci || null,
+    bestUci: row.best_uci || null,
+    opening: row.opening_name || null
+  };
+}
+
+function remoteInsightEntryFromReview(review, id) {
+  const entry = insightEntryFromReview(review);
+  entry.id = id || entry.id || null;
+  return entry;
+}
+
+function upsertRemoteInsightEntry(entry) {
+  if (!entry || !entry.id) return;
+  if (!Array.isArray(coachRemoteInsightEntries)) coachRemoteInsightEntries = [];
+  const idx = coachRemoteInsightEntries.findIndex(existing => existing && existing.id === entry.id);
+  if (idx >= 0) coachRemoteInsightEntries[idx] = entry;
+  else coachRemoteInsightEntries.push(entry);
+  coachRemoteInsightEntries = coachRemoteInsightEntries
+    .filter(e => e && e.tier && e.tier !== 'unknown')
+    .slice(-INSIGHTS_MAX_ENTRIES);
+  renderInsights();
+}
+
+function removeRemoteInsightEntry(id) {
+  if (!id || !Array.isArray(coachRemoteInsightEntries)) return;
+  coachRemoteInsightEntries = coachRemoteInsightEntries.filter(entry => entry && entry.id !== id);
+  renderInsights();
+}
+
+function clearQueuedRemoteCoachGameUpdate() {
+  if (remoteGameUpdateTimer) {
+    clearTimeout(remoteGameUpdateTimer);
+    remoteGameUpdateTimer = null;
+  }
+  pendingRemoteGameEndReason = null;
+}
+
+function queueRemoteCoachGameUpdate(endReason) {
+  if (!hasCoachDbSession() || !coachGame) return;
+  if (endReason) pendingRemoteGameEndReason = endReason;
+  if (remoteGameUpdateTimer) clearTimeout(remoteGameUpdateTimer);
+  remoteGameUpdateTimer = setTimeout(() => {
+    remoteGameUpdateTimer = null;
+    const reason = pendingRemoteGameEndReason;
+    pendingRemoteGameEndReason = null;
+    updateRemoteCoachGame(reason).catch(handleCoachDbError);
+  }, REMOTE_GAME_SYNC_DEBOUNCE_MS);
+}
+
+async function refreshRemoteInsights(opts = {}) {
+  if (!hasCoachDbSession()) {
+    coachRemoteInsightEntries = null;
+    renderInsights();
+    return;
+  }
+  if (!opts.silent) setCoachDbStatus('Loading account insights...');
+  const { data, error } = await coachDbClient
+    .from('coach_moves')
+    .select('id,played_at,classification,centipawn_loss,phase,tags,pair_num,ply,fen_before,user_uci,user_san,best_uci,best_san,opening_name')
+    .eq('user_id', coachAuthUser.id)
+    .order('played_at', { ascending: false })
+    .limit(300);
+  if (error) throw error;
+  coachRemoteInsightEntries = (data || []).slice().reverse().map(remoteMoveToInsightEntry);
+  if (!opts.silent) setCoachDbStatus('Account insights loaded.');
+  renderInsights();
+}
+
+const coachSync = {
+  init() {
+    return initCoachDb();
+  },
+  saveMove(review) {
+    return syncRemoteCoachMove(review);
+  },
+  deleteMove(review) {
+    return deleteRemoteCoachMove(review);
+  },
+  saveGame(endReason) {
+    return updateRemoteCoachGame(endReason);
+  },
+  loadInsights(opts) {
+    return refreshRemoteInsights(opts || {});
+  }
+};
+
+// ─────────────────────────────────────────────
+// PREMOVE — queue your move while the engine is thinking
+// ─────────────────────────────────────────────
+function setPremoveSquares(from, to) {
+  $('#coachBoard .coach-premove-from').removeClass('coach-premove-from');
+  $('#coachBoard .coach-premove-to').removeClass('coach-premove-to');
+  if (from) $('#coachBoard .square-' + from).addClass('coach-premove-from');
+  if (to)   $('#coachBoard .square-' + to).addClass('coach-premove-to');
+}
+function setPremove(from, to, promotion) {
+  coachPremove = { from, to, promotion: promotion || 'q' };
+  setPremoveSquares(from, to);
+  const suffix = coachPremove.promotion && coachPremove.promotion !== 'q'
+    ? '=' + coachPremove.promotion.toUpperCase()
+    : '';
+  $('#coach-premove-hint').text(`Premove queued: ${from}–${to}${suffix} (click board to cancel)`).show();
+}
+function clearPremove() {
+  coachPremove = null;
+  setPremoveSquares(null, null);
+  $('#coach-premove-hint').hide().text('');
+}
+// Called after the opponent's move applies. If the queued premove is still
+// legal, dispatch it through the normal user-move pipeline.
+function tryApplyPremove() {
+  if (!coachPremove || !coachGame || !coachGameActive) return;
+  if (!coachIsUserTurn()) { clearPremove(); return; }
+  const pm = coachPremove;
+  const tmp = new Chess(coachGame.fen());
+  const mv = tmp.move({ from: pm.from, to: pm.to, promotion: pm.promotion });
+  clearPremove();
+  if (!mv) return; // illegal in the new position — silently drop
+  // Update the board immediately, then run classification asynchronously.
+  if (coachBoard) coachBoard.position(tmp.fen());
+  coachHandleUserMove(pm.from, pm.to, pm.promotion, { updateBoard: false });
+}
+
+// ─────────────────────────────────────────────
+// MOVE SOUNDS (Web Audio synthesized — no binary assets)
+// ─────────────────────────────────────────────
+// We synthesize short filtered transients instead of shipping audio files. The
+// profile is tuned toward a dry wooden-board click: fast attack, low body, and
+// a tiny high-frequency edge.
+// AudioContext is created lazily on first play because most browsers block
+// audio creation outside a user gesture; the toggle checkbox click counts.
+const SOUND_PREF_KEY = 'coach:sound:v1';
+let coachSoundEnabled = false;
+let coachAudioCtx = null;
+
+function readSoundPref() {
+  try { return localStorage.getItem(SOUND_PREF_KEY) === '1'; } catch (e) { return false; }
+}
+function writeSoundPref(on) {
+  try { localStorage.setItem(SOUND_PREF_KEY, on ? '1' : '0'); } catch (e) {}
+}
+function ensureAudioCtx() {
+  if (coachAudioCtx) return coachAudioCtx;
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    coachAudioCtx = new Ctx();
+  } catch (e) { return null; }
+  return coachAudioCtx;
+}
+function createNoiseBuffer(ctx, duration) {
+  const length = Math.max(1, Math.floor(ctx.sampleRate * duration));
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++) {
+    data[i] = (Math.random() * 2 - 1) * (1 - i / length);
+  }
+  return buffer;
+}
+
+function applyPercussiveEnvelope(gainNode, start, peak, attack, decay) {
+  const gain = gainNode.gain;
+  gain.cancelScheduledValues(start);
+  gain.setValueAtTime(0.0001, start);
+  gain.exponentialRampToValueAtTime(peak, start + attack);
+  gain.exponentialRampToValueAtTime(0.0001, start + attack + decay);
+}
+
+function playTone(freq, durationMs, opts = {}) {
+  const ctx = ensureAudioCtx();
+  if (!ctx) return;
+  const now = ctx.currentTime + (opts.delay || 0);
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = opts.type || 'sine';
+  osc.frequency.setValueAtTime(freq, now);
+  if (opts.endFreq) {
+    osc.frequency.exponentialRampToValueAtTime(opts.endFreq, now + durationMs / 1000);
+  }
+  const peak = opts.gain == null ? 0.16 : opts.gain;
+  applyPercussiveEnvelope(gain, now, peak, 0.004, durationMs / 1000);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(now);
+  osc.stop(now + durationMs / 1000 + 0.02);
+}
+
+function playNoiseClick(opts = {}) {
+  const ctx = ensureAudioCtx();
+  if (!ctx) return;
+  const start = ctx.currentTime + (opts.delay || 0);
+  const duration = opts.duration || 0.028;
+  const source = ctx.createBufferSource();
+  const filter = ctx.createBiquadFilter();
+  const gain = ctx.createGain();
+  source.buffer = createNoiseBuffer(ctx, duration);
+  filter.type = opts.filterType || 'bandpass';
+  filter.frequency.setValueAtTime(opts.frequency || 2400, start);
+  filter.Q.setValueAtTime(opts.q || 0.8, start);
+  applyPercussiveEnvelope(gain, start, opts.gain || 0.08, 0.0015, duration);
+  source.connect(filter).connect(gain).connect(ctx.destination);
+  source.start(start);
+  source.stop(start + duration + 0.01);
+}
+
+function playWoodTap(opts = {}) {
+  playNoiseClick({
+    delay: opts.delay || 0,
+    duration: opts.clickDuration || 0.022,
+    frequency: opts.clickFreq || 2600,
+    q: opts.clickQ || 0.7,
+    gain: opts.clickGain || 0.045
+  });
+  playTone(opts.bodyFreq || 210, (opts.bodyMs || 58), {
+    delay: opts.delay || 0,
+    type: 'triangle',
+    endFreq: opts.bodyEnd || 115,
+    gain: opts.bodyGain || 0.07
+  });
+  if (opts.lowFreq) {
+    playTone(opts.lowFreq, opts.lowMs || 82, {
+      delay: (opts.delay || 0) + 0.006,
+      type: 'sine',
+      endFreq: opts.lowEnd || Math.max(40, opts.lowFreq * 0.55),
+      gain: opts.lowGain || 0.045
+    });
+  }
+}
+
+function playSound(kind) {
+  if (!coachSoundEnabled) return;
+  const ctx = ensureAudioCtx();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  if (kind === 'move') {
+    playWoodTap({ bodyFreq: 245, bodyEnd: 128, bodyGain: 0.055, clickFreq: 3100, clickGain: 0.04 });
+  } else if (kind === 'capture') {
+    playWoodTap({ bodyFreq: 165, bodyEnd: 82, bodyGain: 0.09, lowFreq: 95, lowGain: 0.055, clickFreq: 1700, clickGain: 0.065, bodyMs: 76 });
+  } else if (kind === 'castle') {
+    playWoodTap({ bodyFreq: 230, bodyEnd: 118, bodyGain: 0.05, clickFreq: 2800, clickGain: 0.038 });
+    playWoodTap({ delay: 0.055, bodyFreq: 205, bodyEnd: 104, bodyGain: 0.047, clickFreq: 2400, clickGain: 0.034 });
+  } else if (kind === 'promote') {
+    playWoodTap({ bodyFreq: 250, bodyEnd: 132, bodyGain: 0.052, clickFreq: 3200, clickGain: 0.04 });
+    playTone(720, 92, { delay: 0.045, type: 'triangle', endFreq: 520, gain: 0.026 });
+  } else if (kind === 'check') {
+    playWoodTap({ bodyFreq: 235, bodyEnd: 122, bodyGain: 0.052, clickFreq: 3000, clickGain: 0.04 });
+    playNoiseClick({ delay: 0.052, duration: 0.018, frequency: 4300, q: 1.2, gain: 0.036 });
+  } else if (kind === 'gameover') {
+    playWoodTap({ bodyFreq: 150, bodyEnd: 78, bodyGain: 0.09, lowFreq: 72, lowGain: 0.06, clickFreq: 1550, clickGain: 0.055, bodyMs: 95 });
+    playTone(210, 180, { delay: 0.11, type: 'triangle', endFreq: 92, gain: 0.055 });
+  }
+}
+// Pick the right sound for a chess.js move object.
+function soundForMove(mv, gameAfter) {
+  if (!mv) return null;
+  if (gameAfter && gameAfter.game_over()) return 'gameover';
+  if (gameAfter && gameAfter.in_check()) return 'check';
+  if (mv.captured) return 'capture';
+  if (mv.promotion) return 'promote';
+  if (isCastlingMove(mv)) return 'castle';
+  return 'move';
+}
+
+// ─────────────────────────────────────────────
+// STOCKFISH ENGINE WRAPPER
+// ─────────────────────────────────────────────
+const engineClient = {
+  worker: null,
+  status: 'idle',   // idle | loading | ready
+  queue: [],
+  current: null,
+  _readyResolvers: [],
+
+  init() {
+    if (this.status === 'ready') return Promise.resolve();
+    if (this.status === 'loading') {
+      return new Promise((resolve, reject) => this._readyResolvers.push({ resolve, reject }));
+    }
+    this.status = 'loading';
+    return new Promise((resolve, reject) => {
+      try {
+        this.worker = new Worker('stockfish/stockfish.js');
+      } catch (err) {
+        this.status = 'idle';
+        reject(err);
+        return;
+      }
+      this._readyResolvers.push({ resolve, reject });
+      this.worker.onmessage = (e) => this._onMessage(e.data);
+      this.worker.onerror = (e) => {
+        const err = new Error('Engine failed: ' + (e.message || e.filename || 'worker error'));
+        this.failAll(err);
+      };
+      this.worker.postMessage('uci');
+    });
+  },
+
+  failAll(err) {
+    if (this.current && this.current.timeoutId) {
+      clearTimeout(this.current.timeoutId);
+      this.current.timeoutId = null;
+    }
+    const pending = [];
+    if (this.current) pending.push(this.current);
+    pending.push(...this.queue);
+    this.current = null;
+    this.queue = [];
+    this.status = 'idle';
+    if (this.worker) {
+      try { this.worker.terminate(); } catch (e) {}
+    }
+    this.worker = null;
+    this._readyResolvers.forEach(waiter => waiter.reject(err));
+    this._readyResolvers = [];
+    pending.forEach(task => {
+      if (task.timeoutId) clearTimeout(task.timeoutId);
+      if (task.reject) task.reject(err);
+    });
+  },
+
+  _onMessage(msg) {
+    if (typeof msg !== 'string') return;
+    if (msg === 'uciok') { this.worker.postMessage('isready'); return; }
+    if (msg === 'readyok' && this.status === 'loading') {
+      this.status = 'ready';
+      this._readyResolvers.forEach(waiter => waiter.resolve());
+      this._readyResolvers = [];
+      this._runNext();
+      return;
+    }
+    if (!this.current) return;
+    if (msg.startsWith('info ')) {
+      const parsed = parseInfo(msg);
+      if (!parsed) return;
+      // Skip info lines without a pv (e.g. currmove progress reports) — they
+      // would otherwise overwrite the real pv1 entry with an empty PV and
+      // corrupt ranking / candidate display.
+      if (!parsed.pv || parsed.pv.length === 0) return;
+      if (this.current.multipv) {
+        this.current.pvLines = this.current.pvLines || {};
+        this.current.pvLines[parsed.multipv || 1] = parsed;
+      } else {
+        this.current.lastInfo = parsed;
+      }
+      return;
+    }
+    if (msg.startsWith('bestmove ')) {
+      const bm = msg.split(' ')[1];
+      const done = this.current;
+      this.current = null;
+      if (done.timeoutId) { clearTimeout(done.timeoutId); done.timeoutId = null; }
+      if (done.multipv) {
+        const lines = Object.keys(done.pvLines || {})
+          .map(k => parseInt(k))
+          .sort((a, b) => a - b)
+          .map(k => done.pvLines[k]);
+        done.resolve({ bestmove: bm === '(none)' ? null : bm, lines });
+      } else {
+        const info = done.lastInfo || { cp: 0, pv: [bm], depth: 0 };
+        done.resolve({ bestmove: bm === '(none)' ? null : bm, info });
+      }
+      this._runNext();
+    }
+  },
+
+  evaluate(fen, depth, opts) {
+    return this.init().then(() => new Promise((resolve, reject) => {
+      const task = {
+        fen,
+        depth,
+        resolve,
+        reject: reject,
+        lastInfo: null,
+        skill: (opts && typeof opts.skill === 'number') ? opts.skill : null,
+        elo: (opts && typeof opts.elo === 'number') ? opts.elo : null,
+        multipv: (opts && opts.multipv) || null,
+        timeoutId: null
+      };
+      // Safety timeout — if the engine worker stalls or the WASM module
+      // wedges, abandon the task after 30s so the queue can drain and
+      // subsequent moves aren't permanently blocked.
+      task.timeoutId = setTimeout(() => {
+        task.timeoutId = null;
+        if (this.current === task) {
+          this.current = null;
+          try { this.worker.postMessage('stop'); } catch (_) {}
+        } else {
+          this.queue = this.queue.filter(t => t !== task);
+        }
+        if (task.multipv) {
+          resolve({ bestmove: null, lines: [] });
+        } else {
+          resolve({ bestmove: null, info: { cp: 0, pv: [], depth: 0 } });
+        }
+        this._runNext();
+      }, 30000);
+      this.queue.push(task);
+      this._runNext();
+    }));
+  },
+
+  _runNext() {
+    if (this.status !== 'ready' || this.current || this.queue.length === 0) return;
+    this.current = this.queue.shift();
+    this.worker.postMessage('ucinewgame');
+    // Apply strength options per task
+    if (this.current.elo !== null && this.current.elo !== undefined) {
+      this.worker.postMessage('setoption name UCI_LimitStrength value true');
+      this.worker.postMessage('setoption name UCI_Elo value ' + this.current.elo);
+    } else if (this.current.skill !== null && this.current.skill !== undefined) {
+      this.worker.postMessage('setoption name UCI_LimitStrength value false');
+      this.worker.postMessage('setoption name Skill Level value ' + this.current.skill);
+    } else {
+      this.worker.postMessage('setoption name UCI_LimitStrength value false');
+      this.worker.postMessage('setoption name Skill Level value 20');
+    }
+    // MultiPV
+    this.worker.postMessage('setoption name MultiPV value ' + (this.current.multipv || 1));
+    this.worker.postMessage('position fen ' + this.current.fen);
+    this.worker.postMessage('go depth ' + this.current.depth);
+  },
+
+  cancel() {
+    if (this.status === 'ready' && this.current) {
+      this.worker.postMessage('stop');
+    }
+    this.queue = [];
+  }
+};
+
+function parseInfo(msg) {
+  const depthMatch = msg.match(/\bdepth (\d+)/);
+  const cpMatch = msg.match(/\bscore cp (-?\d+)/);
+  const mateMatch = msg.match(/\bscore mate (-?\d+)/);
+  const mpvMatch = msg.match(/\bmultipv (\d+)/);
+  // PV runs from "pv " to next space-delimited keyword or end
+  const pvMatch = msg.match(/\bpv ((?:[a-h][1-8][a-h][1-8][qrbn]? ?)+)/);
+  if (!depthMatch) return null;
+  return {
+    depth: parseInt(depthMatch[1]),
+    cp: cpMatch ? parseInt(cpMatch[1]) : null,
+    mate: mateMatch ? parseInt(mateMatch[1]) : null,
+    multipv: mpvMatch ? parseInt(mpvMatch[1]) : 1,
+    pv: pvMatch ? pvMatch[1].trim().split(/\s+/) : []
+  };
+}
+
+function scoreToCp(info) {
+  if (info.mate !== null && info.mate !== undefined) {
+    return info.mate > 0 ? 10000 - info.mate : -10000 - info.mate;
+  }
+  return info.cp || 0;
+}
+
+function formatEval(info) {
+  if (info.mate !== null && info.mate !== undefined) {
+    return '#' + Math.abs(info.mate);
+  }
+  const cp = info.cp || 0;
+  const sign = cp > 0 ? '+' : (cp < 0 ? '−' : '±');
+  return sign + (Math.abs(cp) / 100).toFixed(2);
+}
+
+function uciToSan(fen, uci) {
+  const g = new Chess(fen);
+  const move = g.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || undefined });
+  return move ? move.san : uci;
+}
+
+function pvToSan(fen, pvArr, max) {
+  const g = new Chess(fen);
+  const out = [];
+  for (const uci of pvArr.slice(0, max || 5)) {
+    const mv = g.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || undefined });
+    if (!mv) break;
+    out.push(mv.san);
+  }
+  return out;
+}
+
+function uciFromMove(mv) {
+  if (!mv) return null;
+  return mv.from + mv.to + (mv.promotion || '');
+}
+
+function materialValue(piece) {
+  return ({ p: 100, n: 300, b: 325, r: 500, q: 900, k: 0 })[piece] || 0;
+}
+
+function moveHeuristicScore(gameObj, mv) {
+  let score = Math.random() * 80;
+  if (mv.captured) score += materialValue(mv.captured) - materialValue(mv.piece) * 0.18;
+  if (mv.flags && mv.flags.includes('p')) score += materialValue(mv.promotion || 'q') - 100;
+  if (mv.san && mv.san.includes('+')) score += 120;
+  if (mv.san && mv.san.includes('#')) score += 5000;
+  if (['n', 'b'].includes(mv.piece)) score += 25;
+  if (mv.piece === 'q') score -= 20;
+  if (mv.piece === 'k' && !(mv.flags || '').includes('k') && !(mv.flags || '').includes('q')) score -= 35;
+  return score;
+}
+
+function chooseWeakOpponentMove(fen, elo) {
+  const g = new Chess(fen);
+  const moves = g.moves({ verbose: true });
+  if (!moves.length) return null;
+  if (elo <= 500) {
+    return uciFromMove(moves[Math.floor(Math.random() * moves.length)]);
+  }
+  const randomRate = elo < 700 ? 0.65 : (elo < 900 ? 0.42 : 0.22);
+  if (Math.random() < randomRate) {
+    return uciFromMove(moves[Math.floor(Math.random() * moves.length)]);
+  }
+  const noise = elo < 700 ? 650 : (elo < 900 ? 380 : 180);
+  const ranked = moves
+    .map(mv => ({ mv, score: moveHeuristicScore(g, mv) + (Math.random() * noise) }))
+    .sort((a, b) => b.score - a.score);
+  const poolSize = elo < 700 ? 8 : (elo < 900 ? 5 : 3);
+  const pool = ranked.slice(0, Math.min(poolSize, ranked.length));
+  return uciFromMove(pool[Math.floor(Math.random() * pool.length)].mv);
+}
+
+// ─────────────────────────────────────────────
+// COACH CLASSIFICATION
+// ─────────────────────────────────────────────
+const COACH_DEPTH = 12;
+
+// Rank-and-loss aware classification. `rank` is 1 if user played the engine's
+// #1 move, 2 or 3 if it was a top-3 alternative, otherwise null.
+function classifyRankLoss(rank, loss) {
+  if (rank === 1) return { tier: 'best',      label: 'Best move', emoji: '★' };
+  if (rank === 2 || rank === 3)
+                  return { tier: 'excellent', label: 'Excellent', emoji: '✦' };
+  if (loss < 60)  return { tier: 'good',       label: 'Good',       emoji: '👍' };
+  if (loss < 120) return { tier: 'inaccuracy', label: 'Inaccuracy', emoji: '⚠' };
+  if (loss < 250) return { tier: 'mistake',    label: 'Mistake',    emoji: '✗' };
+  return            { tier: 'blunder',     label: 'Blunder',    emoji: '💥' };
+}
+
+function movePurposeText(fenBefore, bestUci, userUciMove, bestLine, afterInfo) {
+  if (!bestUci || !userUciMove || bestUci === userUciMove) return '';
+  const before = new Chess(fenBefore);
+  const best = before.move({
+    from: bestUci.slice(0, 2),
+    to: bestUci.slice(2, 4),
+    promotion: bestUci[4] || undefined
+  });
+  if (!best) return '';
+
+  const userBefore = new Chess(fenBefore);
+  const user = userBefore.move({
+    from: userUciMove.slice(0, 2),
+    to: userUciMove.slice(2, 4),
+    promotion: userUciMove[4] || undefined
+  });
+
+  const reasons = [];
+  if (best.san.includes('#')) reasons.push(`${best.san} delivers checkmate`);
+  else if (best.san.includes('+')) reasons.push(`${best.san} gives check and forces a response`);
+  if (best.captured) reasons.push(`${best.san} wins the ${PIECE_NAME[best.captured] ? PIECE_NAME[best.captured].toLowerCase() : 'piece'} on ${best.to}`);
+  if (best.promotion) reasons.push(`${best.san} promotes immediately`);
+  if (best.flags && (best.flags.includes('k') || best.flags.includes('q'))) reasons.push(`${best.san} castles and improves king safety`);
+
+  const bestPv = bestLine && bestLine.pv ? pvToSan(fenBefore, bestLine.pv, 4) : [];
+  if (bestPv.length >= 2) {
+    reasons.push(`the follow-up is ${bestPv.join(' ')}`);
+  }
+
+  const afterCp = afterInfo ? -scoreToCp(afterInfo) : null;
+  const beforeCp = bestLine ? scoreToCp(bestLine) : null;
+  if (beforeCp !== null && afterCp !== null && beforeCp - afterCp >= 120) {
+    reasons.push(`${user ? user.san : 'your move'} lets the position swing by ${(Math.min(beforeCp - afterCp, 1000) / 100).toFixed(1)} pawns`);
+  }
+
+  if (!reasons.length) {
+    return `${best.san} keeps the engine's preferred plan; your move gives the opponent a better version of the position.`;
+  }
+  return `${best.san} is better because ${reasons.slice(0, 2).join('; ')}.`;
+}
+
+// Side-to-move perspective: score is always in the mover's favor.
+// We pull MultiPV=3 before the move so we know if the user picked #1/#2/#3.
+async function classifyMove(fenBefore, userUciMove, fenAfter) {
+  const [beforeEval, afterEval] = await Promise.all([
+    engineClient.evaluate(fenBefore, COACH_DEPTH, { multipv: 3 }),
+    engineClient.evaluate(fenAfter, COACH_DEPTH)
+  ]);
+  const lines = beforeEval.lines || [];
+  const bestLine = lines[0];
+  const bestUci = (bestLine && bestLine.pv && bestLine.pv[0]) || beforeEval.bestmove;
+  const afterInfo = afterEval.info;
+
+  // Engine timeout / stall — evaluate resolved with no bestmove and no PV data.
+  // Return a neutral review instead of classifying based on zeroes.
+  const beforeStalled = !bestUci && lines.length === 0;
+  const afterStalled = !afterEval.bestmove && (!afterInfo || !afterInfo.pv || afterInfo.pv.length === 0);
+  if (beforeStalled || afterStalled) {
+    return {
+      tier: 'unknown',
+      label: 'Not analyzed',
+      emoji: '·',
+      loss: 0,
+      rank: null,
+      bestUci: null,
+      bestSan: null,
+      userSan: uciToSan(fenBefore, userUciMove),
+      pvSan: [],
+      evalBefore: null,
+      evalAfter: null,
+      stalled: true
+    };
+  }
+
+  // Determine user's rank in the top-3 (if any)
+  let rank = null;
+  for (let i = 0; i < lines.length; i++) {
+    const pvFirst = lines[i].pv && lines[i].pv[0];
+    if (pvFirst === userUciMove) { rank = i + 1; break; }
+  }
+
+  const cpBefore = bestLine ? scoreToCp(bestLine) : 0;
+  const cpAfter = -scoreToCp(afterInfo);
+  const loss = Math.max(0, cpBefore - cpAfter);
+
+  const cls = classifyRankLoss(rank, loss);
+
+  // Build top-3 alternatives for the review card. Each line carries its first-move
+  // SAN (the candidate), its eval in centipawns, and a short PV preview.
+  const topAlternatives = lines.slice(0, 3).map((line) => {
+    const firstUci = line.pv && line.pv[0];
+    return {
+      uci: firstUci || null,
+      san: firstUci ? uciToSan(fenBefore, firstUci) : null,
+      cp: scoreToCp(line),
+      pvSan: pvToSan(fenBefore, line.pv || [], 4)
+    };
+  }).filter(a => a.san);
+  const whyBetter = movePurposeText(fenBefore, bestUci, userUciMove, bestLine, afterInfo);
+
+  return {
+    tier: cls.tier,
+    label: cls.label,
+    emoji: cls.emoji,
+    loss: rank === 1 ? 0 : Math.round(loss),
+    rank,
+    bestUci,
+    bestSan: bestUci ? uciToSan(fenBefore, bestUci) : null,
+    userSan: uciToSan(fenBefore, userUciMove),
+    pvSan: bestLine ? pvToSan(fenBefore, bestLine.pv || [], 5) : [],
+    topAlternatives,
+    whyBetter,
+    evalBefore: bestLine || null,
+    evalAfter: afterInfo
+  };
+}
+
+function coachUserColor() {
+  return coachUserSide === 'black' ? 'black' : 'white';
+}
+
+function coachIsUserTurn() {
+  if (!coachGame) return false;
+  const turn = coachGame.turn();
+  return (turn === 'w' && coachUserColor() === 'white') ||
+         (turn === 'b' && coachUserColor() === 'black');
+}
+
+// Opponent search depth matches review depth; strength is controlled by Elo.
+function strengthTierLabel(elo) {
+  if (elo < 600)  return 'Absolute beginner';
+  if (elo < 800)  return 'Learning the rules';
+  if (elo < 1000) return 'Beginner';
+  if (elo < 1300) return 'Club novice';
+  if (elo < 1600) return 'Improving club';
+  if (elo < 1900) return 'Strong club';
+  if (elo < 2200) return 'Expert';
+  return 'Master';
+}
+
+// Translate the slider's displayed Elo into opponent behavior. Very low levels
+// need explicit noisy move selection; shallow Stockfish still finds too many
+// forcing moves and does not feel like a 400-rated opponent.
+function coachStrengthOpts(elo) {
+  if (elo < 1000) {
+    return { weak: true };
+  }
+  if (elo < 1320) {
+    // 1000 -> skill 4, depth 3; 1300 -> skill 9, depth 6.
+    const t = Math.max(0, Math.min(1, (elo - 1000) / 320));
+    const skill = 4 + Math.round(t * 5);
+    const depth = 3 + Math.round(t * 3);
+    return { skill, depth };
+  }
+  if (elo < 1400) {
+    // Stockfish's native UCI_Elo floor is around 1320.
+    const depth = 6;
+    return { elo: Math.max(1320, elo), depth };
+  }
+  if (elo < 1600) {
+    const t = Math.max(0, Math.min(1, (elo - 1400) / 200));
+    const skill = Math.round(t * 8);
+    const depth = 6 + Math.round(t * 2);
+    return { skill, depth };
+  }
+  // 1600+: Stockfish's native Elo limiter, with depth tiered for realism.
+  const depth = elo < 2000 ? 10 : 16;
+  return { elo, depth };
+}
+
+// Weight per classification tier for accuracy %.
+const ACCURACY_TIER_WEIGHT = {
+  best: 1, excellent: 0.95, good: 0.85,
+  inaccuracy: 0.6, mistake: 0.3, blunder: 0.05
+};
+
+function accuracyFromTallies(tallies, total) {
+  if (!total) return null;
+  let w = 0;
+  for (const tier in ACCURACY_TIER_WEIGHT) {
+    w += (tallies[tier] || 0) * ACCURACY_TIER_WEIGHT[tier];
+  }
+  return Math.round((w / total) * 100);
+}
+
+// Accuracy over the most recent `window` user moves (ignores 'unknown' tiers).
+function rollingAccuracy(windowSize) {
+  if (!coachReviewLog || coachReviewLog.length === 0) return null;
+  const scored = coachReviewLog.filter(r => r.tier && r.tier !== 'unknown');
+  if (scored.length === 0) return null;
+  const slice = scored.slice(-windowSize);
+  const tallies = {};
+  for (const r of slice) tallies[r.tier] = (tallies[r.tier] || 0) + 1;
+  return { pct: accuracyFromTallies(tallies, slice.length), n: slice.length };
+}
+
+function updateCoachSummary() {
+  if (!coachStats) return;
+  const total = coachStats.moves;
+  $('#coach-moves-count').text(total);
+  $('#coach-tally-best').text(coachStats.best);
+  $('#coach-tally-excellent').text(coachStats.excellent);
+  $('#coach-tally-good').text(coachStats.good);
+  $('#coach-tally-inacc').text(coachStats.inaccuracy);
+  $('#coach-tally-mistake').text(coachStats.mistake);
+  $('#coach-tally-blunder').text(coachStats.blunder);
+  if (total === 0) {
+    $('#coach-accuracy').text('—');
+    $('#coach-accuracy-recent').text('—');
+    $('#coach-accuracy-recent-label').text('Recent accuracy');
+    return;
+  }
+  const pct = accuracyFromTallies(coachStats, total);
+  $('#coach-accuracy').text((pct === null ? '—' : pct + '%'));
+  const roll = rollingAccuracy(10);
+  if (roll && roll.pct !== null) {
+    $('#coach-accuracy-recent').text(roll.pct + '%');
+    $('#coach-accuracy-recent-label').text(`Last ${roll.n} move${roll.n === 1 ? '' : 's'}`);
+  } else {
+    $('#coach-accuracy-recent').text('—');
+    $('#coach-accuracy-recent-label').text('Recent accuracy');
+  }
+}
+
+function renderCoachReview(review) {
+  if (!review) { $('#coach-review').hide(); return; }
+  const $badge = $('#coach-classification');
+  $badge.text(review.emoji + ' ' + review.label);
+  $badge.attr('class', 'coach-classification coach-class-' + review.tier);
+  $('#coach-loss').text(review.loss > 0 ? '−' + (review.loss / 100).toFixed(2) : '0.00');
+  $('#coach-user-move').text(review.userSan || '—');
+  $('#coach-best-move').text(review.bestSan || '—');
+  const isBest = review.tier === 'best';
+  const isExcellent = review.tier === 'excellent';
+  const isUnknown = review.tier === 'unknown';
+  let msg;
+  if (isUnknown) {
+    msg = 'Engine timed out on this move — skipping classification. The game continues.';
+  } else if (isBest) {
+    msg = 'Engine\'s #1 choice. Keep it coming.';
+  } else if (isExcellent) {
+    msg = `Top-3 engine move (#${review.rank}). ${review.bestSan} was #1 — you're in great company.`;
+  } else {
+    msg = `The engine prefers ${review.bestSan}. You lost ${(review.loss / 100).toFixed(2)} pawns of evaluation with ${review.userSan}.`;
+    if (review.whyBetter) msg += ' ' + review.whyBetter;
+  }
+  $('#coach-explanation').text(msg);
+  if (review.pvSan && review.pvSan.length > 1) {
+    $('#coach-pv').show().text('Engine line: ' + review.pvSan.join(' '));
+  } else {
+    $('#coach-pv').hide();
+  }
+  // Auto-surface the top-3 candidate alternatives for mistake/blunder so the
+  // user doesn't have to click "Candidates" — the data is already classified.
+  const showAlts = (review.tier === 'mistake' || review.tier === 'blunder')
+                   && review.topAlternatives && review.topAlternatives.length > 0;
+  if (showAlts) {
+    const $list = $('#coach-alts-list').empty();
+    review.topAlternatives.forEach((alt, i) => {
+      const cont = (alt.pvSan || []).slice(1).join(' ');
+      const cp = alt.cp == null ? '' : (alt.cp >= 10000 ? '#'
+                                       : alt.cp <= -10000 ? '−#'
+                                       : (alt.cp >= 0 ? '+' : '') + (alt.cp / 100).toFixed(2));
+      const $row = $('<div class="coach-review-alts-row"></div>');
+      $row.append(`<span class="alt-rank">#${i + 1}</span>`);
+      const $line = $('<span class="alt-line"></span>');
+      $line.append(`<span class="alt-san">${alt.san}</span>`);
+      if (cont) $line.append(` <span class="alt-cont">${cont}</span>`);
+      $row.append($line);
+      $row.append(`<span class="alt-cp">${cp}</span>`);
+      $list.append($row);
+    });
+    $('#coach-alts').show().css('display', 'flex');
+  } else {
+    $('#coach-alts').hide();
+  }
+  $('#coach-review').show().css('display', 'flex');
+  $('#btn-coach-showbest').prop('disabled', isBest || isUnknown || !review.bestUci);
+}
+
+function setCoachStatus(msg) {
+  $('#coach-status').text(msg);
+}
+
+function showCoachRetryStatus(msg) {
+  const $status = $('#coach-status').empty();
+  $status.append(document.createTextNode(msg + ' '));
+  $('<button type="button" class="movelist-copy" id="btn-coach-retry-opponent">Retry</button>')
+    .appendTo($status);
+}
+
+function resetCoachState(fen) {
+  CoachController.setPhase('idle');
+  candidateRequestId++;
+  coachGame = fen ? new Chess(fen) : new Chess();
+  coachStartFen = coachGame.fen();
+  coachStats = { moves: 0, best: 0, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
+  coachReviewLog = [];
+  coachLastReview = null;
+  coachThinking = false;
+  coachEndedAt = null;
+  coachReviewCursor = null;
+  coachLastEndMsg = null;
+  coachRemoteGameId = null;
+  coachLifetimeRolledForThisGame = false;
+  clearQueuedRemoteCoachGameUpdate();
+  if (coachSummaryTimer) { clearTimeout(coachSummaryTimer); coachSummaryTimer = null; }
+  clearPremove();
+  $('#coach-status').removeClass('status-ended');
+  $('#summary-overlay').hide();
+  $('#coach-review').hide();
+  $('#threats-section').hide();
+  $('#candidates-section').hide();
+  $('#opening-section').hide();
+  $('#movelist-section').hide();
+  $('#liveeval-section').hide();
+  updateCoachSummary();
+  updateCapturedDisplay(coachGame.fen());
+  updateMoveList();
+  updateOpeningLabel();
+}
+
+async function coachOpponentRespond() {
+  if (!coachMode || !coachGameActive) return;
+  if (coachGame.game_over()) { coachHandleGameOver(); return; }
+  if (coachIsUserTurn()) return;
+  CoachController.setPhase('opponentThinking');
+  setCoachStatus('Opponent thinking…');
+  const fen = coachGame.fen();
+  try {
+    // Opponent uses configured strength. Below 1000, explicit noisy move
+    // selection is more realistic than asking Stockfish for a shallow best move.
+    const opts = coachStrengthOpts(coachEngineElo);
+    let bestmove;
+    if (opts.weak) {
+      bestmove = chooseWeakOpponentMove(fen, coachEngineElo);
+    } else {
+      const { depth, ...strength } = opts;
+      const result = await engineClient.evaluate(fen, depth, strength);
+      bestmove = result.bestmove;
+    }
+    if (!coachMode || !coachGameActive || coachIsUserTurn() || coachGame.fen() !== fen) return;
+    if (!bestmove) { setCoachStatus('Your move.'); return; }
+    setTimeout(() => {
+      try {
+        if (!coachMode || !coachGameActive) return;
+        const mv = coachGame.move({
+          from: bestmove.slice(0, 2),
+          to: bestmove.slice(2, 4),
+          promotion: bestmove[4] || undefined
+        });
+        if (!mv) throw new Error('Opponent move was not legal.');
+        candidateRequestId++;
+        if (!coachIsReviewing()) {
+          if (!coachBoard) throw new Error('Coach board is not ready.');
+          coachBoard.position(coachGame.fen());
+          updateCapturedDisplay(coachGame.fen());
+        }
+        playSound(soundForMove(mv, coachGame));
+        updateMoveList();
+        updateOpeningLabel();
+        saveCoachState();
+        if (coachGame.game_over()) { coachHandleGameOver(); return; }
+        if (!coachIsReviewing()) {
+          CoachController.setPhase('userTurn');
+          setCoachStatus('Your move.');
+          showThreats();
+        }
+        updateCoachControlsState();
+        // Apply any queued premove now that it's the user's turn again.
+        tryApplyPremove();
+      } catch (err) {
+        clearPremove();
+        coachThinking = false;
+        updateCoachControlsState();
+        showCoachRetryStatus('Opponent move failed — retry or take back.');
+      }
+    }, 300);
+  } catch (err) {
+    setCoachStatus('Engine error: ' + err.message);
+  }
+}
+
+async function coachHandleUserMove(source, target, promotion, opts) {
+  if (!coachMode || !coachGameActive) return 'snapback';
+  if (coachThinking) return 'snapback';
+  if (!coachIsUserTurn()) return 'snapback';
+  opts = opts || {};
+  promotion = promotion || 'q';
+  const fenBefore = coachGame.fen();
+  const tempGame = new Chess(fenBefore);
+  const move = tempGame.move({ from: source, to: target, promotion });
+  if (!move) return 'snapback';
+
+  const userMv = coachGame.move({ from: source, to: target, promotion });
+  candidateRequestId++;
+  const fenAfter = coachGame.fen();
+  const userUci = source + target + (move.promotion || '');
+  if (opts.updateBoard !== false && coachBoard && !coachIsReviewing()) coachBoard.position(fenAfter);
+  updateCapturedDisplay(fenAfter);
+  playSound(soundForMove(userMv, coachGame));
+
+  // Clear threats/candidates on new move
+  $('#threats-section').hide();
+  $('#candidates-section').hide();
+
+  coachThinking = true;
+  CoachController.setPhase('analyzing');
+  setCoachStatus('Analyzing your move…');
+  try {
+    const review = await classifyMove(fenBefore, userUci, fenAfter);
+    const ply = coachGame.history().length;
+    const pairNum = Math.ceil(ply / 2);
+    const logged = Object.assign({}, review, { fenBefore, fenAfter, userUci, ply, pairNum });
+    coachLastReview = logged;
+    coachReviewLog.push(logged);
+    recordCoachInsight(logged);
+    coachSync.saveMove(logged).catch(handleCoachDbError);
+    // Don't count engine-timeout ("unknown") reviews in stats or accuracy.
+    if (review.tier !== 'unknown') {
+      coachStats.moves++;
+      coachStats[review.tier] = (coachStats[review.tier] || 0) + 1;
+    }
+    renderCoachReview(review);
+    updateCoachSummary();
+    updateCoachControlsState();
+    updateMoveList();
+    updateOpeningLabel();
+    saveCoachState();
+  } catch (err) {
+    setCoachStatus('Engine error: ' + err.message);
+    coachThinking = false;
+    CoachController.setPhase('userTurn');
+    return;
+  }
+  coachThinking = false;
+
+  if (coachGame.game_over()) { coachHandleGameOver(); return; }
+  coachOpponentRespond();
+}
+
+// Track pending review-reveal so a new game cancels it.
+let coachSummaryTimer = null;
+function scheduleSummaryReveal(msg, delayMs) {
+  if (coachSummaryTimer) { clearTimeout(coachSummaryTimer); coachSummaryTimer = null; }
+  // Flag the status line so it pulses while the user takes in the final position.
+  $('#coach-status').addClass('status-ended');
+  coachSummaryTimer = setTimeout(() => {
+    coachSummaryTimer = null;
+    showPostGameSummary(msg);
+  }, delayMs);
+}
+
+function coachHandleGameOver() {
+  if (!coachGameActive) return;
+  CoachController.setPhase('ended');
+  coachGameActive = false;
+  coachEndedAt = Date.now();
+  let msg = 'Game over.';
+  if (coachGame.in_checkmate()) {
+    const loser = coachGame.turn() === 'w' ? 'White' : 'Black';
+    const winner = loser === 'White' ? 'Black' : 'White';
+    msg = `Checkmate — ${winner} wins.`;
+  } else if (coachGame.in_stalemate()) msg = 'Stalemate.';
+  else if (coachGame.in_draw()) msg = 'Draw.';
+  setCoachStatus(msg);
+  updateCoachControlsState();
+  // Persist the now-ended state so a refresh keeps the review reachable.
+  coachLastEndMsg = msg;
+  saveCoachState();
+  clearQueuedRemoteCoachGameUpdate();
+  coachSync.saveGame(msg).catch(handleCoachDbError);
+  // Roll this game's stats into lifetime totals (guarded against double-count).
+  rollGameIntoLifetime();
+  // Let the user take in the final position before the review overlay arrives.
+  scheduleSummaryReveal(msg, 1200);
+}
+
+// ─────────────────────────────────────────────
+// THREAT DETECTION
+// ─────────────────────────────────────────────
+const PIECE_GLYPH = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚' };
+const PIECE_NAME = { p: 'Pawn', n: 'Knight', b: 'Bishop', r: 'Rook', q: 'Queen', k: 'King' };
+
+function piecesDefenders(game, square, defenderColor) {
+  // Count defenders of `square` owned by `defenderColor`.
+  // Trick: swap the piece on `square` for an enemy queen (so pawns and sliders
+  // alike generate capture moves to that square), then list captures from the
+  // defender side. Using a queen — not an empty square — is key: pawns only
+  // capture when a target exists, and only a non-pawn piece can legally occupy
+  // the first/last ranks.
+  const pos = game.board();
+  const fileStr = 'abcdefgh';
+  const f = fileStr.indexOf(square[0]);
+  const r = 8 - parseInt(square[1]);
+  const piece = pos[r][f];
+  if (!piece) return 0;
+
+  const enemyQueen = defenderColor === 'w' ? 'q' : 'Q';
+
+  const parts = game.fen().split(' ');
+  const rows = parts[0].split('/');
+  let row = rows[r];
+  let expanded = '';
+  for (const ch of row) {
+    if (/\d/.test(ch)) for (let i = 0; i < parseInt(ch); i++) expanded += '1';
+    else expanded += ch;
+  }
+  expanded = expanded.substring(0, f) + enemyQueen + expanded.substring(f + 1);
+  let collapsed = '';
+  let runs = 0;
+  for (const ch of expanded) {
+    if (ch === '1') runs++;
+    else { if (runs) { collapsed += runs; runs = 0; } collapsed += ch; }
+  }
+  if (runs) collapsed += runs;
+  rows[r] = collapsed;
+  parts[0] = rows.join('/');
+  parts[1] = defenderColor;
+  parts[3] = '-';
+
+  const g = new Chess();
+  if (!g.load(parts.join(' '))) return 0;
+  return g.moves({ verbose: true }).filter(m => m.to === square).length;
+}
+
+// Piece values for static-exchange evaluation.
+const SEE_VALUES = { p: 100, n: 300, b: 325, r: 500, q: 900, k: 10000 };
+
+// Standard SEE — least-valuable attacker. Returns the material gain (cp) for
+// `sideFirst` if they initiate captures on `square`, with optimal recaptures.
+// Handles the case where a knight captures a pawn and the king recaptures the
+// knight: SEE correctly reports that as a loss for the attacker, whereas the
+// old attackers-vs-defenders heuristic reported the pawn as "hanging".
+function seeAtSquare(game, square, sideFirst) {
+  const fen = game.fen();
+  const parts = fen.split(' ');
+  parts[1] = sideFirst;
+  parts[3] = '-';
+  const g = new Chess();
+  if (!g.load(parts.join(' '))) return 0;
+  const caps = g.moves({ verbose: true }).filter(m => m.to === square && m.captured);
+  if (caps.length === 0) return 0;
+  caps.sort((a, b) => SEE_VALUES[a.piece] - SEE_VALUES[b.piece]);
+  const first = caps[0];
+  const firstValue = SEE_VALUES[first.captured];
+  g.move(first);
+  const recurse = () => {
+    const ms = g.moves({ verbose: true }).filter(m => m.to === square && m.captured);
+    if (ms.length === 0) return 0;
+    ms.sort((a, b) => SEE_VALUES[a.piece] - SEE_VALUES[b.piece]);
+    const m = ms[0];
+    const capVal = SEE_VALUES[m.captured];
+    g.move(m);
+    const sub = recurse();
+    g.undo();
+    // Stand-pat: side only recaptures if net gain is positive.
+    return Math.max(0, capVal - sub);
+  };
+  const oppRecap = recurse();
+  return firstValue - oppRecap;
+}
+
+function detectHangingPieces(game, userColor) {
+  // A user piece is "hanging" iff the opponent can initiate captures on its
+  // square and come out with at least a pawn's worth of material (SEE ≥ 100).
+  const userChar = userColor === 'white' ? 'w' : 'b';
+  const oppChar = userColor === 'white' ? 'b' : 'w';
+  const hangs = [];
+  const boardArr = game.board();
+  for (let r = 0; r < 8; r++) {
+    for (let f = 0; f < 8; f++) {
+      const sq = boardArr[r][f];
+      if (!sq || sq.color !== userChar) continue;
+      const square = 'abcdefgh'[f] + (8 - r);
+      const gain = seeAtSquare(game, square, oppChar);
+      if (gain >= 100) {
+        const attackers = countAttackers(game, square, oppChar);
+        const defenders = piecesDefenders(game, square, userChar);
+        hangs.push({ square, piece: sq.type, attackers, defenders, gain });
+      }
+    }
+  }
+  return hangs;
+}
+
+function countAttackers(game, square, attackerColor) {
+  const parts = game.fen().split(' ');
+  parts[1] = attackerColor;
+  parts[3] = '-';
+  const g = new Chess();
+  if (!g.load(parts.join(' '))) return 0;
+  return g.moves({ verbose: true }).filter(m => m.to === square).length;
+}
+
+async function detectMateThreat(fen) {
+  // Is opponent threatening mate on their next move? Flip side-to-move.
+  // Depth 12 catches ~6-move mate nets that depth 8 missed; still fast.
+  const parts = fen.split(' ');
+  parts[1] = parts[1] === 'w' ? 'b' : 'w';
+  parts[3] = '-';
+  const flipped = parts.join(' ');
+  try {
+    const res = await engineClient.evaluate(flipped, 12);
+    if (res.info && res.info.mate !== null && res.info.mate !== undefined && res.info.mate > 0) {
+      return { status: 'ok', mateIn: res.info.mate };
+    }
+  } catch (e) {
+    return { status: 'unavailable', error: e };
+  }
+  return { status: 'ok', mateIn: null };
+}
+
+function renderThreatItems(items) {
+  const $section = $('#threats-section');
+  const $list = $('#threats-list');
+  $list.empty();
+  if (items.length === 0) {
+    $list.append($('<div class="threats-empty">No immediate threats. Look for active moves.</div>'));
+  } else {
+    items.forEach(it => {
+      const $card = $('<div class="threat-card"></div>').addClass(it.kind === 'mate' ? 'mate' : '');
+      if (it.glyph) $card.append($('<span class="piece"></span>').text(it.glyph));
+      $card.append($('<span class="text"></span>').text(it.text));
+      $list.append($card);
+    });
+  }
+  $section.show();
+}
+
+async function showThreats() {
+  if (!coachMode || !coachGameActive || !coachGame) return;
+  const requestId = ++threatRequestId;
+  const fen = coachGame.fen();
+  const hangs = detectHangingPieces(coachGame, coachUserColor());
+  const items = [];
+  hangs.forEach(h => {
+    const name = PIECE_NAME[h.piece];
+    const glyph = PIECE_GLYPH[h.piece];
+    const pawns = (h.gain / 100).toFixed(h.gain >= 100 && h.gain % 100 === 0 ? 0 : 2);
+    // Severity prefix based on how much opponent nets from the capture sequence.
+    let severity;
+    if (h.gain >= 500) severity = 'Major piece hangs';
+    else if (h.gain >= 300) severity = 'Piece hangs';
+    else severity = 'Pawn hangs';
+    items.push({
+      kind: 'hang',
+      glyph,
+      severity,
+      text: `${severity}: ${name} on ${h.square} — defend or move (~${pawns} pawns).`
+    });
+  });
+  renderThreatItems(items);
+  detectMateThreat(fen).then(mateThreat => {
+    if (requestId !== threatRequestId || !coachMode || !coachGameActive || !coachGame ||
+        coachGame.fen() !== fen || !coachIsUserTurn()) {
+      return;
+    }
+    const nextItems = items.slice();
+    if (mateThreat.status === 'unavailable') {
+      nextItems.unshift({ kind: 'scan', text: 'Mate scan unavailable — engine could not check forcing threats.' });
+    } else if (mateThreat.mateIn !== null) {
+      nextItems.unshift({ kind: 'mate', text: `Mate-in-${mateThreat.mateIn} threat — you must defend now.` });
+    }
+    renderThreatItems(nextItems);
+  }).catch(() => {
+    if (requestId !== threatRequestId || !coachMode || !coachGameActive || !coachGame ||
+        coachGame.fen() !== fen || !coachIsUserTurn()) {
+      return;
+    }
+    renderThreatItems([
+      { kind: 'scan', text: 'Mate scan unavailable — engine could not check forcing threats.' },
+      ...items
+    ]);
+  });
+}
+
+// ─────────────────────────────────────────────
+// CANDIDATE MOVES (top-3)
+// ─────────────────────────────────────────────
+async function showCandidates() {
+  if (!coachMode || !coachGame) return;
+  if (coachThinking) return;
+  if (!coachIsUserTurn()) return; // never compute candidates for opponent's turn
+  const fen = coachGame.fen();
+  const requestId = ++candidateRequestId;
+  const $section = $('#candidates-section').show();
+  const $list = $('#candidates-list');
+  $list.html('<div class="explore-loading">Computing top moves at depth 18…</div>');
+  try {
+    // Depth 18 with MultiPV=3 is strong enough to see most tactics up to ~9 moves
+    // deep. Depth 12 was leaving blunders on the board and producing candidates
+    // that didn't actually win material when the user expected them to.
+    const res = await engineClient.evaluate(fen, 18, { multipv: 3 });
+    if (requestId !== candidateRequestId || !coachMode || !coachGame || !coachGameActive ||
+        !coachIsUserTurn() || coachIsReviewing() || coachGame.fen() !== fen) {
+      return;
+    }
+    $list.empty();
+    if (!res.lines || res.lines.length === 0) {
+      $list.html('<div class="explore-empty">No candidates found.</div>');
+      return;
+    }
+    const bestCp = res.lines[0].mate !== null && res.lines[0].mate !== undefined
+      ? (res.lines[0].mate > 0 ? 10000 : -10000)
+      : (res.lines[0].cp || 0);
+    // Small hint so users don't assume "best move" means "wins material immediately".
+    const $hint = $('<div class="candidate-hint"></div>').text(
+      'Top moves by full-position evaluation — continuation shown after each.'
+    );
+    $list.append($hint);
+    res.lines.forEach((line, idx) => {
+      const uci = (line.pv && line.pv[0]) || null;
+      if (!uci) return;
+      const san = uciToSan(fen, uci);
+      const evalLabel = formatEval(line);
+      const cp = line.mate !== null && line.mate !== undefined
+        ? (line.mate > 0 ? 10000 : -10000)
+        : (line.cp || 0);
+      const delta = cp - bestCp;
+      const continuation = pvToSan(fen, line.pv || [], 5);
+      const $row = $('<div class="candidate-row"></div>');
+      $row.append($('<span class="rank"></span>').text((idx + 1) + '.'));
+      $row.append($('<span class="move"></span>').text(san));
+      const $eval = $('<span class="eval"></span>').text(evalLabel + (idx > 0 ? ` (${(delta / 100).toFixed(2)})` : ''));
+      $row.append($eval);
+      $list.append($row);
+      if (continuation.length > 1) {
+        const $cont = $('<div class="candidate-cont"></div>').text(continuation.slice(1).join(' '));
+        $list.append($cont);
+      }
+    });
+  } catch (err) {
+    if (requestId !== candidateRequestId) return;
+    $list.html('<div class="token-error">Engine error: ' + err.message + '</div>');
+  }
+}
+
+// ─────────────────────────────────────────────
+// POST-GAME SUMMARY
+// ─────────────────────────────────────────────
+
+// Eval from user's POV (centipawns) after a given review's position.
+// evalAfter is stockfish's score from opponent-to-move POV, so we negate.
+function evalAfterUserCp(r) {
+  if (!r || !r.evalAfter) return null;
+  return -scoreToCp(r.evalAfter);
+}
+
+// Average centipawn loss across scored (non-'unknown') moves. Cap each move's
+// contribution at 1000cp so a single mate allowance (loss ~10000cp) doesn't
+// make ACPL meaningless — this matches the Lichess convention.
+const ACPL_CAP = 1000;
+function computeACPL(reviews) {
+  const scored = reviews.filter(r => r && r.tier && r.tier !== 'unknown');
+  if (!scored.length) return null;
+  const total = scored.reduce((s, r) => s + Math.min(r.loss || 0, ACPL_CAP), 0);
+  return Math.round(total / scored.length);
+}
+
+// Format a centipawn loss as a signed pawn value. Losses past 10 pawns
+// (e.g. allowing mate) collapse to "9.9+" so rows don't show "−100.0".
+function formatLossPawns(loss) {
+  if (loss >= 1000) return '9.9+';
+  return (loss / 100).toFixed(1);
+}
+
+// Simple ply-based phase classifier. A game that resigns mid-opening
+// will legitimately have zero moves in later phases.
+function phaseOf(pairNum) {
+  if (pairNum <= 12) return 'opening';
+  if (pairNum <= 25) return 'middlegame';
+  return 'endgame';
+}
+
+function phaseBreakdown(reviews) {
+  const buckets = {
+    opening: { best: 0, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0, moves: 0 },
+    middlegame: { best: 0, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0, moves: 0 },
+    endgame: { best: 0, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0, moves: 0 }
+  };
+  for (const r of reviews) {
+    if (!r || !r.tier || r.tier === 'unknown') continue;
+    const p = phaseOf(r.pairNum);
+    buckets[p][r.tier] = (buckets[p][r.tier] || 0) + 1;
+    buckets[p].moves++;
+  }
+  return {
+    opening: { ...buckets.opening, pct: accuracyFromTallies(buckets.opening, buckets.opening.moves) },
+    middlegame: { ...buckets.middlegame, pct: accuracyFromTallies(buckets.middlegame, buckets.middlegame.moves) },
+    endgame: { ...buckets.endgame, pct: accuracyFromTallies(buckets.endgame, buckets.endgame.moves) }
+  };
+}
+
+// Format "14. Qh5" or "14... Qh5" based on ply parity.
+function formatMoveRef(r) {
+  const dots = (r.ply % 2 === 1) ? '.' : '...';
+  return `${r.pairNum}${dots} ${r.userSan}`;
+}
+
+// Build an inline SVG eval chart from review log.
+// X axis: review index. Y axis: eval after user's move from user's POV.
+// Clamped to ±800 cp (±8 pawns) so blowouts don't flatten the interesting region.
+function renderEvalChart(reviews) {
+  const pts = [];
+  for (const r of reviews) {
+    if (!r || r.tier === 'unknown') continue;
+    const cp = evalAfterUserCp(r);
+    if (cp === null) continue;
+    pts.push({ cp, r });
+  }
+  if (pts.length < 2) return ''; // need at least 2 points for a line
+
+  const W = 580, H = 96, PAD = 4;
+  const CLAMP = 800;
+  const innerW = W - PAD * 2;
+  const innerH = H - PAD * 2;
+  const xStep = innerW / (pts.length - 1);
+  const midY = PAD + innerH / 2;
+  const yFor = (cp) => {
+    const c = Math.max(-CLAMP, Math.min(CLAMP, cp));
+    return midY - (c / CLAMP) * (innerH / 2);
+  };
+
+  let d = '';
+  pts.forEach((p, i) => {
+    const x = PAD + i * xStep;
+    const y = yFor(p.cp);
+    d += (i === 0 ? `M${x.toFixed(1)},${y.toFixed(1)}` : ` L${x.toFixed(1)},${y.toFixed(1)}`);
+  });
+
+  // Area fill down to zero line — gives visual weight to who's winning.
+  let area = '';
+  pts.forEach((p, i) => {
+    const x = PAD + i * xStep;
+    const y = yFor(p.cp);
+    area += (i === 0 ? `M${x.toFixed(1)},${midY.toFixed(1)} L${x.toFixed(1)},${y.toFixed(1)}` : ` L${x.toFixed(1)},${y.toFixed(1)}`);
+  });
+  area += ` L${(PAD + (pts.length - 1) * xStep).toFixed(1)},${midY.toFixed(1)} Z`;
+
+  // Dots for mistakes/blunders so users can eyeball where things went wrong.
+  const markers = pts.map((p, i) => {
+    const x = PAD + i * xStep;
+    const y = yFor(p.cp);
+    const tier = p.r.tier;
+    let color = null;
+    if (tier === 'blunder') color = '#a23346';
+    else if (tier === 'mistake') color = '#c28a4e';
+    if (!color) return '';
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${color}"/>`;
+  }).join('');
+
+  return `
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Evaluation over time">
+      <line x1="${PAD}" y1="${midY}" x2="${W - PAD}" y2="${midY}" stroke="#5a4a3b" stroke-dasharray="2,3" stroke-width="0.5"/>
+      <path d="${area}" fill="rgba(207, 109, 123, 0.12)"/>
+      <path d="${d}" fill="none" stroke="#cf6d7b" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+      ${markers}
+    </svg>
+  `;
+}
+
+// Compact eval sparkline shown next to the move list during play.
+// Same shape as renderEvalChart but smaller, no markers — just a line + zero rule.
+function renderLiveEvalChart(reviews) {
+  const pts = [];
+  for (const r of reviews) {
+    if (!r || r.tier === 'unknown') continue;
+    const cp = evalAfterUserCp(r);
+    if (cp === null) continue;
+    pts.push({ cp, r });
+  }
+  if (pts.length < 2) return '';
+  // Show only the trailing 24 plies so the line keeps moving instead of compressing.
+  const recent = pts.slice(-24);
+  const W = 280, H = 44, PAD = 2;
+  const CLAMP = 800;
+  const innerW = W - PAD * 2;
+  const innerH = H - PAD * 2;
+  const xStep = innerW / (recent.length - 1);
+  const midY = PAD + innerH / 2;
+  const yFor = (cp) => {
+    const c = Math.max(-CLAMP, Math.min(CLAMP, cp));
+    return midY - (c / CLAMP) * (innerH / 2);
+  };
+  let d = '';
+  recent.forEach((p, i) => {
+    const x = PAD + i * xStep;
+    const y = yFor(p.cp);
+    d += (i === 0 ? `M${x.toFixed(1)},${y.toFixed(1)}` : ` L${x.toFixed(1)},${y.toFixed(1)}`);
+  });
+  let area = '';
+  recent.forEach((p, i) => {
+    const x = PAD + i * xStep;
+    const y = yFor(p.cp);
+    area += (i === 0 ? `M${x.toFixed(1)},${midY.toFixed(1)} L${x.toFixed(1)},${y.toFixed(1)}` : ` L${x.toFixed(1)},${y.toFixed(1)}`);
+  });
+  area += ` L${(PAD + (recent.length - 1) * xStep).toFixed(1)},${midY.toFixed(1)} Z`;
+  return `
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Live evaluation">
+      <line x1="${PAD}" y1="${midY}" x2="${W - PAD}" y2="${midY}" stroke="#5a4a3b" stroke-dasharray="2,3" stroke-width="0.5"/>
+      <path d="${area}" fill="rgba(207, 109, 123, 0.12)"/>
+      <path d="${d}" fill="none" stroke="#cf6d7b" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>
+  `;
+}
+
+function updateLiveEvalChart() {
+  const html = renderLiveEvalChart(coachReviewLog || []);
+  if (!html) {
+    $('#liveeval-section').hide();
+    $('#liveeval-chart').empty();
+    return;
+  }
+  $('#liveeval-chart').html(html);
+  $('#liveeval-section').show();
+}
+
+// Human-readable coaching takeaway inferred from pattern in reviews.
+function coachingTakeaway(reviews, phases) {
+  const scored = reviews.filter(r => r.tier && r.tier !== 'unknown');
+  if (scored.length === 0) return null;
+  const blunders = reviews.filter(r => r.tier === 'blunder').length;
+  const mistakes = reviews.filter(r => r.tier === 'mistake').length;
+  const bestCnt = reviews.filter(r => r.tier === 'best').length;
+  const pctBest = bestCnt / scored.length;
+
+  const op = phases.opening.pct;
+  const mi = phases.middlegame.pct;
+  const en = phases.endgame.pct;
+
+  if (blunders === 0 && mistakes === 0 && pctBest >= 0.5) {
+    return 'Clean game — no blunders, over half your moves matched the engine.';
+  }
+  if (blunders === 0 && mistakes <= 1) {
+    return 'Solid play with no blunders. Keep the discipline on every move.';
+  }
+  if (op !== null && mi !== null && op - mi >= 20) {
+    return 'You played the opening sharply but the middlegame got away from you. Before each move, check what your opponent threatens.';
+  }
+  if (mi !== null && en !== null && mi - en >= 20) {
+    return 'Middlegame was steady but the endgame slipped. Endgame technique — king activity, passed pawns, opposition — often decides close games.';
+  }
+  if (blunders >= 3) {
+    return `${blunders} blunders tipped this one. Use the Threats tool before committing to a move — it surfaces hanging pieces and forcing replies.`;
+  }
+  if (blunders >= 1) {
+    return 'One blunder was the turning point — scrub to the critical moment below and try a different move with Show best to see the line you missed.';
+  }
+  if (mistakes >= 3) {
+    return 'Several mistakes without blunders — often a sign of missed candidate moves. Before moving, ask: what\'s the engine\'s #1 doing that mine isn\'t?';
+  }
+  return 'Mixed game with room to grow. The critical moments below are where the game turned.';
+}
+
+function showPostGameSummary(endMsg) {
+  coachLastEndMsg = endMsg;
+  // Status-line pulse handed the baton to the overlay — remove it so reopens don't pulse again.
+  $('#coach-status').removeClass('status-ended');
+  // Refresh the "Open review" button visibility now that we have an end message.
+  updateCoachControlsState();
+  $('#summary-title').text(endMsg);
+
+  // Subtitle: opponent level + user color context
+  const eloEl = document.getElementById('coach-strength-value');
+  const elo = eloEl ? eloEl.textContent : '';
+  const sideName = coachUserColor() === 'white' ? 'White' : 'Black';
+  const subtitleParts = [];
+  if (sideName) subtitleParts.push(`You played ${sideName}`);
+  if (elo) subtitleParts.push(`vs Opponent ${elo}`);
+  if (subtitleParts.length) {
+    $('#summary-subtitle').text(subtitleParts.join(' · ')).show();
+  } else {
+    $('#summary-subtitle').hide();
+  }
+
+  // Headline metrics
+  const total = coachStats.moves;
+  const pct = accuracyFromTallies(coachStats, total);
+  $('#summary-accuracy').text(pct === null ? '—' : pct + '%');
+  $('#summary-moves').text(total);
+  const acpl = computeACPL(coachReviewLog);
+  $('#summary-acpl').text(acpl === null ? '—' : acpl);
+
+  // Classification distribution bar + legend
+  const tiers = ['best', 'excellent', 'good', 'inaccuracy', 'mistake', 'blunder'];
+  const tierLabel = {
+    best: 'Best', excellent: 'Excellent', good: 'Good',
+    inaccuracy: 'Inaccuracy', mistake: 'Mistake', blunder: 'Blunder'
+  };
+  const $bar = $('#summary-tier-bar').empty();
+  const $leg = $('#summary-tier-legend').empty();
+  if (total > 0) {
+    for (const t of tiers) {
+      const n = coachStats[t] || 0;
+      if (n > 0) {
+        const wPct = (n / total) * 100;
+        $bar.append(`<div class="tier-bar-seg ${t}" style="width:${wPct.toFixed(2)}%" title="${tierLabel[t]}: ${n}"></div>`);
+      }
+      // Legend always shows even zero counts so users can see "no blunders".
+      $leg.append(
+        `<span class="tier-legend-item"><span class="swatch ${t}"></span>${tierLabel[t]} <span class="count">${n}</span></span>`
+      );
+    }
+    $('#summary-tier-section').show();
+  } else {
+    // No moves scored — hide the whole section rather than show an empty bar.
+    $('#summary-tier-section').hide();
+  }
+
+  // Phase breakdown
+  const phases = phaseBreakdown(coachReviewLog);
+  const anyPhase = phases.opening.moves + phases.middlegame.moves + phases.endgame.moves > 0;
+  const $phaseGrid = $('#summary-phase-grid').empty();
+  if (anyPhase) {
+    const rows = [
+      ['Opening', phases.opening, '(moves 1–12)'],
+      ['Middlegame', phases.middlegame, '(13–25)'],
+      ['Endgame', phases.endgame, '(26+)']
+    ];
+    for (const [name, data, range] of rows) {
+      const acc = data.pct === null ? '—' : `${data.pct}%`;
+      const moves = data.moves === 0 ? '—' : `${data.moves} move${data.moves === 1 ? '' : 's'}`;
+      $phaseGrid.append(
+        `<span class="phase-name">${name} <span style="color:var(--muted);font-size:0.72rem">${range}</span></span>` +
+        `<span class="phase-acc">${acc}</span>` +
+        `<span class="phase-count">${moves}</span>`
+      );
+    }
+    $('#summary-phase-section').show();
+  } else {
+    $('#summary-phase-section').hide();
+  }
+
+  // Eval chart — need ≥ 2 scored points
+  const chartHtml = renderEvalChart(coachReviewLog);
+  if (chartHtml) {
+    $('#summary-eval-chart').html(chartHtml);
+    $('#summary-eval-section').show();
+  } else {
+    $('#summary-eval-section').hide();
+  }
+
+  // Opening — identify based on full history
+  const openingSans = coachGame ? coachGame.history() : [];
+  if (openingSans.length > 0 && typeof identifyOpening === 'function') {
+    const info = identifyOpening(openingSans);
+    if (info.match) {
+      const mNum = Math.ceil(info.matchedPlies / 2);
+      const lineText = info.exact
+        ? `Stayed in theory through move ${mNum}.`
+        : `Left book after move ${mNum}.`;
+      $('#summary-opening-line').html(
+        `<span class="eco">${escapeHtml(info.match.eco)}</span>` +
+        `<strong>${escapeHtml(info.match.name)}</strong> — ${escapeHtml(lineText)}`
+      );
+      $('#summary-opening-section').show();
+    } else {
+      $('#summary-opening-section').hide();
+    }
+  } else {
+    $('#summary-opening-section').hide();
+  }
+
+  // Critical moments — top 3 worst non-best moves, threshold loss ≥ 30cp
+  const critical = coachReviewLog
+    .filter(r => r.tier && r.tier !== 'unknown' && r.tier !== 'best' && (r.loss || 0) >= 30)
+    .sort((a, b) => (b.loss || 0) - (a.loss || 0))
+    .slice(0, 3);
+  const $crit = $('#summary-critical-list').empty();
+  if (critical.length) {
+    for (const r of critical) {
+      const ref = formatMoveRef(r);
+      const lossPawns = formatLossPawns(r.loss || 0);
+      const best = r.bestSan ? ` — best was ${r.bestSan}` : '';
+      const desc = `${tierLabel[r.tier]}${best}`;
+      const row = document.createElement('div');
+      row.className = `moment-row ${r.tier}`;
+      row.dataset.ply = r.ply;
+      row.innerHTML =
+        `<span class="moment-num">${escapeHtml(ref)}</span>` +
+        `<span class="moment-desc">${escapeHtml(desc)}</span>` +
+        `<span class="moment-loss">−${lossPawns}</span>`;
+      $crit.append(row);
+    }
+    $('#summary-critical-section').show();
+  } else {
+    $('#summary-critical-section').hide();
+  }
+
+  // Best moments — top 3 'best'-tier or 'excellent'-tier moves spaced through the game
+  // Prefer moves where engine rank=1 and there was a real alternative (>1 line seen).
+  // Simple approach: take the first 3 'best' tier reviews with a best alternative.
+  const bestMoves = coachReviewLog
+    .filter(r => r.tier === 'best' || r.tier === 'excellent')
+    .slice(0, 3);
+  const $best = $('#summary-best-list').empty();
+  if (bestMoves.length) {
+    for (const r of bestMoves) {
+      const ref = formatMoveRef(r);
+      const rankNote = r.rank === 1 ? 'top engine choice' : (r.rank ? `#${r.rank} engine choice` : '');
+      const tierNote = r.tier === 'best' ? 'Best' : 'Excellent';
+      const desc = rankNote ? `${tierNote} · ${rankNote}` : tierNote;
+      const row = document.createElement('div');
+      row.className = `moment-row ${r.tier}`;
+      row.dataset.ply = r.ply;
+      row.innerHTML =
+        `<span class="moment-num">${escapeHtml(ref)}</span>` +
+        `<span class="moment-desc">${escapeHtml(desc)}</span>` +
+        `<span class="moment-loss" style="color:#8aa074">✓</span>`;
+      $best.append(row);
+    }
+    $('#summary-best-section').show();
+  } else {
+    $('#summary-best-section').hide();
+  }
+
+  // Takeaway
+  const takeaway = coachingTakeaway(coachReviewLog, phases);
+  if (takeaway) {
+    $('#summary-takeaway-text').text(takeaway);
+    $('#summary-takeaway').show();
+  } else {
+    $('#summary-takeaway').hide();
+  }
+
+  $('#summary-overlay').css('display', 'flex');
+  // Scroll to top when reopening on a new game
+  $('.summary-card').scrollTop(0);
+}
+
+// ─────────────────────────────────────────────
+// SPACED REPETITION (SM-2 lite)
+// ─────────────────────────────────────────────
+const SR_KEY = 'chess_sr_v1';
+const DAY_MS = 86400000;
+
+function loadSR() {
+  try { return JSON.parse(localStorage.getItem(SR_KEY)) || {}; }
+  catch(e) { return {}; }
+}
+function saveSR(data) {
+  try {
+    localStorage.setItem(SR_KEY, JSON.stringify(data));
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+function getSRRecord(id) {
+  const data = loadSR();
+  return data[id] || null;
+}
+function srStatus(id) {
+  const rec = getSRRecord(id);
+  if (!rec) return 'new';
+  if (Date.now() >= rec.nextDue) return 'due';
+  if (rec.reps >= 3) return 'mastered';
+  return 'learning';
+}
+function srRecordQuiz(id, quality) {
+  // quality: 5=perfect, 4=1-2 misses, 0=many misses (reset)
+  const data = loadSR();
+  let rec = data[id] || { ease: 2.5, interval: 0, reps: 0, attempts: 0 };
+  rec.attempts = (rec.attempts || 0) + 1;
+  rec.ease = Math.max(1.3, rec.ease + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
+  if (quality < 3) {
+    rec.reps = 0;
+    rec.interval = 1;
+  } else {
+    rec.reps += 1;
+    if (rec.reps === 1) rec.interval = 1;
+    else if (rec.reps === 2) rec.interval = 3;
+    else rec.interval = Math.round(rec.interval * rec.ease);
+  }
+  rec.lastReviewed = Date.now();
+  rec.nextDue = Date.now() + rec.interval * DAY_MS;
+  data[id] = rec;
+  return saveSR(data);
+}
+function updateSRSidebar() {
+  $('.opening-btn').each(function() {
+    const id = $(this).data('id');
+    const status = srStatus(id);
+    $(this).removeClass('sr-due sr-mastered sr-learning');
+    if (status !== 'new') $(this).addClass('sr-' + status);
+    if ($(this).find('.sr-dot').length === 0) {
+      $(this).prepend('<span class="sr-dot"></span>');
+    }
+  });
+  // Populate "Due for Review" section
+  const due = OPENINGS.filter(o => srStatus(o.id) === 'due');
+  const $section = $('#sr-due-section');
+  const $list = $('#sr-due-list');
+  if (due.length === 0) {
+    $section.hide();
+  } else {
+    const html = due.map(o => {
+      const badge = o.category === 'trap' ? '<span class="trap-badge">trap</span>' : `<span class="eco">${o.eco || ''}</span>`;
+      return `<button class="opening-btn sr-due" data-id="${o.id}" data-cat="${o.category}"><span class="sr-dot"></span>${o.name} ${badge}</button>`;
+    }).join('');
+    $list.html(html);
+    $section.show();
+    $list.find('.opening-btn').on('click', function() { loadOpening($(this).data('id')); });
+  }
+}
+function updateSRPanel() {
+  const $panel = $('#sr-status-panel');
+  if (!currentOpening || !quizMode) { $panel.hide(); return; }
+  const rec = getSRRecord(currentOpening.id);
+  const status = srStatus(currentOpening.id);
+  const statusLabel = { new: 'Never attempted', due: 'Due for review', learning: 'Learning', mastered: 'Mastered' }[status];
+  let html = `<div class="sr-line"><span>Status</span><strong>${statusLabel}</strong></div>`;
+  if (rec) {
+    html += `<div class="sr-line"><span>Clean runs</span><strong>${rec.reps}</strong></div>`;
+    html += `<div class="sr-line"><span>Attempts</span><strong>${rec.attempts}</strong></div>`;
+    if (rec.nextDue) {
+      const days = Math.max(0, Math.round((rec.nextDue - Date.now()) / DAY_MS));
+      html += `<div class="sr-line"><span>Next review</span><strong>${days === 0 ? 'now' : days + 'd'}</strong></div>`;
+    }
+  }
+  $panel.html(html).show();
+}
+
+function validateOpeningData() {
+  const errors = [];
+  const seenIds = new Set();
+  OPENINGS.forEach(opening => {
+    if (!opening.id) errors.push('Opening missing id');
+    if (seenIds.has(opening.id)) errors.push(`Duplicate opening id: ${opening.id}`);
+    seenIds.add(opening.id);
+    if (!Array.isArray(opening.moves) || opening.moves.length === 0) {
+      errors.push(`${opening.id}: missing moves`);
+    }
+    if (!Array.isArray(opening.explanations) || opening.explanations.length !== opening.moves.length) {
+      errors.push(`${opening.id}: explanations length does not match moves length`);
+    }
+    const lineIds = new Set();
+    getOpeningLines(opening).forEach(line => {
+      const lineKey = `${opening.id}/${line.id}`;
+      if (lineIds.has(line.id)) errors.push(`${opening.id}: duplicate line id ${line.id}`);
+      lineIds.add(line.id);
+      if (!Array.isArray(line.moves) || line.moves.length === 0) {
+        errors.push(`${lineKey}: missing moves`);
+        return;
+      }
+      if (!Array.isArray(line.explanations) || line.explanations.length !== line.moves.length) {
+        errors.push(`${lineKey}: explanations length does not match moves length`);
+      }
+      const g = new Chess();
+      for (let i = 0; i < line.moves.length; i++) {
+        const san = line.moves[i];
+        if (!g.move(san)) {
+          errors.push(`${lineKey}: illegal SAN at ply ${i + 1}: ${san}`);
+          break;
+        }
+      }
+    });
+  });
+  if (errors.length) console.warn('Opening data validation failed:', errors);
+  return errors;
+}
+
+// ─────────────────────────────────────────────
+// URL STATE
+// ─────────────────────────────────────────────
+function updateURL() {
+  const params = new URLSearchParams();
+  if (appView === 'coach') {
+    params.set('view', 'coach');
+  } else {
+    if (currentOpening) params.set('opening', currentOpening.id);
+    if (currentOpening && currentLineId && currentLineId !== 'main') params.set('line', currentLineId);
+    if (quizMode) params.set('mode', 'quiz');
+    else if (exploreMode) params.set('mode', 'explore');
+    if (currentOpening && !quizMode && !exploreMode && currentMoveIdx >= 0) {
+      params.set('move', String(currentMoveIdx));
+    }
+  }
+  const q = params.toString();
+  const url = q ? `?${q}` : location.pathname;
+  history.replaceState(null, '', url);
+}
+function readURL() {
+  const p = new URLSearchParams(location.search);
+  return { view: p.get('view'), opening: p.get('opening'), line: p.get('line'), mode: p.get('mode'), move: parseInt(p.get('move'), 10) };
+}
+
+// ─────────────────────────────────────────────
+// BOARD INIT (lazy — board is created on first opening load)
+// ─────────────────────────────────────────────
+function createBoard(position, draggable, orientation) {
+  if (board) board.destroy();
+  board = Chessboard('myBoard', {
+    position: position || 'start',
+    draggable: !!draggable,
+    orientation: orientation || 'white',
+    pieceTheme: function(piece) {
+      var svgMap = {
+        bB: 'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg',
+        bK: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg',
+        bN: 'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg',
+        bP: 'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg',
+        bQ: 'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg',
+        bR: 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg',
+        wB: 'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg',
+        wK: 'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg',
+        wN: 'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg',
+        wP: 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg',
+        wQ: 'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg',
+        wR: 'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg'
+      };
+      return svgMap[piece];
+    },
+    onDrop: handleDrop,
+    onSnapEnd: handleSnapEnd,
+  });
+}
+
+const COACH_PIECE_THEME = {
+  bB: 'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg',
+  bK: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg',
+  bN: 'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg',
+  bP: 'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg',
+  bQ: 'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg',
+  bR: 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg',
+  wB: 'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg',
+  wK: 'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg',
+  wN: 'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg',
+  wP: 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg',
+  wQ: 'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg',
+  wR: 'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg'
+};
+
+function createCoachBoard(position, orientation) {
+  if (coachBoard) coachBoard.destroy();
+  coachBoard = Chessboard('coachBoard', {
+    position: position || 'start',
+    draggable: true,
+    orientation: orientation || 'white',
+    pieceTheme: function(piece) { return COACH_PIECE_THEME[piece]; },
+    onDragStart: function(source, piece) {
+      if (!coachGameActive || !coachGame) return false;
+      if (coachIsReviewing()) return false;
+      // Only allow picking up pieces of the user's colour, ever.
+      const userPrefix = coachUserColor() === 'white' ? 'w' : 'b';
+      if (piece[0] !== userPrefix) return false;
+      // Block during our own classification window — premoves wait for opponent's move.
+      if (coachThinking && coachIsUserTurn()) return false;
+      // Both regular drags (our turn) and premove drags (their turn) are allowed.
+    },
+    onDrop: function(source, target) {
+      if (!coachGameActive || !coachGame) return 'snapback';
+      if (coachIsReviewing()) return 'snapback';
+      if (source === target) return 'snapback';
+      if (coachIsUserTurn()) {
+        if (coachThinking) return 'snapback';
+        if (requestPromotionChoice(coachGame, source, target, promotion => {
+          coachHandleUserMove(source, target, promotion, { updateBoard: true });
+        }, true)) {
+          return 'snapback';
+        }
+        // Synchronous legality check — chessboard.js needs a sync return value
+        const tempGame = new Chess(coachGame.fen());
+        const move = tempGame.move({ from: source, to: target, promotion: 'q' });
+        if (!move) return 'snapback';
+        // Legal move — dispatch async classification + opponent reply
+        coachHandleUserMove(source, target, 'q', { updateBoard: false });
+        return;
+      }
+      // Opponent's turn → queue the move as a premove. The piece visually snaps
+      // back; the highlighted source/target squares + status hint show what's
+      // queued. We attempt to apply it as soon as the opponent moves.
+      if (requestPromotionChoice(coachGame, source, target, promotion => {
+        setPremove(source, target, promotion);
+      }, false)) {
+        return 'snapback';
+      }
+      setPremove(source, target, 'q');
+      return 'snapback';
+    },
+    onSnapEnd: function() {
+      if (coachGame) coachBoard.position(coachGame.fen());
+    }
+  });
+}
+
+// ─────────────────────────────────────────────
+// COACH VIEW SWITCHING
+// ─────────────────────────────────────────────
+function switchView(view) {
+  appView = view;
+  coachMode = (view === 'coach');
+  const $app = $('.app');
+  const $coach = $('#coach-view');
+  if (view === 'coach') {
+    $app.hide();
+    $coach.show().css('display', 'grid').attr('aria-hidden', 'false');
+    $('#nav-library').removeClass('active').attr('aria-selected', 'false');
+    $('#nav-coach').addClass('active').attr('aria-selected', 'true');
+    // Pre-warm Stockfish in the background so the first New Game starts faster.
+    // Errors here are swallowed; the real load gate is inside startCoachGame.
+    if (engineClient.status === 'idle') { engineClient.init().catch(() => {}); }
+    // Initialize strength display
+    $('#coach-strength-value').text(coachEngineElo);
+    $('#coach-strength-tier').text(strengthTierLabel(coachEngineElo));
+    renderCoachAuth();
+    // Show lifetime stats if any are recorded.
+    renderLifetime();
+    renderInsights();
+    if (!coachGame) {
+      // Try to restore an in-progress (or just-ended) game from localStorage.
+      const restore = tryRestoreCoachGame();
+      if (!restore.restored) {
+        // Show an idle board so the user has visual context
+        $('#coachBoard-placeholder').hide();
+        createCoachBoard('start', 'white');
+        setCoachStatus(restore.warning || 'Set a level and start a new game.');
+      }
+    } else {
+      // Returning to an existing game — resize the board and re-kick the
+      // opponent if the previous respond was aborted by the view switch.
+      if (coachBoard) setTimeout(() => coachBoard.resize(), 0);
+      if (coachGameActive && !coachIsUserTurn() && !coachGame.game_over()) {
+        coachOpponentRespond();
+      }
+    }
+    updateCoachControlsState();
+  } else {
+    $coach.hide().attr('aria-hidden', 'true');
+    $app.show();
+    $('#nav-coach').removeClass('active').attr('aria-selected', 'false');
+    $('#nav-library').addClass('active').attr('aria-selected', 'true');
+    // If library board exists, kick it into life via a resize so it redraws correctly
+    if (board) setTimeout(() => board.resize(), 0);
+  }
+  updateURL();
+}
+
+function isValidFen(fen) {
+  try {
+    const g = new Chess();
+    return g.load(fen);
+  } catch (e) { return false; }
+}
+
+function startCoachGame() {
+  const fenRaw = ($('#coach-fen').val() || '').trim();
+  let startFen = null;
+  if (fenRaw) {
+    if (!isValidFen(fenRaw)) {
+      $('#coach-fen-error').text('Invalid FEN — check the position string.').show();
+      return;
+    }
+    startFen = fenRaw;
+  }
+  $('#coach-fen-error').hide();
+
+  // Resolve "random" side
+  const chosenSide = $('.side-toggle button.active').data('side') || 'white';
+  coachUserSide = chosenSide === 'random'
+    ? (Math.random() < 0.5 ? 'white' : 'black')
+    : chosenSide;
+
+  resetCoachState(startFen);
+  coachGameActive = true;
+  CoachController.setPhase(coachIsUserTurn() ? 'userTurn' : 'opponentThinking');
+  $('#summary-overlay').hide();
+  // Replace any saved state from a prior game so a refresh before the first
+  // move doesn't restore the old session.
+  clearCoachState();
+
+  // Orient board so user plays from bottom
+  coachBoardFlipped = (coachUserColor() === 'black');
+  createCoachBoard(coachGame.fen(), coachBoardFlipped ? 'black' : 'white');
+
+  const tier = strengthTierLabel(coachEngineElo);
+  const opening = coachIsUserTurn()
+    ? `Playing ${coachUserColor() === 'white' ? 'White' : 'Black'} vs Opponent ${coachEngineElo} (${tier}). Your move.`
+    : `Playing ${coachUserColor() === 'white' ? 'White' : 'Black'} vs Opponent ${coachEngineElo} (${tier}). Opponent opens — thinking…`;
+  setCoachStatus(opening);
+
+  updateCoachControlsState();
+  ensureRemoteCoachGame().catch(handleCoachDbError);
+
+  // Pre-warm engine, then kick off opponent if it's their turn.
+  // Wrap in a 15s timeout so a stuck WASM load surfaces a retry instead of hanging.
+  const timed = Promise.race([
+    engineClient.init(),
+    new Promise((_, rej) => setTimeout(() => rej(new Error('Engine load timed out')), 15000))
+  ]);
+  timed.then(() => {
+    if (!coachGameActive) return;
+    if (!coachIsUserTurn()) coachOpponentRespond();
+  }).catch((err) => {
+    showEngineLoadError(err);
+  });
+}
+
+// Display a recoverable error inline in the coach status when Stockfish can't load.
+function showEngineLoadError(err) {
+  const msg = (err && err.message) || 'Engine could not load.';
+  setCoachStatus(msg + ' — refresh to retry.');
+  // Also disable in-game actions that require the engine.
+  $('#btn-coach-resign').prop('disabled', true);
+  $('#btn-coach-takeback').prop('disabled', true);
+  $('#btn-coach-showbest').prop('disabled', true);
+  $('#btn-coach-candidates').prop('disabled', true);
+}
+
+// ─────────────────────────────────────────────
+// CONTROL ENABLED-STATE
+// ─────────────────────────────────────────────
+function updateCoachControlsState() {
+  const active = coachGameActive;
+  const reviewing = coachIsReviewing();
+  const hasReview = !!coachLastReview;
+  const total = coachGame ? coachGame.history().length : 0;
+  const cur = coachReviewCursor === null ? total : coachReviewCursor;
+  $('#btn-coach-resign').prop('disabled', !active || reviewing);
+  // "Open review" only appears once the game has ended and we have a summary to reopen.
+  $('#btn-coach-openreview').toggle(!active && !!coachLastEndMsg);
+  $('#btn-coach-takeback').prop('disabled', !hasReview || reviewing);
+  $('#btn-coach-showbest').prop('disabled', !hasReview || (coachLastReview && coachLastReview.tier === 'best') || reviewing);
+  $('#btn-coach-candidates').prop('disabled', !active || !coachGame || !coachIsUserTurn() || reviewing);
+  $('#btn-coach-prev').prop('disabled', !coachGame || total === 0 || cur === 0);
+  $('#btn-coach-next').prop('disabled', !coachGame || total === 0 || cur === total);
+  $('#btn-coach-live').toggle(reviewing);
+  $('#coach-nav-label').text(
+    !coachGame || total === 0 ? '' :
+    reviewing ? `Move ${cur}/${total}` : `Move ${total} • Live`
+  );
+}
+
+// ─────────────────────────────────────────────
+// HISTORY NAVIGATION / REVIEW MODE
+// ─────────────────────────────────────────────
+function coachIsReviewing() {
+  if (!coachGame || coachReviewCursor === null) return false;
+  return coachReviewCursor !== coachGame.history().length;
+}
+
+// Return the review whose ply matches cursor n, or the most recent review at
+// or before n (handles opponent-move plies, which have no review of their own).
+// Returns null if no user move has been reviewed up to that point.
+function reviewAtCursor(n) {
+  if (!coachReviewLog || coachReviewLog.length === 0 || n <= 0) return null;
+  let best = null;
+  for (const r of coachReviewLog) {
+    if (r.ply <= n && (best === null || r.ply > best.ply)) best = r;
+  }
+  return best;
+}
+
+function coachFenAtPly(n) {
+  if (!coachGame) return null;
+  const tmp = new Chess(coachStartFen);
+  const moves = coachGame.history({ verbose: true });
+  const end = Math.max(0, Math.min(n, moves.length));
+  for (let i = 0; i < end; i++) {
+    tmp.move({ from: moves[i].from, to: moves[i].to, promotion: moves[i].promotion });
+  }
+  return tmp.fen();
+}
+
+function coachGotoPly(n) {
+  if (!coachGame) return;
+  const total = coachGame.history().length;
+  n = Math.max(0, Math.min(n, total));
+  coachReviewCursor = n === total ? null : n;
+  const fen = coachFenAtPly(n);
+  if (coachBoard && fen) coachBoard.position(fen);
+  if (coachIsReviewing()) {
+    CoachController.setPhase('reviewing');
+    $('#threats-section').hide();
+    $('#candidates-section').hide();
+    setCoachStatus(`Reviewing move ${n} of ${total} — click Live to return.`);
+    // Show the review card for the move at/before this cursor. If nothing has
+    // been reviewed yet (n==0 or only opponent moves so far), hide the card.
+    const r = reviewAtCursor(n);
+    if (r) renderCoachReview(r); else $('#coach-review').hide();
+  } else {
+    // Back to live — restore the latest review.
+    CoachController.setPhase(coachGameActive
+      ? (coachIsUserTurn() ? 'userTurn' : 'opponentThinking')
+      : 'ended');
+    if (coachLastReview) renderCoachReview(coachLastReview);
+  }
+  updateCoachControlsState();
+  updateCapturedDisplay(fen);
+  updateMoveList();
+  updateOpeningLabel();
+}
+
+function coachGotoLive() {
+  if (!coachGame) return;
+  coachReviewCursor = null;
+  if (coachBoard) coachBoard.position(coachGame.fen());
+  if (coachLastReview) renderCoachReview(coachLastReview);
+  CoachController.setPhase(coachGameActive
+    ? (coachIsUserTurn() ? 'userTurn' : 'opponentThinking')
+    : 'ended');
+  updateCoachControlsState();
+  updateCapturedDisplay(coachGame.fen());
+  updateMoveList();
+  updateOpeningLabel();
+  if (coachGameActive) {
+    setCoachStatus(coachIsUserTurn() ? 'Your move.' : 'Opponent thinking…');
+  }
+}
+
+// ─────────────────────────────────────────────
+// CAPTURED PIECES / MATERIAL LEAD
+// ─────────────────────────────────────────────
+const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+const PIECE_GLYPH_WHITE = { p: '♙', n: '♘', b: '♗', r: '♖', q: '♕' };
+const PIECE_GLYPH_BLACK = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛' };
+
+function countPieces(fen) {
+  const counts = { w: { p: 0, n: 0, b: 0, r: 0, q: 0 }, b: { p: 0, n: 0, b: 0, r: 0, q: 0 } };
+  const rows = fen.split(' ')[0].split('/');
+  for (const row of rows) {
+    for (const ch of row) {
+      if (/\d/.test(ch)) continue;
+      const color = ch === ch.toUpperCase() ? 'w' : 'b';
+      const type = ch.toLowerCase();
+      if (type === 'k') continue;
+      if (counts[color][type] !== undefined) counts[color][type]++;
+    }
+  }
+  return counts;
+}
+
+function renderCapturedRow(caps, glyphs) {
+  let html = '';
+  for (const t of ['q', 'r', 'b', 'n', 'p']) {
+    for (let i = 0; i < caps[t]; i++) {
+      html += '<span class="cap-piece">' + glyphs[t] + '</span>';
+    }
+  }
+  return html;
+}
+
+// Count captures from move history up to the cursor (or live if null).
+// This is robust to promotions: if a pawn promotes to a queen, the pawn isn't
+// "captured" — nothing is, unless the promotion move itself was a capture.
+function capturedFromHistory() {
+  const caps = { w: { p: 0, n: 0, b: 0, r: 0, q: 0 }, b: { p: 0, n: 0, b: 0, r: 0, q: 0 } };
+  if (!coachGame) return caps;
+  const moves = coachGame.history({ verbose: true });
+  const end = coachReviewCursor === null ? moves.length : coachReviewCursor;
+  for (let i = 0; i < end; i++) {
+    const m = moves[i];
+    if (m.captured && caps[m.color][m.captured] !== undefined) {
+      caps[m.color][m.captured]++;
+    }
+  }
+  return caps;
+}
+
+function updateCapturedDisplay(fen) {
+  if (!fen || !coachGame) {
+    $('#captured-top-pieces, #captured-bottom-pieces').empty();
+    $('#captured-top-lead, #captured-bottom-lead').text('');
+    return;
+  }
+  // Captured rows come from the move history (accurate under promotions).
+  const caps = capturedFromHistory();
+  const whiteTook = caps.w; // white's captures = pieces white removed from black
+  const blackTook = caps.b;
+  // Material lead comes from the current board so promotions (and net material
+  // after trades) are reflected correctly.
+  const counts = countPieces(fen);
+  let whiteMat = 0, blackMat = 0;
+  for (const t of ['p', 'n', 'b', 'r', 'q']) {
+    whiteMat += counts.w[t] * PIECE_VALUES[t];
+    blackMat += counts.b[t] * PIECE_VALUES[t];
+  }
+  const userIsWhite = coachUserColor() === 'white';
+  const userTook = userIsWhite ? whiteTook : blackTook;
+  const oppTook = userIsWhite ? blackTook : whiteTook;
+  const userGlyphs = userIsWhite ? PIECE_GLYPH_BLACK : PIECE_GLYPH_WHITE;
+  const oppGlyphs = userIsWhite ? PIECE_GLYPH_WHITE : PIECE_GLYPH_BLACK;
+  const userLead = userIsWhite ? (whiteMat - blackMat) : (blackMat - whiteMat);
+  $('#captured-bottom-pieces').html(renderCapturedRow(userTook, userGlyphs));
+  $('#captured-top-pieces').html(renderCapturedRow(oppTook, oppGlyphs));
+  $('#captured-bottom-lead').text(userLead > 0 ? '+' + userLead : '');
+  $('#captured-top-lead').text(userLead < 0 ? '+' + (-userLead) : '');
+}
+
+// ─────────────────────────────────────────────
+// OPENING IDENTIFICATION
+// ─────────────────────────────────────────────
+// Compact opening book: SAN move sequence (space-joined) → { eco, name }.
+// Curated to cover the most common lines encountered in club-level play.
+// Longer prefixes win — so Italian Giuoco Piano beats Italian Game once c3 is on.
+const OPENING_BOOK = [
+  // 1.e4 families
+  ['e4', 'B00', 'King\'s Pawn Opening'],
+  ['e4 e5', 'C20', 'Open Game'],
+  ['e4 e5 Nf3', 'C40', 'King\'s Knight Opening'],
+  ['e4 e5 Nf3 Nc6', 'C44', 'King\'s Pawn Game'],
+  ['e4 e5 Nf3 Nc6 Bb5', 'C60', 'Ruy Lopez'],
+  ['e4 e5 Nf3 Nc6 Bb5 a6', 'C68', 'Ruy Lopez, Morphy Defense'],
+  ['e4 e5 Nf3 Nc6 Bb5 a6 Ba4', 'C77', 'Ruy Lopez, Morphy Defense'],
+  ['e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6', 'C78', 'Ruy Lopez, Closed'],
+  ['e4 e5 Nf3 Nc6 Bb5 a6 Bxc6', 'C68', 'Ruy Lopez, Exchange Variation'],
+  ['e4 e5 Nf3 Nc6 Bb5 Nf6', 'C67', 'Ruy Lopez, Berlin Defense'],
+  ['e4 e5 Nf3 Nc6 Bc4', 'C50', 'Italian Game'],
+  ['e4 e5 Nf3 Nc6 Bc4 Bc5', 'C50', 'Italian Game, Giuoco Piano'],
+  ['e4 e5 Nf3 Nc6 Bc4 Bc5 c3', 'C53', 'Italian Game, Giuoco Pianissimo'],
+  ['e4 e5 Nf3 Nc6 Bc4 Nf6', 'C55', 'Italian Game, Two Knights Defense'],
+  ['e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5', 'C57', 'Two Knights, Fried Liver Attack'],
+  ['e4 e5 Nf3 Nc6 d4', 'C44', 'Scotch Game'],
+  ['e4 e5 Nf3 Nf6', 'C42', 'Petrov\'s Defense'],
+  ['e4 e5 Nf3 d6', 'C41', 'Philidor Defense'],
+  ['e4 e5 f4', 'C30', 'King\'s Gambit'],
+  ['e4 e5 Nc3', 'C25', 'Vienna Game'],
+  ['e4 e5 Bc4', 'C23', 'Bishop\'s Opening'],
+  ['e4 c5', 'B20', 'Sicilian Defense'],
+  ['e4 c5 Nf3', 'B27', 'Sicilian Defense'],
+  ['e4 c5 Nf3 d6', 'B50', 'Sicilian Defense'],
+  ['e4 c5 Nf3 d6 d4', 'B54', 'Sicilian, Open'],
+  ['e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6', 'B90', 'Sicilian, Najdorf'],
+  ['e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 g6', 'B70', 'Sicilian, Dragon'],
+  ['e4 c5 Nf3 Nc6', 'B30', 'Sicilian, Old Sicilian'],
+  ['e4 c5 Nf3 Nc6 d4 cxd4 Nxd4 Nf6 Nc3 e5', 'B32', 'Sicilian, Sveshnikov'],
+  ['e4 c5 Nf3 e6', 'B40', 'Sicilian, French Variation'],
+  ['e4 c5 Nf3 e6 d4 cxd4 Nxd4 a6', 'B42', 'Sicilian, Kan'],
+  ['e4 c5 Nf3 e6 d4 cxd4 Nxd4 Nc6', 'B44', 'Sicilian, Taimanov'],
+  ['e4 c5 Nc3', 'B23', 'Sicilian, Closed'],
+  ['e4 c5 c3', 'B22', 'Sicilian, Alapin'],
+  ['e4 e6', 'C00', 'French Defense'],
+  ['e4 e6 d4 d5', 'C01', 'French Defense'],
+  ['e4 e6 d4 d5 Nc3', 'C10', 'French, Classical/Winawer territory'],
+  ['e4 e6 d4 d5 Nc3 Bb4', 'C15', 'French, Winawer'],
+  ['e4 e6 d4 d5 Nc3 Nf6', 'C11', 'French, Classical'],
+  ['e4 e6 d4 d5 e5', 'C02', 'French, Advance'],
+  ['e4 e6 d4 d5 exd5', 'C01', 'French, Exchange'],
+  ['e4 c6', 'B10', 'Caro-Kann Defense'],
+  ['e4 c6 d4 d5', 'B12', 'Caro-Kann'],
+  ['e4 c6 d4 d5 Nc3', 'B15', 'Caro-Kann, Main Line'],
+  ['e4 c6 d4 d5 exd5 cxd5', 'B13', 'Caro-Kann, Exchange'],
+  ['e4 c6 d4 d5 e5', 'B12', 'Caro-Kann, Advance'],
+  ['e4 d6', 'B07', 'Pirc Defense'],
+  ['e4 d5', 'B01', 'Scandinavian Defense'],
+  ['e4 Nf6', 'B02', 'Alekhine\'s Defense'],
+  ['e4 g6', 'B06', 'Modern Defense'],
+  ['e4 Nc6', 'B00', 'Nimzowitsch Defense'],
+
+  // 1.d4 families
+  ['d4', 'A40', 'Queen\'s Pawn Opening'],
+  ['d4 d5', 'D00', 'Closed Game'],
+  ['d4 d5 c4', 'D06', 'Queen\'s Gambit'],
+  ['d4 d5 c4 e6', 'D30', 'Queen\'s Gambit Declined'],
+  ['d4 d5 c4 e6 Nc3 Nf6', 'D35', 'QGD, Main Line'],
+  ['d4 d5 c4 c6', 'D10', 'Slav Defense'],
+  ['d4 d5 c4 c6 Nf3 Nf6 Nc3 dxc4', 'D15', 'Slav, Main Line'],
+  ['d4 d5 c4 dxc4', 'D20', 'Queen\'s Gambit Accepted'],
+  ['d4 d5 c4 Nf6', 'D06', 'QGD, Marshall Defense'],
+  ['d4 d5 Nf3', 'D02', 'Queen\'s Pawn Game'],
+  ['d4 d5 Bf4', 'D00', 'London System'],
+  ['d4 d5 Nf3 Nf6 Bf4', 'D02', 'London System'],
+  ['d4 Nf6', 'A45', 'Indian Defense'],
+  ['d4 Nf6 c4', 'A50', 'Indian Defense'],
+  ['d4 Nf6 c4 e6', 'E00', 'Indian, Queen\'s Pawn'],
+  ['d4 Nf6 c4 e6 Nc3 Bb4', 'E20', 'Nimzo-Indian Defense'],
+  ['d4 Nf6 c4 e6 Nf3', 'E10', 'Indian, East Indian'],
+  ['d4 Nf6 c4 e6 Nf3 b6', 'E12', 'Queen\'s Indian Defense'],
+  ['d4 Nf6 c4 e6 g3', 'E00', 'Catalan Opening'],
+  ['d4 Nf6 c4 g6', 'A48', 'King\'s Indian / Grünfeld territory'],
+  ['d4 Nf6 c4 g6 Nc3 Bg7', 'E60', 'King\'s Indian Defense'],
+  ['d4 Nf6 c4 g6 Nc3 d5', 'D80', 'Grünfeld Defense'],
+  ['d4 Nf6 c4 c5', 'A56', 'Benoni Defense'],
+  ['d4 f5', 'A80', 'Dutch Defense'],
+  ['d4 Nf6 Bg5', 'A45', 'Trompowsky Attack'],
+
+  // Flank openings
+  ['c4', 'A10', 'English Opening'],
+  ['c4 e5', 'A20', 'English, King\'s English'],
+  ['c4 c5', 'A30', 'English, Symmetrical'],
+  ['c4 Nf6', 'A15', 'English, Anglo-Indian'],
+  ['c4 e6', 'A13', 'English, Agincourt'],
+  ['Nf3', 'A04', 'Réti Opening'],
+  ['Nf3 d5', 'A07', 'King\'s Indian Attack'],
+  ['g3', 'A00', 'Benko\'s Opening'],
+  ['b3', 'A01', 'Larsen\'s Opening'],
+  ['f4', 'A02', 'Bird\'s Opening'],
+  ['b4', 'A00', 'Sokolsky Opening'],
+];
+
+// Build an in-memory trie keyed by SAN tokens. Each node stores any
+// { eco, name } it terminates, and children keyed by next SAN.
+const OPENING_TRIE = (() => {
+  const root = { children: {} };
+  for (const [line, eco, name] of OPENING_BOOK) {
+    const tokens = line.split(' ');
+    let node = root;
+    for (const tok of tokens) {
+      if (!node.children[tok]) node.children[tok] = { children: {} };
+      node = node.children[tok];
+    }
+    node.data = { eco, name };
+  }
+  return root;
+})();
+
+// Find the deepest opening-book match for the given SAN history.
+// Returns { match, exact, matchedPlies } — exact=true only if every move in
+// `sans` walked into a trie node; matchedPlies is how far the named opening
+// extends (i.e. the depth of the last {eco,name}-bearing node we passed).
+function identifyOpening(sans) {
+  if (!sans || sans.length === 0) return { match: null, exact: false, matchedPlies: 0 };
+  let node = OPENING_TRIE;
+  let last = null;
+  let lastDepth = 0;
+  let walked = 0;
+  for (let i = 0; i < sans.length; i++) {
+    const next = node.children[sans[i]];
+    if (!next) break;
+    node = next;
+    walked = i + 1;
+    if (node.data) { last = node.data; lastDepth = walked; }
+  }
+  return { match: last, exact: walked === sans.length, matchedPlies: lastDepth };
+}
+
+function updateOpeningLabel() {
+  if (!coachGame) {
+    $('#opening-section').hide();
+    return;
+  }
+  // Respect the history cursor so navigating back shows the opening as it was
+  // at that ply, not the latest one.
+  const fullSans = coachGame.history();
+  const end = coachReviewCursor === null ? fullSans.length : coachReviewCursor;
+  const sans = fullSans.slice(0, end);
+  if (sans.length === 0) {
+    $('#opening-section').hide();
+    return;
+  }
+  const info = identifyOpening(sans);
+  if (!info.match) {
+    $('#opening-section').hide();
+    return;
+  }
+  $('#coach-opening-eco').text(info.match.eco);
+  if (info.exact) {
+    // Still in book — just show the current opening name.
+    $('#coach-opening-name').text(info.match.name);
+  } else {
+    // Out of book — pin the deepest named match and say after which move.
+    const moveNum = Math.ceil(info.matchedPlies / 2);
+    $('#coach-opening-name').text(
+      `${info.match.name} — out of book after move ${moveNum}`
+    );
+  }
+  $('#opening-section').show();
+}
+
+// ─────────────────────────────────────────────
+// MOVE LIST / PGN
+// ─────────────────────────────────────────────
+// Build a minimal PGN from coachGame. Uses chess.js pgn() as the base and
+// only adds a couple of safe headers — the rest (result, level) is inferred.
+function coachGetPgn() {
+  if (!coachGame) return '';
+  const today = new Date();
+  const yyyy = today.getUTCFullYear();
+  const mm = String(today.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(today.getUTCDate()).padStart(2, '0');
+  let result = '*';
+  if (coachGame.in_checkmate()) {
+    result = coachGame.turn() === 'w' ? '0-1' : '1-0';
+  } else if (coachGame.in_stalemate() || coachGame.in_draw() || coachGame.in_threefold_repetition() || coachGame.insufficient_material()) {
+    result = '1/2-1/2';
+  }
+  // chess.js .pgn() may include auto tags for custom FEN starts (FEN/SetUp).
+  // Pull them out and merge into our own tag pair section to keep the PGN
+  // standards-compliant (one tag pair section only).
+  const rawPgn = coachGame.pgn();
+  const autoTags = {};
+  const tagRe = /^\[(\w+)\s+"((?:\\.|[^"\\])*)"\]\s*$/gm;
+  let m;
+  let movetext = rawPgn;
+  while ((m = tagRe.exec(rawPgn)) !== null) {
+    autoTags[m[1]] = m[2];
+  }
+  // Strip tag lines and any leading blank lines from the movetext
+  movetext = movetext.replace(/^(?:\[[^\]]*\]\s*\n?)+/, '').trim();
+  const headers = [
+    ['Event', 'Coach Mode training'],
+    ['Site', 'chess.cjarhodes.com'],
+    ['Date', `${yyyy}.${mm}.${dd}`],
+    ['White', coachUserColor() === 'white' ? 'Player' : `Opponent ${coachEngineElo || ''}`.trim()],
+    ['Black', coachUserColor() === 'black' ? 'Player' : `Opponent ${coachEngineElo || ''}`.trim()],
+    ['Result', result],
+  ];
+  if (autoTags.SetUp) headers.push(['SetUp', autoTags.SetUp]);
+  if (autoTags.FEN) headers.push(['FEN', autoTags.FEN]);
+  const header = headers
+    .map(([k, v]) => `[${k} "${String(v).replace(/"/g, '\\"')}"]`)
+    .join('\n');
+  // A valid PGN always ends with the result token. Ensure it's present
+  // whether movetext is empty (just the token) or non-empty (appended if
+  // chess.js didn't already include it).
+  let bodyWithResult;
+  if (!movetext) {
+    bodyWithResult = result;
+  } else if (movetext.endsWith(result)) {
+    bodyWithResult = movetext;
+  } else {
+    bodyWithResult = `${movetext} ${result}`;
+  }
+  return `${header}\n\n${bodyWithResult}\n`;
+}
+
+// Render the move list, highlighting the ply at cursor (or the latest).
+function updateMoveList() {
+  // Refresh the live eval sparkline alongside the move list — both reflect the same data.
+  updateLiveEvalChart();
+  const $section = $('#movelist-section');
+  const $list = $('#movelist');
+  if (!coachGame || coachGame.history().length === 0) {
+    $section.hide();
+    $list.empty();
+    return;
+  }
+  $section.show();
+  const sans = coachGame.history();
+  const total = sans.length;
+  const cursor = coachReviewCursor === null ? total : coachReviewCursor;
+  // Map ply → classification tier for coloring blunders/mistakes in the list.
+  const tierByPly = {};
+  for (const r of coachReviewLog) {
+    if (r && r.ply) tierByPly[r.ply] = r.tier;
+  }
+  const pairs = Math.ceil(sans.length / 2);
+  let html = '';
+  for (let i = 0; i < pairs; i++) {
+    const wPly = i * 2 + 1;
+    const bPly = i * 2 + 2;
+    const wSan = sans[wPly - 1] || '';
+    const bSan = sans[bPly - 1] || '';
+    const wTier = tierByPly[wPly] || '';
+    const bTier = tierByPly[bPly] || '';
+    const wClasses = ['ply'];
+    const bClasses = ['ply'];
+    if (wPly === cursor) wClasses.push('current');
+    if (bPly === cursor) bClasses.push('current');
+    if (['blunder', 'mistake', 'inaccuracy'].includes(wTier)) wClasses.push(wTier);
+    if (['blunder', 'mistake', 'inaccuracy'].includes(bTier)) bClasses.push(bTier);
+    html += `<span class="num">${i + 1}.</span>`;
+    html += `<span class="${wClasses.join(' ')}" data-ply="${wPly}">${escapeHtml(wSan)}</span>`;
+    if (bSan) {
+      html += `<span class="${bClasses.join(' ')}" data-ply="${bPly}">${escapeHtml(bSan)}</span>`;
+    } else {
+      html += `<span class="ply-empty">…</span>`;
+    }
+  }
+  $list.html(html);
+  // Scroll the current ply into view.
+  const $cur = $list.find('.ply.current');
+  if ($cur.length) {
+    const cEl = $cur[0];
+    const lEl = $list[0];
+    const top = cEl.offsetTop - lEl.offsetTop;
+    if (top < lEl.scrollTop || top > lEl.scrollTop + lEl.clientHeight - cEl.clientHeight) {
+      lEl.scrollTop = top - lEl.clientHeight / 2;
+    }
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function reachesPromotionRank(gameObj, source, target) {
+  if (!gameObj || !source || !target) return false;
+  const piece = gameObj.get(source);
+  if (!piece || piece.type !== 'p') return false;
+  return (piece.color === 'w' && target[1] === '8') ||
+         (piece.color === 'b' && target[1] === '1');
+}
+
+function isLegalPromotionMove(gameObj, source, target) {
+  if (!reachesPromotionRank(gameObj, source, target)) return false;
+  return gameObj.moves({ verbose: true }).some(m => m.from === source && m.to === target && m.promotion);
+}
+
+function showPromotionPicker(color, onPick) {
+  const glyphs = color === 'b'
+    ? { q: '♛', r: '♜', b: '♝', n: '♞' }
+    : { q: '♕', r: '♖', b: '♗', n: '♘' };
+  pendingPromotionChoice = onPick;
+  $('#promotion-picker .promotion-choice').each(function() {
+    const piece = $(this).attr('data-promotion');
+    $(this).text(glyphs[piece] || piece.toUpperCase());
+  });
+  $('#promotion-picker').css('display', 'flex').attr('aria-hidden', 'false');
+  $('#promotion-picker .promotion-choice[data-promotion="q"]').trigger('focus');
+}
+
+function closePromotionPicker() {
+  pendingPromotionChoice = null;
+  $('#promotion-picker').hide().attr('aria-hidden', 'true');
+}
+
+function requestPromotionChoice(gameObj, source, target, onPick, legalOnly) {
+  const shouldAsk = legalOnly
+    ? isLegalPromotionMove(gameObj, source, target)
+    : reachesPromotionRank(gameObj, source, target);
+  if (!shouldAsk) return false;
+  const piece = gameObj.get(source);
+  showPromotionPicker(piece ? piece.color : 'w', onPick);
+  return true;
+}
+
+function getOpeningLines(opening) {
+  if (!opening) return [];
+  return [{
+    id: 'main',
+    name: 'Main line',
+    note: opening.tagline || '',
+    tagline: opening.tagline,
+    description: opening.description,
+    moves: opening.moves,
+    explanations: opening.explanations,
+    keyIdeas: opening.keyIdeas
+  }].concat(opening.variations || []);
+}
+
+function setActiveLine(lineId) {
+  const lines = getOpeningLines(currentOpening);
+  currentLine = lines.find(line => line.id === lineId) || lines[0] || null;
+  currentLineId = currentLine ? currentLine.id : 'main';
+}
+
+function activeMoves() {
+  return currentLine && currentLine.moves ? currentLine.moves : [];
+}
+
+function activeExplanations() {
+  return currentLine && currentLine.explanations ? currentLine.explanations : [];
+}
+
+function activeKeyIdeas() {
+  if (currentLine && currentLine.keyIdeas) return currentLine.keyIdeas;
+  return currentOpening && currentOpening.keyIdeas ? currentOpening.keyIdeas : [];
+}
+
+function renderOpeningDetails() {
+  if (!currentOpening || !currentLine) return;
+  $('#opening-title').text(currentOpening.name);
+  if (currentLine.id === 'main') {
+    $('#opening-tagline').text(currentOpening.tagline || '');
+    $('#opening-desc').text(currentOpening.description || '');
+  } else {
+    const note = currentLine.note || currentLine.tagline || '';
+    $('#opening-tagline').text(note ? `${currentLine.name} · ${note}` : currentLine.name);
+    $('#opening-desc').text(currentLine.description || currentOpening.description || '');
+  }
+}
+
+function renderLineSelector() {
+  const lines = getOpeningLines(currentOpening);
+  const $wrap = $('#line-selector-wrap');
+  const $sel = $('#line-selector').empty();
+  if (!currentOpening || lines.length <= 1) {
+    $wrap.hide();
+    return;
+  }
+  lines.forEach(line => {
+    $('<button class="line-btn"></button>')
+      .toggleClass('active', line.id === currentLineId)
+      .attr('data-line', line.id)
+      .text(line.name)
+      .appendTo($sel);
+  });
+  $wrap.show();
+}
+
+function resetQuizTracking() {
+  quizAttempts = 0;
+  quizSessionMisses = 0;
+  quizMissedMoves = [];
+  quizReviewMode = false;
+  quizReviewQueue = [];
+  quizReviewCursor = 0;
+  $('#btn-review-misses').hide();
+}
+
+function recordQuizMiss(idx) {
+  if (!quizMissedMoves.includes(idx)) quizMissedMoves.push(idx);
+}
+
+function moveLabelForIndex(idx) {
+  const moveNo = Math.floor(idx / 2) + 1;
+  return `${moveNo}${idx % 2 === 0 ? '.' : '...'} ${activeMoves()[idx] || ''}`.trim();
+}
+
+function setLineStartPosition() {
+  currentMoveIdx = -1;
+  quizAttempts = 0;
+  game.reset();
+  board.position('start', false);
+  renderMoveList();
+  renderExplanation(-1);
+  updateProgress();
+  updateControls();
+}
+
+function switchOpeningLine(lineId) {
+  if (!currentOpening) return;
+  setActiveLine(lineId);
+  resetQuizTracking();
+  game.reset();
+  currentMoveIdx = -1;
+  if (quizMode) boardFlipped = (getUserColor() === 'black');
+  createBoard('start', quizMode, boardFlipped ? 'black' : 'white');
+  renderOpeningDetails();
+  renderLineSelector();
+  renderKeyIdeas();
+  renderMoveList();
+  renderExplanation(-1);
+  updateProgress();
+  updateControls();
+  clearFeedback();
+  updateSRPanel();
+  updateURL();
+  if (quizMode) {
+    const colorLabel = getUserColor() === 'white' ? 'White ♙' : 'Black ♟';
+    showFeedback('hint', `💡 You're playing ${colorLabel}. The opponent's moves play automatically.`);
+    autoPlayOpponent();
+  }
+}
+
+function startQuizMistakeReview() {
+  if (!currentOpening || quizMissedMoves.length === 0) return;
+  quizReviewQueue = quizMissedMoves.slice().sort((a, b) => a - b);
+  quizReviewCursor = 0;
+  quizReviewMode = true;
+  quizAttempts = 0;
+  $('#btn-review-misses').hide();
+  loadQuizReviewPosition();
+}
+
+function loadQuizReviewPosition() {
+  if (!quizReviewMode || quizReviewCursor >= quizReviewQueue.length) {
+    quizReviewMode = false;
+    setLineStartPosition();
+    showFeedback('correct', 'Review complete — missed moves replayed.');
+    return;
+  }
+  const idx = quizReviewQueue[quizReviewCursor];
+  const moves = activeMoves();
+  game.reset();
+  for (let i = 0; i < idx; i++) game.move(moves[i]);
+  currentMoveIdx = idx - 1;
+  quizAttempts = 0;
+  board.position(game.fen(), false);
+  renderMoveList();
+  renderExplanation(idx - 1);
+  updateProgress();
+  const moveNo = Math.floor(idx / 2) + 1;
+  showFeedback('hint', `Review ${quizReviewCursor + 1}/${quizReviewQueue.length}: find the missed ${idx % 2 === 0 ? moveNo + '.' : moveNo + '...'} move.`);
+}
+
+// ─────────────────────────────────────────────
+// QUIZ AUTO-PLAY HELPERS
+// ─────────────────────────────────────────────
+function getUserColor() {
+  if (!currentOpening) return 'white';
+  return currentOpening.category === 'black' ? 'black' : 'white';
+}
+
+function isUserTurn(idx) {
+  // Even indices (0,2,4…) = White's move; odd = Black's move
+  const userIsWhite = getUserColor() === 'white';
+  return userIsWhite ? (idx % 2 === 0) : (idx % 2 === 1);
+}
+
+function finishQuiz() {
+  if (!currentOpening) return;
+  const m = quizSessionMisses;
+  const quality = m === 0 ? 5 : (m <= 2 ? 4 : (m <= 4 ? 3 : 2));
+  const saveResult = srRecordQuiz(currentOpening.id, quality);
+  const summary = m === 0
+    ? '🎉 Opening complete — perfect run!'
+    : `🎉 Opening complete — ${m} miss${m === 1 ? '' : 'es'}.`;
+  const saveWarning = saveResult && saveResult.ok === false
+    ? ' Progress could not be saved in this browser.'
+    : '';
+  showFeedback('correct', summary + saveWarning);
+  if (quizMissedMoves.length > 0) $('#btn-review-misses').show();
+  updateSRSidebar();
+  updateSRPanel();
+}
+
+function autoPlayOpponent() {
+  if (!quizMode || !currentOpening) return;
+  if (quizReviewMode) return;
+  const moves = activeMoves();
+  const nextIdx = currentMoveIdx + 1;
+  if (nextIdx >= moves.length) {
+    finishQuiz();
+    return;
+  }
+  if (isUserTurn(nextIdx)) return; // user's move, wait for them
+
+  // Play opponent's move after a short pause
+  setTimeout(function () {
+    if (!quizMode) return;
+    if (quizReviewMode) return;
+    game.move(moves[nextIdx]);
+    currentMoveIdx = nextIdx;
+    board.position(game.fen(), false);
+    renderMoveList();
+    updateProgress();
+    if (currentMoveIdx >= moves.length - 1) {
+      finishQuiz();
+    } else {
+      clearFeedback();
+    }
+  }, 600);
+}
+
+function applyExploreMove(source, target, promotion, opts) {
+  if (!exploreGame) return false;
+  opts = opts || {};
+  const move = exploreGame.move({ from: source, to: target, promotion: promotion || 'q' });
+  if (!move) return false;
+  if (opts.updateBoard !== false) board.position(exploreGame.fen());
+  fetchExploreData();
+  return true;
+}
+
+function handleQuizDrop(source, target, promotion) {
+  if (!quizMode || !currentOpening) return 'snapback';
+  promotion = promotion || 'q';
+  const moves = activeMoves();
+  const explanations = activeExplanations();
+  if (quizReviewMode) {
+    const expectedIdx = quizReviewQueue[quizReviewCursor];
+    const expectedSAN = moves[expectedIdx];
+    const tempGame = new Chess(game.fen());
+    const move = tempGame.move({ from: source, to: target, promotion });
+    if (!move) return 'snapback';
+    if (move.san === expectedSAN) {
+      game.move({ from: source, to: target, promotion });
+      currentMoveIdx = expectedIdx;
+      board.position(game.fen(), false);
+      renderMoveList();
+      renderExplanation(expectedIdx);
+      updateProgress();
+      quizReviewCursor++;
+      showFeedback('correct', '✓ Replayed ' + moveLabelForIndex(expectedIdx));
+      setTimeout(loadQuizReviewPosition, 650);
+    } else {
+      quizAttempts++;
+      showFeedback(quizAttempts >= 2 ? 'hint' : 'incorrect',
+        quizAttempts >= 2 ? '💡 The correct move is ' + expectedSAN : '✗ Not quite — try again!');
+      return 'snapback';
+    }
+    return;
+  }
+  const nextIdx = currentMoveIdx + 1;
+  if (nextIdx >= moves.length) return 'snapback';
+  if (!isUserTurn(nextIdx)) return 'snapback'; // opponent's turn — auto-playing
+
+  const expectedSAN = moves[nextIdx];
+
+  // Try the move on a temp game
+  const tempGame = new Chess(game.fen());
+  const move = tempGame.move({ from: source, to: target, promotion });
+  if (!move) return 'snapback';
+
+  if (move.san === expectedSAN) {
+    game.move({ from: source, to: target, promotion });
+    currentMoveIdx = nextIdx;
+    quizAttempts = 0;
+    const exp = explanations[nextIdx];
+    showFeedback('correct', '✓ ' + (exp ? exp.text : moveLabelForIndex(nextIdx)));
+    setTimeout(() => {
+      board.position(game.fen());
+      renderMoveList();
+      updateProgress();
+      autoPlayOpponent();
+    }, 300);
+  } else {
+    quizAttempts++;
+    if (quizAttempts === 1) {
+      quizSessionMisses++;
+      recordQuizMiss(nextIdx);
+    }
+    if (quizAttempts >= 2) {
+      showFeedback('hint', '💡 The correct move is ' + expectedSAN);
+    } else {
+      showFeedback('incorrect', '✗ Not quite — try again!');
+    }
+    return 'snapback';
+  }
+}
+
+function handleDrop(source, target) {
+  // Explore mode: free play, any legal move for either colour
+  if (exploreMode) {
+    if (requestPromotionChoice(exploreGame, source, target, promotion => {
+      applyExploreMove(source, target, promotion, { updateBoard: true });
+    }, true)) {
+      return 'snapback';
+    }
+    if (!applyExploreMove(source, target, 'q', { updateBoard: false })) return 'snapback';
+    return;
+  }
+  if (!quizMode || !currentOpening) return 'snapback';
+  if (requestPromotionChoice(game, source, target, promotion => {
+    handleQuizDrop(source, target, promotion);
+  }, true)) {
+    return 'snapback';
+  }
+  return handleQuizDrop(source, target, 'q');
+}
+
+function handleSnapEnd() {
+  if (exploreMode) {
+    board.position(exploreGame.fen());
+    return;
+  }
+  if (!quizMode) return;
+  board.position(game.fen());
+}
+
+// ─────────────────────────────────────────────
+// LOAD AN OPENING
+// ─────────────────────────────────────────────
+function loadOpening(id, lineId) {
+  currentOpening = OPENINGS.find(o => o.id === id);
+  if (!currentOpening) return;
+  setActiveLine(lineId || 'main');
+
+  // Exit explore mode when user picks an opening
+  if (exploreMode) {
+    exploreMode = false;
+    $('#btn-study, #btn-quiz, #btn-explore').removeClass('active');
+    $('#btn-study').addClass('active');
+    $('#btn-start, #btn-prev, #btn-next, #btn-end').show();
+    $('#btn-explore-undo, #btn-explore-reset').hide();
+    $('#explore-content').hide();
+  }
+
+  currentMoveIdx = -1;
+  resetQuizTracking();
+  game.reset();
+  boardFlipped = false;
+
+  // Show board element first (must be visible before chessboard.js measures it)
+  $('#board-placeholder').hide();
+  $('#myBoard').show();
+  createBoard('start', quizMode, 'white');
+
+  // Enable controls
+  ['btn-prev', 'btn-start', 'btn-flip'].forEach(id => $('#' + id).prop('disabled', true));
+  ['btn-next', 'btn-end'].forEach(id => $('#' + id).prop('disabled', false));
+  $('#btn-flip').prop('disabled', false);
+
+  // Update library
+  $('.opening-btn').removeClass('active');
+  $(`.opening-btn[data-id="${currentOpening.id}"]`).addClass('active');
+
+  // Update info panel
+  $('#empty-state').hide();
+  $('#opening-content').show();
+  renderOpeningDetails();
+
+  renderLineSelector();
+  renderKeyIdeas();
+  renderMoveList();
+  renderExplanation(-1);
+  updateProgress();
+  updateBoardDraggable();
+  clearFeedback();
+  updateSRPanel();
+  updateURL();
+}
+
+// ─────────────────────────────────────────────
+// NAVIGATION
+// ─────────────────────────────────────────────
+function goToMove(idx) {
+  if (!currentOpening || !board) return;
+  const moves = activeMoves();
+  idx = Math.max(-1, Math.min(idx, moves.length - 1));
+  game.reset();
+  for (let i = 0; i <= idx; i++) {
+    game.move(moves[i]);
+  }
+  currentMoveIdx = idx;
+  board.position(idx === -1 ? 'start' : game.fen(), false);
+  renderMoveList();
+  renderExplanation(idx);
+  updateProgress();
+  updateControls();
+  quizAttempts = 0;
+  if (!quizMode) clearFeedback();
+  updateURL();
+}
+
+function updateControls() {
+  const moves = activeMoves();
+  const atStart = currentMoveIdx <= -1;
+  const atEnd = currentOpening && currentMoveIdx >= moves.length - 1;
+  $('#btn-prev').prop('disabled', atStart);
+  $('#btn-start').prop('disabled', atStart);
+  $('#btn-next').prop('disabled', atEnd || !currentOpening);
+  $('#btn-end').prop('disabled', atEnd || !currentOpening);
+}
+
+// ─────────────────────────────────────────────
+// RENDER FUNCTIONS
+// ─────────────────────────────────────────────
+function renderMoveList() {
+  if (!currentOpening) return;
+  const moves = activeMoves();
+  let html = '';
+  for (let i = 0; i < moves.length; i += 2) {
+    const moveNum = Math.floor(i / 2) + 1;
+    html += `<div class="move-pair">`;
+    html += `<span class="move-num">${moveNum}.</span>`;
+    // White move
+    const wClass = i === currentMoveIdx ? 'current' : (i < currentMoveIdx ? 'played' : '');
+    html += `<button class="move-chip ${wClass}" data-idx="${i}">${escapeHtml(moves[i])}</button>`;
+    // Black move (if exists)
+    if (i + 1 < moves.length) {
+      const bClass = (i + 1) === currentMoveIdx ? 'current' : (i + 1 < currentMoveIdx ? 'played' : '');
+      html += `<button class="move-chip ${bClass}" data-idx="${i + 1}">${escapeHtml(moves[i + 1])}</button>`;
+    }
+    html += `</div>`;
+  }
+  $('#move-list').html(html);
+
+  // Click handlers for move chips
+  $('.move-chip').on('click', function () {
+    if (quizMode) return; // no clicking in quiz mode
+    const idx = parseInt($(this).data('idx'));
+    goToMove(idx);
+  });
+}
+
+function renderExplanation(idx) {
+  const box = $('#explanation-box');
+  if (idx < 0 || !currentOpening) {
+    if (quizMode) {
+      box.html(`<span class="move-label">Quiz Mode Active</span><p>Find the correct move on the board. Drag the right piece to the right square.</p>`);
+    } else {
+      box.html(`<p>Click a move or use <strong>Next →</strong> to step through the opening.</p>`);
+    }
+    return;
+  }
+  const exp = activeExplanations()[idx] || { label: moveLabelForIndex(idx), text: 'Continue the selected line from this position.' };
+  box.html(`<span class="move-label">${escapeHtml(exp.label)}</span><p>${escapeHtml(exp.text)}</p>`);
+}
+
+function renderKeyIdeas() {
+  if (!currentOpening) return;
+  const html = activeKeyIdeas().map(idea => `<div class="key-idea">${escapeHtml(idea)}</div>`).join('');
+  $('#key-ideas').html(html);
+}
+
+function updateProgress() {
+  if (!currentOpening) { $('#progress-fill').css('width', '0%'); return; }
+  const moves = activeMoves();
+  const pct = moves.length ? ((currentMoveIdx + 1) / moves.length) * 100 : 0;
+  $('#progress-fill').css('width', pct + '%');
+}
+
+// ─────────────────────────────────────────────
+// QUIZ MODE
+// ─────────────────────────────────────────────
+function updateBoardDraggable() {
+  if (!board) return;
+  createBoard(game.fen(), quizMode, boardFlipped ? 'black' : 'white');
+}
+
+function setMode(mode) {
+  quizMode = (mode === 'quiz');
+  exploreMode = (mode === 'explore');
+
+  $('#btn-study, #btn-quiz, #btn-explore').removeClass('active');
+  $(`#btn-${mode}`).addClass('active');
+
+  if (exploreMode) {
+    // Hide study nav, show explore nav
+    $('#btn-start, #btn-prev, #btn-next, #btn-end').hide();
+    $('#btn-explore-undo, #btn-explore-reset').show();
+    $('#btn-flip').prop('disabled', false);
+
+    // Swap info panel to explore view
+    $('#empty-state, #opening-content').hide();
+    $('#explore-content').show().css('display', 'flex');
+
+    // Build explore game from end of current opening (or start position)
+    exploreGame = new Chess();
+    if (currentOpening) {
+      activeMoves().forEach(m => exploreGame.move(m));
+      $('#explore-title').text(currentLineId === 'main' ? currentOpening.name : `${currentOpening.name}: ${currentLine.name}`);
+      $('#explore-tagline').text('Exploring from end of line · move freely');
+    } else {
+      $('#explore-title').text('Free Exploration');
+      $('#explore-tagline').text('Move freely from the starting position');
+    }
+    exploreStartFen = exploreGame.fen();
+
+    // Show board in free-play mode
+    $('#board-placeholder').hide();
+    $('#myBoard').show();
+    createBoard(exploreStartFen, true, boardFlipped ? 'black' : 'white');
+    clearFeedback();
+    showExploreTokenState();
+    fetchExploreData();
+
+  } else if (quizMode) {
+    // Back to study nav
+    $('#btn-start, #btn-prev, #btn-next, #btn-end').show();
+    $('#btn-explore-undo, #btn-explore-reset').hide();
+    $('#explore-content').hide();
+    if (currentOpening) {
+      $('#empty-state').hide();
+      $('#opening-content').show();
+    }
+    $('#btn-next, #btn-prev, #btn-start, #btn-end').prop('disabled', true);
+    if (currentOpening) {
+      game.reset();
+      currentMoveIdx = -1;
+      resetQuizTracking();
+      // Orient the board so the user plays from the bottom
+      boardFlipped = (getUserColor() === 'black');
+      createBoard('start', true, boardFlipped ? 'black' : 'white');
+      renderMoveList();
+      renderExplanation(-1);
+      updateProgress();
+      clearFeedback();
+      const colorLabel = getUserColor() === 'white' ? 'White ♙' : 'Black ♟';
+      showFeedback('hint', `💡 You're playing ${colorLabel}. The opponent's moves play automatically.`);
+      // For black openings, auto-play White's first move(s)
+      autoPlayOpponent();
+    }
+
+  } else {
+    // Study mode
+    $('#btn-start, #btn-prev, #btn-next, #btn-end').show();
+    $('#btn-explore-undo, #btn-explore-reset').hide();
+    $('#explore-content').hide();
+    if (currentOpening) {
+      $('#empty-state').hide();
+      $('#opening-content').show();
+      updateControls();
+      createBoard(game.fen(), false, boardFlipped ? 'black' : 'white');
+    }
+    renderExplanation(currentMoveIdx);
+    clearFeedback();
+  }
+  updateSRPanel();
+  updateURL();
+}
+
+// ─────────────────────────────────────────────
+// FEEDBACK
+// ─────────────────────────────────────────────
+function showFeedback(type, message) {
+  const bar = $('#feedback-bar');
+  bar.removeClass('correct incorrect hint').addClass(type + ' show').text(message);
+  if (feedbackTimeout) clearTimeout(feedbackTimeout);
+  if (type === 'correct') {
+    feedbackTimeout = setTimeout(clearFeedback, 5000);
+  }
+}
+
+function clearFeedback() {
+  $('#feedback-bar').removeClass('show correct incorrect hint');
+}
+
+// ─────────────────────────────────────────────
+// EXPLORE MODE — LICHESS TOKEN + API
+// ─────────────────────────────────────────────
+const LICHESS_TOKEN_KEY = 'lichess_token';
+const EXPLORE_CACHE_TTL_MS = 10 * 60 * 1000;
+const EXPLORE_CACHE_MAX = 120;
+const exploreCache = new Map();
+try { localStorage.removeItem(LICHESS_TOKEN_KEY); } catch (e) { /* ignore */ }
+function getLichessToken() {
+  try { return sessionStorage.getItem(LICHESS_TOKEN_KEY); }
+  catch (e) { return null; }
+}
+function setLichessToken(t) {
+  try { sessionStorage.setItem(LICHESS_TOKEN_KEY, t); return true; }
+  catch (e) { return false; }
+}
+function clearLichessToken() {
+  try { sessionStorage.removeItem(LICHESS_TOKEN_KEY); } catch (e) { /* ignore */ }
+  try { localStorage.removeItem(LICHESS_TOKEN_KEY); } catch (e) { /* ignore */ }
+}
+
+function showExploreTokenState() {
+  if (getLichessToken()) {
+    $('#explore-token-setup').hide();
+    $('#explore-continuations').show().css('display', 'flex');
+  } else {
+    $('#explore-continuations').hide();
+    $('#explore-token-setup').show();
+  }
+}
+
+function exploreCacheKey(db, fen) {
+  return db + '|' + fen;
+}
+
+function getCachedExploreData(key) {
+  const cached = exploreCache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.time > EXPLORE_CACHE_TTL_MS) {
+    exploreCache.delete(key);
+    return null;
+  }
+  exploreCache.delete(key);
+  exploreCache.set(key, cached);
+  return cached.data;
+}
+
+function setCachedExploreData(key, data) {
+  exploreCache.set(key, { time: Date.now(), data });
+  while (exploreCache.size > EXPLORE_CACHE_MAX) {
+    exploreCache.delete(exploreCache.keys().next().value);
+  }
+}
+
+function fetchExploreData() {
+  if (!exploreGame) return;
+  const token = getLichessToken();
+  if (!token) { showExploreTokenState(); return; }
+
+  const fen = exploreGame.fen();
+  const db = currentDb;
+  const requestId = ++exploreRequestId;
+  const cacheKey = exploreCacheKey(db, fen);
+  const cached = getCachedExploreData(cacheKey);
+  if (cached) {
+    renderContinuations(cached, { cached: true });
+    return;
+  }
+  const endpoint = db === 'masters'
+    ? 'https://explorer.lichess.ovh/masters'
+    : 'https://explorer.lichess.ovh/lichess';
+  $('#continuations-list').html('<div class="explore-loading">Fetching data…</div>');
+  $.ajax({
+    url: endpoint,
+    data: { fen: fen, topGames: 0, recentGames: 0 },
+    dataType: 'json',
+    headers: { 'Authorization': 'Bearer ' + token },
+    success: function(data) {
+      if (requestId !== exploreRequestId || !exploreMode || !exploreGame ||
+          exploreGame.fen() !== fen || currentDb !== db) {
+        return;
+      }
+      setCachedExploreData(cacheKey, data);
+      renderContinuations(data);
+    },
+    error: function(xhr) {
+      if (requestId !== exploreRequestId || !exploreMode || !exploreGame ||
+          exploreGame.fen() !== fen || currentDb !== db) {
+        return;
+      }
+      if (xhr.status === 401) {
+        clearLichessToken();
+        exploreCache.clear();
+        showExploreTokenState();
+        $('#token-error').text('Token invalid or expired — please reconnect.').show();
+      } else {
+        $('#continuations-list').html('<div class="explore-empty">Could not reach Lichess. Check your connection.</div>');
+      }
+    }
+  });
+}
+
+function renderContinuations(data, opts) {
+  const list = $('#continuations-list');
+  const totalPos = (Number(data.white) || 0) + (Number(data.draws) || 0) + (Number(data.black) || 0);
+
+  if (!data.moves || data.moves.length === 0) {
+    const msg = totalPos === 0
+      ? 'No games found for this position.'
+      : `${formatNum(totalPos)} total games — no further continuations recorded.`;
+    list.html(`<div class="explore-empty">${msg}</div>`);
+    return;
+  }
+
+  list.empty();
+  const cacheNote = opts && opts.cached ? ' · cached' : '';
+  list.append($('<div class="explore-total"></div>').text(`${formatNum(totalPos)} games from this position${cacheNote}`));
+  data.moves.slice(0, 8).forEach(function(m) {
+    const white = Number(m.white) || 0;
+    const draws = Number(m.draws) || 0;
+    const black = Number(m.black) || 0;
+    const total = white + draws + black;
+    if (total === 0) return;
+    const wPct = Math.round(white / total * 100);
+    const dPct = Math.round(draws / total * 100);
+    const bPct = 100 - wPct - dPct;
+    const san = String(m.san || '');
+    const $bar = $('<div class="cont-bar"></div>')
+      .append($('<div class="cont-bar-w"></div>').css('width', wPct + '%'))
+      .append($('<div class="cont-bar-d"></div>').css('width', dPct + '%'))
+      .append($('<div class="cont-bar-b"></div>').css('width', bPct + '%'));
+    const $row = $('<div class="continuation-row"></div>')
+      .attr('data-san', san)
+      .append($('<div class="cont-move"></div>').text(san))
+      .append($('<div class="cont-bar-wrap"></div>')
+        .append($bar)
+        .append($('<div class="cont-pct"></div>').text(`${wPct}% · ${dPct}% · ${bPct}%`)))
+      .append($('<div class="cont-games"></div>').text(formatNum(total)));
+    list.append($row);
+  });
+
+  // Click a continuation to play it
+  list.find('.continuation-row').on('click', function() {
+    const san = $(this).attr('data-san');
+    if (exploreGame.move(san)) {
+      board.position(exploreGame.fen());
+      fetchExploreData();
+    }
+  });
+}
+
+function formatNum(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return Math.round(n / 1000) + 'k';
+  return n.toString();
+}
+
+// ─────────────────────────────────────────────
+// EVENT HANDLERS
+// ─────────────────────────────────────────────
+$(function () {
+  // Board is initialized lazily on first opening selection
+  coachSync.init();
+  let applySearch;
+
+  function bindLibraryEvents() {
+
+  // Promotion picker
+  $('#promotion-picker .promotion-choice').on('click', function() {
+    const promotion = $(this).attr('data-promotion');
+    const cb = pendingPromotionChoice;
+    closePromotionPicker();
+    if (cb) cb(promotion);
+  });
+  $('#promotion-picker').on('click', function(e) {
+    if (e.target === this) closePromotionPicker();
+  });
+
+  // Library buttons
+  $('.opening-btn').on('click', function () {
+    loadOpening($(this).data('id'));
+  });
+
+  // Category tab filtering
+  $('.cat-tab').on('click', function () {
+    $('.cat-tab').removeClass('active');
+    $(this).addClass('active');
+    applySearch($('#library-search-input').val());
+  });
+
+  // Navigation
+  $('#btn-prev').on('click', () => goToMove(currentMoveIdx - 1));
+  $('#btn-next').on('click', () => goToMove(currentMoveIdx + 1));
+  $('#btn-start').on('click', () => goToMove(-1));
+  $('#btn-end').on('click', () => { if (currentOpening) goToMove(activeMoves().length - 1); });
+  $('#btn-review-misses').on('click', startQuizMistakeReview);
+
+  // Opening line selector
+  $(document).on('click', '.line-btn', function () {
+    const lineId = $(this).attr('data-line');
+    if (lineId && lineId !== currentLineId) switchOpeningLine(lineId);
+  });
+
+  // Flip board
+  $('#btn-flip').on('click', function () {
+    if (!currentOpening) return;
+    boardFlipped = !boardFlipped;
+    board.flip();
+  });
+
+  // Mode toggle
+  $('#btn-study').on('click', () => setMode('study'));
+  $('#btn-quiz').on('click', () => { if (currentOpening) setMode('quiz'); });
+  $('#btn-explore').on('click', () => setMode('explore'));
+  }
+
+  function bindCoachEvents() {
+
+  // ─── Header nav (Library / Coach) ───────
+  $('#nav-library').on('click', () => switchView('library'));
+  $('#nav-coach').on('click', () => switchView('coach'));
+
+  // ─── Coach settings ─────────────────────
+  $('#coach-strength').on('input', function() {
+    coachEngineElo = parseInt($(this).val(), 10);
+    $('#coach-strength-value').text(coachEngineElo);
+    $('#coach-strength-tier').text(strengthTierLabel(coachEngineElo));
+  });
+
+  $('.side-toggle button').on('click', function() {
+    $('.side-toggle button').removeClass('active');
+    $(this).addClass('active');
+    const side = $(this).data('side');
+    coachUserSide = side; // 'white' | 'black' | 'random'
+  });
+
+  $('#coach-fen').on('input', function() {
+    $('#coach-fen-error').hide();
+  });
+
+  $('#btn-coach-login').on('click', function() {
+    sendCoachLoginLink().catch(handleCoachDbError);
+  });
+  $('#coach-auth-email').on('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      sendCoachLoginLink().catch(handleCoachDbError);
+    }
+  });
+  $('#btn-coach-logout').on('click', function() {
+    signOutCoach().catch(handleCoachDbError);
+  });
+  $('#btn-coach-sync').on('click', async function() {
+    if (!hasCoachDbSession()) {
+      setCoachDbStatus('Sign in to sync games.');
+      return;
+    }
+    setCoachDbStatus('Syncing...');
+    const [insightsResult, gameResult] = await Promise.allSettled([
+      coachSync.loadInsights(),
+      coachSync.saveGame(coachGameActive ? null : coachLastEndMsg)
+    ]);
+    const insightError = insightsResult.status === 'rejected' ? insightsResult.reason : null;
+    const gameError = gameResult.status === 'rejected' ? gameResult.reason : null;
+    if (insightError && gameError) {
+      setCoachDbStatus('Sync failed: ' + ((gameError && gameError.message) || (insightError && insightError.message) || 'Unknown error'));
+    } else if (insightError) {
+      setCoachDbStatus('Game saved, insights failed: ' + ((insightError && insightError.message) || 'Unknown error'));
+    } else if (gameError) {
+      setCoachDbStatus('Insights loaded, game save failed: ' + ((gameError && gameError.message) || 'Unknown error'));
+    } else {
+      setCoachDbStatus('Game and insights synced.');
+    }
+  });
+
+  // Lifetime stats reset.
+  $('#btn-coach-lifetime-reset').on('click', function() {
+    if (!confirm('Reset all lifetime stats? This cannot be undone.')) return;
+    saveLifetime(emptyLifetime());
+    renderLifetime();
+  });
+
+  $('#btn-coach-insights-reset').on('click', function() {
+    if (!confirm('Reset coach insights for this browser? This cannot be undone.')) return;
+    clearInsights();
+    renderInsights();
+  });
+
+  $(document).on('click', '.practice-load', function() {
+    const fen = $(this).attr('data-fen') || '';
+    const side = $(this).attr('data-side') === 'black' ? 'black' : 'white';
+    if (!fen || !isValidFen(fen)) {
+      setCoachStatus('Practice position is no longer valid.');
+      return;
+    }
+    $('#coach-fen').val(fen);
+    $('.side-toggle button').removeClass('active');
+    $('.side-toggle button[data-side="' + side + '"]').addClass('active');
+    coachUserSide = side;
+    startCoachGame();
+    setCoachStatus('Practice position loaded. Find the best move.');
+  });
+
+  // Sound toggle — restore prior preference, persist on change. The first
+  // change is also a user gesture so we can prime the AudioContext here.
+  coachSoundEnabled = readSoundPref();
+  $('#coach-sound-toggle').prop('checked', coachSoundEnabled);
+  $('#coach-sound-toggle').on('change', function() {
+    coachSoundEnabled = this.checked;
+    writeSoundPref(coachSoundEnabled);
+    if (coachSoundEnabled) {
+      // Prime the audio context with a quiet wood-tap preview so a real
+      // sound fires immediately on the next move.
+      const ctx = ensureAudioCtx();
+      if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+      playWoodTap({ bodyFreq: 220, bodyEnd: 130, bodyGain: 0.018, clickGain: 0.014 });
+    }
+  });
+
+  $('#btn-coach-newgame').on('click', function() {
+    startCoachGame();
+  });
+
+  $(document).on('click', '#btn-coach-retry-opponent', function() {
+    if (!coachMode || !coachGameActive || !coachGame) return;
+    if (coachIsUserTurn()) {
+      setCoachStatus('Your move.');
+      return;
+    }
+    coachOpponentRespond();
+  });
+
+  $('#btn-coach-resign').on('click', function() {
+    if (!coachGameActive) return;
+    CoachController.setPhase('ended');
+    candidateRequestId++;
+    clearPremove();
+    coachGameActive = false;
+    coachEndedAt = Date.now();
+    const loser = coachUserColor() === 'white' ? 'White' : 'Black';
+    const winner = loser === 'White' ? 'Black' : 'White';
+    const msg = `Resigned — ${winner} wins.`;
+    setCoachStatus(msg);
+    updateCoachControlsState();
+    coachLastEndMsg = msg;
+    saveCoachState();
+    coachSync.saveGame(msg).catch(handleCoachDbError);
+    rollGameIntoLifetime();
+    // User-initiated — keep it snappy but still buffer with a small beat + animation.
+    scheduleSummaryReveal(msg, 350);
+  });
+
+  // Coach: flip board
+  $('#btn-coach-flip').on('click', function() {
+    if (!coachBoard) return;
+    coachBoardFlipped = !coachBoardFlipped;
+    coachBoard.flip();
+  });
+
+  // Coach: take back (undo user move + opponent reply if present)
+  $('#btn-coach-takeback').on('click', function() {
+    if (!coachMode || !coachGame) return;
+    engineClient.cancel();
+    const removedReview = coachLastReview;
+    candidateRequestId++;
+    clearPremove();
+    // Take back un-ends the game; future game-over should roll lifetime again.
+    coachLifetimeRolledForThisGame = false;
+    // If the game just ended and the post-game summary is pending, abort it —
+    // taking back un-ends the game.
+    if (coachSummaryTimer) { clearTimeout(coachSummaryTimer); coachSummaryTimer = null; }
+    $('#coach-status').removeClass('status-ended');
+    // Undo opponent reply if it was played
+    if (coachLastReview && coachGame.fen() !== coachLastReview.fenAfter) {
+      coachGame.undo();
+    }
+    // Undo user move
+    coachGame.undo();
+    // Roll back stats
+    if (coachLastReview && coachStats) {
+      coachStats.moves = Math.max(0, coachStats.moves - 1);
+      coachStats[coachLastReview.tier] = Math.max(0, (coachStats[coachLastReview.tier] || 0) - 1);
+    }
+    coachLastReview = null;
+    coachThinking = false;
+    coachGameActive = true;
+    CoachController.setPhase('userTurn');
+    coachReviewCursor = null;
+    if (coachBoard) coachBoard.position(coachGame.fen());
+    updateCapturedDisplay(coachGame.fen());
+    // Also remove the rolled-back review from the log so rolling accuracy and
+    // the move list's tier coloring reflect the takeback.
+    if (coachReviewLog && coachReviewLog.length > 0) coachReviewLog.pop();
+    $('#coach-review').hide();
+    $('#threats-section').hide();
+    $('#candidates-section').hide();
+    updateCoachSummary();
+    updateMoveList();
+    updateOpeningLabel();
+    setCoachStatus('Your move.');
+    updateCoachControlsState();
+    saveCoachState();
+    coachSync.deleteMove(removedReview).catch(handleCoachDbError);
+  });
+
+  // Coach: show best — replay the best move instead of the user's
+  $('#btn-coach-showbest').on('click', function() {
+    if (!coachMode || !coachGame || !coachLastReview || !coachLastReview.bestUci) return;
+    engineClient.cancel();
+    const prev = coachLastReview;
+    // Undo opponent reply (if played) + user move
+    if (coachGame.fen() !== prev.fenAfter) coachGame.undo();
+    coachGame.undo();
+    // Play best move
+    const bu = prev.bestUci;
+    coachGame.move({ from: bu.slice(0, 2), to: bu.slice(2, 4), promotion: bu[4] || undefined });
+    candidateRequestId++;
+    const newFenAfter = coachGame.fen();
+    // Adjust stats: convert prior classification to 'best'
+    if (coachStats) {
+      coachStats[prev.tier] = Math.max(0, (coachStats[prev.tier] || 0) - 1);
+      coachStats.best = (coachStats.best || 0) + 1;
+    }
+    if (coachBoard) coachBoard.position(newFenAfter);
+    updateCapturedDisplay(newFenAfter);
+    renderCoachReview({
+      tier: 'best', label: 'Best move', emoji: '★',
+      loss: 0,
+      bestSan: prev.bestSan,
+      userSan: prev.bestSan,
+      pvSan: prev.pvSan
+    });
+    // Keep a review pointer so take-back can roll back cleanly
+    coachLastReview = {
+      tier: 'best',
+      fenBefore: prev.fenBefore,
+      fenAfter: newFenAfter,
+      userUci: prev.bestUci,
+      bestUci: prev.bestUci,
+      bestSan: prev.bestSan
+    };
+    // Also fix the rolling review log so tier coloring reflects the swap.
+    if (coachReviewLog && coachReviewLog.length > 0) {
+      const last = coachReviewLog[coachReviewLog.length - 1];
+      last.tier = 'best';
+      last.userSan = prev.bestSan;
+      last.userUci = prev.bestUci;
+      last.fenAfter = newFenAfter;
+      last.loss = 0;
+      last.insightTags = [];
+      coachSync.saveMove(last).catch(handleCoachDbError);
+    }
+    updateCoachSummary();
+    updateMoveList();
+    updateOpeningLabel();
+    CoachController.setPhase('opponentThinking');
+    setCoachStatus('Opponent thinking…');
+    updateCoachControlsState();
+    saveCoachState();
+    if (coachGame.game_over()) { coachHandleGameOver(); return; }
+    coachOpponentRespond();
+  });
+
+  // Coach: show top-3 candidate moves
+  $('#btn-coach-candidates').on('click', function() {
+    if (!coachMode || !coachGame) return;
+    if (coachIsReviewing()) return;
+    showCandidates();
+  });
+
+  // Coach: history navigation
+  $('#btn-coach-prev').on('click', function() {
+    if (!coachGame) return;
+    const total = coachGame.history().length;
+    const cur = coachReviewCursor === null ? total : coachReviewCursor;
+    if (cur > 0) coachGotoPly(cur - 1);
+  });
+  $('#btn-coach-next').on('click', function() {
+    if (!coachGame) return;
+    const total = coachGame.history().length;
+    const cur = coachReviewCursor === null ? total : coachReviewCursor;
+    if (cur < total) coachGotoPly(cur + 1);
+  });
+  $('#btn-coach-live').on('click', function() {
+    if (!coachGame) return;
+    coachGotoLive();
+  });
+
+  // Generic clipboard helper used by every Copy * button in coach mode.
+  async function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+    throw new Error('Clipboard API unavailable');
+  }
+  // Coach: Copy PGN to clipboard
+  $('#btn-coach-copypgn').on('click', async function() {
+    const $btn = $(this);
+    const pgn = coachGetPgn();
+    if (!pgn) return;
+    try {
+      await copyToClipboard(pgn);
+      $btn.addClass('copied').text('Copied!');
+      setTimeout(() => $btn.removeClass('copied').text('Copy PGN'), 1500);
+    } catch (e) {
+      $btn.text('Copy unavailable');
+      setTimeout(() => $btn.text('Copy PGN'), 1500);
+    }
+  });
+  // Coach: Copy FEN of the position currently displayed (respects review cursor).
+  $('#btn-coach-copyfen').on('click', async function() {
+    const $btn = $(this);
+    if (!coachGame) return;
+    let fen;
+    if (coachReviewCursor !== null) {
+      // Build a chess.js instance up to the cursor ply to read its FEN.
+      const tmp = new Chess(coachStartFen || undefined);
+      const sans = coachGame.history();
+      for (let i = 0; i < coachReviewCursor && i < sans.length; i++) tmp.move(sans[i]);
+      fen = tmp.fen();
+    } else {
+      fen = coachGame.fen();
+    }
+    try {
+      await copyToClipboard(fen);
+      $btn.addClass('copied').text('Copied!');
+      setTimeout(() => $btn.removeClass('copied').text('Copy FEN'), 1500);
+    } catch (e) {
+      $btn.text('Copy unavailable');
+      setTimeout(() => $btn.text('Copy FEN'), 1500);
+    }
+  });
+
+  // Coach: click a ply in the move list to jump to that position.
+  $(document).on('click', '#movelist .ply', function() {
+    const ply = parseInt($(this).attr('data-ply'), 10);
+    if (!isNaN(ply)) coachGotoPly(ply);
+  });
+
+  // Coach: click anywhere on the board to cancel a queued premove. Only fires
+  // when no drag is in progress (a real drop fires onDrop instead).
+  $(document).on('mousedown touchstart', '#coachBoard', function() {
+    if (coachPremove) clearPremove();
+  });
+
+  // Coach: keyboard shortcuts for history navigation.
+  // ← previous ply, → next ply, End returns to the live position. Only
+  // fire in coach mode and never while the user is typing in a form field.
+  $(document).on('keydown', function(e) {
+    if (!coachMode || !coachGame) return;
+    // Ignore if the user is typing (inputs, textareas, contenteditable).
+    const tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === 'ArrowLeft') {
+      const total = coachGame.history().length;
+      const cur = coachReviewCursor === null ? total : coachReviewCursor;
+      if (cur > 0) { e.preventDefault(); coachGotoPly(cur - 1); }
+    } else if (e.key === 'ArrowRight') {
+      const total = coachGame.history().length;
+      const cur = coachReviewCursor === null ? total : coachReviewCursor;
+      if (cur < total) { e.preventDefault(); coachGotoPly(cur + 1); }
+    } else if (e.key === 'End') {
+      if (coachIsReviewing()) { e.preventDefault(); coachGotoLive(); }
+    } else if (e.key === 'Home') {
+      if (coachGame.history().length > 0) { e.preventDefault(); coachGotoPly(0); }
+    }
+  });
+
+  // Summary overlay buttons
+  $('#btn-summary-newgame').on('click', function() {
+    $('#summary-overlay').hide();
+    startCoachGame();
+  });
+  $('#btn-summary-close').on('click', function() {
+    $('#summary-overlay').hide();
+    updateCoachControlsState();
+  });
+  // Reopen the review summary once the game has ended.
+  $('#btn-coach-openreview').on('click', function() {
+    if (!coachLastEndMsg) return;
+    showPostGameSummary(coachLastEndMsg);
+  });
+  // Copy PGN from within the summary — shares logic with the move-list copy button.
+  $('#btn-summary-copypgn').on('click', async function() {
+    const $btn = $(this);
+    const pgn = coachGetPgn();
+    if (!pgn) return;
+    try {
+      await copyToClipboard(pgn);
+      $btn.text('Copied!');
+      setTimeout(() => $btn.text('Copy PGN'), 1500);
+    } catch (e) {
+      $btn.text('Copy unavailable');
+      setTimeout(() => $btn.text('Copy PGN'), 1500);
+    }
+  });
+  // Click a critical/best moment to close the overlay and jump to that position.
+  $(document).on('click', '.moment-row', function() {
+    const ply = parseInt(this.dataset.ply, 10);
+    if (!Number.isInteger(ply)) return;
+    $('#summary-overlay').hide();
+    coachGotoPly(ply);
+    // Surface the "Open review" button so the user can get back to the summary.
+    updateCoachControlsState();
+  });
+  // Allow pressing Escape to dismiss the summary overlay.
+  $(document).on('keydown.summary', function(e) {
+    if (e.key === 'Escape' && $('#summary-overlay').is(':visible')) {
+      $('#summary-overlay').hide();
+      updateCoachControlsState();
+    }
+  });
+  }
+
+  function bindExploreEvents() {
+
+  // Explore: database toggle
+  $('.db-btn').on('click', function() {
+    currentDb = $(this).data('db');
+    $('.db-btn').removeClass('active');
+    $(this).addClass('active');
+    if (exploreMode) fetchExploreData();
+  });
+
+  // Explore: token save
+  $('#btn-save-token').on('click', function() {
+    const token = $('#lichess-token-input').val().trim();
+    if (!token) {
+      $('#token-error').text('Paste a Lichess token first.').show();
+      $('#lichess-token-input').trigger('focus');
+      return;
+    }
+    $('#token-error').hide();
+    const $btn = $(this).prop('disabled', true).text('Checking…');
+    $.ajax({
+      url: 'https://explorer.lichess.ovh/lichess',
+      data: { fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', topGames: 0, recentGames: 0 },
+      dataType: 'json',
+      headers: { 'Authorization': 'Bearer ' + token },
+      success: function() {
+        $btn.prop('disabled', false).text('Connect');
+        if (!setLichessToken(token)) {
+          $('#token-error').text('Could not store token for this tab. Check browser storage settings.').show();
+          return;
+        }
+        showExploreTokenState();
+        fetchExploreData();
+      },
+      error: function(xhr) {
+        $btn.prop('disabled', false).text('Connect');
+        const msg = xhr.status === 401
+          ? 'Invalid token — check you copied it correctly.'
+          : 'Could not reach Lichess. Try again.';
+        $('#token-error').text(msg).show();
+      }
+    });
+  });
+
+  // Explore: disconnect Lichess
+  $('#btn-disconnect-lichess').on('click', function() {
+    clearLichessToken();
+    exploreCache.clear();
+    $('#lichess-token-input').val('');
+    showExploreTokenState();
+  });
+
+  // Explore: undo last move
+  $('#btn-explore-undo').on('click', function() {
+    if (!exploreMode || !exploreGame) return;
+    if (exploreGame.fen() === exploreStartFen) return; // already at start
+    exploreGame.undo();
+    board.position(exploreGame.fen());
+    fetchExploreData();
+  });
+
+  // Explore: reset to opening end position (or initial if no opening)
+  $('#btn-explore-reset').on('click', function() {
+    if (!exploreMode) return;
+    exploreGame = new Chess(exploreStartFen);
+    board.position(exploreStartFen);
+    fetchExploreData();
+  });
+  }
+
+  function bindGlobalInputEvents() {
+
+  // ─── SEARCH ─────────────────────────────
+  applySearch = function(q) {
+    q = (q || '').trim().toLowerCase();
+    const activeCat = $('.cat-tab.active').data('cat') || 'all';
+    let visibleCount = 0;
+    // When searching, ignore category filter and flatten view
+    $('.library > .library-section').each(function() {
+      const $sec = $(this);
+      let secVisible = 0;
+      $sec.find('.opening-btn').each(function() {
+        const id = $(this).data('id');
+        const op = OPENINGS.find(o => o.id === id);
+        const hay = (($(this).text() || '') + ' ' + (op ? op.moves.join(' ') : '')).toLowerCase();
+        const matchesQuery = !q || hay.includes(q);
+        const matchesCat = q ? true : (activeCat === 'all' || op?.category === activeCat);
+        const show = matchesQuery && matchesCat;
+        $(this).toggle(show);
+        if (show) { secVisible++; visibleCount++; }
+      });
+      $sec.toggle(secVisible > 0);
+    });
+    $('#library-empty').toggle(visibleCount === 0);
+    $('.cat-tabs').toggle(!q);
+    // Hide the SR due section while searching
+    if (q) $('#sr-due-section').hide();
+    else updateSRSidebar();
+  };
+  $('#library-search-input').on('input', function() { applySearch($(this).val()); });
+
+  // ─── SHARE LINK ─────────────────────────
+  $('#btn-share').on('click', function() {
+    const $btn = $(this);
+    navigator.clipboard.writeText(location.href).then(() => {
+      const orig = $btn.text();
+      $btn.text('Copied ✓').addClass('copied');
+      setTimeout(() => $btn.text(orig).removeClass('copied'), 1500);
+    });
+  });
+
+  // ─── KEYBOARD SHORTCUTS ─────────────────
+  $(document).on('keydown', function (e) {
+    if (e.key === 'Escape' && $('#promotion-picker').is(':visible')) {
+      e.preventDefault();
+      closePromotionPicker();
+      return;
+    }
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea') {
+      if (e.key === 'Escape') e.target.blur();
+      return;
+    }
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    // In coach view, only handle the flip shortcut; everything else is scoped to library
+    if (coachMode) {
+      if (e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        $('#btn-coach-flip').trigger('click');
+      }
+      return;
+    }
+
+    // Arrow keys: prev/next in study mode
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      if (quizMode || exploreMode) return;
+      e.preventDefault();
+      if (!$('#btn-next').prop('disabled')) goToMove(currentMoveIdx + 1);
+      return;
+    }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      if (quizMode || exploreMode) return;
+      e.preventDefault();
+      if (!$('#btn-prev').prop('disabled')) goToMove(currentMoveIdx - 1);
+      return;
+    }
+
+    const k = e.key.toLowerCase();
+    // Focus search
+    if (k === '/' ) { e.preventDefault(); $('#library-search-input').trigger('focus').select(); return; }
+    // Flip board
+    if (k === 'f') {
+      if (!currentOpening && !exploreMode) return;
+      e.preventDefault();
+      if (exploreMode) { boardFlipped = !boardFlipped; board.flip(); return; }
+      $('#btn-flip').trigger('click');
+      return;
+    }
+    // Reset
+    if (k === 'r') {
+      e.preventDefault();
+      if (exploreMode) { $('#btn-explore-reset').trigger('click'); return; }
+      if (quizMode) { setMode('quiz'); return; }
+      if (currentOpening) goToMove(-1);
+      return;
+    }
+    // Mode switch: 1=Study, 2=Quiz, 3=Explore
+    if (k === '1') { e.preventDefault(); setMode('study'); return; }
+    if (k === '2') { if (currentOpening) { e.preventDefault(); setMode('quiz'); } return; }
+    if (k === '3') { e.preventDefault(); setMode('explore'); return; }
+  });
+
+  // ─── TAP-TO-MOVE (mobile) ───────────────
+  function clearTapSelection() {
+    $('.square-55d63').removeClass('tap-selected tap-target');
+    tapSelected = null;
+  }
+  $(document).on('click', '#myBoard .square-55d63', function(e) {
+    // Only intercept taps in interactive modes (study has no interaction)
+    if (!quizMode && !exploreMode) return;
+    // If the drop already happened (pointerup after drag), chessboard will have already moved — don't interfere
+    const sq = $(this).data('square');
+    if (!sq) return;
+    const activeGame = exploreMode ? exploreGame : game;
+    if (!activeGame) return;
+
+    if (tapSelected && tapSelected !== sq) {
+      // Attempt move
+      if (exploreMode) {
+        const from = tapSelected;
+        if (requestPromotionChoice(exploreGame, from, sq, promotion => {
+          applyExploreMove(from, sq, promotion, { updateBoard: true });
+        }, true)) {
+          clearTapSelection();
+          return;
+        }
+        applyExploreMove(from, sq, 'q', { updateBoard: true });
+      } else {
+        // Quiz: delegate to handleDrop to reuse validation logic
+        const result = handleDrop(tapSelected, sq);
+        if (result !== 'snapback') {
+          // handleDrop already updated game; update board position
+          board.position(game.fen());
+        }
+      }
+      clearTapSelection();
+    } else if (tapSelected === sq) {
+      clearTapSelection();
+    } else {
+      // Select source if it has a piece of the side to move
+      const piece = activeGame.get(sq);
+      if (!piece) return;
+      const turn = activeGame.turn(); // 'w' or 'b'
+      if (piece.color !== turn) return;
+      clearTapSelection();
+      tapSelected = sq;
+      $(this).addClass('tap-selected');
+      // Highlight legal target squares
+      const moves = activeGame.moves({ square: sq, verbose: true });
+      moves.forEach(m => $('.square-' + m.to).addClass('tap-target'));
+    }
+  });
+
+  // Coach board: tap-to-move (scoped to #coachBoard)
+  $(document).on('click', '#coachBoard .square-55d63', function() {
+    if (!coachMode || !coachGameActive || !coachGame) return;
+    const sq = $(this).data('square');
+    if (!sq) return;
+    if (tapSelected && tapSelected !== sq) {
+      const from = tapSelected;
+      if (requestPromotionChoice(coachGame, from, sq, promotion => {
+        coachHandleUserMove(from, sq, promotion, { updateBoard: true }).then(() => {
+          if (coachBoard) coachBoard.position(coachGame.fen());
+        });
+      }, true)) {
+        clearTapSelection();
+        return;
+      }
+      coachHandleUserMove(from, sq, 'q', { updateBoard: true }).then(() => {
+        if (coachBoard) coachBoard.position(coachGame.fen());
+      });
+      clearTapSelection();
+    } else if (tapSelected === sq) {
+      clearTapSelection();
+    } else {
+      const piece = coachGame.get(sq);
+      if (!piece) return;
+      if (piece.color !== coachGame.turn()) return;
+      if (!coachIsUserTurn()) return;
+      clearTapSelection();
+      tapSelected = sq;
+      $(this).addClass('tap-selected');
+      const moves = coachGame.moves({ square: sq, verbose: true });
+      moves.forEach(m => $('.square-' + m.to).addClass('tap-target'));
+    }
+  });
+
+  // ─── SWIPE FOR PREV/NEXT (mobile, study only) ───
+  let touchStartX = null;
+  let touchStartY = null;
+  $('.board-area').on('touchstart', function(e) {
+    if (quizMode || exploreMode) return;
+    if (e.touches.length !== 1) return;
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  });
+  $('.board-area').on('touchend', function(e) {
+    if (touchStartX === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    touchStartX = touchStartY = null;
+    if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return;
+    if (quizMode || exploreMode) return;
+    if (dx < 0) { if (!$('#btn-next').prop('disabled')) goToMove(currentMoveIdx + 1); }
+    else { if (!$('#btn-prev').prop('disabled')) goToMove(currentMoveIdx - 1); }
+  });
+  }
+
+  // ─── SR SIDEBAR INIT ────────────────────
+  function hydrateFromUrl() {
+
+  // ─── HYDRATE FROM URL ───────────────────
+  const initial = readURL();
+  if (initial.view === 'coach') {
+    switchView('coach');
+  } else if (initial.opening) {
+    const op = OPENINGS.find(o => o.id === initial.opening);
+    if (op) {
+      loadOpening(op.id, initial.line || 'main');
+      if (initial.mode === 'quiz') setMode('quiz');
+      else if (initial.mode === 'explore') setMode('explore');
+      else if (!isNaN(initial.move) && initial.move >= 0) goToMove(initial.move);
+    }
+  } else if (initial.mode === 'explore') {
+    setMode('explore');
+  }
+  }
+
+  bindLibraryEvents();
+  bindCoachEvents();
+  bindExploreEvents();
+  bindGlobalInputEvents();
+  updateSRSidebar();
+  validateOpeningData();
+  hydrateFromUrl();
+});

@@ -4,17 +4,21 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
-const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 const errors = [];
 
 function requirePattern(pattern, message) {
-  if (!pattern.test(html)) errors.push(message);
+  if (!pattern.test(app)) errors.push(message);
 }
 
-requirePattern(/const libraryState\s*=/, 'global state must expose a libraryState namespace');
-requirePattern(/const coachState\s*=/, 'global state must expose a coachState namespace');
-requirePattern(/const syncState\s*=/, 'global state must expose a syncState namespace');
-requirePattern(/const uiState\s*=/, 'global state must expose a uiState namespace');
+function forbidPattern(pattern, message) {
+  if (pattern.test(app)) errors.push(message);
+}
+
+forbidPattern(/const libraryState\s*=/, 'dead libraryState namespace scaffolding should not remain');
+forbidPattern(/const coachState\s*=/, 'dead coachState namespace scaffolding should not remain');
+forbidPattern(/const syncState\s*=/, 'dead syncState namespace scaffolding should not remain');
+forbidPattern(/const uiState\s*=/, 'dead uiState namespace scaffolding should not remain');
 
 requirePattern(/const CoachController\s*=/, 'Coach move flow must have a CoachController boundary');
 requirePattern(/phase:\s*'idle'/, 'CoachController must track an explicit phase');
@@ -30,7 +34,11 @@ requirePattern(/saveGame\(endReason\)[\s\S]{0,120}updateRemoteCoachGame\(endReas
 requirePattern(/loadInsights\(opts\)[\s\S]{0,120}refreshRemoteInsights\(opts/, 'coachSync API must expose loadInsights');
 
 requirePattern(/const engineClient\s*=/, 'Stockfish wrapper must be named engineClient');
-requirePattern(/const engine\s*=\s*engineClient/, 'legacy engine references must be a compatibility alias');
+forbidPattern(/const engine\s*=\s*engineClient/, 'unused engine compatibility alias should not remain');
+forbidPattern(/function squaresAttackedBy\(/, 'unused squaresAttackedBy helper should not remain');
+forbidPattern(/function coachOpponentColorChar\(/, 'unused coachOpponentColorChar helper should not remain');
+forbidPattern(/const PIECE_START_COUNT\s*=/, 'unused PIECE_START_COUNT helper should not remain');
+forbidPattern(/document\.execCommand\(/, 'deprecated clipboard execCommand fallback should not remain');
 
 requirePattern(/function bindLibraryEvents\(\)/, 'event wiring must be split into bindLibraryEvents');
 requirePattern(/function bindCoachEvents\(\)/, 'event wiring must be split into bindCoachEvents');

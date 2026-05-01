@@ -5,22 +5,22 @@ const path = require('path');
 const vm = require('vm');
 
 const root = path.resolve(__dirname, '..');
-const htmlPath = path.join(root, 'index.html');
-const html = fs.readFileSync(htmlPath, 'utf8');
+const appPath = path.join(root, 'app.js');
+const app = fs.readFileSync(appPath, 'utf8');
 
-const start = html.indexOf('const OPENINGS = [');
+const start = app.indexOf('const OPENINGS = [');
 const endMarker = '// STATE';
-const end = html.indexOf(endMarker, start);
+const end = app.indexOf(endMarker, start);
 
 if (start === -1 || end === -1) {
-  console.error('Could not locate OPENINGS data in index.html');
+  console.error('Could not locate OPENINGS data in app.js');
   process.exit(1);
 }
 
-const code = html.slice(start, end) + '\nglobalThis.OPENINGS = OPENINGS;';
+const code = app.slice(start, end) + '\nglobalThis.OPENINGS = OPENINGS;';
 const context = {};
 vm.createContext(context);
-vm.runInContext(code, context, { filename: 'index.html' });
+vm.runInContext(code, context, { filename: 'app.js' });
 
 const openings = context.OPENINGS;
 const errors = [];

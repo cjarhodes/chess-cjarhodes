@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
-const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 const errors = [];
 
 function fail(message) {
@@ -12,7 +12,7 @@ function fail(message) {
 }
 
 function requirePattern(pattern, message) {
-  if (!pattern.test(html)) fail(message);
+  if (!pattern.test(app)) fail(message);
 }
 
 requirePattern(/failAll\s*\(/, 'engine must expose failAll for worker-level failures');
