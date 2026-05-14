@@ -13,7 +13,7 @@ Static single-page chess training app served at https://chess.cjarhodes.com.
 - **Auto-deploy:** push to `main` -> Vercel builds & deploys within ~30s
 
 ## Local preview
-This is a pure static page — open `index.html` directly in a browser, or serve the folder with any static server. In Claude Code, use `preview_start` to spin up a dev server for verification.
+This is a pure static page — open `index.html` directly in a browser, or serve the folder with any static server. In Codex, use `preview_start` to spin up a dev server for verification.
 
 ## Workflow
 1. Edit `index.html`

@@ -17,3 +17,7 @@ practice queue items, and theory cards:
 
 Only the anon public key belongs in `coach-config.js`. Do not put service-role
 keys or database passwords in this repo.
+
+Before deploying account sync, review the project's Authentication settings.
+Disable open signups unless public account creation is intentional, and keep the
+RLS policies in `supabase-schema.sql` in place for every client-writable table.
