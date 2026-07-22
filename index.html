@@ -20,7 +20,7 @@
       --surface: #2d221a;         /* umber-900 */
       --surface2: #433326;        /* umber-800 */
       --text: #f1ebe0;            /* parchment-50 */
-      --muted: #8b7868;           /* umber-400 */
+      --muted: #b09b88;           /* readable warm neutral; >= 4.5:1 on surface2 */
       --border: #3d3129;          /* rule-2 */
       --rule-1: #241d18;
       --rule-3: #514237;
@@ -51,6 +51,21 @@
       -moz-osx-font-smoothing: grayscale;
     }
     ::selection { background: #78202d; color: #fff8f0; }
+    :focus-visible {
+      outline: 2px solid var(--accent-soft);
+      outline-offset: 3px;
+    }
+    .sr-only {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
 
     /* ── HEADER ── */
     header {
@@ -180,6 +195,42 @@
     .mode-btn.active { background: var(--surface2); color: var(--text); font-weight: 500; }
     .mode-btn:not(.active):hover { color: var(--text); }
 
+    .mobile-library-toggle { display: none; }
+
+    .keyboard-move {
+      width: 440px;
+      max-width: 90vw;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      background: var(--surface);
+    }
+    .keyboard-move summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 0.72rem;
+      padding: 0.45rem 0.65rem;
+    }
+    .keyboard-move-form {
+      display: flex;
+      gap: 0.45rem;
+      padding: 0 0.65rem 0.65rem;
+    }
+    .keyboard-move-form input {
+      min-width: 0;
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.78rem;
+      padding: 0.45rem 0.55rem;
+    }
+    .keyboard-move-status {
+      padding: 0 0.65rem 0.65rem;
+      color: var(--muted);
+      font-size: 0.72rem;
+    }
+
     #board-wrap {
       position: relative;
     }
@@ -238,6 +289,7 @@
       align-items: center;
       gap: 0.45rem;
       width: 440px;
+      max-width: 100%;
       margin-top: 0.45rem;
     }
     .board-nav .ctrl-btn.nav { padding: 0.3rem 0.6rem; font-size: 0.85rem; min-width: 36px; }
@@ -967,6 +1019,7 @@
       overflow-y: auto;
     }
     .coach-board-area > * { flex-shrink: 0; }
+    #coachBoard { width: 440px; max-width: 100%; }
     .coach-panel {
       border-left: 1px solid var(--border);
       padding: 1.5rem 1.25rem;
@@ -1666,6 +1719,11 @@
       font-size: 0.85rem;
       cursor: pointer;
       transition: background 0.15s, border-color 0.15s;
+      width: 100%;
+      border-top: 0;
+      border-right: 0;
+      border-bottom: 0;
+      text-align: left;
     }
     .moment-row:hover { background: var(--surface); border-left-color: var(--highlight); }
     .moment-row.blunder { border-left-color: var(--accent); }
@@ -1751,6 +1809,9 @@
       .coach-panel { border-left: none; border-top: 1px solid var(--border); }
       .coach-board-area { padding: 1rem; }
       #coachBoard { width: 90vw; max-width: 440px; }
+      .coach-view.game-active .coach-board-area { order: 1; }
+      .coach-view.game-active .coach-settings { order: 2; }
+      .coach-view.game-active .coach-panel { order: 3; }
     }
     @media (max-width: 1100px) {
       .app { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; }
@@ -1765,6 +1826,45 @@
       .board-area { overflow-y: visible; padding: 1rem; }
       #myBoard { width: 90vw; max-width: 440px; }
       .feedback-bar, .progress-bar { width: 90vw; max-width: 440px; }
+      .mobile-library-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        align-self: center;
+        background: none;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        font: inherit;
+        font-size: 0.74rem;
+        padding: 0.45rem 0.75rem;
+        cursor: pointer;
+      }
+      .app.has-opening:not(.mobile-library-open) .library { display: none; }
+      .app.has-opening .board-area { order: 1; }
+      .app.has-opening .info-panel { order: 2; }
+      .app.has-opening .library { order: 3; }
+      .app.mobile-library-open .library { display: block; order: 1; }
+      .app.mobile-library-open .board-area { order: 2; }
+      .app.mobile-library-open .info-panel { order: 3; }
+    }
+    @media (max-width: 600px) {
+      header {
+        padding: 0.9rem 1rem;
+        gap: 0.65rem 1rem;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      header a.back { order: 1; font-size: 0.7rem; }
+      header h1 { order: 2; flex: 1; min-width: 0; white-space: nowrap; }
+      .top-nav {
+        order: 3;
+        flex: 0 0 100%;
+        width: 100%;
+        margin-left: 0;
+      }
+      .top-nav-btn { flex: 1; min-width: 0; }
+      .keyboard-move-form { flex-wrap: wrap; }
+      .keyboard-move-form input { flex-basis: 12rem; }
     }
   </style>
 </head>
@@ -1773,14 +1873,15 @@
 <header>
   <a class="back" href="https://cjarhodes.com">← cjarhodes.com</a>
   <h1>chess<span class="tld">.cjarhodes.com</span><span class="dot" aria-hidden="true"></span></h1>
-  <div class="top-nav" role="tablist">
-    <button class="top-nav-btn active" id="nav-library" role="tab" aria-selected="true">Library</button>
-    <button class="top-nav-btn" id="nav-coach" role="tab" aria-selected="false">Coach</button>
+  <div class="top-nav" role="tablist" aria-label="Application sections">
+    <button class="top-nav-btn active" id="nav-library" role="tab" aria-selected="true" aria-controls="library-view" tabindex="0">Library</button>
+    <button class="top-nav-btn" id="nav-coach" role="tab" aria-selected="false" aria-controls="coach-view" tabindex="-1">Coach</button>
   </div>
 </header>
 
-<div id="promotion-picker" class="promotion-picker" role="dialog" aria-modal="true" aria-hidden="true">
-  <div class="promotion-panel" aria-label="Choose promotion piece">
+<div id="promotion-picker" class="promotion-picker" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="promotion-title">
+  <div class="promotion-panel">
+    <h2 id="promotion-title" class="sr-only">Choose promotion piece</h2>
     <button type="button" class="promotion-choice" data-promotion="q" aria-label="Promote to queen" title="Queen"></button>
     <button type="button" class="promotion-choice" data-promotion="r" aria-label="Promote to rook" title="Rook"></button>
     <button type="button" class="promotion-choice" data-promotion="b" aria-label="Promote to bishop" title="Bishop"></button>
@@ -1788,12 +1889,13 @@
   </div>
 </div>
 
-<div class="app">
+<div class="app" id="library-view" role="tabpanel" aria-labelledby="nav-library" aria-hidden="false">
 
   <!-- ── LIBRARY SIDEBAR ── -->
   <aside class="library" id="library">
     <!-- Search -->
     <div class="library-search">
+      <label class="sr-only" for="library-search-input">Search openings</label>
       <input type="search" id="library-search-input" placeholder="Search openings, ECO, moves…" autocomplete="off" />
     </div>
     <div id="library-empty" class="library-empty" style="display:none">No openings match.</div>
@@ -1857,21 +1959,32 @@
 
   <!-- ── BOARD AREA ── -->
   <main class="board-area">
-    <div class="mode-toggle">
-      <button class="mode-btn active" id="btn-study">Study</button>
-      <button class="mode-btn" id="btn-quiz">Quiz</button>
-      <button class="mode-btn" id="btn-explore">Explore</button>
+    <button type="button" class="mobile-library-toggle" id="btn-mobile-openings" aria-controls="library" aria-expanded="false">Change opening</button>
+    <div class="mode-toggle" role="group" aria-label="Training mode">
+      <button class="mode-btn active" id="btn-study" aria-pressed="true">Study</button>
+      <button class="mode-btn" id="btn-quiz" aria-pressed="false">Quiz</button>
+      <button class="mode-btn" id="btn-explore" aria-pressed="false">Explore</button>
     </div>
 
-    <div id="board-wrap">
-      <div id="myBoard"></div>
+    <div id="board-wrap" role="group" aria-label="Opening board">
+      <div id="myBoard" role="img" aria-label="No opening selected"></div>
       <div id="board-placeholder" class="board-empty-state">
         <div class="icon">♟</div>
         <p>Select an opening to begin</p>
       </div>
     </div>
 
-    <div class="feedback-bar" id="feedback-bar"></div>
+    <details class="keyboard-move" id="library-keyboard-move">
+      <summary>Keyboard move</summary>
+      <form class="keyboard-move-form" id="library-keyboard-move-form">
+        <label class="sr-only" for="library-keyboard-move-input">Enter a move in SAN or coordinate notation</label>
+        <input id="library-keyboard-move-input" autocomplete="off" spellcheck="false" placeholder="e4 or e2e4" />
+        <button type="submit" class="ctrl-btn">Play move</button>
+      </form>
+      <div class="keyboard-move-status" id="library-keyboard-move-status" aria-live="polite"></div>
+    </details>
+
+    <div class="feedback-bar" id="feedback-bar" role="status" aria-live="polite"></div>
 
     <div class="board-controls">
       <button class="ctrl-btn" id="btn-start" disabled title="To start">«</button>
@@ -1932,9 +2045,9 @@
         <div class="opening-tagline" id="explore-tagline">Move freely — see what real players do</div>
       </div>
 
-      <div class="explore-db-toggle">
-        <button class="db-btn active" data-db="lichess">Lichess Games</button>
-        <button class="db-btn" data-db="masters">Masters Only</button>
+      <div class="explore-db-toggle" role="group" aria-label="Opening Explorer database">
+        <button class="db-btn active" data-db="lichess" aria-pressed="true">Lichess Games</button>
+        <button class="db-btn" data-db="masters" aria-pressed="false">Masters Only</button>
       </div>
 
       <!-- Token setup (shown when no token saved) -->
@@ -1943,11 +2056,12 @@
         <div class="token-setup">
           <p>Opening Explorer data requires a free Lichess API token. It stays in this browser tab only.</p>
           <p><a href="https://lichess.org/account/oauth/token/create?description=Chess+Opening+Library" target="_blank" rel="noopener noreferrer">→ Generate a token on Lichess ↗</a><br><small style="opacity:0.6;">No scopes needed — just click Create.</small></p>
-          <div class="token-input-row">
+          <form class="token-input-row" id="lichess-token-form">
+            <label class="sr-only" for="lichess-token-input">Lichess personal access token</label>
             <input type="password" class="token-input" id="lichess-token-input" placeholder="lip_..." autocomplete="off" spellcheck="false" />
-            <button class="ctrl-btn" id="btn-save-token">Connect</button>
-          </div>
-          <div class="token-error" id="token-error" style="display:none;"></div>
+            <button type="submit" class="ctrl-btn" id="btn-save-token">Connect</button>
+          </form>
+          <div class="token-error" id="token-error" role="alert" style="display:none;"></div>
         </div>
       </div>
 
@@ -1968,7 +2082,7 @@
 </div>
 
 <!-- ── COACH VIEW (standalone page) ── -->
-<section class="coach-view" id="coach-view" style="display:none;" aria-hidden="true">
+<section class="coach-view" id="coach-view" role="tabpanel" aria-labelledby="nav-coach" style="display:none;" aria-hidden="true">
 
   <!-- SETTINGS -->
   <aside class="coach-settings">
@@ -1984,10 +2098,11 @@
           <div class="auth-status">Local mode</div>
         </div>
         <div id="coach-auth-form" style="display:none;">
-          <div class="auth-row">
+          <form class="auth-row" id="coach-auth-email-form">
+            <label class="sr-only" for="coach-auth-email">Email address</label>
             <input type="email" class="auth-input" id="coach-auth-email" placeholder="email@example.com" autocomplete="email" />
-            <button class="ctrl-btn" id="btn-coach-login">Send link</button>
-          </div>
+            <button type="submit" class="ctrl-btn" id="btn-coach-login">Send link</button>
+          </form>
         </div>
         <div id="coach-auth-session" style="display:none;">
           <div class="auth-user">Signed in as <strong id="coach-auth-user">-</strong></div>
@@ -1996,13 +2111,13 @@
             <button class="ctrl-btn" id="btn-coach-logout">Sign out</button>
           </div>
         </div>
-        <div class="auth-status" id="coach-auth-status"></div>
+        <div class="auth-status" id="coach-auth-status" role="status" aria-live="polite"></div>
       </div>
     </div>
 
     <div class="field-group">
       <div class="strength-row">
-        <span class="strength-label">Opponent level</span>
+        <label class="strength-label" id="coach-strength-label" for="coach-strength">Opponent level</label>
         <span class="strength-value" id="coach-strength-value">1200</span>
       </div>
       <input type="range" class="strength-slider" id="coach-strength"
@@ -2011,16 +2126,16 @@
     </div>
 
     <div class="field-group">
-      <div class="section-label">Play as</div>
-      <div class="side-toggle" role="tablist">
-        <button class="active" data-side="white" role="tab">White</button>
-        <button data-side="black" role="tab">Black</button>
-        <button data-side="random" role="tab">Random</button>
+      <div class="section-label" id="coach-side-label">Play as</div>
+      <div class="side-toggle" role="group" aria-labelledby="coach-side-label">
+        <button type="button" class="active" data-side="white" aria-pressed="true">White</button>
+        <button type="button" data-side="black" aria-pressed="false">Black</button>
+        <button type="button" data-side="random" aria-pressed="false">Random</button>
       </div>
     </div>
 
     <div class="field-group">
-      <div class="section-label">Starting position</div>
+      <label class="section-label" for="coach-fen">Starting position</label>
       <textarea class="fen-input" id="coach-fen" rows="3"
                 placeholder="FEN (optional) — leave empty for the initial position"></textarea>
       <div class="fen-error" id="coach-fen-error" style="display:none;"></div>
@@ -2046,13 +2161,22 @@
       <span class="captured-pieces" id="captured-top-pieces"></span>
       <span class="material-lead" id="captured-top-lead"></span>
     </div>
-    <div id="coachBoard-wrap" style="position:relative;">
-      <div id="coachBoard" style="width:440px;"></div>
+    <div id="coachBoard-wrap" style="position:relative;" role="group" aria-label="Coach board">
+      <div id="coachBoard" role="img" aria-label="Starting position"></div>
       <div id="coachBoard-placeholder" class="board-empty-state" style="display:none;">
         <div class="icon">♟</div>
         <p>Start a new game to begin</p>
       </div>
     </div>
+    <details class="keyboard-move" id="coach-keyboard-move">
+      <summary>Keyboard move</summary>
+      <form class="keyboard-move-form" id="coach-keyboard-move-form">
+        <label class="sr-only" for="coach-keyboard-move-input">Enter a move in SAN or coordinate notation</label>
+        <input id="coach-keyboard-move-input" autocomplete="off" spellcheck="false" placeholder="e4 or e2e4" />
+        <button type="submit" class="ctrl-btn">Play move</button>
+      </form>
+      <div class="keyboard-move-status" id="coach-keyboard-move-status" aria-live="polite"></div>
+    </details>
     <div class="captured-bar" id="captured-bottom">
       <span class="captured-pieces" id="captured-bottom-pieces"></span>
       <span class="material-lead" id="captured-bottom-lead"></span>
@@ -2075,7 +2199,7 @@
 
   <!-- COACH PANEL -->
   <aside class="coach-panel">
-    <div id="coach-status" class="coach-status">Set a level and start a new game.</div>
+    <div id="coach-status" class="coach-status" role="status" aria-live="polite">Set a level and start a new game.</div>
     <div id="coach-premove-hint" class="coach-premove-hint" style="display:none;"></div>
 
     <div id="coach-review" class="coach-review" style="display:none">
@@ -2190,8 +2314,8 @@
 </section>
 
 <!-- Post-game summary overlay -->
-<div class="summary-overlay" id="summary-overlay" style="display:none;" role="dialog" aria-modal="true">
-  <div class="summary-card">
+<div class="summary-overlay" id="summary-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="summary-title" aria-hidden="true">
+  <div class="summary-card" tabindex="-1">
     <div class="summary-title" id="summary-title">Game over</div>
     <div class="summary-subtitle" id="summary-subtitle" style="display:none;"></div>
 

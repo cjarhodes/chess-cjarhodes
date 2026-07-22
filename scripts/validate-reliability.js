@@ -34,6 +34,16 @@ requirePattern(/Account sync cannot persist in this browser session/, 'Supabase 
 requirePattern(/Promise\.allSettled/, 'manual sync must aggregate partial failures');
 requirePattern(/Game saved, insights failed|Insights loaded, game save failed/, 'manual sync must report partial sync failures');
 requirePattern(/Paste a Lichess token first/, 'empty Lichess token submit must show feedback');
+requirePattern(/function invalidateCoachAsyncWork[\s\S]{0,500}engineClient\.cancel/, 'position resets must cancel active and queued engine work');
+requirePattern(/generation !== coachGameGeneration|coachGameGeneration !== generation/, 'async Coach work must reject stale game generations');
+requirePattern(/const gameRef = coachGame/, 'move analysis must retain and verify the game object it started against');
+requirePattern(/function createCoachGameId/, 'Coach games must have stable local ids');
+requirePattern(/rollups:\s*\{\}/, 'lifetime stats must track per-game rollups');
+requirePattern(/function unrollGameFromLifetime/, 'takeback must be able to remove a completed-game lifetime rollup');
+requirePattern(/if \(coachLifetimeRolledForThisGame\) unrollGameFromLifetime\(\)/, 'takeback must unroll completed lifetime stats before resuming');
+requirePattern(/#lichess-token-form'\)\.on\('submit'/, 'Lichess token entry must use form submission');
+requirePattern(/#coach-auth-email-form'\)\.on\('submit'/, 'Coach sign-in must use form submission');
+requirePattern(/navigator\.clipboard[\s\S]{0,300}\.catch/, 'share-link clipboard failures must be handled');
 
 if (errors.length) {
   console.error(errors.join('\n'));

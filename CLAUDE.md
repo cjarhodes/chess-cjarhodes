@@ -3,9 +3,10 @@
 Static single-page chess training app served at https://chess.cjarhodes.com.
 
 ## Stack
-- Single `index.html` (no build step, no package manager, no dependencies)
-- Client-side only — uses chessboard.js + chess.js from CDN
+- Static `index.html` + `app.js` (no build step or package manager)
+- Client-side only — chessboard.js, chess.js, jQuery, Supabase JS, and Stockfish are vendored locally
 - Lichess Opening Explorer API for Explore mode (user supplies their own Lichess Personal Access Token, stored in localStorage)
+- Optional Supabase account sync; Coach remains fully usable in local-only mode
 
 ## Hosting
 - **Vercel project:** `chess-cjarhodes`
@@ -13,11 +14,18 @@ Static single-page chess training app served at https://chess.cjarhodes.com.
 - **Auto-deploy:** push to `main` -> Vercel builds & deploys within ~30s
 
 ## Local preview
-This is a pure static page — open `index.html` directly in a browser, or serve the folder with any static server. In Claude Code, use `preview_start` to spin up a dev server for verification.
+Serve the folder over HTTP so workers and browser security rules behave like production:
+
+```sh
+python3 -m http.server 4173 --bind 127.0.0.1
+```
+
+Then open `http://127.0.0.1:4173/`.
 
 ## Workflow
-1. Edit `index.html`
-2. Verify locally via `preview_start` + `preview_snapshot`/`preview_screenshot`
-3. Commit to `main`
-4. Push — Vercel auto-deploys to chess.cjarhodes.com
-5. Confirm deployment success via the Vercel MCP (`list_deployments`)
+1. Edit `index.html`, `app.js`, or the relevant vendored/config file.
+2. Run `node --check app.js` and every `scripts/validate-*.js` validator.
+3. Verify Library and Coach in a desktop and 390px-wide browser. Include a move followed immediately by New Game to catch stale engine output.
+4. For schema changes, add a Supabase migration and run a local reset or linked `supabase db push`.
+5. Commit and push to `main`; Vercel auto-deploys to chess.cjarhodes.com.
+6. Confirm the deployment and smoke-test the custom domain.

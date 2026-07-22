@@ -1209,6 +1209,8 @@ let quizReviewQueue = [];
 let quizReviewCursor = 0;
 let tapSelected = null;      // square selected for tap-to-move, or null
 let pendingPromotionChoice = null;
+let promotionReturnFocus = null;
+let summaryReturnFocus = null;
 
 // Coach mode (standalone page)
 let appView = 'library';           // 'library' | 'coach'
@@ -1224,6 +1226,8 @@ let coachEngineElo = 1200;         // displayed opponent level
 let coachBoard = null;             // separate Chessboard.js instance
 let coachBoardFlipped = false;
 let coachGameActive = false;       // true once user hits New Game
+let coachGameGeneration = 0;       // invalidates async work from replaced/rewound games
+let coachLocalGameId = null;       // stable id for idempotent local lifetime rollups
 let coachEndedAt = null;           // timestamp of game end, null while playing
 let coachReviewCursor = null;      // null = live; integer = ply index displayed on the board
 let coachLastEndMsg = null;        // headline from last game-over, used to reopen the review
@@ -1231,6 +1235,8 @@ let candidateRequestId = 0;        // invalidates stale async candidate searches
 let threatRequestId = 0;           // invalidates stale async threat scans
 let coachPremove = null;           // queued premove while opponent is thinking
 let coachRemoteGameId = null;      // Supabase coach_games.id for current game
+let coachRemoteGamePromise = null;
+let coachRemoteGamePromiseGeneration = null;
 let coachAuthUser = null;
 let coachDbClient = null;
 let coachDbInitStarted = false;
@@ -1239,6 +1245,7 @@ let coachRemoteInsightEntries = null;
 let coachDbStatus = 'local';
 let remoteGameUpdateTimer = null;
 let pendingRemoteGameEndReason = null;
+let pendingRemoteGameGeneration = null;
 const REMOTE_GAME_SYNC_DEBOUNCE_MS = 2500;
 
 const CoachController = {
@@ -1254,7 +1261,7 @@ const CoachController = {
 // local-first and uses the existing localStorage insights.
 window.COACH_SUPABASE_CONFIG = window.COACH_SUPABASE_CONFIG || {
   url: '',
-  anonKey: ''
+  publishableKey: ''
 };
 
 // ─────────────────────────────────────────────
@@ -1265,6 +1272,13 @@ window.COACH_SUPABASE_CONFIG = window.COACH_SUPABASE_CONFIG || {
 // game or dismisses the review summary after a game ends.
 const COACH_STATE_KEY = 'coach:state:v1';
 const COACH_STATE_BACKUP_KEY = 'coach:state:corrupt:v1';
+
+function createCoachGameId() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+    return window.crypto.randomUUID();
+  }
+  return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 function saveCoachState() {
   try {
@@ -1281,6 +1295,7 @@ function saveCoachState() {
       startFen: coachStartFen,
       userSide: coachUserSide,
       engineElo: coachEngineElo,
+      localGameId: coachLocalGameId,
       remoteGameId: coachRemoteGameId,
       reviewLog: coachReviewLog,
       stats: coachStats,
@@ -1338,6 +1353,8 @@ function tryRestoreCoachGame() {
     if (s.pgn) g.load_pgn(s.pgn, { sloppy: true });
     coachGame = g;
     coachStartFen = s.startFen || g.fen();
+    coachGameGeneration++;
+    coachLocalGameId = s.localGameId || createCoachGameId();
     coachUserSide = s.userSide || 'white';
     coachEngineElo = typeof s.engineElo === 'number' ? s.engineElo : 1200;
     coachRemoteGameId = s.remoteGameId || null;
@@ -1352,16 +1369,19 @@ function tryRestoreCoachGame() {
     // If we're restoring an ended game, lifetime totals were already rolled
     // when the game ended — don't double-count if the user opens the review.
     coachLifetimeRolledForThisGame = !!s.ended;
+    if (s.ended) registerRestoredLifetimeRollup();
     // Sync slider + tier label.
     $('#coach-strength').val(coachEngineElo);
     $('#coach-strength-value').text(coachEngineElo);
     $('#coach-strength-tier').text(strengthTierLabel(coachEngineElo));
     // Sync side toggle.
     $('.side-toggle button').removeClass('active');
-    $('.side-toggle button[data-side="' + coachUserSide + '"]').addClass('active');
+    $('.side-toggle button').attr('aria-pressed', 'false');
+    $('.side-toggle button[data-side="' + coachUserSide + '"]').addClass('active').attr('aria-pressed', 'true');
     // Build the board oriented for the user.
     coachBoardFlipped = (coachUserColor() === 'black');
     createCoachBoard(g.fen(), coachBoardFlipped ? 'black' : 'white');
+    $('#coach-view').addClass('game-active');
     // Repopulate panels.
     updateCapturedDisplay(g.fen());
     updateMoveList();
@@ -1381,10 +1401,14 @@ function tryRestoreCoachGame() {
         engineClient.init(),
         new Promise((_, rej) => setTimeout(() => rej(new Error('Engine load timed out')), 15000))
       ]);
+      const generation = coachGameGeneration;
       timed.then(() => {
-        if (!coachGameActive) return;
+        if (generation !== coachGameGeneration || !coachGameActive) return;
         if (!coachIsUserTurn() && !g.game_over()) coachOpponentRespond();
-      }).catch((err) => showEngineLoadError(err));
+      }).catch((err) => {
+        if (generation !== coachGameGeneration || isAbortError(err)) return;
+        showEngineLoadError(err);
+      });
     } else {
       // Game is over — show a status that nudges towards reopening the review.
       setCoachStatus((coachLastEndMsg || 'Game over.') + ' Click Open review to revisit.');
@@ -1405,14 +1429,18 @@ function tryRestoreCoachGame() {
 const LIFETIME_KEY = 'coach:lifetime:v1';
 function emptyLifetime() {
   return { games: 0, moves: 0, accuracySum: 0, blunders: 0, mistakes: 0,
-           inaccuracies: 0, best: 0, excellent: 0, good: 0 };
+           inaccuracies: 0, best: 0, excellent: 0, good: 0, rollups: {} };
 }
 function loadLifetime() {
   try {
     const raw = localStorage.getItem(LIFETIME_KEY);
     if (!raw) return emptyLifetime();
     const v = JSON.parse(raw);
-    return Object.assign(emptyLifetime(), v || {});
+    const merged = Object.assign(emptyLifetime(), v || {});
+    if (!merged.rollups || typeof merged.rollups !== 'object' || Array.isArray(merged.rollups)) {
+      merged.rollups = {};
+    }
+    return merged;
   } catch (e) { return emptyLifetime(); }
 }
 function saveLifetime(s) {
@@ -1421,23 +1449,67 @@ function saveLifetime(s) {
 // Roll the just-finished game into lifetime totals. Idempotent guard via a
 // per-game flag so a refresh on the summary screen doesn't double-count.
 let coachLifetimeRolledForThisGame = false;
+
+function lifetimeContribution() {
+  if (!coachStats || coachStats.moves === 0) return null;
+  const accuracy = accuracyFromTallies(coachStats, coachStats.moves);
+  return {
+    games: 1,
+    moves: coachStats.moves,
+    accuracySum: accuracy === null ? 0 : accuracy * coachStats.moves,
+    best: coachStats.best || 0,
+    excellent: coachStats.excellent || 0,
+    good: coachStats.good || 0,
+    inaccuracies: coachStats.inaccuracy || 0,
+    mistakes: coachStats.mistake || 0,
+    blunders: coachStats.blunder || 0
+  };
+}
+
+function applyLifetimeContribution(lifetime, contribution, direction) {
+  if (!contribution) return;
+  for (const key of ['games', 'moves', 'accuracySum', 'best', 'excellent', 'good', 'inaccuracies', 'mistakes', 'blunders']) {
+    lifetime[key] = Math.max(0, (lifetime[key] || 0) + direction * (contribution[key] || 0));
+  }
+}
+
 function rollGameIntoLifetime() {
   if (coachLifetimeRolledForThisGame) return;
-  if (!coachStats || coachStats.moves === 0) return;
+  const contribution = lifetimeContribution();
+  if (!contribution) return;
+  if (!coachLocalGameId) coachLocalGameId = createCoachGameId();
   const lt = loadLifetime();
-  const acc = accuracyFromTallies(coachStats, coachStats.moves);
-  lt.games += 1;
-  lt.moves += coachStats.moves;
-  if (acc !== null) lt.accuracySum += acc * coachStats.moves; // weighted by move count
-  lt.best += coachStats.best || 0;
-  lt.excellent += coachStats.excellent || 0;
-  lt.good += coachStats.good || 0;
-  lt.inaccuracies += coachStats.inaccuracy || 0;
-  lt.mistakes += coachStats.mistake || 0;
-  lt.blunders += coachStats.blunder || 0;
+  const previous = lt.rollups[coachLocalGameId];
+  if (previous) applyLifetimeContribution(lt, previous, -1);
+  applyLifetimeContribution(lt, contribution, 1);
+  lt.rollups[coachLocalGameId] = contribution;
   saveLifetime(lt);
   coachLifetimeRolledForThisGame = true;
   renderLifetime();
+}
+
+function unrollGameFromLifetime() {
+  if (!coachLocalGameId) return;
+  const lt = loadLifetime();
+  const previous = lt.rollups[coachLocalGameId];
+  if (!previous) return;
+  applyLifetimeContribution(lt, previous, -1);
+  delete lt.rollups[coachLocalGameId];
+  saveLifetime(lt);
+  renderLifetime();
+}
+
+function registerRestoredLifetimeRollup() {
+  if (!coachLocalGameId) return;
+  const contribution = lifetimeContribution();
+  if (!contribution) return;
+  const lt = loadLifetime();
+  if (lt.rollups[coachLocalGameId]) return;
+  // Older saved games predate per-game rollups, but their contribution was
+  // already added to the aggregate at game end. Register it without adding
+  // again so a subsequent takeback can reverse it exactly once.
+  lt.rollups[coachLocalGameId] = contribution;
+  saveLifetime(lt);
 }
 function renderLifetime() {
   const lt = loadLifetime();
@@ -1974,7 +2046,7 @@ function supabaseRuntimeConfig() {
   const cfg = window.COACH_SUPABASE_CONFIG || {};
   return {
     url: (cfg.url || cfg.supabaseUrl || '').trim(),
-    anonKey: (cfg.anonKey || cfg.key || cfg.supabaseAnonKey || '').trim()
+    anonKey: (cfg.publishableKey || cfg.anonKey || cfg.key || cfg.supabaseAnonKey || '').trim()
   };
 }
 
@@ -2163,6 +2235,8 @@ async function signOutCoach() {
   coachAuthUser = null;
   coachRemoteInsightEntries = null;
   coachRemoteGameId = null;
+  coachRemoteGamePromise = null;
+  coachRemoteGamePromiseGeneration = null;
   coachDbStatus = '';
   renderCoachAuth();
   renderInsights();
@@ -2203,26 +2277,52 @@ function remoteGamePayload(endReason) {
   };
 }
 
-async function ensureRemoteCoachGame() {
+async function ensureRemoteCoachGame(generation = coachGameGeneration) {
   if (!hasCoachDbSession() || !coachGame) return null;
   if (coachRemoteGameId) return coachRemoteGameId;
+  if (coachRemoteGamePromise && coachRemoteGamePromiseGeneration === generation) {
+    return coachRemoteGamePromise;
+  }
+  const gameRef = coachGame;
+  const userId = coachAuthUser.id;
   const payload = remoteGamePayload(null);
-  const { data, error } = await coachDbClient
-    .from('coach_games')
-    .insert(payload)
-    .select('id')
-    .single();
-  if (error) throw error;
-  coachRemoteGameId = data.id;
-  saveCoachState();
-  setCoachDbStatus('Game sync started.');
-  return coachRemoteGameId;
+  coachRemoteGamePromiseGeneration = generation;
+  coachRemoteGamePromise = (async () => {
+    const { data, error } = await coachDbClient
+      .from('coach_games')
+      .insert(payload)
+      .select('id')
+      .single();
+    if (error) throw error;
+    if (generation !== coachGameGeneration || coachGame !== gameRef ||
+        !coachAuthUser || coachAuthUser.id !== userId) {
+      // The insert completed after the user replaced the game. Remove the
+      // now-orphaned row when the session still permits it, and never attach it
+      // to the current game.
+      coachDbClient.from('coach_games').delete().eq('id', data.id).eq('user_id', userId).then(() => {});
+      return null;
+    }
+    coachRemoteGameId = data.id;
+    saveCoachState();
+    setCoachDbStatus('Game sync started.');
+    return coachRemoteGameId;
+  })();
+  try {
+    return await coachRemoteGamePromise;
+  } finally {
+    if (coachRemoteGamePromiseGeneration === generation) {
+      coachRemoteGamePromise = null;
+      coachRemoteGamePromiseGeneration = null;
+    }
+  }
 }
 
-async function updateRemoteCoachGame(endReason) {
+async function updateRemoteCoachGame(endReason, generation = coachGameGeneration) {
   if (!hasCoachDbSession() || !coachGame) return;
-  const gameId = await ensureRemoteCoachGame();
+  const gameRef = coachGame;
+  const gameId = await ensureRemoteCoachGame(generation);
   if (!gameId) return;
+  if (generation !== coachGameGeneration || coachGame !== gameRef || !hasCoachDbSession()) return;
   const { error } = await coachDbClient
     .from('coach_games')
     .update(remoteGamePayload(endReason || null))
@@ -2300,12 +2400,14 @@ function learningArtifactPayloads(review, moveId) {
   return { drills, cards };
 }
 
-async function syncRemoteLearningArtifacts(review, moveId) {
+async function syncRemoteLearningArtifacts(review, moveId, generation) {
   if (!hasCoachDbSession()) return;
+  if (generation !== coachGameGeneration) return;
   const artifacts = learningArtifactPayloads(review, moveId);
 
   if (!artifacts.drills.length && !artifacts.cards.length) return;
   await deleteRemoteLearningArtifacts(moveId);
+  if (generation !== coachGameGeneration) return;
 
   const writes = [];
   if (artifacts.drills.length) {
@@ -2344,15 +2446,20 @@ async function deleteRemoteLearningArtifacts(moveId) {
 
 async function syncRemoteCoachMove(review) {
   if (!hasCoachDbSession() || !review || review.tier === 'unknown') return;
-  const gameId = await ensureRemoteCoachGame();
+  const generation = review.gameGeneration;
+  if (generation !== coachGameGeneration || review.localGameId !== coachLocalGameId) return;
+  const gameId = await ensureRemoteCoachGame(generation);
   if (!gameId) return;
+  if (generation !== coachGameGeneration || review.localGameId !== coachLocalGameId) return;
   const { data, error } = await coachDbClient
     .from('coach_moves')
     .upsert(remoteMovePayload(review, gameId), { onConflict: 'game_id,ply' })
     .select('id')
     .single();
   if (error) throw error;
-  if (data && data.id) await syncRemoteLearningArtifacts(review, data.id);
+  if (generation !== coachGameGeneration || review.localGameId !== coachLocalGameId) return;
+  if (data && data.id) await syncRemoteLearningArtifacts(review, data.id, generation);
+  if (generation !== coachGameGeneration) return;
   if (data && data.id) upsertRemoteInsightEntry(remoteInsightEntryFromReview(review, data.id));
   queueRemoteCoachGameUpdate(null);
 }
@@ -2426,17 +2533,22 @@ function clearQueuedRemoteCoachGameUpdate() {
     remoteGameUpdateTimer = null;
   }
   pendingRemoteGameEndReason = null;
+  pendingRemoteGameGeneration = null;
 }
 
 function queueRemoteCoachGameUpdate(endReason) {
   if (!hasCoachDbSession() || !coachGame) return;
+  pendingRemoteGameGeneration = coachGameGeneration;
   if (endReason) pendingRemoteGameEndReason = endReason;
   if (remoteGameUpdateTimer) clearTimeout(remoteGameUpdateTimer);
   remoteGameUpdateTimer = setTimeout(() => {
     remoteGameUpdateTimer = null;
     const reason = pendingRemoteGameEndReason;
+    const generation = pendingRemoteGameGeneration;
     pendingRemoteGameEndReason = null;
-    updateRemoteCoachGame(reason).catch(handleCoachDbError);
+    pendingRemoteGameGeneration = null;
+    if (generation !== coachGameGeneration) return;
+    updateRemoteCoachGame(reason, generation).catch(handleCoachDbError);
   }, REMOTE_GAME_SYNC_DEBOUNCE_MS);
 }
 
@@ -2656,6 +2768,16 @@ function soundForMove(mv, gameAfter) {
 // ─────────────────────────────────────────────
 // STOCKFISH ENGINE WRAPPER
 // ─────────────────────────────────────────────
+function createAbortError(message) {
+  const err = new Error(message || 'Engine work was cancelled.');
+  err.name = 'AbortError';
+  return err;
+}
+
+function isAbortError(err) {
+  return !!(err && err.name === 'AbortError');
+}
+
 const engineClient = {
   worker: null,
   status: 'idle',   // idle | loading | ready
@@ -2812,11 +2934,14 @@ const engineClient = {
     this.worker.postMessage('go depth ' + this.current.depth);
   },
 
-  cancel() {
-    if (this.status === 'ready' && this.current) {
-      this.worker.postMessage('stop');
-    }
-    this.queue = [];
+  cancel(message) {
+    const hasPendingWork = this.status === 'loading' || !!this.current || this.queue.length > 0;
+    if (!hasPendingWork) return;
+    // Terminating the worker is deliberate: UCI does not tag responses, so
+    // starting a new search before the prior `bestmove` arrives can mix results.
+    // failAll rejects every active/queued promise and the next evaluation
+    // transparently starts a clean worker.
+    this.failAll(createAbortError(message));
   }
 };
 
@@ -3219,10 +3344,20 @@ function showCoachRetryStatus(msg) {
     .appendTo($status);
 }
 
-function resetCoachState(fen) {
-  CoachController.setPhase('idle');
+function invalidateCoachAsyncWork(reason) {
+  coachGameGeneration++;
   candidateRequestId++;
+  threatRequestId++;
+  engineClient.cancel(reason || 'Coach position changed.');
+  clearQueuedRemoteCoachGameUpdate();
+  return coachGameGeneration;
+}
+
+function resetCoachState(fen) {
+  invalidateCoachAsyncWork('A new game replaced the previous analysis.');
+  CoachController.setPhase('idle');
   coachGame = fen ? new Chess(fen) : new Chess();
+  coachLocalGameId = createCoachGameId();
   coachStartFen = coachGame.fen();
   coachStats = { moves: 0, best: 0, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
   coachReviewLog = [];
@@ -3232,12 +3367,13 @@ function resetCoachState(fen) {
   coachReviewCursor = null;
   coachLastEndMsg = null;
   coachRemoteGameId = null;
+  coachRemoteGamePromise = null;
+  coachRemoteGamePromiseGeneration = null;
   coachLifetimeRolledForThisGame = false;
-  clearQueuedRemoteCoachGameUpdate();
   if (coachSummaryTimer) { clearTimeout(coachSummaryTimer); coachSummaryTimer = null; }
   clearPremove();
   $('#coach-status').removeClass('status-ended');
-  $('#summary-overlay').hide();
+  $('#summary-overlay').hide().attr('aria-hidden', 'true');
   $('#coach-review').hide();
   $('#threats-section').hide();
   $('#candidates-section').hide();
@@ -3254,6 +3390,8 @@ async function coachOpponentRespond() {
   if (!coachMode || !coachGameActive) return;
   if (coachGame.game_over()) { coachHandleGameOver(); return; }
   if (coachIsUserTurn()) return;
+  const generation = coachGameGeneration;
+  const gameRef = coachGame;
   CoachController.setPhase('opponentThinking');
   setCoachStatus('Opponent thinking…');
   const fen = coachGame.fen();
@@ -3269,11 +3407,12 @@ async function coachOpponentRespond() {
       const result = await engineClient.evaluate(fen, depth, strength);
       bestmove = result.bestmove;
     }
-    if (!coachMode || !coachGameActive || coachIsUserTurn() || coachGame.fen() !== fen) return;
+    if (generation !== coachGameGeneration || coachGame !== gameRef || !coachMode ||
+        !coachGameActive || coachIsUserTurn() || coachGame.fen() !== fen) return;
     if (!bestmove) { setCoachStatus('Your move.'); return; }
     setTimeout(() => {
       try {
-        if (!coachMode || !coachGameActive) return;
+        if (generation !== coachGameGeneration || coachGame !== gameRef || !coachMode || !coachGameActive) return;
         const mv = coachGame.move({
           from: bestmove.slice(0, 2),
           to: bestmove.slice(2, 4),
@@ -3307,6 +3446,7 @@ async function coachOpponentRespond() {
       }
     }, 300);
   } catch (err) {
+    if (generation !== coachGameGeneration || isAbortError(err)) return;
     setCoachStatus('Engine error: ' + err.message);
   }
 }
@@ -3318,6 +3458,8 @@ async function coachHandleUserMove(source, target, promotion, opts) {
   opts = opts || {};
   promotion = promotion || 'q';
   const fenBefore = coachGame.fen();
+  const generation = coachGameGeneration;
+  const gameRef = coachGame;
   const tempGame = new Chess(fenBefore);
   const move = tempGame.move({ from: source, to: target, promotion });
   if (!move) return 'snapback';
@@ -3337,11 +3479,24 @@ async function coachHandleUserMove(source, target, promotion, opts) {
   coachThinking = true;
   CoachController.setPhase('analyzing');
   setCoachStatus('Analyzing your move…');
+  updateCoachControlsState();
   try {
     const review = await classifyMove(fenBefore, userUci, fenAfter);
+    if (generation !== coachGameGeneration || coachGame !== gameRef || !coachGameActive ||
+        coachGame.fen() !== fenAfter) {
+      return 'stale';
+    }
     const ply = coachGame.history().length;
     const pairNum = Math.ceil(ply / 2);
-    const logged = Object.assign({}, review, { fenBefore, fenAfter, userUci, ply, pairNum });
+    const logged = Object.assign({}, review, {
+      fenBefore,
+      fenAfter,
+      userUci,
+      ply,
+      pairNum,
+      gameGeneration: generation,
+      localGameId: coachLocalGameId
+    });
     coachLastReview = logged;
     coachReviewLog.push(logged);
     recordCoachInsight(logged);
@@ -3358,13 +3513,16 @@ async function coachHandleUserMove(source, target, promotion, opts) {
     updateOpeningLabel();
     saveCoachState();
   } catch (err) {
+    if (generation !== coachGameGeneration || isAbortError(err)) return 'stale';
     setCoachStatus('Engine error: ' + err.message);
     coachThinking = false;
     CoachController.setPhase('userTurn');
     return;
   }
   coachThinking = false;
+  updateCoachControlsState();
 
+  if (generation !== coachGameGeneration || coachGame !== gameRef) return 'stale';
   if (coachGame.game_over()) { coachHandleGameOver(); return; }
   coachOpponentRespond();
 }
@@ -4004,7 +4162,8 @@ function showPostGameSummary(endMsg) {
       const lossPawns = formatLossPawns(r.loss || 0);
       const best = r.bestSan ? ` — best was ${r.bestSan}` : '';
       const desc = `${tierLabel[r.tier]}${best}`;
-      const row = document.createElement('div');
+      const row = document.createElement('button');
+      row.type = 'button';
       row.className = `moment-row ${r.tier}`;
       row.dataset.ply = r.ply;
       row.innerHTML =
@@ -4031,7 +4190,8 @@ function showPostGameSummary(endMsg) {
       const rankNote = r.rank === 1 ? 'top engine choice' : (r.rank ? `#${r.rank} engine choice` : '');
       const tierNote = r.tier === 'best' ? 'Best' : 'Excellent';
       const desc = rankNote ? `${tierNote} · ${rankNote}` : tierNote;
-      const row = document.createElement('div');
+      const row = document.createElement('button');
+      row.type = 'button';
       row.className = `moment-row ${r.tier}`;
       row.dataset.ply = r.ply;
       row.innerHTML =
@@ -4054,9 +4214,11 @@ function showPostGameSummary(endMsg) {
     $('#summary-takeaway').hide();
   }
 
-  $('#summary-overlay').css('display', 'flex');
+  summaryReturnFocus = document.activeElement;
+  $('#summary-overlay').css('display', 'flex').attr('aria-hidden', 'false');
   // Scroll to top when reopening on a new game
   $('.summary-card').scrollTop(0);
+  $('.summary-card').trigger('focus');
 }
 
 // ─────────────────────────────────────────────
@@ -4219,48 +4381,73 @@ function readURL() {
 // ─────────────────────────────────────────────
 // BOARD INIT (lazy — board is created on first opening load)
 // ─────────────────────────────────────────────
+const PIECE_THEME_GLYPHS = {
+  bB: '♝', bK: '♚', bN: '♞', bP: '♟', bQ: '♛', bR: '♜',
+  wB: '♗', wK: '♔', wN: '♘', wP: '♙', wQ: '♕', wR: '♖'
+};
+
+function localPieceTheme(piece) {
+  const glyph = PIECE_THEME_GLYPHS[piece] || '';
+  const fill = piece && piece[0] === 'w' ? '#fff8ed' : '#17100c';
+  const stroke = piece && piece[0] === 'w' ? '#2a1f17' : '#f1ebe0';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="45" height="45" viewBox="0 0 45 45"><text x="22.5" y="36" text-anchor="middle" font-family="Georgia,serif" font-size="41" fill="${fill}" stroke="${stroke}" stroke-width="0.45">${glyph}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function describeChessPosition(gameObj) {
+  if (!gameObj) return 'Chess position unavailable.';
+  const turn = gameObj.turn() === 'w' ? 'White' : 'Black';
+  const state = gameObj.in_checkmate() ? ' Checkmate.' : (gameObj.in_check() ? ' In check.' : '');
+  return `${turn} to move.${state} FEN: ${gameObj.fen()}`;
+}
+
+function updateLibraryBoardAccessibility() {
+  const activeGame = exploreMode && exploreGame ? exploreGame : game;
+  $('#myBoard').attr('aria-label', describeChessPosition(activeGame));
+}
+
+function updateCoachBoardAccessibility() {
+  $('#coachBoard').attr('aria-label', describeChessPosition(coachGame));
+}
+
+function isCompactLayout() {
+  return window.matchMedia && window.matchMedia('(max-width: 1100px)').matches;
+}
+
+function setMobileLibraryOpen(open) {
+  const expanded = !!open;
+  $('.app').toggleClass('mobile-library-open', expanded);
+  $('#btn-mobile-openings')
+    .attr('aria-expanded', String(expanded))
+    .text(expanded ? 'Hide openings' : 'Change opening');
+}
+
+function scrollLibraryBoardIntoViewOnMobile() {
+  if (!isCompactLayout()) return;
+  window.requestAnimationFrame(() => {
+    document.querySelector('.board-area')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
+}
+
+function scrollCoachBoardIntoViewOnMobile() {
+  if (!isCompactLayout()) return;
+  window.requestAnimationFrame(() => {
+    document.querySelector('.coach-board-area')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
+}
+
 function createBoard(position, draggable, orientation) {
   if (board) board.destroy();
   board = Chessboard('myBoard', {
     position: position || 'start',
     draggable: !!draggable,
     orientation: orientation || 'white',
-    pieceTheme: function(piece) {
-      var svgMap = {
-        bB: 'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg',
-        bK: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg',
-        bN: 'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg',
-        bP: 'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg',
-        bQ: 'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg',
-        bR: 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg',
-        wB: 'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg',
-        wK: 'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg',
-        wN: 'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg',
-        wP: 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg',
-        wQ: 'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg',
-        wR: 'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg'
-      };
-      return svgMap[piece];
-    },
+    pieceTheme: localPieceTheme,
     onDrop: handleDrop,
     onSnapEnd: handleSnapEnd,
   });
+  updateLibraryBoardAccessibility();
 }
-
-const COACH_PIECE_THEME = {
-  bB: 'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg',
-  bK: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg',
-  bN: 'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg',
-  bP: 'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg',
-  bQ: 'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg',
-  bR: 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg',
-  wB: 'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg',
-  wK: 'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg',
-  wN: 'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg',
-  wP: 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg',
-  wQ: 'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg',
-  wR: 'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg'
-};
 
 function createCoachBoard(position, orientation) {
   if (coachBoard) coachBoard.destroy();
@@ -4268,7 +4455,7 @@ function createCoachBoard(position, orientation) {
     position: position || 'start',
     draggable: true,
     orientation: orientation || 'white',
-    pieceTheme: function(piece) { return COACH_PIECE_THEME[piece]; },
+    pieceTheme: localPieceTheme,
     onDragStart: function(source, piece) {
       if (!coachGameActive || !coachGame) return false;
       if (coachIsReviewing()) return false;
@@ -4313,6 +4500,7 @@ function createCoachBoard(position, orientation) {
       if (coachGame) coachBoard.position(coachGame.fen());
     }
   });
+  updateCoachBoardAccessibility();
 }
 
 // ─────────────────────────────────────────────
@@ -4324,10 +4512,11 @@ function switchView(view) {
   const $app = $('.app');
   const $coach = $('#coach-view');
   if (view === 'coach') {
-    $app.hide();
+    $app.hide().attr('aria-hidden', 'true');
     $coach.show().css('display', 'grid').attr('aria-hidden', 'false');
     $('#nav-library').removeClass('active').attr('aria-selected', 'false');
-    $('#nav-coach').addClass('active').attr('aria-selected', 'true');
+    $('#nav-library').attr('tabindex', '-1');
+    $('#nav-coach').addClass('active').attr({ 'aria-selected': 'true', tabindex: '0' });
     // Pre-warm Stockfish in the background so the first New Game starts faster.
     // Errors here are swallowed; the real load gate is inside startCoachGame.
     if (engineClient.status === 'idle') { engineClient.init().catch(() => {}); }
@@ -4342,6 +4531,7 @@ function switchView(view) {
       // Try to restore an in-progress (or just-ended) game from localStorage.
       const restore = tryRestoreCoachGame();
       if (!restore.restored) {
+        $('#coach-view').removeClass('game-active');
         // Show an idle board so the user has visual context
         $('#coachBoard-placeholder').hide();
         createCoachBoard('start', 'white');
@@ -4358,9 +4548,10 @@ function switchView(view) {
     updateCoachControlsState();
   } else {
     $coach.hide().attr('aria-hidden', 'true');
-    $app.show();
+    $app.show().attr('aria-hidden', 'false');
     $('#nav-coach').removeClass('active').attr('aria-selected', 'false');
-    $('#nav-library').addClass('active').attr('aria-selected', 'true');
+    $('#nav-coach').attr('tabindex', '-1');
+    $('#nav-library').addClass('active').attr({ 'aria-selected': 'true', tabindex: '0' });
     // If library board exists, kick it into life via a resize so it redraws correctly
     if (board) setTimeout(() => board.resize(), 0);
   }
@@ -4393,9 +4584,10 @@ function startCoachGame() {
     : chosenSide;
 
   resetCoachState(startFen);
+  const generation = coachGameGeneration;
   coachGameActive = true;
   CoachController.setPhase(coachIsUserTurn() ? 'userTurn' : 'opponentThinking');
-  $('#summary-overlay').hide();
+  $('#summary-overlay').hide().attr('aria-hidden', 'true');
   // Replace any saved state from a prior game so a refresh before the first
   // move doesn't restore the old session.
   clearCoachState();
@@ -4403,6 +4595,8 @@ function startCoachGame() {
   // Orient board so user plays from bottom
   coachBoardFlipped = (coachUserColor() === 'black');
   createCoachBoard(coachGame.fen(), coachBoardFlipped ? 'black' : 'white');
+  $('#coach-view').addClass('game-active');
+  scrollCoachBoardIntoViewOnMobile();
 
   const tier = strengthTierLabel(coachEngineElo);
   const opening = coachIsUserTurn()
@@ -4411,7 +4605,9 @@ function startCoachGame() {
   setCoachStatus(opening);
 
   updateCoachControlsState();
-  ensureRemoteCoachGame().catch(handleCoachDbError);
+  ensureRemoteCoachGame(generation).catch(err => {
+    if (!isAbortError(err)) handleCoachDbError(err);
+  });
 
   // Pre-warm engine, then kick off opponent if it's their turn.
   // Wrap in a 15s timeout so a stuck WASM load surfaces a retry instead of hanging.
@@ -4420,9 +4616,10 @@ function startCoachGame() {
     new Promise((_, rej) => setTimeout(() => rej(new Error('Engine load timed out')), 15000))
   ]);
   timed.then(() => {
-    if (!coachGameActive) return;
+    if (generation !== coachGameGeneration || !coachGameActive) return;
     if (!coachIsUserTurn()) coachOpponentRespond();
   }).catch((err) => {
+    if (generation !== coachGameGeneration || isAbortError(err)) return;
     showEngineLoadError(err);
   });
 }
@@ -4450,9 +4647,9 @@ function updateCoachControlsState() {
   $('#btn-coach-resign').prop('disabled', !active || reviewing);
   // "Open review" only appears once the game has ended and we have a summary to reopen.
   $('#btn-coach-openreview').toggle(!active && !!coachLastEndMsg);
-  $('#btn-coach-takeback').prop('disabled', !hasReview || reviewing);
-  $('#btn-coach-showbest').prop('disabled', !hasReview || (coachLastReview && coachLastReview.tier === 'best') || reviewing);
-  $('#btn-coach-candidates').prop('disabled', !active || !coachGame || !coachIsUserTurn() || reviewing);
+  $('#btn-coach-takeback').prop('disabled', !hasReview || reviewing || coachThinking);
+  $('#btn-coach-showbest').prop('disabled', !hasReview || (coachLastReview && coachLastReview.tier === 'best') || reviewing || coachThinking);
+  $('#btn-coach-candidates').prop('disabled', !active || !coachGame || !coachIsUserTurn() || reviewing || coachThinking);
   $('#btn-coach-prev').prop('disabled', !coachGame || total === 0 || cur === 0);
   $('#btn-coach-next').prop('disabled', !coachGame || total === 0 || cur === total);
   $('#btn-coach-live').toggle(reviewing);
@@ -4849,6 +5046,7 @@ function coachGetPgn() {
 function updateMoveList() {
   // Refresh the live eval sparkline alongside the move list — both reflect the same data.
   updateLiveEvalChart();
+  updateCoachBoardAccessibility();
   const $section = $('#movelist-section');
   const $list = $('#movelist');
   if (!coachGame || coachGame.history().length === 0) {
@@ -4918,11 +5116,47 @@ function isLegalPromotionMove(gameObj, source, target) {
   return gameObj.moves({ verbose: true }).some(m => m.from === source && m.to === target && m.promotion);
 }
 
+function resolveAccessibleMove(gameObj, rawMove) {
+  if (!gameObj) return null;
+  const value = String(rawMove || '').trim();
+  if (!value) return null;
+  const legalMoves = gameObj.moves({ verbose: true });
+  const uci = value.toLowerCase().match(/^([a-h][1-8])([a-h][1-8])([qrbn])?$/);
+  if (uci) {
+    return legalMoves.find(move => move.from === uci[1] && move.to === uci[2] &&
+      (!move.promotion || (uci[3] || 'q') === move.promotion)) || null;
+  }
+  const normalized = value.replace(/\s+/g, '').toLowerCase();
+  return legalMoves.find(move => move.san.replace(/\s+/g, '').toLowerCase() === normalized) || null;
+}
+
+function focusableElements(container) {
+  return Array.from(container.querySelectorAll(
+    'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )).filter(el => !el.hidden && el.getClientRects().length > 0);
+}
+
+function trapDialogTab(event, container) {
+  if (event.key !== 'Tab') return;
+  const focusable = focusableElements(container);
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
 function showPromotionPicker(color, onPick) {
   const glyphs = color === 'b'
     ? { q: '♛', r: '♜', b: '♝', n: '♞' }
     : { q: '♕', r: '♖', b: '♗', n: '♘' };
   pendingPromotionChoice = onPick;
+  promotionReturnFocus = document.activeElement;
   $('#promotion-picker .promotion-choice').each(function() {
     const piece = $(this).attr('data-promotion');
     $(this).text(glyphs[piece] || piece.toUpperCase());
@@ -4934,6 +5168,24 @@ function showPromotionPicker(color, onPick) {
 function closePromotionPicker() {
   pendingPromotionChoice = null;
   $('#promotion-picker').hide().attr('aria-hidden', 'true');
+  if (promotionReturnFocus && typeof promotionReturnFocus.focus === 'function') {
+    promotionReturnFocus.focus();
+  }
+  promotionReturnFocus = null;
+}
+
+function closeSummaryOverlay() {
+  const overlay = document.getElementById('summary-overlay');
+  const requestedTarget = summaryReturnFocus;
+  const canRestore = requestedTarget && requestedTarget !== document.body && requestedTarget.isConnected &&
+    !(overlay && overlay.contains(requestedTarget));
+  const returnTarget = canRestore
+    ? requestedTarget
+    : (document.getElementById('btn-coach-openreview') || document.getElementById('btn-coach-newgame'));
+  $('#summary-overlay').hide().attr('aria-hidden', 'true');
+  updateCoachControlsState();
+  summaryReturnFocus = null;
+  if (returnTarget && typeof returnTarget.focus === 'function') returnTarget.focus();
 }
 
 function requestPromotionChoice(gameObj, source, target, onPick, legalOnly) {
@@ -5272,8 +5524,8 @@ function loadOpening(id, lineId) {
   // Exit explore mode when user picks an opening
   if (exploreMode) {
     exploreMode = false;
-    $('#btn-study, #btn-quiz, #btn-explore').removeClass('active');
-    $('#btn-study').addClass('active');
+    $('#btn-study, #btn-quiz, #btn-explore').removeClass('active').attr('aria-pressed', 'false');
+    $('#btn-study').addClass('active').attr('aria-pressed', 'true');
     $('#btn-start, #btn-prev, #btn-next, #btn-end').show();
     $('#btn-explore-undo, #btn-explore-reset').hide();
     $('#explore-content').hide();
@@ -5301,6 +5553,8 @@ function loadOpening(id, lineId) {
   // Update info panel
   $('#empty-state').hide();
   $('#opening-content').show();
+  $('.app').addClass('has-opening');
+  setMobileLibraryOpen(false);
   renderOpeningDetails();
 
   renderLineSelector();
@@ -5312,6 +5566,7 @@ function loadOpening(id, lineId) {
   clearFeedback();
   updateSRPanel();
   updateURL();
+  scrollLibraryBoardIntoViewOnMobile();
 }
 
 // ─────────────────────────────────────────────
@@ -5398,6 +5653,7 @@ function renderKeyIdeas() {
 }
 
 function updateProgress() {
+  if (board) updateLibraryBoardAccessibility();
   if (!currentOpening) { $('#progress-fill').css('width', '0%'); return; }
   const moves = activeMoves();
   const pct = moves.length ? ((currentMoveIdx + 1) / moves.length) * 100 : 0;
@@ -5416,8 +5672,8 @@ function setMode(mode) {
   quizMode = (mode === 'quiz');
   exploreMode = (mode === 'explore');
 
-  $('#btn-study, #btn-quiz, #btn-explore').removeClass('active');
-  $(`#btn-${mode}`).addClass('active');
+  $('#btn-study, #btn-quiz, #btn-explore').removeClass('active').attr('aria-pressed', 'false');
+  $(`#btn-${mode}`).addClass('active').attr('aria-pressed', 'true');
 
   if (exploreMode) {
     // Hide study nav, show explore nav
@@ -5693,6 +5949,10 @@ $(function () {
     loadOpening($(this).data('id'));
   });
 
+  $('#btn-mobile-openings').on('click', function() {
+    setMobileLibraryOpen($(this).attr('aria-expanded') !== 'true');
+  });
+
   // Category tab filtering
   $('.cat-tab').on('click', function () {
     $('.cat-tab').removeClass('active');
@@ -5724,6 +5984,31 @@ $(function () {
   $('#btn-study').on('click', () => setMode('study'));
   $('#btn-quiz').on('click', () => { if (currentOpening) setMode('quiz'); });
   $('#btn-explore').on('click', () => setMode('explore'));
+
+  $('#library-keyboard-move-form').on('submit', function(event) {
+    event.preventDefault();
+    const $status = $('#library-keyboard-move-status');
+    if (!quizMode && !exploreMode) {
+      $status.text('Switch to Quiz or Explore mode to play a move.');
+      return;
+    }
+    const activeGame = exploreMode ? exploreGame : game;
+    const move = resolveAccessibleMove(activeGame, $('#library-keyboard-move-input').val());
+    if (!move) {
+      $status.text('That move is not legal here. Try SAN such as Nf3 or coordinates such as g1f3.');
+      return;
+    }
+    const result = exploreMode
+      ? applyExploreMove(move.from, move.to, move.promotion || 'q', { updateBoard: true })
+      : handleQuizDrop(move.from, move.to, move.promotion || 'q');
+    if (!exploreMode && result === 'snapback') {
+      $status.text('Legal move, but not the quiz answer. Try again.');
+      return;
+    }
+    $('#library-keyboard-move-input').val('');
+    $status.text('Move played: ' + move.san);
+    updateLibraryBoardAccessibility();
+  });
   }
 
   function bindCoachEvents() {
@@ -5731,6 +6016,14 @@ $(function () {
   // ─── Header nav (Library / Coach) ───────
   $('#nav-library').on('click', () => switchView('library'));
   $('#nav-coach').on('click', () => switchView('coach'));
+  $('.top-nav-btn').on('keydown', function(event) {
+    const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
+    if (!keys.includes(event.key)) return;
+    event.preventDefault();
+    const nextView = (event.key === 'ArrowLeft' || event.key === 'Home') ? 'library' : 'coach';
+    switchView(nextView);
+    $('#nav-' + nextView).trigger('focus');
+  });
 
   // ─── Coach settings ─────────────────────
   $('#coach-strength').on('input', function() {
@@ -5740,8 +6033,8 @@ $(function () {
   });
 
   $('.side-toggle button').on('click', function() {
-    $('.side-toggle button').removeClass('active');
-    $(this).addClass('active');
+    $('.side-toggle button').removeClass('active').attr('aria-pressed', 'false');
+    $(this).addClass('active').attr('aria-pressed', 'true');
     const side = $(this).data('side');
     coachUserSide = side; // 'white' | 'black' | 'random'
   });
@@ -5750,14 +6043,9 @@ $(function () {
     $('#coach-fen-error').hide();
   });
 
-  $('#btn-coach-login').on('click', function() {
+  $('#coach-auth-email-form').on('submit', function(event) {
+    event.preventDefault();
     sendCoachLoginLink().catch(handleCoachDbError);
-  });
-  $('#coach-auth-email').on('keydown', function(e) {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      sendCoachLoginLink().catch(handleCoachDbError);
-    }
   });
   $('#btn-coach-logout').on('click', function() {
     signOutCoach().catch(handleCoachDbError);
@@ -5806,8 +6094,8 @@ $(function () {
       return;
     }
     $('#coach-fen').val(fen);
-    $('.side-toggle button').removeClass('active');
-    $('.side-toggle button[data-side="' + side + '"]').addClass('active');
+    $('.side-toggle button').removeClass('active').attr('aria-pressed', 'false');
+    $('.side-toggle button[data-side="' + side + '"]').addClass('active').attr('aria-pressed', 'true');
     coachUserSide = side;
     startCoachGame();
     setCoachStatus('Practice position loaded. Find the best move.');
@@ -5833,6 +6121,36 @@ $(function () {
     startCoachGame();
   });
 
+  $('#coach-keyboard-move-form').on('submit', async function(event) {
+    event.preventDefault();
+    const $status = $('#coach-keyboard-move-status');
+    if (!coachGameActive || !coachGame) {
+      $status.text('Start a Coach game first.');
+      return;
+    }
+    if (!coachIsUserTurn() || coachThinking || coachIsReviewing()) {
+      $status.text(coachIsReviewing() ? 'Return to the live position first.' : 'Wait until it is your turn.');
+      return;
+    }
+    const move = resolveAccessibleMove(coachGame, $('#coach-keyboard-move-input').val());
+    if (!move) {
+      $status.text('That move is not legal here. Try SAN such as Nf3 or coordinates such as g1f3.');
+      return;
+    }
+    const result = await coachHandleUserMove(move.from, move.to, move.promotion || 'q', { updateBoard: true });
+    if (result === 'snapback') {
+      $status.text('That move could not be played.');
+      return;
+    }
+    if (result === 'stale') {
+      $status.text('The position changed before analysis finished.');
+      return;
+    }
+    $('#coach-keyboard-move-input').val('');
+    $status.text('Move played: ' + move.san);
+    updateCoachBoardAccessibility();
+  });
+
   $(document).on('click', '#btn-coach-retry-opponent', function() {
     if (!coachMode || !coachGameActive || !coachGame) return;
     if (coachIsUserTurn()) {
@@ -5846,6 +6164,7 @@ $(function () {
     if (!coachGameActive) return;
     CoachController.setPhase('ended');
     candidateRequestId++;
+    threatRequestId++;
     clearPremove();
     coachGameActive = false;
     coachEndedAt = Date.now();
@@ -5872,11 +6191,12 @@ $(function () {
   // Coach: take back (undo user move + opponent reply if present)
   $('#btn-coach-takeback').on('click', function() {
     if (!coachMode || !coachGame) return;
-    engineClient.cancel();
     const removedReview = coachLastReview;
-    candidateRequestId++;
+    invalidateCoachAsyncWork('The position was taken back.');
     clearPremove();
-    // Take back un-ends the game; future game-over should roll lifetime again.
+    // Remove the prior completed-game contribution before allowing this game
+    // to end again with a revised score.
+    if (coachLifetimeRolledForThisGame) unrollGameFromLifetime();
     coachLifetimeRolledForThisGame = false;
     // If the game just ended and the post-game summary is pending, abort it —
     // taking back un-ends the game.
@@ -5918,7 +6238,7 @@ $(function () {
   // Coach: show best — replay the best move instead of the user's
   $('#btn-coach-showbest').on('click', function() {
     if (!coachMode || !coachGame || !coachLastReview || !coachLastReview.bestUci) return;
-    engineClient.cancel();
+    invalidateCoachAsyncWork('The best-move replay replaced the prior position.');
     const prev = coachLastReview;
     // Undo opponent reply (if played) + user move
     if (coachGame.fen() !== prev.fenAfter) coachGame.undo();
@@ -5926,7 +6246,6 @@ $(function () {
     // Play best move
     const bu = prev.bestUci;
     coachGame.move({ from: bu.slice(0, 2), to: bu.slice(2, 4), promotion: bu[4] || undefined });
-    candidateRequestId++;
     const newFenAfter = coachGame.fen();
     // Adjust stats: convert prior classification to 'best'
     if (coachStats) {
@@ -5960,6 +6279,8 @@ $(function () {
       last.fenAfter = newFenAfter;
       last.loss = 0;
       last.insightTags = [];
+      last.gameGeneration = coachGameGeneration;
+      last.localGameId = coachLocalGameId;
       coachSync.saveMove(last).catch(handleCoachDbError);
     }
     updateCoachSummary();
@@ -6082,12 +6403,11 @@ $(function () {
 
   // Summary overlay buttons
   $('#btn-summary-newgame').on('click', function() {
-    $('#summary-overlay').hide();
+    closeSummaryOverlay();
     startCoachGame();
   });
   $('#btn-summary-close').on('click', function() {
-    $('#summary-overlay').hide();
-    updateCoachControlsState();
+    closeSummaryOverlay();
   });
   // Reopen the review summary once the game has ended.
   $('#btn-coach-openreview').on('click', function() {
@@ -6112,16 +6432,19 @@ $(function () {
   $(document).on('click', '.moment-row', function() {
     const ply = parseInt(this.dataset.ply, 10);
     if (!Number.isInteger(ply)) return;
-    $('#summary-overlay').hide();
+    closeSummaryOverlay();
     coachGotoPly(ply);
     // Surface the "Open review" button so the user can get back to the summary.
     updateCoachControlsState();
   });
   // Allow pressing Escape to dismiss the summary overlay.
   $(document).on('keydown.summary', function(e) {
-    if (e.key === 'Escape' && $('#summary-overlay').is(':visible')) {
-      $('#summary-overlay').hide();
-      updateCoachControlsState();
+    const summary = document.getElementById('summary-overlay');
+    if (!summary || !$('#summary-overlay').is(':visible')) return;
+    if (e.key === 'Escape') {
+      closeSummaryOverlay();
+    } else {
+      trapDialogTab(e, summary);
     }
   });
   }
@@ -6131,13 +6454,14 @@ $(function () {
   // Explore: database toggle
   $('.db-btn').on('click', function() {
     currentDb = $(this).data('db');
-    $('.db-btn').removeClass('active');
-    $(this).addClass('active');
+    $('.db-btn').removeClass('active').attr('aria-pressed', 'false');
+    $(this).addClass('active').attr('aria-pressed', 'true');
     if (exploreMode) fetchExploreData();
   });
 
   // Explore: token save
-  $('#btn-save-token').on('click', function() {
+  $('#lichess-token-form').on('submit', function(event) {
+    event.preventDefault();
     const token = $('#lichess-token-input').val().trim();
     if (!token) {
       $('#token-error').text('Paste a Lichess token first.').show();
@@ -6230,19 +6554,32 @@ $(function () {
   // ─── SHARE LINK ─────────────────────────
   $('#btn-share').on('click', function() {
     const $btn = $(this);
+    if (!navigator.clipboard || !navigator.clipboard.writeText) {
+      const original = $btn.text();
+      $btn.text('Copy unavailable');
+      setTimeout(() => $btn.text(original), 1500);
+      return;
+    }
     navigator.clipboard.writeText(location.href).then(() => {
       const orig = $btn.text();
       $btn.text('Copied ✓').addClass('copied');
       setTimeout(() => $btn.text(orig).removeClass('copied'), 1500);
+    }).catch(() => {
+      const original = $btn.text();
+      $btn.text('Copy unavailable');
+      setTimeout(() => $btn.text(original), 1500);
     });
   });
 
   // ─── KEYBOARD SHORTCUTS ─────────────────
   $(document).on('keydown', function (e) {
-    if (e.key === 'Escape' && $('#promotion-picker').is(':visible')) {
-      e.preventDefault();
-      closePromotionPicker();
-      return;
+    if ($('#promotion-picker').is(':visible')) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closePromotionPicker();
+        return;
+      }
+      trapDialogTab(e, document.getElementById('promotion-picker'));
     }
     const tag = (e.target.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea') {

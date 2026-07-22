@@ -1,6 +1,5 @@
--- Supabase schema for account-backed Coach history and insights.
--- Canonical schema reference for the project used by COACH_SUPABASE_CONFIG.
--- New environments should apply the versioned files in supabase/migrations.
+-- Initial account-backed Coach schema. Keep supabase-schema.sql in sync as a
+-- readable reference, but deploy environments from versioned migrations.
 
 create extension if not exists pgcrypto;
 
@@ -92,19 +91,14 @@ create table if not exists public.theory_cards (
 
 create index if not exists coach_games_user_started_idx
   on public.coach_games(user_id, started_at desc);
-
 create index if not exists coach_moves_user_played_idx
   on public.coach_moves(user_id, played_at desc);
-
 create index if not exists coach_moves_user_tags_idx
   on public.coach_moves using gin(tags);
-
 create index if not exists drill_queue_user_due_idx
   on public.drill_queue(user_id, due_at asc);
-
 create unique index if not exists drill_queue_source_tag_unique_idx
   on public.drill_queue(source_move_id, tag);
-
 create unique index if not exists theory_cards_source_tag_unique_idx
   on public.theory_cards(source_move_id, tag);
 
@@ -114,44 +108,31 @@ alter table public.coach_moves enable row level security;
 alter table public.drill_queue enable row level security;
 alter table public.theory_cards enable row level security;
 
-drop policy if exists "profiles select own" on public.profiles;
 create policy "profiles select own"
   on public.profiles for select to authenticated
   using (id = (select auth.uid()));
-
-drop policy if exists "profiles update own" on public.profiles;
 create policy "profiles update own"
   on public.profiles for update to authenticated
   using (id = (select auth.uid()))
   with check (id = (select auth.uid()));
 
-drop policy if exists "coach_games select own" on public.coach_games;
 create policy "coach_games select own"
   on public.coach_games for select to authenticated
   using (user_id = (select auth.uid()));
-
-drop policy if exists "coach_games insert own" on public.coach_games;
 create policy "coach_games insert own"
   on public.coach_games for insert to authenticated
   with check (user_id = (select auth.uid()));
-
-drop policy if exists "coach_games update own" on public.coach_games;
 create policy "coach_games update own"
   on public.coach_games for update to authenticated
   using (user_id = (select auth.uid()))
   with check (user_id = (select auth.uid()));
-
-drop policy if exists "coach_games delete own" on public.coach_games;
 create policy "coach_games delete own"
   on public.coach_games for delete to authenticated
   using (user_id = (select auth.uid()));
 
-drop policy if exists "coach_moves select own" on public.coach_moves;
 create policy "coach_moves select own"
   on public.coach_moves for select to authenticated
   using (user_id = (select auth.uid()));
-
-drop policy if exists "coach_moves insert own" on public.coach_moves;
 create policy "coach_moves insert own"
   on public.coach_moves for insert to authenticated
   with check (
@@ -161,8 +142,6 @@ create policy "coach_moves insert own"
       where g.id = game_id and g.user_id = (select auth.uid())
     )
   );
-
-drop policy if exists "coach_moves update own" on public.coach_moves;
 create policy "coach_moves update own"
   on public.coach_moves for update to authenticated
   using (user_id = (select auth.uid()))
@@ -173,13 +152,10 @@ create policy "coach_moves update own"
       where g.id = game_id and g.user_id = (select auth.uid())
     )
   );
-
-drop policy if exists "coach_moves delete own" on public.coach_moves;
 create policy "coach_moves delete own"
   on public.coach_moves for delete to authenticated
   using (user_id = (select auth.uid()));
 
-drop policy if exists "drill_queue all own" on public.drill_queue;
 create policy "drill_queue all own"
   on public.drill_queue for all to authenticated
   using (
@@ -203,7 +179,6 @@ create policy "drill_queue all own"
     )
   );
 
-drop policy if exists "theory_cards all own" on public.theory_cards;
 create policy "theory_cards all own"
   on public.theory_cards for all to authenticated
   using (
@@ -245,13 +220,11 @@ begin
 end;
 $$;
 
-drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function private.handle_new_user();
 
 revoke all on function private.handle_new_user() from public, anon, authenticated;
-drop function if exists public.handle_new_user();
 
 create or replace view public.coach_insight_summary
 with (security_invoker = true)
@@ -273,8 +246,6 @@ cross join unnest(tags) as tag
 where classification in ('inaccuracy', 'mistake', 'blunder')
 group by user_id, tag;
 
--- The browser uses only the authenticated Data API role. Keep anonymous
--- visitors out of every account table even if a policy is changed later.
 revoke all on table public.profiles, public.coach_games, public.coach_moves,
   public.drill_queue, public.theory_cards from anon;
 grant usage on schema public to authenticated;

@@ -1,7 +1,8 @@
 // Public runtime config for optional account-backed Coach history.
-// Fill these with the Supabase project URL and anon public key after running
-// supabase-schema.sql. Leaving them blank keeps Coach in local-only mode.
+// Fill these with the Supabase project URL and publishable key after applying
+// the versioned migrations. A legacy anon key is also safe to expose here.
+// Leaving them blank keeps Coach in local-only mode.
 window.COACH_SUPABASE_CONFIG = {
   url: '',
-  anonKey: ''
+  publishableKey: ''
 };

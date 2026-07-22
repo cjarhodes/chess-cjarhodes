@@ -2,3 +2,6 @@
 
 # Local Claude/Codex tool state
 .claude/*.lock
+
+# Local browser verification artifacts
+.playwright-cli/
