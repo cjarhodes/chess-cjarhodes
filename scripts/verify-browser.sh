@@ -152,6 +152,44 @@ async page => {
   assert(boardBox && boardBox.width <= 352, 'mobile Library board exceeds the viewport');
   assert(libraryTabBox && libraryTabBox.width > 120, 'mobile navigation tabs collapsed');
 
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(page.url().split('?')[0] + '?view=coach');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.locator('#coach-fen').fill('7k/8/5KQ1/8/8/8/8/8 w - - 0 1');
+  await page.locator('.side-toggle button[data-side="white"]').click();
+  await page.locator('#btn-coach-newgame').click();
+  await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
+  await page.locator('#coach-keyboard-move-input').fill('Qe4');
+  await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+  await page.waitForFunction(() => {
+    return (document.querySelector('#coach-classification')?.textContent || '').includes('Blunder');
+  }, null, { timeout: 30000 }).catch(() => {});
+  assert((await page.locator('#coach-classification').textContent()).includes('Blunder'), 'missed mate was not classified as a blunder');
+  assert(await page.locator('#coach-best-move').textContent() === 'Qg7#', 'real review did not preserve the mating move');
+  assert(await page.locator('.practice-load').count() >= 1, 'real reviewed mistake did not create a due drill');
+  const generatedBest = await page.locator('#coach-best-move').textContent();
+  await page.locator('#btn-coach-resign').click();
+  await page.locator('#summary-overlay').waitFor({ state: 'visible', timeout: 5000 });
+  assert(await page.locator('#btn-summary-practice').isVisible(), 'post-game summary did not offer current-game practice');
+  await page.locator('#btn-summary-practice').click();
+  assert(await page.locator('#coach-practice-banner').isVisible(), 'post-game practice action did not open the generated drill');
+  await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
+  await page.locator('#coach-keyboard-move-input').fill(generatedBest);
+  await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+  assert((await page.locator('#coach-practice-status').textContent()).includes('Correct on the first try'), 'generated drill did not accept the reviewed best move');
+  assert(await page.locator('#practice-progress-success').textContent() === '100%', 'generated drill result was not measured');
+
+  await page.locator('#btn-coach-practice-exit').click();
+  await page.locator('#btn-coach-newgame').click();
+  await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
+  await page.locator('#coach-keyboard-move-input').fill('Qg7#');
+  await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+  await page.waitForFunction(() => {
+    return (document.querySelector('#coach-classification')?.textContent || '').includes('Best move');
+  }, null, { timeout: 30000 }).catch(() => {});
+  assert((await page.locator('#coach-classification').textContent()).includes('Best move'), 'mating move was not classified as best');
+
   assert(consoleErrors.length === 0, `console errors: ${consoleErrors.join(' | ')}`);
   assert(pageErrors.length === 0, `page errors: ${pageErrors.join(' | ')}`);
   if (failures.length) throw new Error(failures.join('\n'));
@@ -159,7 +197,8 @@ async page => {
     practice: 'incorrect and correct attempts graded and scheduled',
     coach: 'replacement-game race stayed clean',
     library: 'keyboard quiz advanced',
-    mobile: '390px layout stayed within viewport'
+    mobile: '390px layout stayed within viewport',
+    closedLoop: 'missed mate became a post-game drill and delivered mate stayed scorable'
   };
 }
 EOF

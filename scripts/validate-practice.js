@@ -17,12 +17,15 @@ requirePattern(app, /const PRACTICE_PROGRESS_KEY = 'coach:practice:v1'/, 'practi
 requirePattern(app, /function practiceItemId[\s\S]{0,300}fenBefore[\s\S]{0,100}bestUci/, 'practice ids must be deterministic from position and answer');
 requirePattern(app, /function recordPracticeAttempt[\s\S]{0,1600}attempts \+= 1[\s\S]{0,800}dueAt/, 'practice attempts must update measurable spaced-repetition state');
 requirePattern(app, /function coachHandlePracticeMove[\s\S]{0,2200}actualUci !== session\.item\.entry\.bestUci/, 'practice moves must be graded against the saved best move');
+requirePattern(app, /const missedImmediateMate[\s\S]{0,300}Math\.max\(loss, 250\)/, 'missing mate-in-one must create a meaningful training error');
+requirePattern(app, /function currentGameDuePracticeItems[\s\S]{0,700}practiceIsDue/, 'post-game review must identify due drills from the current game');
 requirePattern(app, /function syncRemotePracticeProgress[\s\S]{0,1200}\.from\('drill_queue'\)[\s\S]{0,300}\.upsert/, 'signed-in practice scheduling must sync to drill_queue');
 requirePattern(app, /function queueRemotePracticeProgressSync[\s\S]{0,900}practiceRemoteSyncChains/, 'rapid practice attempts must serialize account-sync writes per drill');
 requirePattern(app, /mergeRemotePracticeRecords\(drillsResult\.data \|\| \[\]\)/, 'remote drill scheduling must hydrate local practice progress');
 requirePattern(html, /id="coach-practice-banner"[\s\S]{0,800}id="btn-coach-practice-answer"[\s\S]{0,300}id="btn-coach-practice-exit"/, 'practice mode needs answer and exit controls');
+requirePattern(html, /id="btn-summary-practice"/, 'post-game review needs a direct practice action');
 requirePattern(html, /id="practice-progress-attempts"[\s\S]{0,400}id="practice-progress-success"[\s\S]{0,400}id="practice-progress-mastered"/, 'practice queue must display progress metrics');
-requirePattern(smoke, /incorrect drill move was not rejected[\s\S]+correct drill move was not graded[\s\S]+practice progress did not survive reload[\s\S]+revealed answer was not completed[\s\S]+stale engine result leaked/, 'browser smoke must cover practice grading, persistence, answer reveal, and the replacement-game race');
+requirePattern(smoke, /incorrect drill move was not rejected[\s\S]+correct drill move was not graded[\s\S]+practice progress did not survive reload[\s\S]+revealed answer was not completed[\s\S]+stale engine result leaked[\s\S]+missed mate was not classified as a blunder[\s\S]+post-game practice action did not open the generated drill[\s\S]+mating move was not classified as best/, 'browser smoke must cover practice grading, persistence, answer reveal, replacement-game race, and real missed/delivered mates');
 requirePattern(smoke, /setViewportSize\(\{ width: 390, height: 844 \}\)/, 'browser smoke must cover the 390px mobile layout');
 
 if (errors.length) {

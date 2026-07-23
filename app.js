@@ -1236,6 +1236,7 @@ let threatRequestId = 0;           // invalidates stale async threat scans
 let coachPremove = null;           // queued premove while opponent is thinking
 let coachPracticeSession = null;   // active mistake-position drill, separate from normal games
 let renderedPracticeItems = new Map();
+let summaryPracticeItems = [];
 let coachRemoteGameId = null;      // Supabase coach_games.id for current game
 let coachRemoteGamePromise = null;
 let coachRemoteGamePromiseGeneration = null;
@@ -1927,6 +1928,24 @@ function buildPracticeQueue(entries, counts) {
   return queue;
 }
 
+function practiceItemsForEntries(entries, counts) {
+  return buildPracticeQueue(entries, counts).map(item => {
+    const meta = INSIGHT_TAG_META[item.tag] || INSIGHT_TAG_META.candidate_moves;
+    return Object.assign(item, {
+      id: practiceItemId(item.entry, item.tag),
+      meta
+    });
+  });
+}
+
+function currentGameDuePracticeItems() {
+  const entries = (coachReviewLog || [])
+    .filter(review => review && isInsightProblem(review.tier))
+    .map(insightEntryFromReview);
+  return practiceItemsForEntries(entries, insightTagCounts(entries))
+    .filter(item => practiceIsDue(item));
+}
+
 function formatPracticeContext(entry) {
   const ref = formatMoveRef(entry);
   const played = entry.userSan ? `You played ${entry.userSan}.` : 'Review the candidate moves.';
@@ -2101,13 +2120,7 @@ function formatPracticeDue(record) {
 }
 
 function renderPracticeQueue(entries, counts) {
-  const queue = buildPracticeQueue(entries, counts).map(item => {
-    const meta = INSIGHT_TAG_META[item.tag] || INSIGHT_TAG_META.candidate_moves;
-    return Object.assign(item, {
-      id: practiceItemId(item.entry, item.tag),
-      meta
-    });
-  });
+  const queue = practiceItemsForEntries(entries, counts);
   const $section = $('#practice-section');
   const $list = $('#practice-list').empty();
   renderedPracticeItems = new Map(queue.map(item => [item.id, item]));
@@ -3299,11 +3312,14 @@ async function classifyMove(fenBefore, userUciMove, fenAfter) {
   const bestLine = lines[0];
   const bestUci = (bestLine && bestLine.pv && bestLine.pv[0]) || beforeEval.bestmove;
   const afterInfo = afterEval.info;
+  const afterPosition = new Chess(fenAfter);
+  const afterIsTerminal = afterPosition.game_over();
 
   // Engine timeout / stall — evaluate resolved with no bestmove and no PV data.
   // Return a neutral review instead of classifying based on zeroes.
   const beforeStalled = !bestUci && lines.length === 0;
-  const afterStalled = !afterEval.bestmove && (!afterInfo || !afterInfo.pv || afterInfo.pv.length === 0);
+  const afterStalled = !afterIsTerminal &&
+    !afterEval.bestmove && (!afterInfo || !afterInfo.pv || afterInfo.pv.length === 0);
   if (beforeStalled || afterStalled) {
     return {
       tier: 'unknown',
@@ -3329,10 +3345,24 @@ async function classifyMove(fenBefore, userUciMove, fenAfter) {
   }
 
   const cpBefore = bestLine ? scoreToCp(bestLine) : 0;
-  const cpAfter = -scoreToCp(afterInfo);
-  const loss = Math.max(0, cpBefore - cpAfter);
+  const cpAfter = afterPosition.in_checkmate()
+    ? 10000
+    : (afterPosition.in_draw() ? 0 : -scoreToCp(afterInfo));
+  let loss = Math.max(0, cpBefore - cpAfter);
 
-  const cls = classifyRankLoss(rank, loss);
+  // Centipawn conversion intentionally keeps mate scores close together so
+  // charts remain bounded, but that makes missing mate-in-one look like a
+  // one-centipawn loss when a slower forced mate remains. Preserve the
+  // training meaning: any non-mating move that skips an immediate mate is a
+  // blunder even if Stockfish still sees a forced win.
+  const missedImmediateMate = !!(
+    bestLine && bestLine.mate === 1 &&
+    userUciMove !== bestUci &&
+    !afterPosition.in_checkmate()
+  );
+  if (missedImmediateMate) loss = Math.max(loss, 250);
+
+  const cls = classifyRankLoss(missedImmediateMate ? null : rank, loss);
 
   // Build top-3 alternatives for the review card. Each line carries its first-move
   // SAN (the candidate), its eval in centipawns, and a short PV preview.
@@ -3550,6 +3580,7 @@ function invalidateCoachAsyncWork(reason) {
 function resetCoachState(fen) {
   invalidateCoachAsyncWork('A new game replaced the previous analysis.');
   coachPracticeSession = null;
+  summaryPracticeItems = [];
   CoachController.setPhase('idle');
   coachGame = fen ? new Chess(fen) : new Chess();
   coachLocalGameId = createCoachGameId();
@@ -4409,6 +4440,12 @@ function showPostGameSummary(endMsg) {
   } else {
     $('#summary-takeaway').hide();
   }
+
+  summaryPracticeItems = currentGameDuePracticeItems();
+  const dueCount = summaryPracticeItems.length;
+  $('#btn-summary-practice')
+    .text(dueCount === 1 ? 'Practice this mistake' : `Practice ${dueCount} mistakes`)
+    .toggle(dueCount > 0);
 
   summaryReturnFocus = document.activeElement;
   $('#summary-overlay').css('display', 'flex').attr('aria-hidden', 'false');
@@ -6717,6 +6754,12 @@ $(function () {
   $('#btn-summary-newgame').on('click', function() {
     closeSummaryOverlay();
     startCoachGame();
+  });
+  $('#btn-summary-practice').on('click', function() {
+    const item = summaryPracticeItems[0];
+    if (!item) return;
+    closeSummaryOverlay();
+    startCoachPractice(item);
   });
   $('#btn-summary-close').on('click', function() {
     closeSummaryOverlay();
