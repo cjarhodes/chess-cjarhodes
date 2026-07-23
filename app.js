@@ -1234,6 +1234,8 @@ let coachLastEndMsg = null;        // headline from last game-over, used to reop
 let candidateRequestId = 0;        // invalidates stale async candidate searches
 let threatRequestId = 0;           // invalidates stale async threat scans
 let coachPremove = null;           // queued premove while opponent is thinking
+let coachPracticeSession = null;   // active mistake-position drill, separate from normal games
+let renderedPracticeItems = new Map();
 let coachRemoteGameId = null;      // Supabase coach_games.id for current game
 let coachRemoteGamePromise = null;
 let coachRemoteGamePromiseGeneration = null;
@@ -1283,6 +1285,9 @@ function createCoachGameId() {
 function saveCoachState() {
   try {
     if (!coachGame) return;
+    // Practice attempts have their own persistence model and must never be
+    // restored as unfinished rated games.
+    if (coachPracticeSession) return;
     const total = coachGame.history().length;
     // Skip persisting empty initial state — nothing to recover.
     if (total === 0 && !coachLastEndMsg && !coachRemoteGameId) {
@@ -1929,27 +1934,207 @@ function formatPracticeContext(entry) {
   return `${ref}: ${played}${opening}`;
 }
 
+const PRACTICE_PROGRESS_KEY = 'coach:practice:v1';
+const practiceRemoteSyncChains = new Map();
+
+function emptyPracticeProgress() {
+  return { v: 1, records: {} };
+}
+
+function loadPracticeProgress() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PRACTICE_PROGRESS_KEY));
+    if (!parsed || parsed.v !== 1 || !parsed.records || typeof parsed.records !== 'object') {
+      return emptyPracticeProgress();
+    }
+    return { v: 1, records: parsed.records };
+  } catch (e) {
+    return emptyPracticeProgress();
+  }
+}
+
+function savePracticeProgress(state) {
+  try {
+    localStorage.setItem(PRACTICE_PROGRESS_KEY, JSON.stringify({ v: 1, records: state.records || {} }));
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
+function clearPracticeProgress() {
+  try { localStorage.removeItem(PRACTICE_PROGRESS_KEY); } catch (e) {}
+}
+
+function hashPracticeValue(value) {
+  let hash = 2166136261;
+  const text = String(value || '');
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function practiceItemId(entry, tag) {
+  return 'drill-' + hashPracticeValue(`${entry.fenBefore}|${entry.bestUci}|${tag}`);
+}
+
+function practiceRecordFor(item) {
+  return loadPracticeProgress().records[item.id] || null;
+}
+
+function practiceIsDue(item, now = Date.now()) {
+  const record = practiceRecordFor(item);
+  return !record || !record.dueAt || record.dueAt <= now;
+}
+
+function practiceProgressTotals() {
+  const records = Object.values(loadPracticeProgress().records);
+  return records.reduce((totals, record) => {
+    totals.attempts += record.attempts || 0;
+    totals.correct += record.correct || 0;
+    if ((record.reps || 0) >= 3) totals.mastered += 1;
+    return totals;
+  }, { attempts: 0, correct: 0, mastered: 0 });
+}
+
+function nextPracticeInterval(record, clean) {
+  if (!clean) return 0;
+  if (record.reps <= 1) return 1;
+  if (record.reps === 2) return 3;
+  return Math.max(4, Math.round((record.intervalDays || 3) * (record.ease || 2.5)));
+}
+
+function recordPracticeAttempt(item, correct, revealed) {
+  const state = loadPracticeProgress();
+  const now = Date.now();
+  const previous = state.records[item.id] || {
+    attempts: 0, correct: 0, reps: 0, ease: 2.5, intervalDays: 0, dueAt: 0
+  };
+  const record = Object.assign({}, previous);
+  record.attempts += 1;
+  record.lastAttemptAt = now;
+  record.lastResult = correct ? (revealed ? 'assisted' : 'correct') : 'incorrect';
+  if (correct) {
+    record.correct += 1;
+    record.reps += 1;
+    record.ease = Math.max(1.3, record.ease + (revealed ? -0.05 : 0.08));
+    record.intervalDays = nextPracticeInterval(record, true);
+    record.dueAt = now + record.intervalDays * DAY_MS;
+  } else {
+    record.reps = 0;
+    record.ease = Math.max(1.3, record.ease - 0.2);
+    record.intervalDays = 0;
+    record.dueAt = now;
+  }
+  state.records[item.id] = record;
+  const saved = savePracticeProgress(state);
+  if (!saved.ok) setCoachStatus('Practice result could not be saved in this browser.');
+  queueRemotePracticeProgressSync(item, record);
+  return record;
+}
+
+function queueRemotePracticeProgressSync(item, record) {
+  if (!hasCoachDbSession() || !item.entry.id) return;
+  const previous = practiceRemoteSyncChains.get(item.id) || Promise.resolve();
+  const next = previous
+    .catch(() => {})
+    .then(() => syncRemotePracticeProgress(item, record))
+    .catch(handleCoachDbError)
+    .finally(() => {
+      if (practiceRemoteSyncChains.get(item.id) === next) {
+        practiceRemoteSyncChains.delete(item.id);
+      }
+    });
+  practiceRemoteSyncChains.set(item.id, next);
+}
+
+function mergeRemotePracticeRecords(rows) {
+  if (!Array.isArray(rows) || !rows.length) return;
+  const state = loadPracticeProgress();
+  let changed = false;
+  rows.forEach(row => {
+    if (!row || !row.fen || !row.best_uci || !row.tag) return;
+    const id = practiceItemId({ fenBefore: row.fen, bestUci: row.best_uci }, row.tag);
+    const local = state.records[id];
+    const remoteUpdatedAt = row.updated_at ? Date.parse(row.updated_at) : 0;
+    if (local && (local.lastAttemptAt || 0) > remoteUpdatedAt) return;
+    state.records[id] = Object.assign({}, local || {}, {
+      reps: row.reps || 0,
+      ease: Number(row.ease) || 2.5,
+      intervalDays: row.interval_days || 0,
+      dueAt: row.due_at ? Date.parse(row.due_at) : 0,
+      remoteUpdatedAt
+    });
+    changed = true;
+  });
+  if (changed) savePracticeProgress(state);
+}
+
+async function syncRemotePracticeProgress(item, record) {
+  if (!hasCoachDbSession() || !item.entry.id) return;
+  const payload = {
+    user_id: coachAuthUser.id,
+    source_move_id: item.entry.id,
+    tag: item.tag,
+    fen: item.entry.fenBefore,
+    best_uci: item.entry.bestUci || null,
+    best_san: item.entry.bestSan || null,
+    prompt: item.meta.practice,
+    due_at: new Date(record.dueAt || Date.now()).toISOString(),
+    interval_days: record.intervalDays || 0,
+    ease: record.ease || 2.5,
+    reps: record.reps || 0,
+    updated_at: new Date().toISOString()
+  };
+  const { error } = await coachDbClient
+    .from('drill_queue')
+    .upsert(payload, { onConflict: 'source_move_id,tag' });
+  if (error) throw error;
+}
+
+function formatPracticeDue(record) {
+  if (!record || !record.dueAt || record.dueAt <= Date.now()) return 'Due now';
+  const days = Math.max(1, Math.ceil((record.dueAt - Date.now()) / DAY_MS));
+  return `Due in ${days}d`;
+}
+
 function renderPracticeQueue(entries, counts) {
-  const queue = buildPracticeQueue(entries, counts);
+  const queue = buildPracticeQueue(entries, counts).map(item => {
+    const meta = INSIGHT_TAG_META[item.tag] || INSIGHT_TAG_META.candidate_moves;
+    return Object.assign(item, {
+      id: practiceItemId(item.entry, item.tag),
+      meta
+    });
+  });
   const $section = $('#practice-section');
   const $list = $('#practice-list').empty();
+  renderedPracticeItems = new Map(queue.map(item => [item.id, item]));
   if (!queue.length) {
     $section.hide();
     return;
   }
-  $('#practice-count').text(`${queue.length} due`);
-  queue.forEach(item => {
+  const due = queue.filter(item => practiceIsDue(item));
+  const totals = practiceProgressTotals();
+  const successRate = totals.attempts ? Math.round(totals.correct / totals.attempts * 100) : null;
+  $('#practice-count').text(`${due.length} due`);
+  $('#practice-progress-attempts').text(totals.attempts);
+  $('#practice-progress-success').text(successRate === null ? '—' : successRate + '%');
+  $('#practice-progress-mastered').text(totals.mastered);
+  $('#practice-empty').toggle(due.length === 0);
+  due.forEach(item => {
     const entry = item.entry;
-    const meta = INSIGHT_TAG_META[item.tag] || INSIGHT_TAG_META.candidate_moves;
+    const meta = item.meta;
+    const record = practiceRecordFor(item);
     const $row = $('<div class="practice-row"></div>');
     const $title = $('<div class="practice-title"></div>').text(meta.title);
     const $button = $('<button type="button" class="movelist-copy practice-load"></button>')
-      .text('Load')
-      .attr('data-fen', entry.fenBefore)
-      .attr('data-side', fenSideToUserSide(entry.fenBefore));
+      .text(record ? 'Review' : 'Practice')
+      .attr('data-practice-id', item.id);
     $row.append($title);
     $row.append($button);
-    $row.append($('<div class="practice-detail"></div>').text(`${meta.practice} ${formatPracticeContext(entry)}`));
+    $row.append($('<div class="practice-detail"></div>').text(`${meta.practice} ${formatPracticeContext(entry)} ${formatPracticeDue(record)}.`));
     $list.append($row);
   });
   $section.show();
@@ -2559,14 +2744,23 @@ async function refreshRemoteInsights(opts = {}) {
     return;
   }
   if (!opts.silent) setCoachDbStatus('Loading account insights...');
-  const { data, error } = await coachDbClient
-    .from('coach_moves')
-    .select('id,played_at,classification,centipawn_loss,phase,tags,pair_num,ply,fen_before,user_uci,user_san,best_uci,best_san,opening_name')
-    .eq('user_id', coachAuthUser.id)
-    .order('played_at', { ascending: false })
-    .limit(300);
-  if (error) throw error;
-  coachRemoteInsightEntries = (data || []).slice().reverse().map(remoteMoveToInsightEntry);
+  const [movesResult, drillsResult] = await Promise.all([
+    coachDbClient
+      .from('coach_moves')
+      .select('id,played_at,classification,centipawn_loss,phase,tags,pair_num,ply,fen_before,user_uci,user_san,best_uci,best_san,opening_name')
+      .eq('user_id', coachAuthUser.id)
+      .order('played_at', { ascending: false })
+      .limit(300),
+    coachDbClient
+      .from('drill_queue')
+      .select('source_move_id,tag,fen,best_uci,due_at,interval_days,ease,reps,updated_at')
+      .eq('user_id', coachAuthUser.id)
+      .limit(300)
+  ]);
+  if (movesResult.error) throw movesResult.error;
+  if (drillsResult.error) throw drillsResult.error;
+  mergeRemotePracticeRecords(drillsResult.data || []);
+  coachRemoteInsightEntries = (movesResult.data || []).slice().reverse().map(remoteMoveToInsightEntry);
   if (!opts.silent) setCoachDbStatus('Account insights loaded.');
   renderInsights();
 }
@@ -3355,6 +3549,7 @@ function invalidateCoachAsyncWork(reason) {
 
 function resetCoachState(fen) {
   invalidateCoachAsyncWork('A new game replaced the previous analysis.');
+  coachPracticeSession = null;
   CoachController.setPhase('idle');
   coachGame = fen ? new Chess(fen) : new Chess();
   coachLocalGameId = createCoachGameId();
@@ -3374,6 +3569,7 @@ function resetCoachState(fen) {
   clearPremove();
   $('#coach-status').removeClass('status-ended');
   $('#summary-overlay').hide().attr('aria-hidden', 'true');
+  $('#coach-practice-banner').hide();
   $('#coach-review').hide();
   $('#threats-section').hide();
   $('#candidates-section').hide();
@@ -4436,6 +4632,108 @@ function scrollCoachBoardIntoViewOnMobile() {
   });
 }
 
+function startCoachPractice(item) {
+  if (!item || !item.entry || !isValidFen(item.entry.fenBefore) || !item.entry.bestUci) {
+    setCoachStatus('Practice position is no longer valid.');
+    return;
+  }
+  resetCoachState(item.entry.fenBefore);
+  coachPracticeSession = {
+    item,
+    misses: 0,
+    revealed: false,
+    completed: false
+  };
+  coachUserSide = fenSideToUserSide(item.entry.fenBefore);
+  coachGameActive = true;
+  CoachController.setPhase('practice');
+  clearCoachState();
+  coachBoardFlipped = coachUserColor() === 'black';
+  createCoachBoard(coachGame.fen(), coachBoardFlipped ? 'black' : 'white');
+  $('#coach-view').addClass('game-active');
+  $('#coach-practice-title').text(item.meta.title);
+  $('#coach-practice-prompt').text(item.meta.practice + ' Find the best move in this position.');
+  $('#coach-practice-status').text('Attempt the move without engine help.');
+  $('#btn-coach-practice-answer').prop('disabled', false);
+  $('#coach-practice-banner').show().css('display', 'flex');
+  $('#coach-keyboard-move-status').text('');
+  setCoachStatus('Practice drill — find the best move.');
+  updateCoachControlsState();
+  scrollCoachBoardIntoViewOnMobile();
+}
+
+function coachPracticeMoveLabel(item) {
+  if (!item || !item.entry) return 'the best move';
+  if (item.entry.bestSan) return item.entry.bestSan;
+  const move = moveFromUci(item.entry.fenBefore, item.entry.bestUci);
+  return move ? move.san : item.entry.bestUci;
+}
+
+function coachHandlePracticeMove(source, target, promotion, opts) {
+  const session = coachPracticeSession;
+  if (!session || session.completed || !coachGameActive || !coachGame) return 'snapback';
+  const temp = new Chess(coachGame.fen());
+  const move = temp.move({ from: source, to: target, promotion: promotion || 'q' });
+  if (!move) return 'snapback';
+  const actualUci = uciFromMove(move);
+  if (actualUci !== session.item.entry.bestUci) {
+    session.misses += 1;
+    recordPracticeAttempt(session.item, false, false);
+    const hint = session.misses >= 2
+      ? ` Hint: the best move starts on ${session.item.entry.bestUci.slice(0, 2)}.`
+      : '';
+    $('#coach-practice-status').text(`Not the best move yet.${hint}`);
+    setCoachStatus('Practice: try another candidate.');
+    renderInsights();
+    return 'snapback';
+  }
+
+  const played = coachGame.move({ from: source, to: target, promotion: promotion || 'q' });
+  if (!played) return 'snapback';
+  session.completed = true;
+  const record = recordPracticeAttempt(session.item, true, session.revealed);
+  if (opts && opts.updateBoard !== false && coachBoard) coachBoard.position(coachGame.fen());
+  updateCapturedDisplay(coachGame.fen());
+  updateCoachBoardAccessibility();
+  playSound(soundForMove(played, coachGame));
+  const due = formatPracticeDue(record);
+  const quality = session.revealed
+    ? 'Solved after revealing the answer'
+    : (session.misses > 0 ? `Correct after ${session.misses + 1} attempts` : 'Correct on the first try');
+  $('#coach-practice-status').text(`${quality}: ${played.san}. ${due}.`);
+  setCoachStatus(`${quality}. Practice progress saved.`);
+  $('#btn-coach-practice-answer').prop('disabled', true);
+  updateCoachControlsState();
+  renderInsights();
+  return 'correct';
+}
+
+function revealCoachPracticeAnswer() {
+  const session = coachPracticeSession;
+  if (!session || session.completed) return;
+  if (!session.revealed) {
+    session.revealed = true;
+    recordPracticeAttempt(session.item, false, true);
+    renderInsights();
+  }
+  const label = coachPracticeMoveLabel(session.item);
+  $('#coach-practice-status').text(`Answer: ${label}. Play it on the board to complete the drill.`);
+  $('#btn-coach-practice-answer').prop('disabled', true);
+  setCoachStatus('Practice answer revealed — now play the move.');
+}
+
+function exitCoachPractice() {
+  if (!coachPracticeSession) return;
+  resetCoachState();
+  coachGameActive = false;
+  CoachController.setPhase('idle');
+  createCoachBoard('start', 'white');
+  $('#coach-view').removeClass('game-active');
+  $('#coach-practice-banner').hide();
+  setCoachStatus('Practice closed. Start a game or choose another due drill.');
+  updateCoachControlsState();
+}
+
 function createBoard(position, draggable, orientation) {
   if (board) board.destroy();
   board = Chessboard('myBoard', {
@@ -4458,6 +4756,7 @@ function createCoachBoard(position, orientation) {
     pieceTheme: localPieceTheme,
     onDragStart: function(source, piece) {
       if (!coachGameActive || !coachGame) return false;
+      if (coachPracticeSession && coachPracticeSession.completed) return false;
       if (coachIsReviewing()) return false;
       // Only allow picking up pieces of the user's colour, ever.
       const userPrefix = coachUserColor() === 'white' ? 'w' : 'b';
@@ -4473,7 +4772,11 @@ function createCoachBoard(position, orientation) {
       if (coachIsUserTurn()) {
         if (coachThinking) return 'snapback';
         if (requestPromotionChoice(coachGame, source, target, promotion => {
-          coachHandleUserMove(source, target, promotion, { updateBoard: true });
+          if (coachPracticeSession) {
+            coachHandlePracticeMove(source, target, promotion, { updateBoard: true });
+          } else {
+            coachHandleUserMove(source, target, promotion, { updateBoard: true });
+          }
         }, true)) {
           return 'snapback';
         }
@@ -4481,6 +4784,9 @@ function createCoachBoard(position, orientation) {
         const tempGame = new Chess(coachGame.fen());
         const move = tempGame.move({ from: source, to: target, promotion: 'q' });
         if (!move) return 'snapback';
+        if (coachPracticeSession) {
+          return coachHandlePracticeMove(source, target, 'q', { updateBoard: false });
+        }
         // Legal move — dispatch async classification + opponent reply
         coachHandleUserMove(source, target, 'q', { updateBoard: false });
         return;
@@ -4640,21 +4946,22 @@ function showEngineLoadError(err) {
 // ─────────────────────────────────────────────
 function updateCoachControlsState() {
   const active = coachGameActive;
+  const practicing = !!coachPracticeSession;
   const reviewing = coachIsReviewing();
   const hasReview = !!coachLastReview;
   const total = coachGame ? coachGame.history().length : 0;
   const cur = coachReviewCursor === null ? total : coachReviewCursor;
-  $('#btn-coach-resign').prop('disabled', !active || reviewing);
+  $('#btn-coach-resign').prop('disabled', !active || reviewing || practicing);
   // "Open review" only appears once the game has ended and we have a summary to reopen.
-  $('#btn-coach-openreview').toggle(!active && !!coachLastEndMsg);
-  $('#btn-coach-takeback').prop('disabled', !hasReview || reviewing || coachThinking);
-  $('#btn-coach-showbest').prop('disabled', !hasReview || (coachLastReview && coachLastReview.tier === 'best') || reviewing || coachThinking);
-  $('#btn-coach-candidates').prop('disabled', !active || !coachGame || !coachIsUserTurn() || reviewing || coachThinking);
-  $('#btn-coach-prev').prop('disabled', !coachGame || total === 0 || cur === 0);
-  $('#btn-coach-next').prop('disabled', !coachGame || total === 0 || cur === total);
+  $('#btn-coach-openreview').toggle(!practicing && !active && !!coachLastEndMsg);
+  $('#btn-coach-takeback').prop('disabled', practicing || !hasReview || reviewing || coachThinking);
+  $('#btn-coach-showbest').prop('disabled', practicing || !hasReview || (coachLastReview && coachLastReview.tier === 'best') || reviewing || coachThinking);
+  $('#btn-coach-candidates').prop('disabled', practicing || !active || !coachGame || !coachIsUserTurn() || reviewing || coachThinking);
+  $('#btn-coach-prev').prop('disabled', practicing || !coachGame || total === 0 || cur === 0);
+  $('#btn-coach-next').prop('disabled', practicing || !coachGame || total === 0 || cur === total);
   $('#btn-coach-live').toggle(reviewing);
   $('#coach-nav-label').text(
-    !coachGame || total === 0 ? '' :
+    practicing ? 'Practice' : !coachGame || total === 0 ? '' :
     reviewing ? `Move ${cur}/${total}` : `Move ${total} • Live`
   );
 }
@@ -6086,20 +6393,23 @@ $(function () {
     renderInsights();
   });
 
+  $('#btn-practice-progress-reset').on('click', function() {
+    if (!confirm('Reset all practice attempts and scheduling for this browser?')) return;
+    clearPracticeProgress();
+    renderInsights();
+  });
+
   $(document).on('click', '.practice-load', function() {
-    const fen = $(this).attr('data-fen') || '';
-    const side = $(this).attr('data-side') === 'black' ? 'black' : 'white';
-    if (!fen || !isValidFen(fen)) {
+    const item = renderedPracticeItems.get($(this).attr('data-practice-id'));
+    if (!item) {
       setCoachStatus('Practice position is no longer valid.');
       return;
     }
-    $('#coach-fen').val(fen);
-    $('.side-toggle button').removeClass('active').attr('aria-pressed', 'false');
-    $('.side-toggle button[data-side="' + side + '"]').addClass('active').attr('aria-pressed', 'true');
-    coachUserSide = side;
-    startCoachGame();
-    setCoachStatus('Practice position loaded. Find the best move.');
+    startCoachPractice(item);
   });
+
+  $('#btn-coach-practice-answer').on('click', revealCoachPracticeAnswer);
+  $('#btn-coach-practice-exit').on('click', exitCoachPractice);
 
   // Sound toggle — restore prior preference, persist on change. The first
   // change is also a user gesture so we can prime the AudioContext here.
@@ -6137,9 +6447,11 @@ $(function () {
       $status.text('That move is not legal here. Try SAN such as Nf3 or coordinates such as g1f3.');
       return;
     }
-    const result = await coachHandleUserMove(move.from, move.to, move.promotion || 'q', { updateBoard: true });
+    const result = coachPracticeSession
+      ? coachHandlePracticeMove(move.from, move.to, move.promotion || 'q', { updateBoard: true })
+      : await coachHandleUserMove(move.from, move.to, move.promotion || 'q', { updateBoard: true });
     if (result === 'snapback') {
-      $status.text('That move could not be played.');
+      $status.text(coachPracticeSession ? 'Not the best move yet. Try again.' : 'That move could not be played.');
       return;
     }
     if (result === 'stale') {
@@ -6147,7 +6459,7 @@ $(function () {
       return;
     }
     $('#coach-keyboard-move-input').val('');
-    $status.text('Move played: ' + move.san);
+    $status.text(coachPracticeSession ? 'Practice move played: ' + move.san : 'Move played: ' + move.san);
     updateCoachBoardAccessibility();
   });
 
@@ -6521,6 +6833,21 @@ $(function () {
   }
 
   function bindGlobalInputEvents() {
+
+  // chessboard.js measures its internal grid at creation time. Re-measure both
+  // boards after responsive layout changes so desktop-to-mobile resizing and
+  // device rotation cannot leave a 440px grid clipped inside a smaller shell.
+  let boardResizeTimer = null;
+  $(window).on('resize', function() {
+    if (boardResizeTimer) clearTimeout(boardResizeTimer);
+    boardResizeTimer = setTimeout(() => {
+      boardResizeTimer = null;
+      if (board) board.resize();
+      if (coachBoard) coachBoard.resize();
+      updateLibraryBoardAccessibility();
+      updateCoachBoardAccessibility();
+    }, 120);
+  });
 
   // ─── SEARCH ─────────────────────────────
   applySearch = function(q) {

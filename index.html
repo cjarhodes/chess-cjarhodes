@@ -663,6 +663,32 @@
       margin-bottom: 0.5rem;
       letter-spacing: 0.01em;
     }
+    .coach-practice-banner {
+      width: 440px;
+      max-width: 100%;
+      display: none;
+      flex-direction: column;
+      gap: 0.45rem;
+      padding: 0.75rem 0.85rem;
+      background: var(--surface2);
+      border: 1px solid var(--highlight);
+      border-left: 3px solid var(--highlight);
+      border-radius: 2px;
+    }
+    .coach-practice-banner .title {
+      color: var(--text);
+      font-weight: 600;
+      font-size: 0.86rem;
+    }
+    .coach-practice-banner .prompt,
+    .coach-practice-banner .status {
+      color: var(--muted);
+      font-family: var(--font-reading);
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+    .coach-practice-banner .status { color: var(--accent-soft); }
+    .coach-practice-actions { display: flex; gap: 0.45rem; flex-wrap: wrap; }
     .coach-classification {
       display: inline-block;
       padding: 0.28rem 0.65rem;
@@ -1250,6 +1276,45 @@
       font-size: 0.66rem;
       letter-spacing: 0.06em;
       text-transform: uppercase;
+    }
+    .practice-head-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+    .practice-progress {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.4rem;
+      margin-bottom: 0.55rem;
+    }
+    .practice-progress .metric {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 0.5rem;
+      text-align: center;
+    }
+    .practice-progress .value {
+      display: block;
+      color: var(--accent-soft);
+      font-family: var(--font-mono);
+      font-weight: 600;
+    }
+    .practice-progress .label {
+      display: block;
+      margin-top: 0.2rem;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .practice-empty {
+      color: var(--muted);
+      font-family: var(--font-reading);
+      font-size: 0.9rem;
+      line-height: 1.4;
+      padding: 0.55rem 0;
     }
     .practice-load {
       align-self: start;
@@ -2157,6 +2222,15 @@
 
   <!-- BOARD -->
   <main class="coach-board-area">
+    <div class="coach-practice-banner" id="coach-practice-banner" role="region" aria-labelledby="coach-practice-title">
+      <div class="title" id="coach-practice-title">Practice drill</div>
+      <div class="prompt" id="coach-practice-prompt"></div>
+      <div class="status" id="coach-practice-status" role="status" aria-live="polite"></div>
+      <div class="coach-practice-actions">
+        <button type="button" class="ctrl-btn" id="btn-coach-practice-answer">Show answer</button>
+        <button type="button" class="ctrl-btn" id="btn-coach-practice-exit">Exit practice</button>
+      </div>
+    </div>
     <div class="captured-bar" id="captured-top">
       <span class="captured-pieces" id="captured-top-pieces"></span>
       <span class="material-lead" id="captured-top-lead"></span>
@@ -2301,8 +2375,17 @@
     <div class="coach-panel-section" id="practice-section" style="display:none;">
       <div class="lifetime-head">
         <span class="section-label">Practice Queue</span>
-        <span class="practice-tag" id="practice-count">0 due</span>
+        <span class="practice-head-actions">
+          <span class="practice-tag" id="practice-count">0 due</span>
+          <button id="btn-practice-progress-reset" class="movelist-copy" title="Reset practice progress">Reset</button>
+        </span>
       </div>
+      <div class="practice-progress" aria-label="Practice progress">
+        <div class="metric"><span class="value" id="practice-progress-attempts">0</span><span class="label">Attempts</span></div>
+        <div class="metric"><span class="value" id="practice-progress-success">—</span><span class="label">Success</span></div>
+        <div class="metric"><span class="value" id="practice-progress-mastered">0</span><span class="label">Mastered</span></div>
+      </div>
+      <div class="practice-empty" id="practice-empty" style="display:none;">All caught up. Completed drills return when they are due.</div>
       <div class="practice-list" id="practice-list"></div>
     </div>
 

@@ -25,7 +25,7 @@ Then open `http://127.0.0.1:4173/`.
 ## Workflow
 1. Edit `index.html`, `app.js`, or the relevant vendored/config file.
 2. Run `node --check app.js` and every `scripts/validate-*.js` validator.
-3. Verify Library and Coach in a desktop and 390px-wide browser. Include a move followed immediately by New Game to catch stale engine output.
+3. Run `scripts/verify-browser.sh` for the repeatable Library, Coach, practice-loop, 390px mobile, and stale-engine smoke coverage.
 4. For schema changes, add a Supabase migration and run a local reset or linked `supabase db push`.
 5. Commit and push to `main`; Vercel auto-deploys to chess.cjarhodes.com.
 6. Confirm the deployment and smoke-test the custom domain.
