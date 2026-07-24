@@ -35,6 +35,8 @@ requirePattern(html, /id="coach-practice-session-status"[\s\S]{0,800}id="btn-coa
 requirePattern(html, /id="btn-summary-practice"/, 'post-game review needs a direct practice action');
 requirePattern(html, /id="practice-progress-attempts"[\s\S]{0,400}id="practice-progress-success"[\s\S]{0,400}id="practice-progress-mastered"/, 'practice queue must display progress metrics');
 requirePattern(html, /id="practice-progress-week"[\s\S]{0,300}id="practice-progress-streak"[\s\S]{0,500}id="practice-trend-bars"/, 'practice progress must render seven-day activity and streaks');
+requirePattern(html, /id="coach-daily-plan"[\s\S]{0,500}id="coach-daily-plan-title"[\s\S]{0,500}id="btn-coach-next-action"/, 'Coach must always show one clear next training action');
+requirePattern(app, /function renderCoachDailyPlan[\s\S]{0,2600}practice drill[\s\S]{0,1200}Play one coached game/, 'daily plan must prioritize active work, due drills, and the next coached game');
 requirePattern(migration, /create table public\.practice_attempts[\s\S]{0,1800}enable row level security/, 'attempt history must be RLS-protected');
 requirePattern(migration, /function public\.record_practice_attempt[\s\S]{0,600}security invoker[\s\S]{0,4200}pg_advisory_xact_lock/, 'practice RPC must be security-invoker and serialize each drill');
 requirePattern(migration, /on conflict \(id\) do nothing[\s\S]{0,300}row_count/, 'practice RPC must be idempotent by event id');

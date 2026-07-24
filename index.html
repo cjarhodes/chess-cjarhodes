@@ -239,6 +239,10 @@
       width: 440px;
     }
 
+    #coachBoard {
+      width: 440px;
+    }
+
     /* chessboard.js overrides — cream/walnut traditional board */
     .board-b72b1 { border: 3px solid var(--walnut) !important; border-radius: 0 !important; overflow: hidden; }
     .white-1e1d7 { background: var(--white-cat) !important; color: var(--black-cat) !important; }
@@ -662,6 +666,28 @@
       color: var(--muted);
       margin-bottom: 0.5rem;
       letter-spacing: 0.01em;
+    }
+    .coach-daily-plan {
+      padding: 0.8rem;
+      background: linear-gradient(135deg, rgba(162,51,70,0.16), rgba(162,51,70,0.04));
+      border: 1px solid rgba(198,103,119,0.55);
+      border-left: 3px solid var(--accent-soft);
+      border-radius: 2px;
+    }
+    .coach-daily-plan .plan-title {
+      color: var(--text);
+      font-weight: 600;
+      font-size: 0.92rem;
+      line-height: 1.3;
+    }
+    .coach-daily-plan .plan-detail {
+      color: var(--muted);
+      font-family: var(--font-reading);
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+    .coach-daily-plan .ctrl-btn {
+      align-self: flex-start;
     }
     .coach-practice-banner {
       width: 440px;
@@ -1946,6 +1972,23 @@
     .summary-actions { display: flex; gap: 0.5rem; margin-top: 0.25rem; flex-wrap: wrap; }
 
     /* Responsive */
+    @media (max-width: 700px) {
+      header {
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.75rem 1rem;
+        padding: 1rem;
+      }
+      header h1 { font-size: 0.95rem; }
+      .top-nav {
+        margin-left: 0;
+        width: 100%;
+      }
+      .top-nav-btn {
+        flex: 1;
+      }
+    }
+
     @media (max-width: 1100px) {
       .coach-view { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; }
       .coach-settings { border-right: none; border-bottom: 1px solid var(--border); }
@@ -1959,12 +2002,14 @@
     @media (max-width: 1100px) {
       .app { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; }
       .library { border-right: none; border-bottom: 1px solid var(--border); padding: 1rem; overflow-y: visible; }
+      .library, .board-area, .info-panel { min-width: 0; }
       .library-search { padding: 0 0 0.75rem; }
+      .library-search, .cat-tabs, .library-section, .sr-due-section { width: 100%; max-width: 100%; }
       .library-section, .sr-due-section { margin-bottom: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
       .sr-due-section { width: 100%; }
       .library-label { display: none; }
       .cat-tabs { flex-wrap: wrap; padding: 0 0 0.5rem; border-bottom: none; }
-      .opening-btn { border-radius: 4px; border-left: none; border: 1px solid var(--border); padding: 0.35rem 0.75rem; width: auto; display: inline-block; }
+      .opening-btn { border-radius: 4px; border-left: none; border: 1px solid var(--border); padding: 0.35rem 0.75rem; width: auto; max-width: 100%; display: inline-block; white-space: normal; }
       .info-panel { border-left: none; border-top: 1px solid var(--border); overflow-y: visible; }
       .board-area { overflow-y: visible; padding: 1rem; }
       #myBoard { width: 90vw; max-width: 440px; }
@@ -2353,6 +2398,12 @@
 
   <!-- COACH PANEL -->
   <aside class="coach-panel">
+    <div class="coach-panel-section coach-daily-plan" id="coach-daily-plan" aria-labelledby="coach-daily-plan-label">
+      <div class="section-label" id="coach-daily-plan-label">Today’s plan</div>
+      <div class="plan-title" id="coach-daily-plan-title">Play one coached game</div>
+      <div class="plan-detail" id="coach-daily-plan-detail">Your mistakes will become targeted practice drills after the game.</div>
+      <button type="button" class="ctrl-btn primary" id="btn-coach-next-action" data-action="game">Start today’s game</button>
+    </div>
     <div id="coach-status" class="coach-status" role="status" aria-live="polite">Set a level and start a new game.</div>
     <div id="coach-premove-hint" class="coach-premove-hint" style="display:none;"></div>
 

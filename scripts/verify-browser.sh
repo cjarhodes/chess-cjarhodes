@@ -92,6 +92,8 @@ async page => {
   }, insightState);
   await page.reload();
 
+  assert(await page.locator('#coach-daily-plan-title').textContent() === '2 practice drills due', 'daily plan did not prioritize due drills');
+  assert((await page.locator('#btn-coach-next-action').textContent()).includes('2-drill session'), 'daily plan did not offer the due session');
   assert(await page.locator('#practice-section').isVisible(), 'practice queue did not render from a reviewed mistake');
   assert(await page.locator('.practice-load').count() === 2, 'expected two due practice drills');
   await page.locator('.practice-load').first().click();
@@ -232,6 +234,8 @@ async page => {
   await page.goto(page.url().split('?')[0] + '?view=coach');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
+  assert(await page.locator('#coach-daily-plan-title').textContent() === 'Play one coached game', 'clean first visit did not explain the next training action');
+  assert(await page.locator('#btn-coach-next-action').textContent() === 'Start today’s game', 'clean first visit did not offer a direct game action');
   await page.locator('#coach-fen').fill('7k/8/5KQ1/8/8/8/8/8 w - - 0 1');
   await page.locator('.side-toggle button[data-side="white"]').click();
   await page.locator('#btn-coach-newgame').click();

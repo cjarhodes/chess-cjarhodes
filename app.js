@@ -2370,6 +2370,45 @@ function formatPracticeDue(record) {
   return `Due in ${days}d`;
 }
 
+function renderCoachDailyPlan(queue, due, totals) {
+  const items = Array.isArray(queue) ? queue : Array.from(renderedPracticeItems.values());
+  const dueItems = Array.isArray(due) ? due : items.filter(item => practiceIsDue(item));
+  const progress = totals || practiceProgressTotals();
+  const $action = $('#btn-coach-next-action');
+
+  if (coachPracticeSession) {
+    $('#coach-daily-plan-title').text('Complete your current drill');
+    $('#coach-daily-plan-detail').text('Solve the position on the board, then continue through the remaining due drills.');
+    $action.text('Return to the drill').attr('data-action', 'continue');
+    return;
+  }
+
+  if (coachGameActive && coachGame && !coachGame.game_over()) {
+    $('#coach-daily-plan-title').text('Continue your coached game');
+    $('#coach-daily-plan-detail').text('Finish the game so Coach can turn your reviewed mistakes into targeted practice.');
+    $action.text('Return to the board').attr('data-action', 'continue');
+    return;
+  }
+
+  if (dueItems.length) {
+    const first = dueItems[0];
+    const focus = first && first.meta ? first.meta.title : 'your recent mistakes';
+    $('#coach-daily-plan-title').text(`${dueItems.length} practice drill${dueItems.length === 1 ? '' : 's'} due`);
+    $('#coach-daily-plan-detail').text(`Start with ${focus}. These positions come directly from your reviewed games.`);
+    $action
+      .text(dueItems.length === 1 ? 'Practice now' : `Start ${dueItems.length}-drill session`)
+      .attr('data-action', 'practice');
+    return;
+  }
+
+  const returning = progress.attempts > 0 || items.length > 0;
+  $('#coach-daily-plan-title').text(returning ? 'Practice complete — play a coached game' : 'Play one coached game');
+  $('#coach-daily-plan-detail').text(returning
+    ? 'You are caught up. Play a game to find the next positions worth training.'
+    : 'Coach will review every move and turn your mistakes into targeted practice drills.');
+  $action.text(returning ? 'Play the next game' : 'Start today’s game').attr('data-action', 'game');
+}
+
 function renderPracticeQueue(entries, counts) {
   const queue = practiceItemsForEntries(entries, counts);
   const $section = $('#practice-section');
@@ -2379,6 +2418,7 @@ function renderPracticeQueue(entries, counts) {
   if (!queue.length) {
     if (!totals.attempts) {
       $section.hide();
+      renderCoachDailyPlan(queue, [], totals);
       return;
     }
     $('#practice-count').text('0 due');
@@ -2389,6 +2429,7 @@ function renderPracticeQueue(entries, counts) {
     $('#btn-practice-session-start').text('Start practice').prop('disabled', true);
     renderPracticeTrends();
     $section.show();
+    renderCoachDailyPlan(queue, [], totals);
     return;
   }
   const due = queue.filter(item => practiceIsDue(item));
@@ -2417,6 +2458,7 @@ function renderPracticeQueue(entries, counts) {
     $list.append($row);
   });
   $section.show();
+  renderCoachDailyPlan(queue, due, totals);
 }
 
 function renderTheoryCards(entries, counts) {
@@ -5023,6 +5065,7 @@ function startCoachPractice(item, opts = {}) {
   $('#coach-keyboard-move-status').text('');
   setCoachStatus('Practice drill — find the best move.');
   updateCoachControlsState();
+  renderCoachDailyPlan();
   scrollCoachBoardIntoViewOnMobile();
 }
 
@@ -5123,6 +5166,7 @@ function exitCoachPractice(message) {
   $('#coach-practice-banner').hide();
   setCoachStatus(message || 'Practice closed. Start a game or choose another due drill.');
   updateCoachControlsState();
+  renderInsights();
 }
 
 function createBoard(position, draggable, orientation) {
@@ -5198,6 +5242,9 @@ function createCoachBoard(position, orientation) {
     }
   });
   updateCoachBoardAccessibility();
+  setTimeout(() => {
+    if (coachBoard) coachBoard.resize();
+  }, 0);
 }
 
 // ─────────────────────────────────────────────
@@ -5302,6 +5349,7 @@ function startCoachGame() {
   setCoachStatus(opening);
 
   updateCoachControlsState();
+  renderCoachDailyPlan();
   ensureRemoteCoachGame(generation).catch(err => {
     if (!isAbortError(err)) handleCoachDbError(err);
   });
@@ -6803,6 +6851,20 @@ $(function () {
   $('#btn-practice-session-start').on('click', function() {
     const due = Array.from(renderedPracticeItems.values()).filter(item => practiceIsDue(item));
     startCoachPracticeSession(due, due[0]);
+  });
+  $('#btn-coach-next-action').on('click', function() {
+    const action = $(this).attr('data-action');
+    if (action === 'practice') {
+      const due = Array.from(renderedPracticeItems.values()).filter(item => practiceIsDue(item));
+      startCoachPracticeSession(due, due[0]);
+      return;
+    }
+    if (action === 'continue') {
+      document.querySelector('.coach-board-area')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      document.getElementById('coachBoard')?.focus({ preventScroll: true });
+      return;
+    }
+    startCoachGame();
   });
   $('#btn-coach-practice-answer').on('click', revealCoachPracticeAnswer);
   $('#btn-coach-practice-next').on('click', advanceCoachPractice);
