@@ -1,18 +1,24 @@
-# Supabase setup for Coach history
+# Supabase setup for durable Coach progress
 
 Coach works locally without Supabase. To enable account-backed games, mistakes,
-practice queue items, and theory cards:
+practice attempts, spaced-repetition schedules, trends, and theory cards:
 
-1. Create a Supabase project.
-2. Link this checkout and apply the versioned migration:
+1. Create a dedicated Supabase project for Chess. Do not reuse another app's
+   project.
+2. Link this checkout and apply all versioned migrations:
    ```sh
    supabase login
    supabase link --project-ref YOUR_PROJECT_REF
    supabase db push
    ```
-   For a local Docker-backed check first, run `supabase start` and
-   `supabase db reset`. `supabase-schema.sql` is a readable schema reference,
-   not the deployment workflow.
+   For a local Docker-backed check first, run:
+   ```sh
+   supabase start
+   supabase db reset
+   supabase test db
+   ```
+   `supabase-schema.sql` is the readable canonical reference; versioned
+   migrations remain the deployment workflow.
 3. In Authentication -> URL Configuration, set:
    - Site URL: `https://chess.cjarhodes.com`
    - Redirect URL: `https://chess.cjarhodes.com/?view=coach`
@@ -20,9 +26,19 @@ practice queue items, and theory cards:
 4. Copy the project URL and publishable key into `coach-config.js`. Existing
    projects may use the legacy anon public key instead.
 5. Commit and push. Vercel will deploy `main` automatically.
-6. Smoke test: open Coach, send a magic link, play a few moves, then verify
-   rows appear in `coach_games`, `coach_moves`, `drill_queue`, and
-   `theory_cards`.
+6. Smoke test:
+   - Open Coach, send a magic link, and finish a game with a review mistake.
+   - Complete at least two practice drills, including one incorrect attempt.
+   - Reload the page and verify the attempts, schedule, and 7-day trend remain.
+   - Sign in on a second browser and verify the same progress appears.
+   - Confirm rows exist in `coach_games`, `coach_moves`, `drill_queue`,
+     `practice_attempts`, and `theory_cards`.
+
+Practice storage is scoped by account in the browser. Anonymous practice is
+moved into the account on sign-in, and it is only removed from the anonymous
+scope after that account-scoped write succeeds. Offline events retain stable
+IDs; retries are idempotent, and the database replays each drill's history by
+attempt time so a late event from another device cannot rewind its schedule.
 
 Only a publishable or legacy anon public key belongs in `coach-config.js`. Do
 not put secret keys, service-role keys, database passwords, or access tokens in
@@ -31,5 +47,8 @@ this repo.
 Before deploying account sync, review the project's Authentication settings.
 Disable open signups unless public account creation is intentional, and keep the
 RLS policies in `supabase-schema.sql` in place for every client-writable table.
-The migration also limits Data API grants to authenticated users and keeps the
-`SECURITY DEFINER` signup trigger in a private schema with an empty search path.
+The migrations explicitly grant the authenticated Data API role only the
+required table and RPC access, keep anonymous visitors out of account data, and
+keep the `SECURITY DEFINER` signup trigger in a private schema with an empty
+search path. Practice updates go through `record_practice_attempt`, which writes
+the immutable attempt event and advances its drill schedule in one transaction.

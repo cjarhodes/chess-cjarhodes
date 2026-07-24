@@ -64,6 +64,7 @@ create table if not exists public.coach_moves (
 create table if not exists public.drill_queue (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
+  drill_key text not null,
   source_move_id uuid references public.coach_moves(id) on delete cascade,
   tag text not null,
   fen text not null,
@@ -74,8 +75,28 @@ create table if not exists public.drill_queue (
   interval_days integer not null default 1,
   ease numeric not null default 2.5,
   reps integer not null default 0,
+  attempts integer not null default 0
+    check (attempts >= 0),
+  correct integer not null default 0
+    check (correct >= 0 and correct <= attempts),
+  last_result text
+    check (last_result is null or last_result in ('incorrect', 'correct', 'assisted')),
+  last_attempt_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
+);
+
+create table if not exists public.practice_attempts (
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  drill_key text not null,
+  source_move_id uuid references public.coach_moves(id) on delete set null,
+  tag text not null,
+  attempted_at timestamptz not null,
+  correct boolean not null,
+  revealed boolean not null default false,
+  result text not null check (result in ('incorrect', 'correct', 'assisted')),
+  created_at timestamptz not null default now()
 );
 
 create table if not exists public.theory_cards (
@@ -102,16 +123,33 @@ create index if not exists coach_moves_user_tags_idx
 create index if not exists drill_queue_user_due_idx
   on public.drill_queue(user_id, due_at asc);
 
+create unique index if not exists drill_queue_user_key_unique_idx
+  on public.drill_queue(user_id, drill_key);
+
 create unique index if not exists drill_queue_source_tag_unique_idx
   on public.drill_queue(source_move_id, tag);
 
+create index if not exists practice_attempts_user_attempted_idx
+  on public.practice_attempts(user_id, attempted_at desc);
+
+create index if not exists practice_attempts_user_drill_idx
+  on public.practice_attempts(user_id, drill_key, attempted_at desc);
+
+create index if not exists practice_attempts_source_move_idx
+  on public.practice_attempts(source_move_id)
+  where source_move_id is not null;
+
 create unique index if not exists theory_cards_source_tag_unique_idx
   on public.theory_cards(source_move_id, tag);
+
+create index if not exists theory_cards_user_idx
+  on public.theory_cards(user_id);
 
 alter table public.profiles enable row level security;
 alter table public.coach_games enable row level security;
 alter table public.coach_moves enable row level security;
 alter table public.drill_queue enable row level security;
+alter table public.practice_attempts enable row level security;
 alter table public.theory_cards enable row level security;
 
 drop policy if exists "profiles select own" on public.profiles;
@@ -203,6 +241,25 @@ create policy "drill_queue all own"
     )
   );
 
+drop policy if exists "practice_attempts select own" on public.practice_attempts;
+create policy "practice_attempts select own"
+  on public.practice_attempts for select to authenticated
+  using (user_id = (select auth.uid()));
+
+drop policy if exists "practice_attempts insert own" on public.practice_attempts;
+create policy "practice_attempts insert own"
+  on public.practice_attempts for insert to authenticated
+  with check (
+    user_id = (select auth.uid())
+    and (
+      source_move_id is null
+      or exists (
+        select 1 from public.coach_moves m
+        where m.id = source_move_id and m.user_id = (select auth.uid())
+      )
+    )
+  );
+
 drop policy if exists "theory_cards all own" on public.theory_cards;
 create policy "theory_cards all own"
   on public.theory_cards for all to authenticated
@@ -226,6 +283,173 @@ create policy "theory_cards all own"
       )
     )
   );
+
+create or replace function public.record_practice_attempt(
+  p_event_id uuid,
+  p_drill_key text,
+  p_source_move_id uuid,
+  p_tag text,
+  p_fen text,
+  p_best_uci text,
+  p_best_san text,
+  p_prompt text,
+  p_correct boolean,
+  p_revealed boolean,
+  p_attempted_at timestamptz
+)
+returns public.drill_queue
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_user_id uuid := (select auth.uid());
+  v_inserted integer := 0;
+  v_drill public.drill_queue;
+  v_drill_exists boolean := false;
+  v_attempt record;
+  v_attempts integer := 0;
+  v_correct integer := 0;
+  v_result text;
+  v_reps integer := 0;
+  v_ease numeric := 2.5;
+  v_interval integer := 0;
+  v_due_at timestamptz;
+  v_last_result text;
+  v_last_attempt_at timestamptz;
+begin
+  if v_user_id is null then
+    raise exception 'Authentication required';
+  end if;
+  if p_event_id is null or coalesce(p_drill_key, '') = '' or
+     coalesce(p_tag, '') = '' or coalesce(p_fen, '') = '' or
+     coalesce(p_best_uci, '') = '' or p_attempted_at is null then
+    raise exception 'Practice attempt payload is incomplete';
+  end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(v_user_id::text || ':' || p_drill_key, 0)
+  );
+
+  if p_source_move_id is not null then
+    update public.drill_queue d
+    set drill_key = p_drill_key
+    where d.user_id = v_user_id
+      and d.source_move_id = p_source_move_id
+      and d.tag = p_tag
+      and d.drill_key like 'legacy-%'
+      and not exists (
+        select 1
+        from public.drill_queue keyed
+        where keyed.user_id = v_user_id and keyed.drill_key = p_drill_key
+      );
+  end if;
+
+  v_result := case
+    when not p_correct then 'incorrect'
+    when p_revealed then 'assisted'
+    else 'correct'
+  end;
+
+  insert into public.practice_attempts (
+    id, user_id, drill_key, source_move_id, tag, attempted_at,
+    correct, revealed, result
+  )
+  values (
+    p_event_id, v_user_id, p_drill_key, p_source_move_id, p_tag,
+    p_attempted_at, p_correct, p_revealed, v_result
+  )
+  on conflict (id) do nothing;
+  get diagnostics v_inserted = row_count;
+
+  if v_inserted = 0 then
+    select *
+    into v_drill
+    from public.drill_queue
+    where user_id = v_user_id and drill_key = p_drill_key;
+    if not found then
+      raise exception 'Attempt exists without its drill progress row';
+    end if;
+    return v_drill;
+  end if;
+
+  select *
+  into v_drill
+  from public.drill_queue
+  where user_id = v_user_id and drill_key = p_drill_key
+  for update;
+  v_drill_exists := found;
+
+  -- Events may arrive late from another browser or after an offline session.
+  -- Replaying the immutable history keeps the schedule independent of network
+  -- arrival order while the event-id guard above keeps retries idempotent.
+  for v_attempt in
+    select correct, revealed, result, attempted_at
+    from public.practice_attempts
+    where user_id = v_user_id and drill_key = p_drill_key
+    order by attempted_at asc, id asc
+  loop
+    v_attempts := v_attempts + 1;
+    if v_attempt.correct then
+      v_correct := v_correct + 1;
+      v_reps := v_reps + 1;
+      v_ease := greatest(
+        1.3,
+        v_ease + case when v_attempt.revealed then -0.05 else 0.08 end
+      );
+      v_interval := case
+        when v_reps <= 1 then 1
+        when v_reps = 2 then 3
+        else greatest(4, round(greatest(v_interval, 3) * v_ease)::integer)
+      end;
+    else
+      v_reps := 0;
+      v_ease := greatest(1.3, v_ease - 0.2);
+      v_interval := 0;
+    end if;
+    v_due_at := v_attempt.attempted_at + (v_interval * interval '1 day');
+    v_last_result := v_attempt.result;
+    v_last_attempt_at := v_attempt.attempted_at;
+  end loop;
+
+  if v_drill_exists then
+    update public.drill_queue
+    set
+      source_move_id = coalesce(p_source_move_id, source_move_id),
+      tag = p_tag,
+      fen = p_fen,
+      best_uci = p_best_uci,
+      best_san = p_best_san,
+      prompt = p_prompt,
+      due_at = v_due_at,
+      interval_days = v_interval,
+      ease = v_ease,
+      reps = v_reps,
+      attempts = v_attempts,
+      correct = v_correct,
+      last_result = v_last_result,
+      last_attempt_at = v_last_attempt_at,
+      updated_at = now()
+    where id = v_drill.id
+    returning * into v_drill;
+  else
+    insert into public.drill_queue (
+      user_id, drill_key, source_move_id, tag, fen, best_uci, best_san,
+      prompt, due_at, interval_days, ease, reps, attempts, correct,
+      last_result, last_attempt_at, updated_at
+    )
+    values (
+      v_user_id, p_drill_key, p_source_move_id, p_tag, p_fen, p_best_uci,
+      p_best_san, p_prompt, v_due_at,
+      v_interval, v_ease, v_reps, v_attempts, v_correct,
+      v_last_result, v_last_attempt_at, now()
+    )
+    returning * into v_drill;
+  end if;
+
+  return v_drill;
+end;
+$$;
 
 create schema if not exists private;
 
@@ -276,10 +500,17 @@ group by user_id, tag;
 -- The browser uses only the authenticated Data API role. Keep anonymous
 -- visitors out of every account table even if a policy is changed later.
 revoke all on table public.profiles, public.coach_games, public.coach_moves,
-  public.drill_queue, public.theory_cards from anon;
+  public.drill_queue, public.practice_attempts, public.theory_cards from anon;
 grant usage on schema public to authenticated;
 grant select, update on table public.profiles to authenticated;
 grant select, insert, update, delete on table public.coach_games,
   public.coach_moves, public.drill_queue, public.theory_cards to authenticated;
+grant select, insert on table public.practice_attempts to authenticated;
 grant select on table public.coach_insight_summary to authenticated;
 revoke all on table public.coach_insight_summary from anon;
+revoke all on function public.record_practice_attempt(
+  uuid, text, uuid, text, text, text, text, text, boolean, boolean, timestamptz
+) from public, anon;
+grant execute on function public.record_practice_attempt(
+  uuid, text, uuid, text, text, text, text, text, boolean, boolean, timestamptz
+) to authenticated;

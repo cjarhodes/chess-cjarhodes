@@ -14,6 +14,7 @@ function fail(message) {
 const html = read('index.html');
 const schema = read('supabase-schema.sql');
 const migration = read('supabase/migrations/20260722030933_initial_coach_schema.sql');
+const practiceMigration = read('supabase/migrations/20260724025215_durable_practice_progress.sql');
 const vercel = JSON.parse(read('vercel.json'));
 
 if (/https:\/\/cdnjs\.cloudflare\.com|https:\/\/cdn\.jsdelivr\.net/.test(html)) {
@@ -73,6 +74,25 @@ for (const source of [schema, migration]) {
   if (!/for (?:select|insert|update|delete|all) to authenticated/i.test(source)) {
     fail('RLS policies must target the authenticated role');
   }
+}
+
+if (!/alter table public\.practice_attempts enable row level security/i.test(practiceMigration)) {
+  fail('practice attempt history must enable RLS');
+}
+if (!/practice_attempts select own[\s\S]+?user_id = \(select auth\.uid\(\)\)/i.test(practiceMigration) ||
+    !/practice_attempts insert own[\s\S]+?source_move_id[\s\S]+?public\.coach_moves/i.test(practiceMigration)) {
+  fail('practice attempt policies must enforce user and source-move ownership');
+}
+if (!/function public\.record_practice_attempt[\s\S]+?security invoker[\s\S]+?set search_path = ''/i.test(practiceMigration)) {
+  fail('practice recording RPC must be SECURITY INVOKER with an empty search path');
+}
+if (!/revoke all on function public\.record_practice_attempt[\s\S]+?from public, anon/i.test(practiceMigration) ||
+    !/grant execute on function public\.record_practice_attempt[\s\S]+?to authenticated/i.test(practiceMigration)) {
+  fail('practice recording RPC must be executable only by authenticated users');
+}
+if (!/revoke all on table public\.practice_attempts from anon/i.test(practiceMigration) ||
+    !/grant select, insert on table public\.practice_attempts to authenticated/i.test(practiceMigration)) {
+  fail('practice attempt Data API grants must exclude anonymous users');
 }
 
 if (errors.length) {

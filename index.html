@@ -681,11 +681,18 @@
       font-size: 0.86rem;
     }
     .coach-practice-banner .prompt,
-    .coach-practice-banner .status {
+    .coach-practice-banner .status,
+    .coach-practice-banner .session-status {
       color: var(--muted);
       font-family: var(--font-reading);
       font-size: 0.9rem;
       line-height: 1.4;
+    }
+    .coach-practice-banner .session-status {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
     }
     .coach-practice-banner .status { color: var(--accent-soft); }
     .coach-practice-actions { display: flex; gap: 0.45rem; flex-wrap: wrap; }
@@ -1308,6 +1315,77 @@
       font-size: 0.62rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
+    }
+    .practice-recent {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.4rem;
+      margin: 0.45rem 0;
+    }
+    .practice-recent .metric {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 0.45rem 0.55rem;
+    }
+    .practice-recent .value {
+      color: var(--accent-soft);
+      font-family: var(--font-mono);
+      font-weight: 600;
+    }
+    .practice-recent .label {
+      display: block;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .practice-trend {
+      padding: 0.55rem 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0.55rem;
+    }
+    .practice-trend-bars {
+      height: 72px;
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 0.35rem;
+      align-items: end;
+    }
+    .practice-trend-day {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: end;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    .practice-trend-bar {
+      width: min(20px, 70%);
+      height: var(--bar-height);
+      min-height: 3px;
+      border: 1px solid var(--border);
+      background:
+        linear-gradient(
+          to top,
+          var(--success) 0 var(--bar-success),
+          var(--highlight) var(--bar-success) 100%
+        );
+      border-radius: 2px 2px 0 0;
+    }
+    .practice-trend-label {
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 0.58rem;
+      text-transform: uppercase;
+    }
+    .practice-trend-summary {
+      color: var(--muted);
+      font-family: var(--font-reading);
+      font-size: 0.82rem;
+      line-height: 1.4;
+      margin-top: 0.45rem;
     }
     .practice-empty {
       color: var(--muted);
@@ -2223,11 +2301,13 @@
   <!-- BOARD -->
   <main class="coach-board-area">
     <div class="coach-practice-banner" id="coach-practice-banner" role="region" aria-labelledby="coach-practice-title">
+      <div class="session-status" id="coach-practice-session-status">Single drill</div>
       <div class="title" id="coach-practice-title">Practice drill</div>
       <div class="prompt" id="coach-practice-prompt"></div>
       <div class="status" id="coach-practice-status" role="status" aria-live="polite"></div>
       <div class="coach-practice-actions">
         <button type="button" class="ctrl-btn" id="btn-coach-practice-answer">Show answer</button>
+        <button type="button" class="ctrl-btn primary" id="btn-coach-practice-next" style="display:none;">Next drill</button>
         <button type="button" class="ctrl-btn" id="btn-coach-practice-exit">Exit practice</button>
       </div>
     </div>
@@ -2377,6 +2457,7 @@
         <span class="section-label">Practice Queue</span>
         <span class="practice-head-actions">
           <span class="practice-tag" id="practice-count">0 due</span>
+          <button id="btn-practice-session-start" class="movelist-copy" disabled>Start practice</button>
           <button id="btn-practice-progress-reset" class="movelist-copy" title="Reset practice progress">Reset</button>
         </span>
       </div>
@@ -2384,6 +2465,14 @@
         <div class="metric"><span class="value" id="practice-progress-attempts">0</span><span class="label">Attempts</span></div>
         <div class="metric"><span class="value" id="practice-progress-success">—</span><span class="label">Success</span></div>
         <div class="metric"><span class="value" id="practice-progress-mastered">0</span><span class="label">Mastered</span></div>
+      </div>
+      <div class="practice-recent" aria-label="Recent practice activity">
+        <div class="metric"><span class="value" id="practice-progress-week">0</span><span class="label">Attempts · 7d</span></div>
+        <div class="metric"><span class="value" id="practice-progress-streak">0d</span><span class="label">Active streak</span></div>
+      </div>
+      <div class="practice-trend" aria-label="Seven-day practice trend">
+        <div class="practice-trend-bars" id="practice-trend-bars"></div>
+        <div class="practice-trend-summary" id="practice-trend-summary">No attempts in the last 7 days.</div>
       </div>
       <div class="practice-empty" id="practice-empty" style="display:none;">All caught up. Completed drills return when they are due.</div>
       <div class="practice-list" id="practice-list"></div>

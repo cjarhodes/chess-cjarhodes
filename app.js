@@ -1235,6 +1235,7 @@ let candidateRequestId = 0;        // invalidates stale async candidate searches
 let threatRequestId = 0;           // invalidates stale async threat scans
 let coachPremove = null;           // queued premove while opponent is thinking
 let coachPracticeSession = null;   // active mistake-position drill, separate from normal games
+let coachPracticeRun = null;       // ordered multi-drill session and its aggregate result
 let renderedPracticeItems = new Map();
 let summaryPracticeItems = [];
 let coachRemoteGameId = null;      // Supabase coach_games.id for current game
@@ -1896,6 +1897,8 @@ function fenSideToUserSide(fen) {
   return turn === 'b' ? 'black' : 'white';
 }
 
+const PRACTICE_QUEUE_LIMIT = 10;
+
 function buildPracticeQueue(entries, counts) {
   const used = new Set();
   const keyForEntry = entry => (entry.id || entry.ts || entry.ply || '') + ':' + entry.fenBefore;
@@ -1914,11 +1917,11 @@ function buildPracticeQueue(entries, counts) {
     used.add(tag);
     used.add(key);
     queue.push({ entry, tag });
-    if (queue.length >= 4) break;
+    if (queue.length >= PRACTICE_QUEUE_LIMIT) break;
   }
 
   for (const entry of sorted) {
-    if (queue.length >= 4) break;
+    if (queue.length >= PRACTICE_QUEUE_LIMIT) break;
     const tag = insightTagForEntry(entry);
     const key = keyForEntry(entry);
     if (used.has(key)) continue;
@@ -1953,28 +1956,53 @@ function formatPracticeContext(entry) {
   return `${ref}: ${played}${opening}`;
 }
 
-const PRACTICE_PROGRESS_KEY = 'coach:practice:v1';
+const PRACTICE_PROGRESS_KEY = 'coach:practice:v2';
+const LEGACY_PRACTICE_PROGRESS_KEY = 'coach:practice:v1';
+const PRACTICE_EVENT_LIMIT = 2000;
 const practiceRemoteSyncChains = new Map();
 
 function emptyPracticeProgress() {
-  return { v: 1, records: {} };
+  return { v: 2, records: {}, events: [] };
 }
 
-function loadPracticeProgress() {
+function activePracticeOwnerId() {
+  return coachAuthUser && coachAuthUser.id ? coachAuthUser.id : null;
+}
+
+function practiceProgressStorageKey(ownerId = activePracticeOwnerId()) {
+  return ownerId ? `${PRACTICE_PROGRESS_KEY}:${ownerId}` : PRACTICE_PROGRESS_KEY;
+}
+
+function loadPracticeProgress(ownerId = activePracticeOwnerId()) {
   try {
-    const parsed = JSON.parse(localStorage.getItem(PRACTICE_PROGRESS_KEY));
-    if (!parsed || parsed.v !== 1 || !parsed.records || typeof parsed.records !== 'object') {
-      return emptyPracticeProgress();
+    const currentRaw = localStorage.getItem(practiceProgressStorageKey(ownerId));
+    if (currentRaw) {
+      const parsed = JSON.parse(currentRaw);
+      if (parsed && parsed.v === 2 && parsed.records && typeof parsed.records === 'object') {
+        return {
+          v: 2,
+          records: parsed.records,
+          events: Array.isArray(parsed.events) ? parsed.events.slice(-PRACTICE_EVENT_LIMIT) : []
+        };
+      }
     }
-    return { v: 1, records: parsed.records };
+    const legacy = ownerId ? null : JSON.parse(localStorage.getItem(LEGACY_PRACTICE_PROGRESS_KEY));
+    if (legacy && legacy.v === 1 && legacy.records && typeof legacy.records === 'object') {
+      return { v: 2, records: legacy.records, events: [] };
+    }
+    return emptyPracticeProgress();
   } catch (e) {
     return emptyPracticeProgress();
   }
 }
 
-function savePracticeProgress(state) {
+function savePracticeProgress(state, ownerId = activePracticeOwnerId()) {
   try {
-    localStorage.setItem(PRACTICE_PROGRESS_KEY, JSON.stringify({ v: 1, records: state.records || {} }));
+    localStorage.setItem(practiceProgressStorageKey(ownerId), JSON.stringify({
+      v: 2,
+      records: state.records || {},
+      events: (state.events || []).slice(-PRACTICE_EVENT_LIMIT)
+    }));
     return { ok: true };
   } catch (error) {
     return { ok: false, error };
@@ -1982,7 +2010,44 @@ function savePracticeProgress(state) {
 }
 
 function clearPracticeProgress() {
-  try { localStorage.removeItem(PRACTICE_PROGRESS_KEY); } catch (e) {}
+  try {
+    const ownerId = activePracticeOwnerId();
+    localStorage.removeItem(practiceProgressStorageKey(ownerId));
+    if (!ownerId) localStorage.removeItem(LEGACY_PRACTICE_PROGRESS_KEY);
+  } catch (e) {}
+}
+
+function adoptAnonymousPracticeProgress(ownerId) {
+  if (!ownerId) return;
+  const anonymous = loadPracticeProgress(null);
+  const hasAnonymousData = Object.keys(anonymous.records).length || anonymous.events.length;
+  if (!hasAnonymousData) return;
+
+  const account = loadPracticeProgress(ownerId);
+  Object.entries(anonymous.records).forEach(([drillId, record]) => {
+    const existing = account.records[drillId];
+    const recordIsNewer = !existing ||
+      (record.lastAttemptAt || 0) > (existing.lastAttemptAt || 0) ||
+      ((record.lastAttemptAt || 0) === (existing.lastAttemptAt || 0) &&
+       (record.attempts || 0) > (existing.attempts || 0));
+    if (recordIsNewer) account.records[drillId] = record;
+  });
+
+  const eventIds = new Set(account.events.map(event => event.id));
+  anonymous.events.forEach(event => {
+    if (!event || !event.id || eventIds.has(event.id)) return;
+    account.events.push(Object.assign({}, event, {
+      ownerId,
+      synced: false
+    }));
+    eventIds.add(event.id);
+  });
+  const adopted = savePracticeProgress(account, ownerId);
+  if (!adopted.ok) return;
+  try {
+    localStorage.removeItem(PRACTICE_PROGRESS_KEY);
+    localStorage.removeItem(LEGACY_PRACTICE_PROGRESS_KEY);
+  } catch (e) {}
 }
 
 function hashPracticeValue(value) {
@@ -2018,6 +2083,133 @@ function practiceProgressTotals() {
   }, { attempts: 0, correct: 0, mastered: 0 });
 }
 
+function practiceDayKey(timestamp) {
+  const date = new Date(timestamp);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function practiceTrendSnapshot(now = Date.now()) {
+  const events = loadPracticeProgress().events.filter(event => Number.isFinite(event.at));
+  const dayMs = DAY_MS;
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const currentStart = today.getTime() - 6 * dayMs;
+  const previousStart = currentStart - 7 * dayMs;
+  const current = events.filter(event => event.at >= currentStart);
+  const previous = events.filter(event => event.at >= previousStart && event.at < currentStart);
+  const summarize = list => ({
+    attempts: list.length,
+    correct: list.filter(event => event.correct).length
+  });
+  const currentTotals = summarize(current);
+  const previousTotals = summarize(previous);
+  const currentRate = currentTotals.attempts
+    ? Math.round(currentTotals.correct / currentTotals.attempts * 100)
+    : null;
+  const previousRate = previousTotals.attempts
+    ? Math.round(previousTotals.correct / previousTotals.attempts * 100)
+    : null;
+
+  const activeDays = new Set(events.map(event => practiceDayKey(event.at)));
+  let streak = 0;
+  const cursor = new Date(today);
+  if (!activeDays.has(practiceDayKey(cursor.getTime()))) cursor.setDate(cursor.getDate() - 1);
+  while (activeDays.has(practiceDayKey(cursor.getTime()))) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  const days = [];
+  for (let offset = 6; offset >= 0; offset--) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - offset);
+    const key = practiceDayKey(date.getTime());
+    const dayEvents = current.filter(event => practiceDayKey(event.at) === key);
+    days.push({
+      key,
+      label: date.toLocaleDateString(undefined, { weekday: 'short' }).slice(0, 2),
+      attempts: dayEvents.length,
+      correct: dayEvents.filter(event => event.correct).length
+    });
+  }
+
+  const tagStats = {};
+  events.filter(event => event.at >= today.getTime() - 13 * dayMs).forEach(event => {
+    const tag = event.tag || 'candidate_moves';
+    if (!tagStats[tag]) tagStats[tag] = { tag, attempts: 0, correct: 0 };
+    tagStats[tag].attempts += 1;
+    if (event.correct) tagStats[tag].correct += 1;
+  });
+  const focus = Object.values(tagStats)
+    .sort((a, b) =>
+      (b.attempts - b.correct) - (a.attempts - a.correct) ||
+      b.attempts - a.attempts
+    )[0] || null;
+
+  return {
+    attempts: currentTotals.attempts,
+    rate: currentRate,
+    previousRate,
+    streak,
+    days,
+    focus
+  };
+}
+
+function renderPracticeTrends() {
+  const trend = practiceTrendSnapshot();
+  $('#practice-progress-week').text(trend.attempts);
+  $('#practice-progress-streak').text(trend.streak + 'd');
+  const comparison = trend.rate === null
+    ? 'No attempts in the last 7 days.'
+    : trend.previousRate === null
+      ? `${trend.rate}% success this week — your first trend baseline.`
+      : `${trend.rate}% success this week, ${trend.rate - trend.previousRate >= 0 ? '+' : ''}${trend.rate - trend.previousRate} points vs the prior week.`;
+  const focus = trend.focus && INSIGHT_TAG_META[trend.focus.tag]
+    ? ` Focus next: ${INSIGHT_TAG_META[trend.focus.tag].title}.`
+    : '';
+  $('#practice-trend-summary').text(comparison + focus);
+
+  const maxAttempts = Math.max(1, ...trend.days.map(day => day.attempts));
+  const $bars = $('#practice-trend-bars').empty();
+  trend.days.forEach(day => {
+    const height = day.attempts ? Math.max(12, Math.round(day.attempts / maxAttempts * 100)) : 4;
+    const success = day.attempts ? Math.round(day.correct / day.attempts * 100) : 0;
+    const $day = $('<div class="practice-trend-day"></div>')
+      .attr('aria-label', `${day.label}: ${day.attempts} attempt${day.attempts === 1 ? '' : 's'}, ${success}% success`);
+    $day.append(
+      $('<span class="practice-trend-bar"></span>')
+        .css('--bar-height', height + '%')
+        .css('--bar-success', success + '%')
+    );
+    $day.append($('<span class="practice-trend-label"></span>').text(day.label));
+    $bars.append($day);
+  });
+}
+
+function practiceEventId() {
+  return createCoachGameId();
+}
+
+function practiceEventFromAttempt(item, correct, revealed, at) {
+  return {
+    id: practiceEventId(),
+    ownerId: activePracticeOwnerId(),
+    drillId: item.id,
+    sourceMoveId: item.entry.id || null,
+    tag: item.tag,
+    fen: item.entry.fenBefore,
+    bestUci: item.entry.bestUci,
+    bestSan: item.entry.bestSan || null,
+    prompt: item.meta.practice,
+    at,
+    correct: !!correct,
+    revealed: !!revealed,
+    result: correct ? (revealed ? 'assisted' : 'correct') : 'incorrect',
+    synced: false
+  };
+}
+
 function nextPracticeInterval(record, clean) {
   if (!clean) return 0;
   if (record.reps <= 1) return 1;
@@ -2028,6 +2220,7 @@ function nextPracticeInterval(record, clean) {
 function recordPracticeAttempt(item, correct, revealed) {
   const state = loadPracticeProgress();
   const now = Date.now();
+  const event = practiceEventFromAttempt(item, correct, revealed, now);
   const previous = state.records[item.id] || {
     attempts: 0, correct: 0, reps: 0, ease: 2.5, intervalDays: 0, dueAt: 0
   };
@@ -2048,69 +2241,127 @@ function recordPracticeAttempt(item, correct, revealed) {
     record.dueAt = now;
   }
   state.records[item.id] = record;
+  state.events.push(event);
   const saved = savePracticeProgress(state);
   if (!saved.ok) setCoachStatus('Practice result could not be saved in this browser.');
-  queueRemotePracticeProgressSync(item, record);
+  queueRemotePracticeProgressSync(event);
   return record;
 }
 
-function queueRemotePracticeProgressSync(item, record) {
-  if (!hasCoachDbSession() || !item.entry.id) return;
-  const previous = practiceRemoteSyncChains.get(item.id) || Promise.resolve();
-  const next = previous
-    .catch(() => {})
-    .then(() => syncRemotePracticeProgress(item, record))
-    .catch(handleCoachDbError)
-    .finally(() => {
-      if (practiceRemoteSyncChains.get(item.id) === next) {
-        practiceRemoteSyncChains.delete(item.id);
-      }
-    });
-  practiceRemoteSyncChains.set(item.id, next);
+function markPracticeEventSynced(eventId, ownerId = activePracticeOwnerId()) {
+  const state = loadPracticeProgress(ownerId);
+  const event = state.events.find(item => item.id === eventId);
+  if (!event || event.synced) return;
+  event.synced = true;
+  savePracticeProgress(state, ownerId);
 }
 
-function mergeRemotePracticeRecords(rows) {
+function queueRemotePracticeProgressSync(event) {
+  if (!hasCoachDbSession() || !event) return;
+  const previous = practiceRemoteSyncChains.get(event.drillId) || Promise.resolve();
+  const next = previous
+    .catch(() => {})
+    .then(() => syncRemotePracticeEvent(event))
+    .catch(handleCoachDbError)
+    .finally(() => {
+      if (practiceRemoteSyncChains.get(event.drillId) === next) {
+        practiceRemoteSyncChains.delete(event.drillId);
+      }
+    });
+  practiceRemoteSyncChains.set(event.drillId, next);
+}
+
+function mergeRemotePracticeRecords(rows, ownerId = activePracticeOwnerId()) {
   if (!Array.isArray(rows) || !rows.length) return;
-  const state = loadPracticeProgress();
+  const state = loadPracticeProgress(ownerId);
   let changed = false;
   rows.forEach(row => {
     if (!row || !row.fen || !row.best_uci || !row.tag) return;
-    const id = practiceItemId({ fenBefore: row.fen, bestUci: row.best_uci }, row.tag);
+    const id = row.drill_key || practiceItemId({ fenBefore: row.fen, bestUci: row.best_uci }, row.tag);
     const local = state.records[id];
-    const remoteUpdatedAt = row.updated_at ? Date.parse(row.updated_at) : 0;
-    if (local && (local.lastAttemptAt || 0) > remoteUpdatedAt) return;
+    const remoteAttemptAt = row.last_attempt_at ? Date.parse(row.last_attempt_at) : 0;
+    if (local && (local.lastAttemptAt || 0) > remoteAttemptAt) return;
     state.records[id] = Object.assign({}, local || {}, {
       reps: row.reps || 0,
       ease: Number(row.ease) || 2.5,
       intervalDays: row.interval_days || 0,
       dueAt: row.due_at ? Date.parse(row.due_at) : 0,
-      remoteUpdatedAt
+      attempts: row.attempts || 0,
+      correct: row.correct || 0,
+      lastResult: row.last_result || null,
+      lastAttemptAt: remoteAttemptAt,
+      remoteUpdatedAt: row.updated_at ? Date.parse(row.updated_at) : 0
     });
     changed = true;
   });
-  if (changed) savePracticeProgress(state);
+  if (changed) savePracticeProgress(state, ownerId);
 }
 
-async function syncRemotePracticeProgress(item, record) {
-  if (!hasCoachDbSession() || !item.entry.id) return;
-  const payload = {
-    user_id: coachAuthUser.id,
-    source_move_id: item.entry.id,
-    tag: item.tag,
-    fen: item.entry.fenBefore,
-    best_uci: item.entry.bestUci || null,
-    best_san: item.entry.bestSan || null,
-    prompt: item.meta.practice,
-    due_at: new Date(record.dueAt || Date.now()).toISOString(),
-    interval_days: record.intervalDays || 0,
-    ease: record.ease || 2.5,
-    reps: record.reps || 0,
-    updated_at: new Date().toISOString()
-  };
-  const { error } = await coachDbClient
-    .from('drill_queue')
-    .upsert(payload, { onConflict: 'source_move_id,tag' });
+function mergeRemotePracticeEvents(rows, ownerId = activePracticeOwnerId()) {
+  if (!Array.isArray(rows) || !rows.length) return;
+  const state = loadPracticeProgress(ownerId);
+  const byId = new Map(state.events.map(event => [event.id, event]));
+  let changed = false;
+  rows.forEach(row => {
+    if (!row || !row.id || !row.drill_key || !row.attempted_at) return;
+    const existing = byId.get(row.id);
+    if (existing) {
+      if (!existing.synced) {
+        existing.synced = true;
+        changed = true;
+      }
+      return;
+    }
+    const event = {
+      id: row.id,
+      ownerId,
+      drillId: row.drill_key,
+      sourceMoveId: row.source_move_id || null,
+      tag: row.tag,
+      at: Date.parse(row.attempted_at),
+      correct: !!row.correct,
+      revealed: !!row.revealed,
+      result: row.result,
+      synced: true
+    };
+    state.events.push(event);
+    byId.set(event.id, event);
+    changed = true;
+  });
+  if (changed) savePracticeProgress(state, ownerId);
+}
+
+async function syncRemotePracticeEvent(event) {
+  if (!hasCoachDbSession() || !event) return;
+  const ownerId = event.ownerId || activePracticeOwnerId();
+  if (!ownerId || activePracticeOwnerId() !== ownerId) return;
+  const { data, error } = await coachDbClient.rpc('record_practice_attempt', {
+    p_event_id: event.id,
+    p_drill_key: event.drillId,
+    p_source_move_id: event.sourceMoveId || null,
+    p_tag: event.tag,
+    p_fen: event.fen,
+    p_best_uci: event.bestUci,
+    p_best_san: event.bestSan || null,
+    p_prompt: event.prompt || null,
+    p_correct: !!event.correct,
+    p_revealed: !!event.revealed,
+    p_attempted_at: new Date(event.at).toISOString()
+  });
   if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  if (row) mergeRemotePracticeRecords([row], ownerId);
+  markPracticeEventSynced(event.id, ownerId);
+}
+
+async function syncPendingPracticeEvents() {
+  if (!hasCoachDbSession()) return;
+  const ownerId = activePracticeOwnerId();
+  const pending = loadPracticeProgress(ownerId).events.filter(event => !event.synced);
+  for (const event of pending) {
+    if (!event.ownerId) event.ownerId = ownerId;
+    await syncRemotePracticeEvent(event);
+  }
 }
 
 function formatPracticeDue(record) {
@@ -2123,19 +2374,34 @@ function renderPracticeQueue(entries, counts) {
   const queue = practiceItemsForEntries(entries, counts);
   const $section = $('#practice-section');
   const $list = $('#practice-list').empty();
+  const totals = practiceProgressTotals();
   renderedPracticeItems = new Map(queue.map(item => [item.id, item]));
   if (!queue.length) {
-    $section.hide();
+    if (!totals.attempts) {
+      $section.hide();
+      return;
+    }
+    $('#practice-count').text('0 due');
+    $('#practice-progress-attempts').text(totals.attempts);
+    $('#practice-progress-success').text(Math.round(totals.correct / totals.attempts * 100) + '%');
+    $('#practice-progress-mastered').text(totals.mastered);
+    $('#practice-empty').show();
+    $('#btn-practice-session-start').text('Start practice').prop('disabled', true);
+    renderPracticeTrends();
+    $section.show();
     return;
   }
   const due = queue.filter(item => practiceIsDue(item));
-  const totals = practiceProgressTotals();
   const successRate = totals.attempts ? Math.round(totals.correct / totals.attempts * 100) : null;
   $('#practice-count').text(`${due.length} due`);
   $('#practice-progress-attempts').text(totals.attempts);
   $('#practice-progress-success').text(successRate === null ? '—' : successRate + '%');
   $('#practice-progress-mastered').text(totals.mastered);
+  renderPracticeTrends();
   $('#practice-empty').toggle(due.length === 0);
+  $('#btn-practice-session-start')
+    .text(due.length > 1 ? `Start ${due.length}-drill session` : 'Start practice')
+    .prop('disabled', due.length === 0);
   due.forEach(item => {
     const entry = item.entry;
     const meta = item.meta;
@@ -2185,7 +2451,7 @@ function renderInsights() {
   const $section = $('#insights-section');
   if (!entries.length) {
     $section.hide();
-    $('#practice-section').hide();
+    renderPracticeQueue([], []);
     $('#theory-section').hide();
     return;
   }
@@ -2368,6 +2634,7 @@ async function initCoachDb() {
       });
       const { data } = await coachDbClient.auth.getSession();
       coachAuthUser = data && data.session ? data.session.user : null;
+      if (coachAuthUser) adoptAnonymousPracticeProgress(coachAuthUser.id);
       coachDbStatus = coachAccountSyncStatus();
       renderCoachAuth();
       renderInsights();
@@ -2377,6 +2644,7 @@ async function initCoachDb() {
       }
       coachDbClient.auth.onAuthStateChange((event, session) => {
         coachAuthUser = session ? session.user : null;
+        if (coachAuthUser) adoptAnonymousPracticeProgress(coachAuthUser.id);
         coachRemoteInsightEntries = null;
         coachDbStatus = coachAccountSyncStatus();
         renderCoachAuth();
@@ -2574,6 +2842,7 @@ function learningArtifactPayloads(review, moveId) {
     if (review.bestUci) {
       drills.push({
         user_id: coachAuthUser.id,
+        drill_key: practiceItemId({ fenBefore: review.fenBefore, bestUci: review.bestUci }, tag),
         source_move_id: moveId,
         tag,
         fen: review.fenBefore,
@@ -2611,7 +2880,7 @@ async function syncRemoteLearningArtifacts(review, moveId, generation) {
   if (artifacts.drills.length) {
     writes.push(coachDbClient
       .from('drill_queue')
-      .upsert(artifacts.drills, { onConflict: 'source_move_id,tag' }));
+      .upsert(artifacts.drills, { onConflict: 'user_id,drill_key' }));
   }
   if (artifacts.cards.length) {
     writes.push(coachDbClient
@@ -2756,23 +3025,34 @@ async function refreshRemoteInsights(opts = {}) {
     renderInsights();
     return;
   }
+  const ownerId = activePracticeOwnerId();
   if (!opts.silent) setCoachDbStatus('Loading account insights...');
-  const [movesResult, drillsResult] = await Promise.all([
+  await syncPendingPracticeEvents().catch(handleCoachDbError);
+  const [movesResult, drillsResult, attemptsResult] = await Promise.all([
     coachDbClient
       .from('coach_moves')
       .select('id,played_at,classification,centipawn_loss,phase,tags,pair_num,ply,fen_before,user_uci,user_san,best_uci,best_san,opening_name')
-      .eq('user_id', coachAuthUser.id)
+      .eq('user_id', ownerId)
       .order('played_at', { ascending: false })
       .limit(300),
     coachDbClient
       .from('drill_queue')
-      .select('source_move_id,tag,fen,best_uci,due_at,interval_days,ease,reps,updated_at')
-      .eq('user_id', coachAuthUser.id)
-      .limit(300)
+      .select('drill_key,source_move_id,tag,fen,best_uci,due_at,interval_days,ease,reps,attempts,correct,last_result,last_attempt_at,updated_at')
+      .eq('user_id', ownerId)
+      .limit(300),
+    coachDbClient
+      .from('practice_attempts')
+      .select('id,drill_key,source_move_id,tag,attempted_at,correct,revealed,result')
+      .eq('user_id', ownerId)
+      .order('attempted_at', { ascending: false })
+      .limit(PRACTICE_EVENT_LIMIT)
   ]);
   if (movesResult.error) throw movesResult.error;
   if (drillsResult.error) throw drillsResult.error;
-  mergeRemotePracticeRecords(drillsResult.data || []);
+  if (attemptsResult.error) throw attemptsResult.error;
+  if (activePracticeOwnerId() !== ownerId) return;
+  mergeRemotePracticeRecords(drillsResult.data || [], ownerId);
+  mergeRemotePracticeEvents((attemptsResult.data || []).slice().reverse(), ownerId);
   coachRemoteInsightEntries = (movesResult.data || []).slice().reverse().map(remoteMoveToInsightEntry);
   if (!opts.silent) setCoachDbStatus('Account insights loaded.');
   renderInsights();
@@ -3577,9 +3857,10 @@ function invalidateCoachAsyncWork(reason) {
   return coachGameGeneration;
 }
 
-function resetCoachState(fen) {
+function resetCoachState(fen, opts = {}) {
   invalidateCoachAsyncWork('A new game replaced the previous analysis.');
   coachPracticeSession = null;
+  if (!opts.preservePracticeRun) coachPracticeRun = null;
   summaryPracticeItems = [];
   CoachController.setPhase('idle');
   coachGame = fen ? new Chess(fen) : new Chess();
@@ -4669,12 +4950,56 @@ function scrollCoachBoardIntoViewOnMobile() {
   });
 }
 
-function startCoachPractice(item) {
+function orderedPracticeRunItems(items, firstItem) {
+  const unique = [];
+  const seen = new Set();
+  const ordered = [firstItem].concat(items || []);
+  ordered.forEach(item => {
+    if (!item || seen.has(item.id) || !practiceIsDue(item)) return;
+    seen.add(item.id);
+    unique.push(item);
+  });
+  return unique.slice(0, PRACTICE_QUEUE_LIMIT);
+}
+
+function startCoachPracticeSession(items, firstItem) {
+  const runItems = orderedPracticeRunItems(items, firstItem || (items && items[0]));
+  if (!runItems.length) {
+    setCoachStatus('No practice drills are due right now.');
+    return;
+  }
+  coachPracticeRun = {
+    items: runItems,
+    index: 0,
+    completed: 0,
+    clean: 0,
+    assisted: 0,
+    startedAt: Date.now()
+  };
+  startCoachPractice(runItems[0], { preserveRun: true });
+}
+
+function practiceRunPositionText() {
+  if (!coachPracticeRun) return 'Single drill';
+  return `Drill ${coachPracticeRun.index + 1} of ${coachPracticeRun.items.length}`;
+}
+
+function startCoachPractice(item, opts = {}) {
   if (!item || !item.entry || !isValidFen(item.entry.fenBefore) || !item.entry.bestUci) {
     setCoachStatus('Practice position is no longer valid.');
     return;
   }
-  resetCoachState(item.entry.fenBefore);
+  if (!opts.preserveRun) {
+    coachPracticeRun = {
+      items: [item],
+      index: 0,
+      completed: 0,
+      clean: 0,
+      assisted: 0,
+      startedAt: Date.now()
+    };
+  }
+  resetCoachState(item.entry.fenBefore, { preservePracticeRun: true });
   coachPracticeSession = {
     item,
     misses: 0,
@@ -4690,8 +5015,10 @@ function startCoachPractice(item) {
   $('#coach-view').addClass('game-active');
   $('#coach-practice-title').text(item.meta.title);
   $('#coach-practice-prompt').text(item.meta.practice + ' Find the best move in this position.');
+  $('#coach-practice-session-status').text(practiceRunPositionText());
   $('#coach-practice-status').text('Attempt the move without engine help.');
   $('#btn-coach-practice-answer').prop('disabled', false);
+  $('#btn-coach-practice-next').hide().prop('disabled', true);
   $('#coach-practice-banner').show().css('display', 'flex');
   $('#coach-keyboard-move-status').text('');
   setCoachStatus('Practice drill — find the best move.');
@@ -4740,6 +5067,21 @@ function coachHandlePracticeMove(source, target, promotion, opts) {
   $('#coach-practice-status').text(`${quality}: ${played.san}. ${due}.`);
   setCoachStatus(`${quality}. Practice progress saved.`);
   $('#btn-coach-practice-answer').prop('disabled', true);
+  if (coachPracticeRun) {
+    coachPracticeRun.completed += 1;
+    if (session.revealed) coachPracticeRun.assisted += 1;
+    else if (session.misses === 0) coachPracticeRun.clean += 1;
+    const hasNext = coachPracticeRun.index + 1 < coachPracticeRun.items.length;
+    $('#btn-coach-practice-next')
+      .text(hasNext ? 'Next drill' : 'Finish session')
+      .show()
+      .prop('disabled', false);
+    if (!hasNext) {
+      $('#coach-practice-status').text(
+        `${quality}: ${played.san}. Session complete — ${coachPracticeRun.clean}/${coachPracticeRun.completed} first-try.`
+      );
+    }
+  }
   updateCoachControlsState();
   renderInsights();
   return 'correct';
@@ -4759,7 +5101,19 @@ function revealCoachPracticeAnswer() {
   setCoachStatus('Practice answer revealed — now play the move.');
 }
 
-function exitCoachPractice() {
+function advanceCoachPractice() {
+  if (!coachPracticeRun || !coachPracticeSession || !coachPracticeSession.completed) return;
+  if (coachPracticeRun.index + 1 >= coachPracticeRun.items.length) {
+    const completed = coachPracticeRun.completed;
+    const clean = coachPracticeRun.clean;
+    exitCoachPractice(`Practice session complete — ${clean}/${completed} solved on the first try.`);
+    return;
+  }
+  coachPracticeRun.index += 1;
+  startCoachPractice(coachPracticeRun.items[coachPracticeRun.index], { preserveRun: true });
+}
+
+function exitCoachPractice(message) {
   if (!coachPracticeSession) return;
   resetCoachState();
   coachGameActive = false;
@@ -4767,7 +5121,7 @@ function exitCoachPractice() {
   createCoachBoard('start', 'white');
   $('#coach-view').removeClass('game-active');
   $('#coach-practice-banner').hide();
-  setCoachStatus('Practice closed. Start a game or choose another due drill.');
+  setCoachStatus(message || 'Practice closed. Start a game or choose another due drill.');
   updateCoachControlsState();
 }
 
@@ -6442,11 +6796,17 @@ $(function () {
       setCoachStatus('Practice position is no longer valid.');
       return;
     }
-    startCoachPractice(item);
+    const due = Array.from(renderedPracticeItems.values()).filter(candidate => practiceIsDue(candidate));
+    startCoachPracticeSession(due, item);
   });
 
+  $('#btn-practice-session-start').on('click', function() {
+    const due = Array.from(renderedPracticeItems.values()).filter(item => practiceIsDue(item));
+    startCoachPracticeSession(due, due[0]);
+  });
   $('#btn-coach-practice-answer').on('click', revealCoachPracticeAnswer);
-  $('#btn-coach-practice-exit').on('click', exitCoachPractice);
+  $('#btn-coach-practice-next').on('click', advanceCoachPractice);
+  $('#btn-coach-practice-exit').on('click', function() { exitCoachPractice(); });
 
   // Sound toggle — restore prior preference, persist on change. The first
   // change is also a user gesture so we can prime the AudioContext here.
@@ -6759,7 +7119,7 @@ $(function () {
     const item = summaryPracticeItems[0];
     if (!item) return;
     closeSummaryOverlay();
-    startCoachPractice(item);
+    startCoachPracticeSession(summaryPracticeItems, item);
   });
   $('#btn-summary-close').on('click', function() {
     closeSummaryOverlay();

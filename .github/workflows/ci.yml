@@ -1,0 +1,61 @@
+name: Chess app CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chess-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-validation:
+    name: Static validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Check JavaScript and repository validators
+        run: |
+          node --check app.js
+          for validator in scripts/validate-*.js; do
+            node "$validator"
+          done
+
+  browser-regression:
+    name: Complete browser regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Install pinned Playwright CLI and Chromium
+        run: |
+          npm install --global @playwright/cli@0.1.17
+          playwright-cli install-browser chromium
+      - name: Run Library, Coach, practice, race, and mobile flows
+        run: scripts/verify-browser.sh
+
+  database-regression:
+    name: Supabase migration and RLS regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.84.2
+      - name: Start local Supabase
+        run: supabase start
+      - name: Rebuild schema from migrations
+        run: supabase db reset --local --no-seed
+      - name: Run database tests
+        run: supabase test db --local

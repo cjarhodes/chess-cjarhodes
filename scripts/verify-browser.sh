@@ -68,6 +68,20 @@ async page => {
       userUci: 'h2h4',
       bestUci: 'e2e4',
       opening: 'Smoke test'
+    }, {
+      ts: 1760000001000,
+      tier: 'mistake',
+      loss: 180,
+      phase: 'opening',
+      tags: ['development'],
+      pairNum: 2,
+      ply: 3,
+      userSan: 'a3',
+      bestSan: 'Nf3',
+      fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+      userUci: 'a2a3',
+      bestUci: 'g1f3',
+      opening: 'Smoke test'
     }]
   };
 
@@ -79,9 +93,10 @@ async page => {
   await page.reload();
 
   assert(await page.locator('#practice-section').isVisible(), 'practice queue did not render from a reviewed mistake');
-  assert(await page.locator('.practice-load').count() === 1, 'expected one due practice drill');
-  await page.locator('.practice-load').click();
+  assert(await page.locator('.practice-load').count() === 2, 'expected two due practice drills');
+  await page.locator('.practice-load').first().click();
   assert(await page.locator('#coach-practice-banner').isVisible(), 'practice banner did not open');
+  assert(await page.locator('#coach-practice-session-status').textContent() === 'Drill 1 of 2', 'multi-drill session did not start');
   assert(await page.locator('#btn-coach-resign').isDisabled(), 'normal game controls stayed enabled during practice');
 
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
@@ -93,18 +108,79 @@ async page => {
   await page.locator('#coach-keyboard-move-input').fill('e4');
   await page.locator('#coach-keyboard-move-form button[type=submit]').click();
   assert((await page.locator('#coach-practice-status').textContent()).includes('Correct after 2 attempts'), 'correct drill move was not graded');
-  assert(await page.locator('#practice-progress-attempts').textContent() === '2', 'completed attempt count is wrong');
-  assert(await page.locator('#practice-progress-success').textContent() === '50%', 'practice success rate is wrong');
+  assert(await page.locator('#practice-progress-attempts').textContent() === '2', 'first drill attempt count is wrong');
+  assert(await page.locator('#practice-progress-success').textContent() === '50%', 'first drill success rate is wrong');
+  assert(await page.locator('#practice-count').textContent() === '1 due', 'first completed drill did not leave the next drill due');
+  assert(await page.locator('#btn-coach-practice-next').isVisible(), 'next-drill action did not appear');
+  await page.locator('#btn-coach-practice-next').click();
+  assert(await page.locator('#coach-practice-session-status').textContent() === 'Drill 2 of 2', 'session did not advance to drill two');
+  await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
+  await page.locator('#coach-keyboard-move-input').fill('Nf3');
+  await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+  assert((await page.locator('#coach-practice-status').textContent()).includes('Session complete'), 'multi-drill session did not complete');
+  assert(await page.locator('#practice-progress-attempts').textContent() === '3', 'session attempt count is wrong');
+  assert(await page.locator('#practice-progress-success').textContent() === '67%', 'session success rate is wrong');
   assert(await page.locator('#practice-count').textContent() === '0 due', 'completed drill was not rescheduled');
   assert(await page.locator('#practice-empty').isVisible(), 'caught-up state did not render');
+  assert(await page.locator('#practice-progress-week').textContent() === '3', 'seven-day attempts did not update');
+  assert(await page.locator('#practice-progress-streak').textContent() === '1d', 'practice streak did not update');
 
   await page.reload();
-  assert(await page.locator('#practice-progress-attempts').textContent() === '2', 'practice progress did not survive reload');
+  assert(await page.locator('#practice-progress-attempts').textContent() === '3', 'practice progress did not survive reload');
   assert(await page.locator('#practice-count').textContent() === '0 due', 'practice schedule did not survive reload');
 
-  await page.evaluate(() => localStorage.removeItem('coach:practice:v1'));
+  const accountIsolation = await page.evaluate(() => {
+    const accountA = '00000000-0000-0000-0000-000000000001';
+    const accountB = '00000000-0000-0000-0000-000000000002';
+    const accountAKey = `coach:practice:v2:${accountA}`;
+    const originalSetItem = Storage.prototype.setItem;
+    let failedWritePreserved = false;
+    try {
+      Storage.prototype.setItem = function(key, value) {
+        if (key === accountAKey) throw new DOMException('Storage full', 'QuotaExceededError');
+        return originalSetItem.call(this, key, value);
+      };
+      coachAuthUser = { id: accountA };
+      adoptAnonymousPracticeProgress(accountA);
+      failedWritePreserved =
+        localStorage.getItem('coach:practice:v2') !== null &&
+        localStorage.getItem(accountAKey) === null;
+    } finally {
+      Storage.prototype.setItem = originalSetItem;
+      coachAuthUser = null;
+    }
+    coachAuthUser = { id: accountA };
+    adoptAnonymousPracticeProgress(accountA);
+    const moved = JSON.parse(localStorage.getItem(accountAKey));
+    coachAuthUser = { id: accountB };
+    const other = loadPracticeProgress();
+    coachAuthUser = { id: accountA };
+    const restored = loadPracticeProgress();
+    coachAuthUser = null;
+    return {
+      failedWritePreserved,
+      anonymousRemoved: localStorage.getItem('coach:practice:v2') === null,
+      importedAttempts: moved.records[Object.keys(moved.records)[0]].attempts,
+      importedOwner: moved.events[0].ownerId,
+      otherAttempts: Object.keys(other.records).length,
+      restoredEvents: restored.events.length
+    };
+  });
+  assert(accountIsolation.failedWritePreserved, 'failed account adoption removed anonymous progress');
+  assert(accountIsolation.anonymousRemoved, 'anonymous progress was not moved into the signed-in account scope');
+  assert(accountIsolation.importedAttempts >= 1, 'anonymous progress did not import into the account scope');
+  assert(accountIsolation.importedOwner === '00000000-0000-0000-0000-000000000001', 'imported attempts were not assigned to the account');
+  assert(accountIsolation.otherAttempts === 0, 'practice progress leaked between browser accounts');
+  assert(accountIsolation.restoredEvents === 3, 'account progress did not survive an account switch');
+
+  await page.evaluate(() => {
+    localStorage.removeItem('coach:practice:v1');
+    localStorage.removeItem('coach:practice:v2');
+    localStorage.removeItem('coach:practice:v2:00000000-0000-0000-0000-000000000001');
+    localStorage.removeItem('coach:practice:v2:00000000-0000-0000-0000-000000000002');
+  });
   await page.reload();
-  await page.locator('.practice-load').click();
+  await page.locator('.practice-load').first().click();
   await page.locator('#btn-coach-practice-answer').click();
   assert((await page.locator('#coach-practice-status').textContent()).includes('Answer: e4'), 'practice answer was not revealed');
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
@@ -194,7 +270,7 @@ async page => {
   assert(pageErrors.length === 0, `page errors: ${pageErrors.join(' | ')}`);
   if (failures.length) throw new Error(failures.join('\n'));
   return {
-    practice: 'incorrect and correct attempts graded and scheduled',
+    practice: 'multi-drill session graded, persisted, and updated trends',
     coach: 'replacement-game race stayed clean',
     library: 'keyboard quiz advanced',
     mobile: '390px layout stayed within viewport',
