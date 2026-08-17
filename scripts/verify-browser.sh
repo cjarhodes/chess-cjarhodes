@@ -104,6 +104,25 @@ async page => {
   });
   assert(legacyUpgrade.movesPreserved, 'in-progress legacy move sprint was not preserved during upgrade');
   assert(legacyUpgrade.drillsPreserved, 'in-progress legacy drill sprint was not preserved during upgrade');
+  const crossDeviceMerge = await page.evaluate(() => {
+    const local = {
+      mode: 'adaptive', phase: 'drills', focus: 'Development', drillTarget: 2, moveTarget: 6,
+      target: 8, drillsCompleted: 1, movesCompleted: 0, completedUnits: 1,
+      drillIds: ['drill-a'], moveIds: [], cleanDrillIds: ['drill-a'], clean: 1,
+      startedAt: 1000, updatedAt: 2000
+    };
+    const remote = {
+      mode: 'adaptive', phase: 'moves', focus: 'Development', drillTarget: 2, moveTarget: 6,
+      target: 8, drillsCompleted: 1, movesCompleted: 2, completedUnits: 3,
+      drillIds: ['drill-b'], moveIds: ['game-b:1', 'game-b:2'], assistedDrillIds: ['drill-b'], assisted: 1,
+      startedAt: 1100, updatedAt: 3000
+    };
+    return mergeDailySprintDay(local, remote);
+  });
+  assert(crossDeviceMerge.drillsCompleted === 2, 'cross-device merge lost a completed drill');
+  assert(crossDeviceMerge.movesCompleted === 2, 'cross-device merge lost transfer moves');
+  assert(crossDeviceMerge.completedUnits === 4 && crossDeviceMerge.phase === 'moves', 'cross-device merge derived the wrong adaptive phase');
+  assert(crossDeviceMerge.clean === 1 && crossDeviceMerge.assisted === 1, 'cross-device merge lost drill quality');
   await page.evaluate(state => {
     localStorage.clear();
     localStorage.setItem('coach:insights:v1', JSON.stringify(state));

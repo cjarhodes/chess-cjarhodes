@@ -1250,7 +1250,10 @@ let coachDbStatus = 'local';
 let remoteGameUpdateTimer = null;
 let pendingRemoteGameEndReason = null;
 let pendingRemoteGameGeneration = null;
+let dailySprintSyncTimer = null;
+let dailySprintSyncChain = Promise.resolve();
 const REMOTE_GAME_SYNC_DEBOUNCE_MS = 2500;
+const DAILY_SPRINT_SYNC_DEBOUNCE_MS = 800;
 
 const CoachController = {
   phase: 'idle',
@@ -2115,6 +2118,87 @@ function adoptAnonymousDailySprint(ownerId) {
   try { localStorage.removeItem(DAILY_SPRINT_KEY); } catch (e) {}
 }
 
+function dailySprintStringIds(values) {
+  return Array.from(new Set((Array.isArray(values) ? values : [])
+    .filter(value => typeof value === 'string' && value.length <= 240)))
+    .slice(0, 100);
+}
+
+function dailySprintIdsFrom(day, field) {
+  return day && Array.isArray(day[field]) ? day[field] : [];
+}
+
+function mergeDailySprintDay(localDay, remoteDay) {
+  if (!localDay) return remoteDay ? Object.assign({}, remoteDay) : null;
+  if (!remoteDay) return Object.assign({}, localDay);
+  const localProgress = Number(localDay.completedUnits) || 0;
+  const remoteProgress = Number(remoteDay.completedUnits) || 0;
+  const localUpdated = Number(localDay.updatedAt) || Number(localDay.completedAt) || Number(localDay.startedAt) || 0;
+  const remoteUpdated = Number(remoteDay.updatedAt) || Number(remoteDay.completedAt) || Number(remoteDay.startedAt) || 0;
+  const localRank = (localDay.completedAt ? 10000 : 0) + localProgress;
+  const remoteRank = (remoteDay.completedAt ? 10000 : 0) + remoteProgress;
+  const preferred = remoteRank > localRank || (remoteRank === localRank && remoteUpdated > localUpdated)
+    ? remoteDay
+    : localDay;
+  const merged = Object.assign({}, preferred);
+  merged.drillIds = dailySprintStringIds([...dailySprintIdsFrom(localDay, 'drillIds'), ...dailySprintIdsFrom(remoteDay, 'drillIds')]);
+  merged.moveIds = dailySprintStringIds([...dailySprintIdsFrom(localDay, 'moveIds'), ...dailySprintIdsFrom(remoteDay, 'moveIds')]);
+  merged.unitIds = dailySprintStringIds([
+    ...dailySprintIdsFrom(localDay, 'unitIds'), ...dailySprintIdsFrom(remoteDay, 'unitIds'),
+    ...merged.drillIds, ...merged.moveIds
+  ]);
+  merged.cleanDrillIds = dailySprintStringIds([...dailySprintIdsFrom(localDay, 'cleanDrillIds'), ...dailySprintIdsFrom(remoteDay, 'cleanDrillIds')]);
+  merged.assistedDrillIds = dailySprintStringIds([...dailySprintIdsFrom(localDay, 'assistedDrillIds'), ...dailySprintIdsFrom(remoteDay, 'assistedDrillIds')]);
+  merged.drillTarget = Math.max(0, Number(preferred.drillTarget) || 0);
+  merged.moveTarget = Math.max(0, Number(preferred.moveTarget) || Number(preferred.target) || 0);
+  merged.target = merged.drillTarget + merged.moveTarget;
+  merged.drillsCompleted = Math.min(merged.drillTarget, Math.max(
+    Number(localDay.drillsCompleted) || 0,
+    Number(remoteDay.drillsCompleted) || 0,
+    merged.drillIds.length
+  ));
+  merged.movesCompleted = Math.min(merged.moveTarget, Math.max(
+    Number(localDay.movesCompleted) || 0,
+    Number(remoteDay.movesCompleted) || 0,
+    merged.moveIds.length
+  ));
+  merged.completedUnits = merged.drillsCompleted + merged.movesCompleted;
+  merged.clean = Math.min(merged.drillsCompleted, Math.max(
+    Number(localDay.clean) || 0,
+    Number(remoteDay.clean) || 0,
+    merged.cleanDrillIds.length
+  ));
+  merged.assisted = Math.min(merged.drillsCompleted, Math.max(
+    Number(localDay.assisted) || 0,
+    Number(remoteDay.assisted) || 0,
+    merged.assistedDrillIds.length
+  ));
+  merged.startedAt = Math.min(
+    Number(localDay.startedAt) || Number(remoteDay.startedAt) || Date.now(),
+    Number(remoteDay.startedAt) || Number(localDay.startedAt) || Date.now()
+  );
+  merged.updatedAt = Math.max(localUpdated, remoteUpdated);
+  merged.completedAt = localDay.completedAt && remoteDay.completedAt
+    ? Math.min(Number(localDay.completedAt), Number(remoteDay.completedAt))
+    : (Number(localDay.completedAt) || Number(remoteDay.completedAt) || null);
+  if (merged.completedAt || (merged.target > 0 && merged.completedUnits >= merged.target)) {
+    merged.completedAt = merged.completedAt || merged.updatedAt || Date.now();
+    merged.phase = 'complete';
+  } else {
+    merged.phase = merged.drillsCompleted < merged.drillTarget ? 'drills' : 'moves';
+  }
+  return merged;
+}
+
+function mergeDailySprintHistories(localHistory, remoteRows) {
+  const merged = { v: 1, days: Object.assign({}, (localHistory && localHistory.days) || {}) };
+  (remoteRows || []).forEach(row => {
+    if (!row || !/^\d{4}-\d{2}-\d{2}$/.test(row.day_key) || !row.state || typeof row.state !== 'object') return;
+    merged.days[row.day_key] = mergeDailySprintDay(merged.days[row.day_key], row.state);
+  });
+  return merged;
+}
+
 function dailySprintDayKey(now = Date.now()) {
   return practiceDayKey(now);
 }
@@ -2162,9 +2246,11 @@ function updateDailySprint(mutator) {
     completedAt: null
   }, history.days[key] || {});
   const next = mutator(current) || current;
+  next.updatedAt = Date.now();
   history.days[key] = next;
   const saved = saveDailySprintHistory(history, ownerId);
   if (!saved.ok) setCoachStatus('Daily Sprint progress could not be saved in this browser.');
+  else queueRemoteDailySprintSync();
   return next;
 }
 
@@ -2280,6 +2366,8 @@ function initializeAdaptiveDay(day, plan) {
   day.unitIds = [];
   day.clean = 0;
   day.assisted = 0;
+  day.cleanDrillIds = [];
+  day.assistedDrillIds = [];
   return day;
 }
 
@@ -2388,12 +2476,16 @@ function recordDailySprintDrill(item, revealed, clean) {
     if (day.mode && day.mode !== 'adaptive') upgradeLegacyDailySprint(day, renderedAdaptivePlan);
     else if (day.mode !== 'adaptive') initializeAdaptiveDay(day, renderedAdaptivePlan);
     day.drillIds = Array.isArray(day.drillIds) ? day.drillIds : [];
+    day.cleanDrillIds = Array.isArray(day.cleanDrillIds) ? day.cleanDrillIds : [];
+    day.assistedDrillIds = Array.isArray(day.assistedDrillIds) ? day.assistedDrillIds : [];
     if (!day.drillIds.includes(item.id)) {
       day.drillIds.push(item.id);
-      if (clean) day.clean += 1;
-      if (revealed) day.assisted += 1;
+      if (clean) day.cleanDrillIds.push(item.id);
+      if (revealed) day.assistedDrillIds.push(item.id);
     }
     day.drillsCompleted = Math.min(day.drillTarget, day.drillIds.length);
+    day.clean = Math.min(day.drillsCompleted, Math.max(day.clean || 0, day.cleanDrillIds.length));
+    day.assisted = Math.min(day.drillsCompleted, Math.max(day.assisted || 0, day.assistedDrillIds.length));
     day.completedUnits = day.drillsCompleted + (day.movesCompleted || 0);
     if (day.drillsCompleted >= day.drillTarget) day.phase = 'moves';
     return day;
@@ -2742,6 +2834,52 @@ async function syncPendingPracticeEvents() {
     if (!event.ownerId) event.ownerId = ownerId;
     await syncRemotePracticeEvent(event);
   }
+}
+
+function queueRemoteDailySprintSync() {
+  if (!hasCoachDbSession()) return;
+  if (dailySprintSyncTimer) clearTimeout(dailySprintSyncTimer);
+  dailySprintSyncTimer = setTimeout(() => {
+    dailySprintSyncTimer = null;
+    dailySprintSyncChain = dailySprintSyncChain
+      .catch(() => {})
+      .then(() => syncRemoteDailySprints({ silent: true }))
+      .catch(handleCoachDbError);
+  }, DAILY_SPRINT_SYNC_DEBOUNCE_MS);
+}
+
+async function syncRemoteDailySprints(opts = {}) {
+  if (!hasCoachDbSession()) return;
+  const ownerId = activePracticeOwnerId();
+  if (!opts.silent) setCoachDbStatus('Syncing training sessions...');
+  const { data, error } = await coachDbClient
+    .from('daily_training_sessions')
+    .select('day_key,state,updated_at')
+    .eq('user_id', ownerId)
+    .order('day_key', { ascending: false })
+    .limit(DAILY_HISTORY_LIMIT);
+  if (error) throw error;
+  if (activePracticeOwnerId() !== ownerId) return;
+
+  const merged = mergeDailySprintHistories(loadDailySprintHistory(ownerId), data || []);
+  const saved = saveDailySprintHistory(merged, ownerId);
+  if (!saved.ok) throw saved.error || new Error('Training history could not be saved locally');
+  const latest = loadDailySprintHistory(ownerId);
+  const payload = Object.entries(latest.days).map(([dayKey, state]) => ({
+    user_id: ownerId,
+    day_key: dayKey,
+    state,
+    client_updated_at: new Date(Number(state.updatedAt) || Number(state.completedAt) || Number(state.startedAt) || Date.now()).toISOString()
+  }));
+  if (payload.length) {
+    const result = await coachDbClient
+      .from('daily_training_sessions')
+      .upsert(payload, { onConflict: 'user_id,day_key' });
+    if (result.error) throw result.error;
+  }
+  if (activePracticeOwnerId() !== ownerId) return;
+  renderCoachDailyPlan();
+  if (!opts.silent) setCoachDbStatus('Training sessions synced.');
 }
 
 function formatPracticeDue(record) {
@@ -3174,6 +3312,10 @@ async function sendCoachLoginLink() {
 async function signOutCoach() {
   if (!coachDbClient) return;
   clearQueuedRemoteCoachGameUpdate();
+  if (dailySprintSyncTimer) {
+    clearTimeout(dailySprintSyncTimer);
+    dailySprintSyncTimer = null;
+  }
   await coachDbClient.auth.signOut();
   coachAuthUser = null;
   coachRemoteInsightEntries = null;
@@ -3504,7 +3646,10 @@ async function refreshRemoteInsights(opts = {}) {
   }
   const ownerId = activePracticeOwnerId();
   if (!opts.silent) setCoachDbStatus('Loading account insights...');
-  await syncPendingPracticeEvents().catch(handleCoachDbError);
+  await Promise.all([
+    syncPendingPracticeEvents(),
+    syncRemoteDailySprints({ silent: true })
+  ]);
   const [movesResult, drillsResult, attemptsResult] = await Promise.all([
     coachDbClient
       .from('coach_moves')
@@ -3550,6 +3695,9 @@ const coachSync = {
   },
   loadInsights(opts) {
     return refreshRemoteInsights(opts || {});
+  },
+  syncDailySessions(opts) {
+    return syncRemoteDailySprints(opts || {});
   }
 };
 
@@ -7270,7 +7418,7 @@ $(function () {
     } else if (gameError) {
       setCoachDbStatus('Insights loaded, game save failed: ' + ((gameError && gameError.message) || 'Unknown error'));
     } else {
-      setCoachDbStatus('Game and insights synced.');
+      setCoachDbStatus('Games, insights, and training sessions synced.');
     }
   });
 

@@ -99,6 +99,18 @@ create table if not exists public.practice_attempts (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.daily_training_sessions (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  day_key date not null,
+  state jsonb not null,
+  client_updated_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, day_key),
+  constraint daily_training_sessions_state_object check (jsonb_typeof(state) = 'object'),
+  constraint daily_training_sessions_state_bounded check (octet_length(state::text) <= 32768)
+);
+
 create table if not exists public.theory_cards (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -150,6 +162,7 @@ alter table public.coach_games enable row level security;
 alter table public.coach_moves enable row level security;
 alter table public.drill_queue enable row level security;
 alter table public.practice_attempts enable row level security;
+alter table public.daily_training_sessions enable row level security;
 alter table public.theory_cards enable row level security;
 
 drop policy if exists "profiles select own" on public.profiles;
@@ -259,6 +272,22 @@ create policy "practice_attempts insert own"
       )
     )
   );
+
+drop policy if exists "daily training sessions select own" on public.daily_training_sessions;
+create policy "daily training sessions select own"
+  on public.daily_training_sessions for select to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "daily training sessions insert own" on public.daily_training_sessions;
+create policy "daily training sessions insert own"
+  on public.daily_training_sessions for insert to authenticated
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "daily training sessions update own" on public.daily_training_sessions;
+create policy "daily training sessions update own"
+  on public.daily_training_sessions for update to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
 
 drop policy if exists "theory_cards all own" on public.theory_cards;
 create policy "theory_cards all own"
@@ -451,6 +480,23 @@ begin
 end;
 $$;
 
+create or replace function public.touch_daily_training_session_updated_at()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+  new.updated_at := pg_catalog.now();
+  return new;
+end;
+$$;
+
+drop trigger if exists daily_training_sessions_touch_updated_at on public.daily_training_sessions;
+create trigger daily_training_sessions_touch_updated_at
+before update on public.daily_training_sessions
+for each row execute function public.touch_daily_training_session_updated_at();
+
 create schema if not exists private;
 
 create or replace function private.handle_new_user()
@@ -500,12 +546,14 @@ group by user_id, tag;
 -- The browser uses only the authenticated Data API role. Keep anonymous
 -- visitors out of every account table even if a policy is changed later.
 revoke all on table public.profiles, public.coach_games, public.coach_moves,
-  public.drill_queue, public.practice_attempts, public.theory_cards from anon;
+  public.drill_queue, public.practice_attempts, public.daily_training_sessions,
+  public.theory_cards from anon;
 grant usage on schema public to authenticated;
 grant select, update on table public.profiles to authenticated;
 grant select, insert, update, delete on table public.coach_games,
   public.coach_moves, public.drill_queue, public.theory_cards to authenticated;
 grant select, insert on table public.practice_attempts to authenticated;
+grant select, insert, update on table public.daily_training_sessions to authenticated;
 grant select on table public.coach_insight_summary to authenticated;
 revoke all on table public.coach_insight_summary from anon;
 revoke all on function public.record_practice_attempt(
@@ -514,3 +562,4 @@ revoke all on function public.record_practice_attempt(
 grant execute on function public.record_practice_attempt(
   uuid, text, uuid, text, text, text, text, text, boolean, boolean, timestamptz
 ) to authenticated;
+revoke all on function public.touch_daily_training_session_updated_at() from public, anon;

@@ -9,6 +9,8 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const smoke = fs.readFileSync(path.join(root, 'scripts/verify-browser.sh'), 'utf8');
 const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20260724025215_durable_practice_progress.sql'), 'utf8');
 const dbTest = fs.readFileSync(path.join(root, 'supabase/tests/database/durable_practice_progress.test.sql'), 'utf8');
+const dailyMigration = fs.readFileSync(path.join(root, 'supabase/migrations/20260817024158_sync_adaptive_training_sessions.sql'), 'utf8');
+const dailyDbTest = fs.readFileSync(path.join(root, 'supabase/tests/database/daily_training_sessions.test.sql'), 'utf8');
 const workflow = fs.readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8');
 const errors = [];
 
@@ -32,6 +34,8 @@ requirePattern(app, /function startCoachPracticeSession[\s\S]{0,900}coachPractic
 requirePattern(app, /function practiceTrendSnapshot[\s\S]{0,2600}previousRate[\s\S]{0,1200}streak/, 'practice progress must include recent trends and streaks');
 requirePattern(app, /const DAILY_SPRINT_KEY = 'coach:daily-sprint:v1'[\s\S]{0,180}DAILY_MOVE_TARGET = 10[\s\S]{0,120}DAILY_DRILL_TARGET = 2[\s\S]{0,120}DAILY_TRANSFER_TARGET = 6/, 'adaptive sessions must define bounded baseline, drill, and transfer targets');
 requirePattern(app, /function dailySprintStorageKey[\s\S]{0,220}ownerId[\s\S]{0,3000}function adoptAnonymousDailySprint/, 'Daily Sprint history must be isolated by account and adopt anonymous work');
+requirePattern(app, /function mergeDailySprintDay[\s\S]{0,4200}drillIds[\s\S]{0,1200}moveIds[\s\S]{0,2200}completedUnits/, 'cross-device session reconciliation must preserve progress completed on either device');
+requirePattern(app, /function queueRemoteDailySprintSync[\s\S]{0,900}syncRemoteDailySprints[\s\S]{0,2600}daily_training_sessions[\s\S]{0,1400}upsert/, 'signed-in adaptive sessions must retry local progress and hydrate remote history');
 requirePattern(app, /function adaptiveFocusProfile[\s\S]{0,3200}severity \* recency[\s\S]{0,2600}function adaptiveDailyPlan/, 'adaptive focus must combine error severity, recency, and practice results');
 requirePattern(app, /kind: 'focus-transfer'[\s\S]{0,700}drillTarget[\s\S]{0,200}moveTarget: DAILY_TRANSFER_TARGET/, 'returning sessions must connect focused drills to transfer moves');
 requirePattern(app, /function upgradeLegacyDailySprint[\s\S]{0,2200}legacyCompleted[\s\S]{0,1600}Continued from the Daily Sprint/, 'in-progress Daily Sprint state must upgrade without losing completed work');
@@ -51,6 +55,8 @@ requirePattern(migration, /function public\.record_practice_attempt[\s\S]{0,600}
 requirePattern(migration, /on conflict \(id\) do nothing[\s\S]{0,300}row_count/, 'practice RPC must be idempotent by event id');
 requirePattern(migration, /order by attempted_at asc, id asc[\s\S]{0,1800}last_attempt_at = v_last_attempt_at/, 'practice RPC must rebuild schedules chronologically for late offline events');
 requirePattern(dbTest, /plan\(23\)[\s\S]+older offline attempt can arrive after newer events[\s\S]+late delivery preserves the chronologically latest schedule anchor/, 'database tests must prove idempotency, late-event ordering, and account isolation');
+requirePattern(dailyMigration, /create table public\.daily_training_sessions[\s\S]{0,1600}enable row level security[\s\S]{0,1800}to authenticated[\s\S]{0,1800}grant select, insert, update/, 'adaptive session sync must use an RLS-protected, explicitly granted account table');
+requirePattern(dailyDbTest, /plan\(12\)[\s\S]+another account cannot read the first account session[\s\S]+another account cannot insert for the first account/, 'database tests must prove adaptive-session account isolation');
 requirePattern(smoke, /legacy move sprint was not preserved[\s\S]+legacy drill sprint was not preserved[\s\S]+one-click session[\s\S]+reload skipped an unfinished adaptive drill phase[\s\S]+restored adaptive drill session did not restart[\s\S]+focused drills did not advance into transfer play[\s\S]+adaptive takeaway did not assess live transfer[\s\S]+adaptive session completion did not survive reload[\s\S]+daily sprint progress leaked between browser accounts[\s\S]+revealed answer was not completed[\s\S]+stale engine result leaked[\s\S]+clean first visit did not offer a one-click baseline[\s\S]+mobile first visit did not show the Daily Sprint before optional account setup[\s\S]+reviewed move did not advance the Daily Sprint[\s\S]+ten reviewed moves did not complete the Daily Sprint[\s\S]+move sprint completion did not persist across reload/, 'browser smoke must cover upgrades, mid-phase reload, baseline and adaptive transfer journeys, persistence, isolation, mobile priority, races, and completion');
 requirePattern(smoke, /setViewportSize\(\{ width: 390, height: 844 \}\)/, 'browser smoke must cover the 390px mobile layout');
 requirePattern(workflow, /scripts\/verify-browser\.sh[\s\S]+supabase test db --local/, 'CI must enforce the complete browser and database regressions');
