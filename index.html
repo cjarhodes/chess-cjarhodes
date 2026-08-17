@@ -6,6 +6,7 @@
   <title>Chess Opening Library — Alex Rhodes</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/favicon.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#2a1f17">
   <link rel="stylesheet" href="vendor/chessboardjs/chessboard-1.0.0.min.css">
   <style>
@@ -2121,6 +2122,33 @@
       .keyboard-move-form { flex-wrap: wrap; }
       .keyboard-move-form input { flex-basis: 12rem; }
     }
+    .growth-card { padding: 0.85rem; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+    .growth-card + .growth-card { margin-top: 0.75rem; }
+    .growth-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; margin-top: 0.65rem; }
+    .growth-grid .wide { grid-column: 1 / -1; }
+    .growth-card label { display: block; color: var(--muted); font-size: 0.72rem; margin-bottom: 0.25rem; }
+    .growth-card input, .growth-card select, .growth-card textarea {
+      width: 100%; border: 1px solid var(--rule-3); border-radius: 4px; background: var(--bg);
+      color: var(--text); padding: 0.5rem; font: 0.78rem var(--font-mono);
+    }
+    .growth-card textarea { resize: vertical; min-height: 6rem; }
+    .growth-actions { display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap; margin-top: 0.65rem; }
+    .growth-status { color: var(--muted); font-size: 0.72rem; line-height: 1.4; margin-top: 0.5rem; }
+    .growth-status.error { color: #d88484; }
+    .growth-status.success { color: #9db49a; }
+    .repertoire-action { margin-top: 0.6rem; }
+    .opening-btn.in-repertoire::after { content: '★'; color: var(--highlight); float: right; margin-left: 0.5rem; }
+    .weekly-list, .endgame-list { display: grid; gap: 0.55rem; margin-top: 0.65rem; }
+    .weekly-item, .endgame-item { padding: 0.65rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); }
+    .weekly-item strong, .endgame-item strong { display: block; color: var(--text); font-size: 0.78rem; margin-bottom: 0.2rem; }
+    .weekly-item span, .endgame-item span { color: var(--muted); font-size: 0.72rem; line-height: 1.45; }
+    .endgame-item { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; }
+    .endgame-item.is-complete { border-color: rgba(107,130,104,0.55); }
+    .import-progress { height: 4px; background: var(--rule-1); border-radius: 4px; overflow: hidden; margin-top: 0.55rem; }
+    .import-progress > span { display: block; width: 0; height: 100%; background: var(--accent); transition: width 0.2s ease; }
+    .auto-elo-note { color: var(--muted); font-size: 0.68rem; margin-top: 0.35rem; line-height: 1.35; }
+    #repertoire-section:empty { display: none; }
+    @media (max-width: 620px) { .growth-grid { grid-template-columns: 1fr; } .growth-grid .wide { grid-column: auto; } }
   </style>
 </head>
 <body>
@@ -2160,6 +2188,8 @@
       <div class="library-label">Due for Review</div>
       <div id="sr-due-list"></div>
     </div>
+
+    <div class="library-section" id="repertoire-section"></div>
 
     <!-- Category filter tabs -->
     <div class="cat-tabs">
@@ -2266,6 +2296,7 @@
         <div class="opening-title" id="opening-title"></div>
         <div class="opening-tagline" id="opening-tagline"></div>
         <button class="btn-share" id="btn-share" title="Copy shareable link">Share link</button>
+        <button class="btn-share repertoire-action" id="btn-repertoire-toggle" type="button">☆ Add to my repertoire</button>
       </div>
       <div class="opening-desc" id="opening-desc"></div>
       <div id="sr-status-panel" class="sr-panel" style="display:none"></div>
@@ -2370,6 +2401,19 @@
       </div>
     </div>
 
+    <div class="field-group growth-card" id="player-profile-card">
+      <div class="section-label">Training profile</div>
+      <form id="player-profile-form">
+        <div class="growth-grid">
+          <div><label for="player-rating">Approx. rating</label><input id="player-rating" type="number" min="400" max="2800" step="50" value="1200"></div>
+          <div><label for="player-minutes">Daily minutes</label><input id="player-minutes" type="number" min="5" max="60" step="5" value="10"></div>
+          <div class="wide"><label for="player-goal">Primary goal</label><select id="player-goal"><option value="balanced">Balanced improvement</option><option value="tactics">Reduce tactical mistakes</option><option value="repertoire">Build an opening repertoire</option><option value="endgames">Improve endgames</option></select></div>
+        </div>
+        <div class="growth-actions"><button class="ctrl-btn primary" type="submit">Save profile</button><button class="ctrl-btn" type="button" id="btn-install-app" style="display:none">Install app</button></div>
+        <div class="growth-status" id="player-profile-status">Set this once; Coach will tune difficulty and session emphasis.</div>
+      </form>
+    </div>
+
     <div class="field-group">
       <div class="strength-row">
         <label class="strength-label" id="coach-strength-label" for="coach-strength">Opponent level</label>
@@ -2378,6 +2422,8 @@
       <input type="range" class="strength-slider" id="coach-strength"
              min="400" max="2400" step="50" value="1200" />
       <div class="strength-tier" id="coach-strength-tier">Club novice</div>
+      <label class="toggle-label" for="coach-auto-elo"><input type="checkbox" id="coach-auto-elo" checked> <span>Adapt level automatically</span></label>
+      <div class="auto-elo-note" id="coach-auto-elo-note"></div>
     </div>
 
     <div class="field-group">
@@ -2394,6 +2440,18 @@
       <textarea class="fen-input" id="coach-fen" rows="3"
                 placeholder="FEN (optional) — leave empty for the initial position"></textarea>
       <div class="fen-error" id="coach-fen-error" style="display:none;"></div>
+    </div>
+
+    <div class="field-group growth-card" id="game-inbox-card">
+      <div class="section-label">Game Inbox</div>
+      <div class="growth-grid">
+        <div class="wide"><label for="game-inbox-pgn">Paste a PGN</label><textarea id="game-inbox-pgn" placeholder="Paste a Lichess, Chess.com, or tournament PGN…"></textarea></div>
+        <div><label for="game-inbox-side">Analyse my moves as</label><select id="game-inbox-side"><option value="white">White</option><option value="black">Black</option></select></div>
+        <div><label for="game-inbox-file">Or choose a .pgn file</label><input id="game-inbox-file" type="file" accept=".pgn,text/plain,application/x-chess-pgn"></div>
+      </div>
+      <div class="growth-actions"><button class="ctrl-btn primary" id="btn-analyse-pgn" type="button">Analyse game</button></div>
+      <div class="import-progress" aria-hidden="true"><span id="game-inbox-progress"></span></div>
+      <div class="growth-status" id="game-inbox-status" role="status" aria-live="polite">Analysis stays in this browser; signed-in insights and drills sync normally.</div>
     </div>
 
     <div class="field-group toggle-row">
@@ -2567,6 +2625,16 @@
       </div>
     </div>
 
+    <div class="coach-panel-section" id="weekly-review-section">
+      <div class="section-label">Weekly coaching review</div>
+      <div class="weekly-list" id="weekly-review-list"></div>
+    </div>
+
+    <div class="coach-panel-section" id="endgame-track-section">
+      <div class="lifetime-head"><span class="section-label">Endgame essentials</span><span class="practice-tag" id="endgame-track-progress">0/4</span></div>
+      <div class="endgame-list" id="endgame-track-list"></div>
+    </div>
+
     <div class="coach-panel-section" id="insights-section" style="display:none;">
       <div class="lifetime-head">
         <span class="section-label">Coach Insights</span>
@@ -2704,5 +2772,6 @@
 <script src="coach-config.js"></script>
 
 <script src="app.js"></script>
+<script src="growth.js"></script>
 </body>
 </html>

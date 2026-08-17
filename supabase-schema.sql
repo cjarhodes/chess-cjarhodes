@@ -111,6 +111,16 @@ create table if not exists public.daily_training_sessions (
   constraint daily_training_sessions_state_bounded check (octet_length(state::text) <= 32768)
 );
 
+create table if not exists public.player_training_profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  state jsonb not null default '{}'::jsonb,
+  client_updated_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint player_training_profiles_state_object check (jsonb_typeof(state) = 'object'),
+  constraint player_training_profiles_state_bounded check (octet_length(state::text) <= 131072)
+);
+
 create table if not exists public.theory_cards (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -163,6 +173,7 @@ alter table public.coach_moves enable row level security;
 alter table public.drill_queue enable row level security;
 alter table public.practice_attempts enable row level security;
 alter table public.daily_training_sessions enable row level security;
+alter table public.player_training_profiles enable row level security;
 alter table public.theory_cards enable row level security;
 
 drop policy if exists "profiles select own" on public.profiles;
@@ -286,6 +297,22 @@ create policy "daily training sessions insert own"
 drop policy if exists "daily training sessions update own" on public.daily_training_sessions;
 create policy "daily training sessions update own"
   on public.daily_training_sessions for update to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "player training profiles select own" on public.player_training_profiles;
+create policy "player training profiles select own"
+  on public.player_training_profiles for select to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "player training profiles insert own" on public.player_training_profiles;
+create policy "player training profiles insert own"
+  on public.player_training_profiles for insert to authenticated
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "player training profiles update own" on public.player_training_profiles;
+create policy "player training profiles update own"
+  on public.player_training_profiles for update to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
@@ -497,6 +524,23 @@ create trigger daily_training_sessions_touch_updated_at
 before update on public.daily_training_sessions
 for each row execute function public.touch_daily_training_session_updated_at();
 
+create or replace function public.touch_player_training_profile_updated_at()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+  new.updated_at := pg_catalog.now();
+  return new;
+end;
+$$;
+
+drop trigger if exists player_training_profiles_touch_updated_at on public.player_training_profiles;
+create trigger player_training_profiles_touch_updated_at
+before update on public.player_training_profiles
+for each row execute function public.touch_player_training_profile_updated_at();
+
 create schema if not exists private;
 
 create or replace function private.handle_new_user()
@@ -547,13 +591,14 @@ group by user_id, tag;
 -- visitors out of every account table even if a policy is changed later.
 revoke all on table public.profiles, public.coach_games, public.coach_moves,
   public.drill_queue, public.practice_attempts, public.daily_training_sessions,
-  public.theory_cards from anon;
+  public.player_training_profiles, public.theory_cards from anon;
 grant usage on schema public to authenticated;
 grant select, update on table public.profiles to authenticated;
 grant select, insert, update, delete on table public.coach_games,
   public.coach_moves, public.drill_queue, public.theory_cards to authenticated;
 grant select, insert on table public.practice_attempts to authenticated;
 grant select, insert, update on table public.daily_training_sessions to authenticated;
+grant select, insert, update on table public.player_training_profiles to authenticated;
 grant select on table public.coach_insight_summary to authenticated;
 revoke all on table public.coach_insight_summary from anon;
 revoke all on function public.record_practice_attempt(
@@ -563,3 +608,4 @@ grant execute on function public.record_practice_attempt(
   uuid, text, uuid, text, text, text, text, text, boolean, boolean, timestamptz
 ) to authenticated;
 revoke all on function public.touch_daily_training_session_updated_at() from public, anon;
+revoke all on function public.touch_player_training_profile_updated_at() from public, anon;

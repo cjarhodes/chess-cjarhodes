@@ -2322,7 +2322,7 @@ function adaptiveDailyPlan(entries, queue, due, totals) {
   const meta = focusProfile ? INSIGHT_TAG_META[focusProfile.tag] : null;
   const returning = !!((entries || []).length || (queue || []).length || (totals && totals.attempts));
   if (orderedDue.length) {
-    return {
+    const plan = {
       kind: 'focus-transfer',
       focusTag: focusProfile.tag,
       focus: meta.title,
@@ -2332,19 +2332,22 @@ function adaptiveDailyPlan(entries, queue, due, totals) {
       moveTarget: DAILY_TRANSFER_TARGET,
       orderedDue
     };
+    return typeof personalizeAdaptivePlan === 'function' ? personalizeAdaptivePlan(plan) : plan;
   }
   if (returning && meta) {
-    return {
+    const plan = {
       kind: 'transfer', focusTag: focusProfile.tag, focus: meta.title,
       cue: meta.practice, reason: adaptiveFocusReason(focusProfile),
       drillTarget: 0, moveTarget: 8, orderedDue: []
     };
+    return typeof personalizeAdaptivePlan === 'function' ? personalizeAdaptivePlan(plan) : plan;
   }
-  return {
+  const plan = {
     kind: 'baseline', focusTag: null, focus: 'Build your baseline',
     cue: 'Play naturally. Coach will turn recurring mistakes into tomorrow’s focus.',
     reason: 'No reviewed history yet.', drillTarget: 0, moveTarget: DAILY_MOVE_TARGET, orderedDue: []
   };
+  return typeof personalizeAdaptivePlan === 'function' ? personalizeAdaptivePlan(plan) : plan;
 }
 
 function initializeAdaptiveDay(day, plan) {
@@ -2717,6 +2720,8 @@ function recordPracticeAttempt(item, correct, revealed) {
   const saved = savePracticeProgress(state);
   if (!saved.ok) setCoachStatus('Practice result could not be saved in this browser.');
   queueRemotePracticeProgressSync(event);
+  if (typeof renderEndgameTrack === 'function') renderEndgameTrack();
+  if (typeof renderWeeklyReview === 'function') renderWeeklyReview();
   return record;
 }
 
@@ -3057,6 +3062,7 @@ function renderInsights() {
     : [];
   const entries = remoteEntries.length ? remoteEntries : localEntries;
   const usingRemote = remoteEntries.length > 0;
+  if (typeof renderWeeklyReview === 'function') renderWeeklyReview(entries);
   const $section = $('#insights-section');
   if (!entries.length) {
     $section.hide();
@@ -3246,6 +3252,7 @@ async function initCoachDb() {
       if (coachAuthUser) {
         adoptAnonymousPracticeProgress(coachAuthUser.id);
         adoptAnonymousDailySprint(coachAuthUser.id);
+        if (typeof adoptAnonymousGrowthState === 'function') adoptAnonymousGrowthState(coachAuthUser.id);
       }
       coachDbStatus = coachAccountSyncStatus();
       renderCoachAuth();
@@ -3259,6 +3266,7 @@ async function initCoachDb() {
         if (coachAuthUser) {
           adoptAnonymousPracticeProgress(coachAuthUser.id);
           adoptAnonymousDailySprint(coachAuthUser.id);
+          if (typeof adoptAnonymousGrowthState === 'function') adoptAnonymousGrowthState(coachAuthUser.id);
         }
         coachRemoteInsightEntries = null;
         coachDbStatus = coachAccountSyncStatus();
@@ -3315,6 +3323,10 @@ async function signOutCoach() {
   if (dailySprintSyncTimer) {
     clearTimeout(dailySprintSyncTimer);
     dailySprintSyncTimer = null;
+  }
+  if (typeof growthRemoteSync !== 'undefined' && growthRemoteSync.timer) {
+    clearTimeout(growthRemoteSync.timer);
+    growthRemoteSync.timer = null;
   }
   await coachDbClient.auth.signOut();
   coachAuthUser = null;
@@ -3648,7 +3660,8 @@ async function refreshRemoteInsights(opts = {}) {
   if (!opts.silent) setCoachDbStatus('Loading account insights...');
   await Promise.all([
     syncPendingPracticeEvents(),
-    syncRemoteDailySprints({ silent: true })
+    syncRemoteDailySprints({ silent: true }),
+    typeof syncGrowthState === 'function' ? syncGrowthState({ silent: true }) : Promise.resolve()
   ]);
   const [movesResult, drillsResult, attemptsResult] = await Promise.all([
     coachDbClient
@@ -5369,10 +5382,12 @@ const SR_KEY = 'chess_sr_v1';
 const DAY_MS = 86400000;
 
 function loadSR() {
+  if (typeof loadSyncedLibrarySR === 'function') return loadSyncedLibrarySR();
   try { return JSON.parse(localStorage.getItem(SR_KEY)) || {}; }
   catch(e) { return {}; }
 }
 function saveSR(data) {
+  if (typeof saveSyncedLibrarySR === 'function') return saveSyncedLibrarySR(data);
   try {
     localStorage.setItem(SR_KEY, JSON.stringify(data));
     return { ok: true };
@@ -5912,6 +5927,7 @@ function isValidFen(fen) {
 }
 
 function startCoachGame() {
+  if (typeof applyAdaptiveCoachElo === 'function') applyAdaptiveCoachElo();
   const fenRaw = ($('#coach-fen').val() || '').trim();
   let startFen = null;
   if (fenRaw) {
@@ -6905,6 +6921,7 @@ function loadOpening(id, lineId) {
   $('.app').addClass('has-opening');
   setMobileLibraryOpen(false);
   renderOpeningDetails();
+  if (typeof renderRepertoireUI === 'function') renderRepertoireUI();
 
   renderLineSelector();
   renderKeyIdeas();

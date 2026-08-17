@@ -129,6 +129,46 @@ async page => {
   }, insightState);
   await page.reload();
 
+  const growthMerge = await page.evaluate(() => mergeGrowthStates({
+    v: 1,
+    updatedAt: 10,
+    profile: { rating: 900, updatedAt: 10 },
+    repertoire: { ids: ['italian'], updatedAt: 10 },
+    library: { records: { italian: { quality: 3, lastReviewed: 20 } } }
+  }, {
+    v: 1,
+    updatedAt: 30,
+    profile: { rating: 1300, updatedAt: 30 },
+    repertoire: { ids: ['queens-gambit'], updatedAt: 30 },
+    library: { records: { italian: { quality: 5, lastReviewed: 40 }, london: { quality: 4, lastReviewed: 35 } } }
+  }));
+  assert(growthMerge.profile.rating === 1300, 'cross-device growth merge ignored the newer profile');
+  assert(growthMerge.repertoire.ids.length === 1 && growthMerge.repertoire.ids[0] === 'queens-gambit', 'cross-device growth merge ignored the newer repertoire');
+  assert(growthMerge.library.records.italian.quality === 5 && growthMerge.library.records.london.quality === 4, 'cross-device growth merge lost Library progress');
+
+  await page.locator('#player-rating').fill('1350');
+  await page.locator('#player-minutes').fill('5');
+  await page.locator('#player-goal').selectOption('tactics');
+  await page.locator('#player-profile-form button[type=submit]').click();
+  assert((await page.locator('#player-profile-status').textContent()).includes('Profile saved'), 'training profile did not save through onboarding UI');
+  assert(await page.locator('#coach-auto-elo').isChecked(), 'adaptive opponent strength was not enabled by default');
+  assert(Number(await page.locator('#coach-strength').inputValue()) > 0, 'adaptive opponent strength did not produce a rating');
+  await page.evaluate(() => {
+    savePlayerProfile({ rating: 1200, minutes: 10, goal: 'balanced', autoElo: true });
+    hydrateGrowthUI();
+    renderCoachDailyPlan();
+  });
+  assert((await page.locator('#weekly-review-list .weekly-item').count()) === 3, 'weekly coaching review did not render its three evidence sections');
+  const pwaReady = await page.evaluate(async () => {
+    const manifestHref = document.querySelector('link[rel="manifest"]')?.getAttribute('href');
+    const manifestResponse = await fetch(manifestHref);
+    const registration = 'serviceWorker' in navigator
+      ? await Promise.race([navigator.serviceWorker.ready, new Promise(resolve => setTimeout(() => resolve(null), 5000))])
+      : null;
+    return manifestResponse.ok && !!registration;
+  });
+  assert(pwaReady, 'installable offline app shell did not register');
+
   assert(await page.locator('#coach-daily-plan-title').textContent() === 'Train Opening principle gaps, then transfer', 'adaptive plan did not choose the highest-severity focus');
   assert(await page.locator('#btn-coach-next-action').textContent() === 'Start adaptive session', 'adaptive plan did not offer the one-click session');
   assert(await page.locator('#daily-sprint-progress-label').textContent() === '0 of 8 steps', 'adaptive session did not explain its drill-plus-transfer target');
@@ -288,6 +328,10 @@ async page => {
 
   await page.locator('#nav-library').click();
   await page.locator('.opening-btn[data-id="italian"]').click();
+  await page.locator('#btn-repertoire-toggle').click();
+  assert((await page.locator('#btn-repertoire-toggle').textContent()).includes('In my repertoire'), 'opening was not added to the personal repertoire');
+  await page.reload();
+  assert((await page.locator('#btn-repertoire-toggle').textContent()).includes('In my repertoire'), 'personal repertoire did not persist across reload');
   await page.locator('#btn-quiz').click();
   await page.locator('#library-keyboard-move').evaluate(element => { element.open = true; });
   await page.locator('#library-keyboard-move-input').fill('e4');
@@ -374,6 +418,23 @@ async page => {
   await page.reload();
   assert(await page.locator('#coach-daily-plan-title').textContent() === '✓ Today’s training complete', 'move sprint completion did not persist across reload');
 
+  await page.locator('#endgame-track-list .endgame-item button').first().click();
+  assert(await page.locator('#coach-practice-banner').isVisible(), 'structured endgame lesson did not open in Coach practice');
+  await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
+  await page.locator('#coach-keyboard-move-input').fill('Qg7#');
+  await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+  assert((await page.locator('#coach-practice-status').textContent()).includes('Correct on the first try'), 'structured endgame lesson was not graded');
+  assert(await page.locator('#endgame-track-progress').textContent() === '1/4', 'structured endgame progress did not update');
+  await page.locator('#btn-coach-practice-exit').click();
+
+  await page.locator('#game-inbox-pgn').fill('[Event "Smoke import"]\n[Result "*"]\n\n1. e4 *');
+  await page.locator('#game-inbox-side').selectOption('white');
+  await page.locator('#btn-analyse-pgn').click();
+  await page.waitForFunction(() => {
+    return (document.querySelector('#game-inbox-status')?.textContent || '').includes('reviewed. Mistakes');
+  }, null, { timeout: 30000 }).catch(() => {});
+  assert((await page.locator('#game-inbox-status').textContent()).includes('1 move reviewed'), 'PGN Game Inbox did not complete a bounded imported review');
+
   assert(consoleErrors.length === 0, `console errors: ${consoleErrors.join(' | ')}`);
   assert(pageErrors.length === 0, `page errors: ${pageErrors.join(' | ')}`);
   if (failures.length) throw new Error(failures.join('\n'));
@@ -383,15 +444,19 @@ async page => {
     library: 'keyboard quiz advanced',
     mobile: '390px layout stayed within viewport',
     closedLoop: 'missed mate became a post-game drill and delivered mate stayed scorable',
-    dailyHabit: 'first-visit baseline and returning adaptive session completed with takeaways, streaks, persistence, and account isolation'
+    dailyHabit: 'first-visit baseline and returning adaptive session completed with takeaways, streaks, persistence, and account isolation',
+    growth: 'profile, repertoire, adaptive strength, weekly review, endgames, PGN Inbox, and offline shell worked in-browser'
   };
 }
 EOF
 )
 
+set +e
 SMOKE_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$SMOKE_CODE")
+SMOKE_EXIT=$?
+set -e
 echo "$SMOKE_OUTPUT"
-if [[ "$SMOKE_OUTPUT" == *"### Error"* ]]; then
+if [[ "$SMOKE_EXIT" -ne 0 || "$SMOKE_OUTPUT" == *"### Error"* ]]; then
   echo "Browser smoke validation failed." >&2
   exit 1
 fi
