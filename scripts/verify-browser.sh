@@ -86,15 +86,35 @@ async page => {
   };
 
   await page.setViewportSize({ width: 1280, height: 800 });
+  const legacyUpgrade = await page.evaluate(() => {
+    const baseline = {
+      focusTag: null, focus: 'Build your baseline', cue: 'Play naturally.',
+      drillTarget: 0, moveTarget: 10
+    };
+    const focused = {
+      focusTag: 'development', focus: 'Slow development', cue: 'Develop pieces.',
+      drillTarget: 2, moveTarget: 6
+    };
+    const moves = upgradeLegacyDailySprint({ mode: 'moves', target: 10, completedUnits: 4, unitIds: ['a', 'b', 'c', 'd'] }, baseline);
+    const drills = upgradeLegacyDailySprint({ mode: 'drills', target: 3, completedUnits: 1, unitIds: ['a'], focus: 'Slow development' }, focused);
+    return {
+      movesPreserved: moves.mode === 'adaptive' && moves.movesCompleted === 4 && moves.target === 10,
+      drillsPreserved: drills.mode === 'adaptive' && drills.drillsCompleted === 1 && drills.target === 8 && drills.phase === 'drills'
+    };
+  });
+  assert(legacyUpgrade.movesPreserved, 'in-progress legacy move sprint was not preserved during upgrade');
+  assert(legacyUpgrade.drillsPreserved, 'in-progress legacy drill sprint was not preserved during upgrade');
   await page.evaluate(state => {
     localStorage.clear();
     localStorage.setItem('coach:insights:v1', JSON.stringify(state));
   }, insightState);
   await page.reload();
 
-  assert(await page.locator('#coach-daily-plan-title').textContent() === '2-drill Daily Sprint', 'daily plan did not prioritize a bounded due-drill sprint');
-  assert(await page.locator('#btn-coach-next-action').textContent() === 'Start 2-drill sprint', 'daily plan did not offer the one-click sprint');
-  assert(await page.locator('#daily-sprint-progress-label').textContent() === '0 of 2 drills', 'daily sprint did not explain its bounded target');
+  assert(await page.locator('#coach-daily-plan-title').textContent() === 'Train Opening principle gaps, then transfer', 'adaptive plan did not choose the highest-severity focus');
+  assert(await page.locator('#btn-coach-next-action').textContent() === 'Start adaptive session', 'adaptive plan did not offer the one-click session');
+  assert(await page.locator('#daily-sprint-progress-label').textContent() === '0 of 8 steps', 'adaptive session did not explain its drill-plus-transfer target');
+  assert(await page.locator('#daily-sprint-focus-title').textContent() === 'Focus · Opening principle gaps', 'adaptive session did not name its selected focus');
+  assert((await page.locator('#daily-sprint-focus-detail').textContent()).includes('reviewed error'), 'adaptive session did not explain why it selected the focus');
   assert(await page.locator('#practice-section').isVisible(), 'practice queue did not render from a reviewed mistake');
   assert(await page.locator('.practice-load').count() === 2, 'expected two due practice drills');
   await page.locator('#btn-coach-next-action').click();
@@ -127,15 +147,26 @@ async page => {
   assert(await page.locator('#practice-empty').isVisible(), 'caught-up state did not render');
   assert(await page.locator('#practice-progress-week').textContent() === '3', 'seven-day attempts did not update');
   assert(await page.locator('#practice-progress-streak').textContent() === '1d', 'practice streak did not update');
-  assert(await page.locator('#coach-daily-plan-title').textContent() === '✓ Today’s training complete', 'daily sprint did not produce a clear completion state');
-  assert(await page.locator('#daily-sprint-progress-label').textContent() === '2 of 2 drills', 'daily sprint completion progress is wrong');
-  assert(await page.locator('#daily-sprint-streak').textContent() === '1-day streak', 'daily sprint completion did not start a streak');
-  assert((await page.locator('#daily-sprint-takeaway').textContent()).startsWith('You trained '), 'daily sprint did not explain what the player learned');
+  await page.locator('#btn-coach-practice-next').click();
+  assert(await page.locator('#coach-daily-plan-title').textContent() === 'Transfer Opening principle gaps into play', 'focused drills did not advance into transfer play');
+  assert(await page.locator('#daily-sprint-progress-label').textContent() === '2 of 8 steps', 'adaptive session did not retain drill progress');
+  assert(await page.locator('#btn-coach-next-action').textContent() === 'Start transfer game', 'adaptive session did not offer the transfer game');
+
+  await page.evaluate(() => {
+    coachLocalGameId = 'adaptive-smoke';
+    coachReviewLog = [];
+    for (let ply = 1; ply <= 6; ply++) recordDailySprintMove({ ply, tier: 'good', tags: [] });
+    renderCoachDailyPlan();
+  });
+  assert(await page.locator('#coach-daily-plan-title').textContent() === '✓ Today’s training complete', 'drill-plus-transfer session did not complete');
+  assert(await page.locator('#daily-sprint-progress-label').textContent() === '8 of 8 steps', 'adaptive session completion progress is wrong');
+  assert(await page.locator('#daily-sprint-streak').textContent() === '1-day streak', 'adaptive session completion did not start a streak');
+  assert((await page.locator('#daily-sprint-takeaway').textContent()).includes('did not repeat during the transfer moves'), 'adaptive takeaway did not assess live transfer');
 
   await page.reload();
   assert(await page.locator('#practice-progress-attempts').textContent() === '3', 'practice progress did not survive reload');
   assert(await page.locator('#practice-count').textContent() === '0 due', 'practice schedule did not survive reload');
-  assert(await page.locator('#coach-daily-plan-title').textContent() === '✓ Today’s training complete', 'daily sprint completion did not survive reload');
+  assert(await page.locator('#coach-daily-plan-title').textContent() === '✓ Today’s training complete', 'adaptive session completion did not survive reload');
 
   const accountIsolation = await page.evaluate(() => {
     const accountA = '00000000-0000-0000-0000-000000000001';
@@ -258,8 +289,9 @@ async page => {
   await page.goto(page.url().split('?')[0] + '?view=coach');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
-  assert(await page.locator('#coach-daily-plan-title').textContent() === '10-move Daily Sprint', 'clean first visit did not explain the bounded training action');
-  assert(await page.locator('#btn-coach-next-action').textContent() === 'Start Daily Sprint', 'clean first visit did not offer a one-click sprint');
+  assert(await page.locator('#coach-daily-plan-title').textContent() === 'Build your 10-move baseline', 'clean first visit did not explain the bounded baseline');
+  assert(await page.locator('#btn-coach-next-action').textContent() === 'Start baseline', 'clean first visit did not offer a one-click baseline');
+  assert(await page.locator('#daily-sprint-focus-title').textContent() === 'Focus · Build your baseline', 'clean first visit did not explain how adaptation begins');
   assert(await page.locator('#daily-sprint-progress-label').textContent() === '0 of 10 moves', 'clean first visit did not show the sprint target');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(250);
@@ -321,12 +353,12 @@ async page => {
   assert(pageErrors.length === 0, `page errors: ${pageErrors.join(' | ')}`);
   if (failures.length) throw new Error(failures.join('\n'));
   return {
-    practice: 'bounded Daily Sprint graded, completed, persisted, and updated trends',
+    practice: 'adaptive focus was selected, rehearsed, transferred, assessed, and persisted',
     coach: 'replacement-game race stayed clean',
     library: 'keyboard quiz advanced',
     mobile: '390px layout stayed within viewport',
     closedLoop: 'missed mate became a post-game drill and delivered mate stayed scorable',
-    dailyHabit: 'first-visit move sprint and returning drill sprint completed with takeaways, streaks, persistence, and account isolation'
+    dailyHabit: 'first-visit baseline and returning adaptive session completed with takeaways, streaks, persistence, and account isolation'
   };
 }
 EOF

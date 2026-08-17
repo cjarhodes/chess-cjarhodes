@@ -1961,9 +1961,11 @@ const LEGACY_PRACTICE_PROGRESS_KEY = 'coach:practice:v1';
 const PRACTICE_EVENT_LIMIT = 2000;
 const DAILY_SPRINT_KEY = 'coach:daily-sprint:v1';
 const DAILY_MOVE_TARGET = 10;
-const DAILY_DRILL_TARGET = 3;
+const DAILY_DRILL_TARGET = 2;
+const DAILY_TRANSFER_TARGET = 6;
 const DAILY_HISTORY_LIMIT = 60;
 const practiceRemoteSyncChains = new Map();
+let renderedAdaptivePlan = null;
 
 function emptyPracticeProgress() {
   return { v: 2, records: {}, events: [] };
@@ -2146,6 +2148,15 @@ function updateDailySprint(mutator) {
     clean: 0,
     assisted: 0,
     focus: null,
+    focusTag: null,
+    focusCue: null,
+    phase: null,
+    drillTarget: 0,
+    drillsCompleted: 0,
+    drillIds: [],
+    moveTarget: 0,
+    movesCompleted: 0,
+    moveIds: [],
     takeaway: null,
     startedAt: Date.now(),
     completedAt: null
@@ -2157,37 +2168,189 @@ function updateDailySprint(mutator) {
   return next;
 }
 
+function adaptiveFocusProfile(entries, now = Date.now()) {
+  const profiles = {};
+  const ensure = tag => {
+    if (!INSIGHT_TAG_META[tag]) return null;
+    if (!profiles[tag]) profiles[tag] = {
+      tag, score: 0, occurrences: 0, attempts: 0, correct: 0, latestAt: 0
+    };
+    return profiles[tag];
+  };
+  (entries || []).forEach(entry => {
+    if (!entry || !isInsightProblem(entry.tier)) return;
+    const ageDays = Math.max(0, (now - (entry.ts || 0)) / DAY_MS);
+    const recency = ageDays <= 7 ? 1.5 : (ageDays <= 30 ? 1 : 0.55);
+    const severity = INSIGHT_TIER_WEIGHT[entry.tier] || 1;
+    (entry.tags || []).forEach(tag => {
+      const profile = ensure(tag);
+      if (!profile) return;
+      profile.score += severity * recency;
+      profile.occurrences += 1;
+      profile.latestAt = Math.max(profile.latestAt, entry.ts || 0);
+    });
+  });
+  loadPracticeProgress().events.forEach(event => {
+    if (!event || !event.tag || !Number.isFinite(event.at) || now - event.at > 30 * DAY_MS) return;
+    const profile = ensure(event.tag);
+    if (!profile) return;
+    profile.attempts += 1;
+    if (event.correct && !event.revealed) {
+      profile.correct += 1;
+      profile.score = Math.max(0, profile.score - 0.4);
+    } else {
+      profile.score += event.revealed ? 2 : 2.5;
+    }
+    profile.latestAt = Math.max(profile.latestAt, event.at);
+  });
+  return Object.values(profiles).sort((a, b) =>
+    b.score - a.score || b.occurrences - a.occurrences || b.latestAt - a.latestAt
+  );
+}
+
+function adaptiveFocusReason(profile) {
+  if (!profile) return 'Coach needs a short baseline before choosing a focus.';
+  const mistakes = `${profile.occurrences} reviewed error${profile.occurrences === 1 ? '' : 's'}`;
+  if (!profile.attempts) return `${mistakes}; this pattern has not been rehearsed yet.`;
+  const rate = Math.round(profile.correct / profile.attempts * 100);
+  return `${mistakes} and ${rate}% first-try practice success across ${profile.attempts} attempt${profile.attempts === 1 ? '' : 's'}.`;
+}
+
+function prioritizeAdaptivePractice(items, profiles) {
+  const scoreByTag = new Map((profiles || []).map(profile => [profile.tag, profile.score]));
+  return (items || []).slice().sort((a, b) => {
+    const score = (scoreByTag.get(b.tag) || 0) - (scoreByTag.get(a.tag) || 0);
+    if (score) return score;
+    const aDue = (practiceRecordFor(a) || {}).dueAt || 0;
+    const bDue = (practiceRecordFor(b) || {}).dueAt || 0;
+    return aDue - bDue;
+  });
+}
+
+function adaptiveDailyPlan(entries, queue, due, totals) {
+  const profiles = adaptiveFocusProfile(entries);
+  const orderedDue = prioritizeAdaptivePractice(due, profiles);
+  const focusProfile = orderedDue.length
+    ? profiles.find(profile => profile.tag === orderedDue[0].tag) || { tag: orderedDue[0].tag, occurrences: 1, attempts: 0, correct: 0 }
+    : profiles[0] || null;
+  const meta = focusProfile ? INSIGHT_TAG_META[focusProfile.tag] : null;
+  const returning = !!((entries || []).length || (queue || []).length || (totals && totals.attempts));
+  if (orderedDue.length) {
+    return {
+      kind: 'focus-transfer',
+      focusTag: focusProfile.tag,
+      focus: meta.title,
+      cue: meta.practice,
+      reason: adaptiveFocusReason(focusProfile),
+      drillTarget: Math.min(DAILY_DRILL_TARGET, orderedDue.length),
+      moveTarget: DAILY_TRANSFER_TARGET,
+      orderedDue
+    };
+  }
+  if (returning && meta) {
+    return {
+      kind: 'transfer', focusTag: focusProfile.tag, focus: meta.title,
+      cue: meta.practice, reason: adaptiveFocusReason(focusProfile),
+      drillTarget: 0, moveTarget: 8, orderedDue: []
+    };
+  }
+  return {
+    kind: 'baseline', focusTag: null, focus: 'Build your baseline',
+    cue: 'Play naturally. Coach will turn recurring mistakes into tomorrow’s focus.',
+    reason: 'No reviewed history yet.', drillTarget: 0, moveTarget: DAILY_MOVE_TARGET, orderedDue: []
+  };
+}
+
+function initializeAdaptiveDay(day, plan) {
+  const selected = plan || renderedAdaptivePlan || adaptiveDailyPlan([], [], [], practiceProgressTotals());
+  day.mode = 'adaptive';
+  day.phase = selected.drillTarget ? 'drills' : 'moves';
+  day.focusTag = selected.focusTag;
+  day.focus = selected.focus;
+  day.focusCue = selected.cue;
+  day.focusReason = selected.reason;
+  day.drillTarget = selected.drillTarget;
+  day.moveTarget = selected.moveTarget;
+  day.target = selected.drillTarget + selected.moveTarget;
+  day.drillsCompleted = 0;
+  day.movesCompleted = 0;
+  day.completedUnits = 0;
+  day.drillIds = [];
+  day.moveIds = [];
+  day.unitIds = [];
+  day.clean = 0;
+  day.assisted = 0;
+  return day;
+}
+
+function upgradeLegacyDailySprint(day, plan) {
+  if (!day || day.mode === 'adaptive') return day;
+  const selected = plan || renderedAdaptivePlan || adaptiveDailyPlan([], [], [], practiceProgressTotals());
+  const legacyMode = day.mode;
+  const legacyIds = Array.isArray(day.unitIds) ? day.unitIds.slice() : [];
+  const legacyCompleted = Math.min(day.target || legacyIds.length, day.completedUnits || legacyIds.length);
+  day.mode = 'adaptive';
+  day.focusTag = selected.focusTag;
+  day.focus = day.focus || selected.focus;
+  day.focusCue = selected.cue;
+  day.focusReason = 'Continued from the Daily Sprint already started before this update.';
+  day.clean = day.clean || 0;
+  day.assisted = day.assisted || 0;
+  if (legacyMode === 'drills') {
+    day.drillsCompleted = legacyCompleted;
+    day.drillIds = legacyIds;
+    day.drillTarget = Math.max(
+      day.drillsCompleted,
+      Math.min(day.target || DAILY_DRILL_TARGET, selected.drillTarget || DAILY_DRILL_TARGET)
+    );
+    day.phase = day.drillsCompleted >= day.drillTarget ? 'moves' : 'drills';
+    day.moveTarget = DAILY_TRANSFER_TARGET;
+    day.movesCompleted = 0;
+    day.moveIds = [];
+  } else {
+    day.phase = 'moves';
+    day.drillTarget = 0;
+    day.drillsCompleted = 0;
+    day.drillIds = [];
+    day.moveTarget = day.target || DAILY_MOVE_TARGET;
+    day.movesCompleted = legacyCompleted;
+    day.moveIds = legacyIds;
+  }
+  day.target = day.drillTarget + day.moveTarget;
+  day.completedUnits = day.drillsCompleted + day.movesCompleted;
+  return day;
+}
+
 function beginDailyMoveSprint() {
   const existing = dailySprintToday();
-  if (existing && (existing.completedAt || existing.mode === 'drills')) return existing;
+  if (existing && (existing.completedAt || existing.mode === 'adaptive')) return existing;
   return updateDailySprint(day => {
-    day.mode = 'moves';
-    day.target = DAILY_MOVE_TARGET;
-    day.completedUnits = Math.min(DAILY_MOVE_TARGET, (day.unitIds || []).length);
-    return day;
+    if (day.mode) return upgradeLegacyDailySprint(day, renderedAdaptivePlan);
+    return initializeAdaptiveDay(day, renderedAdaptivePlan);
   });
 }
 
 function beginDailyDrillSprint(items) {
   const existing = dailySprintToday();
-  if (existing && (existing.completedAt || existing.mode === 'moves')) return existing;
+  if (existing && (existing.completedAt || existing.mode === 'adaptive')) return existing;
   return updateDailySprint(day => {
-    if (day.mode !== 'drills') {
-      day.mode = 'drills';
-      day.unitIds = [];
-      day.completedUnits = 0;
-      day.clean = 0;
-      day.assisted = 0;
-    }
-    day.target = day.target || Math.min(DAILY_DRILL_TARGET, (items || []).length);
-    const first = items && items[0];
-    if (!day.focus && first && first.meta) day.focus = first.meta.title;
+    if (day.mode) return upgradeLegacyDailySprint(day, renderedAdaptivePlan);
+    initializeAdaptiveDay(day, renderedAdaptivePlan);
+    day.drillTarget = Math.min(day.drillTarget || DAILY_DRILL_TARGET, (items || []).length);
+    day.target = day.drillTarget + day.moveTarget;
     return day;
   });
 }
 
-function dailyMoveSprintTakeaway() {
+function dailyMoveSprintTakeaway(day) {
   const scored = (coachReviewLog || []).filter(review => review && review.tier && review.tier !== 'unknown');
+  if (day && day.focusTag && INSIGHT_TAG_META[day.focusTag]) {
+    const repeats = scored.filter(review => (review.insightTags || review.tags || []).includes(day.focusTag)).length;
+    const result = repeats
+      ? `The pattern resurfaced ${repeats} time${repeats === 1 ? '' : 's'} in transfer play.`
+      : 'The pattern did not repeat during the transfer moves.';
+    return `${day.focus}: ${day.clean || 0}/${day.drillsCompleted || 0} drills first-try. ${result} Keep using this cue: ${day.focusCue}`;
+  }
   const problem = scored.slice().reverse().find(review => isInsightProblem(review.tier));
   const tag = problem && (problem.tags || []).find(value => INSIGHT_TAG_META[value]);
   if (tag) return `Today’s focus: ${INSIGHT_TAG_META[tag].title}. ${INSIGHT_TAG_META[tag].practice}`;
@@ -2199,17 +2362,20 @@ function dailyMoveSprintTakeaway() {
 
 function recordDailySprintMove(review) {
   const existing = dailySprintToday();
-  if (existing && (existing.completedAt || existing.mode === 'drills')) return existing;
+  if (existing && (existing.completedAt || existing.mode === 'drills' || (existing.mode === 'adaptive' && existing.phase === 'drills'))) return existing;
   const id = `${coachLocalGameId || 'local'}:${review.ply}`;
   return updateDailySprint(day => {
-    day.mode = 'moves';
-    day.target = DAILY_MOVE_TARGET;
-    day.unitIds = Array.isArray(day.unitIds) ? day.unitIds : [];
-    if (!day.unitIds.includes(id)) day.unitIds.push(id);
-    day.completedUnits = Math.min(day.target, day.unitIds.length);
+    if (day.mode && day.mode !== 'adaptive') upgradeLegacyDailySprint(day, renderedAdaptivePlan);
+    else if (day.mode !== 'adaptive') initializeAdaptiveDay(day, renderedAdaptivePlan);
+    day.phase = 'moves';
+    day.moveIds = Array.isArray(day.moveIds) ? day.moveIds : [];
+    if (!day.moveIds.includes(id)) day.moveIds.push(id);
+    day.movesCompleted = Math.min(day.moveTarget, day.moveIds.length);
+    day.completedUnits = (day.drillsCompleted || 0) + day.movesCompleted;
     if (day.completedUnits >= day.target && !day.completedAt) {
       day.completedAt = Date.now();
-      day.takeaway = dailyMoveSprintTakeaway();
+      day.phase = 'complete';
+      day.takeaway = dailyMoveSprintTakeaway(day);
     }
     return day;
   });
@@ -2219,26 +2385,17 @@ function recordDailySprintDrill(item, revealed, clean) {
   const existing = dailySprintToday();
   if (existing && (existing.completedAt || existing.mode === 'moves')) return existing;
   return updateDailySprint(day => {
-    if (day.mode !== 'drills') {
-      day.mode = 'drills';
-      day.target = 1;
-      day.unitIds = [];
-      day.completedUnits = 0;
-      day.clean = 0;
-      day.assisted = 0;
-    }
-    day.unitIds = Array.isArray(day.unitIds) ? day.unitIds : [];
-    if (!day.unitIds.includes(item.id)) {
-      day.unitIds.push(item.id);
+    if (day.mode && day.mode !== 'adaptive') upgradeLegacyDailySprint(day, renderedAdaptivePlan);
+    else if (day.mode !== 'adaptive') initializeAdaptiveDay(day, renderedAdaptivePlan);
+    day.drillIds = Array.isArray(day.drillIds) ? day.drillIds : [];
+    if (!day.drillIds.includes(item.id)) {
+      day.drillIds.push(item.id);
       if (clean) day.clean += 1;
       if (revealed) day.assisted += 1;
     }
-    if (!day.focus && item.meta) day.focus = item.meta.title;
-    day.completedUnits = Math.min(day.target, day.unitIds.length);
-    if (day.completedUnits >= day.target && !day.completedAt) {
-      day.completedAt = Date.now();
-      day.takeaway = `You trained ${day.focus || 'your recent mistakes'} — ${day.clean}/${day.completedUnits} solved on the first try.`;
-    }
+    day.drillsCompleted = Math.min(day.drillTarget, day.drillIds.length);
+    day.completedUnits = day.drillsCompleted + (day.movesCompleted || 0);
+    if (day.drillsCompleted >= day.drillTarget) day.phase = 'moves';
     return day;
   });
 }
@@ -2252,11 +2409,22 @@ function setDailySprintProgress(completed, target, unit) {
   $('#daily-sprint-fill').css('width', `${percent}%`);
 }
 
+function dailySprintProgressUnit(day) {
+  if (!day || day.mode !== 'adaptive') return day && day.mode === 'drills' ? 'drill' : 'move';
+  return day.drillTarget > 0 ? 'step' : 'move';
+}
+
 function renderDailySprintChrome(day) {
   const history = loadDailySprintHistory();
   const streak = dailySprintStreak(history);
   $('#daily-sprint-streak').text(streak ? `${streak}-day streak` : 'Start a streak');
   $('#coach-daily-plan').toggleClass('is-complete', !!(day && day.completedAt));
+  const focus = day && day.focus
+    ? { title: day.focus, cue: day.focusCue, reason: day.focusReason }
+    : renderedAdaptivePlan && { title: renderedAdaptivePlan.focus, cue: renderedAdaptivePlan.cue, reason: renderedAdaptivePlan.reason };
+  $('#daily-sprint-focus-title').text(focus ? `Focus · ${focus.title}` : '');
+  $('#daily-sprint-focus-detail').text(focus ? `${focus.cue} ${focus.reason}` : '');
+  $('#daily-sprint-focus').toggle(!!focus);
   $('#daily-sprint-takeaway')
     .text(day && day.takeaway ? day.takeaway : '')
     .toggle(!!(day && day.completedAt && day.takeaway));
@@ -2582,19 +2750,21 @@ function formatPracticeDue(record) {
   return `Due in ${days}d`;
 }
 
-function renderCoachDailyPlan(queue, due, totals) {
+function renderCoachDailyPlan(queue, due, totals, entries) {
   const items = Array.isArray(queue) ? queue : Array.from(renderedPracticeItems.values());
   const dueItems = Array.isArray(due) ? due : items.filter(item => practiceIsDue(item));
   const progress = totals || practiceProgressTotals();
   const $action = $('#btn-coach-next-action');
   const sprint = dailySprintToday();
+  if (!sprint) renderedAdaptivePlan = adaptiveDailyPlan(entries || [], items, dueItems, progress);
   renderDailySprintChrome(sprint);
 
   if (sprint && sprint.completedAt) {
-    const unit = sprint.mode === 'drills' ? 'drill' : 'move';
-    setDailySprintProgress(sprint.target, sprint.target, unit);
+    setDailySprintProgress(sprint.target, sprint.target, dailySprintProgressUnit(sprint));
     $('#coach-daily-plan-title').text('✓ Today’s training complete');
-    $('#coach-daily-plan-detail').text('You finished a focused session. Your progress is saved — come back tomorrow to keep the streak alive.');
+    $('#coach-daily-plan-detail').text(sprint.mode === 'adaptive'
+      ? 'You rehearsed a priority, tested it in live play, and saved the result. Come back tomorrow for an updated focus.'
+      : 'You finished today’s sprint. Come back tomorrow for a newly adaptive session.');
     $action
       .text(coachGameActive && !coachPracticeSession ? 'Keep playing' : 'Play an extra game')
       .attr('data-action', coachGameActive && !coachPracticeSession ? 'continue' : 'extra-game');
@@ -2602,12 +2772,21 @@ function renderCoachDailyPlan(queue, due, totals) {
   }
 
   if (coachPracticeSession) {
-    const target = sprint && sprint.mode === 'drills' ? sprint.target : (coachPracticeRun ? coachPracticeRun.items.length : 1);
-    const completed = sprint && sprint.mode === 'drills' ? sprint.completedUnits : (coachPracticeRun ? coachPracticeRun.completed : 0);
-    setDailySprintProgress(completed, target, 'drill');
-    $('#coach-daily-plan-title').text('Daily Sprint in progress');
-    $('#coach-daily-plan-detail').text('Solve the position on the board, then continue through this short set.');
+    const target = sprint && sprint.mode === 'adaptive' ? sprint.target : (coachPracticeRun ? coachPracticeRun.items.length : 1);
+    const completed = sprint && sprint.mode === 'adaptive' ? sprint.completedUnits : (coachPracticeRun ? coachPracticeRun.completed : 0);
+    setDailySprintProgress(completed, target, sprint && sprint.mode === 'adaptive' ? 'step' : 'drill');
+    $('#coach-daily-plan-title').text(`Rehearse ${sprint && sprint.focus ? sprint.focus : 'today’s focus'}`);
+    $('#coach-daily-plan-detail').text('Solve the focused positions first. Live transfer moves come next.');
     $action.text('Return to the drill').attr('data-action', 'continue');
+    return;
+  }
+
+  if (sprint && sprint.mode === 'adaptive') {
+    setDailySprintProgress(sprint.completedUnits, sprint.target, dailySprintProgressUnit(sprint));
+    const remaining = Math.max(0, sprint.moveTarget - (sprint.movesCompleted || 0));
+    $('#coach-daily-plan-title').text(`Transfer ${sprint.focus || 'the lesson'} into play`);
+    $('#coach-daily-plan-detail').text(`${remaining} reviewed move${remaining === 1 ? '' : 's'} remain. Use the focus cue before every move.`);
+    $action.text(coachGameActive ? 'Return to the board' : 'Start transfer game').attr('data-action', coachGameActive ? 'continue' : 'game');
     return;
   }
 
@@ -2628,29 +2807,30 @@ function renderCoachDailyPlan(queue, due, totals) {
   }
 
   if (dueItems.length) {
-    const first = dueItems[0];
-    const focus = first && first.meta ? first.meta.title : 'your recent mistakes';
-    const target = Math.min(DAILY_DRILL_TARGET, dueItems.length);
-    setDailySprintProgress(0, target, 'drill');
-    $('#coach-daily-plan-title').text(`${target}-drill Daily Sprint`);
-    $('#coach-daily-plan-detail').text(`Focus: ${focus}. A short set drawn directly from your reviewed mistakes.`);
+    const plan = renderedAdaptivePlan;
+    const target = plan.drillTarget + plan.moveTarget;
+    setDailySprintProgress(0, target, 'step');
+    $('#coach-daily-plan-title').text(`Train ${plan.focus}, then transfer`);
+    $('#coach-daily-plan-detail').text(`${plan.drillTarget} focused drill${plan.drillTarget === 1 ? '' : 's'} → ${plan.moveTarget} reviewed game moves. Coach chose this from your recent errors and practice results.`);
     $action
-      .text(target === 1 ? 'Start Daily Sprint' : `Start ${target}-drill sprint`)
+      .text('Start adaptive session')
       .attr('data-action', 'practice');
     return;
   }
 
   const returning = progress.attempts > 0 || items.length > 0;
-  setDailySprintProgress(0, DAILY_MOVE_TARGET, 'move');
-  $('#coach-daily-plan-title').text('10-move Daily Sprint');
-  $('#coach-daily-plan-detail').text(returning
-    ? 'Your drills are caught up. Play ten reviewed moves to find the next positions worth training.'
-    : 'Play a short coached sprint. Every move gets feedback and mistakes become future drills.');
-  $action.text('Start Daily Sprint').attr('data-action', 'game');
+  const plan = renderedAdaptivePlan;
+  setDailySprintProgress(0, plan.moveTarget, 'move');
+  $('#coach-daily-plan-title').text(returning && plan.focusTag ? `Transfer ${plan.focus}` : 'Build your 10-move baseline');
+  $('#coach-daily-plan-detail').text(returning && plan.focusTag
+    ? `${plan.moveTarget} reviewed moves using one personalised cue. Coach will check whether the pattern returns.`
+    : 'Play naturally for ten reviewed moves. Coach will use the result to choose your first training focus.');
+  $action.text(returning ? 'Start focused game' : 'Start baseline').attr('data-action', 'game');
 }
 
 function renderPracticeQueue(entries, counts) {
-  const queue = practiceItemsForEntries(entries, counts);
+  const profiles = adaptiveFocusProfile(entries);
+  const queue = prioritizeAdaptivePractice(practiceItemsForEntries(entries, counts), profiles);
   const $section = $('#practice-section');
   const $list = $('#practice-list').empty();
   const totals = practiceProgressTotals();
@@ -2658,7 +2838,7 @@ function renderPracticeQueue(entries, counts) {
   if (!queue.length) {
     if (!totals.attempts) {
       $section.hide();
-      renderCoachDailyPlan(queue, [], totals);
+      renderCoachDailyPlan(queue, [], totals, entries);
       return;
     }
     $('#practice-count').text('0 due');
@@ -2669,7 +2849,7 @@ function renderPracticeQueue(entries, counts) {
     $('#btn-practice-session-start').text('Start practice').prop('disabled', true);
     renderPracticeTrends();
     $section.show();
-    renderCoachDailyPlan(queue, [], totals);
+    renderCoachDailyPlan(queue, [], totals, entries);
     return;
   }
   const due = queue.filter(item => practiceIsDue(item));
@@ -2698,7 +2878,7 @@ function renderPracticeQueue(entries, counts) {
     $list.append($row);
   });
   $section.show();
-  renderCoachDailyPlan(queue, due, totals);
+  renderCoachDailyPlan(queue, due, totals, entries);
 }
 
 function renderTheoryCards(entries, counts) {
@@ -5262,7 +5442,8 @@ function orderedPracticeRunItems(items, firstItem) {
     seen.add(item.id);
     unique.push(item);
   });
-  return unique.slice(0, DAILY_DRILL_TARGET);
+  const target = renderedAdaptivePlan ? renderedAdaptivePlan.drillTarget : DAILY_DRILL_TARGET;
+  return unique.slice(0, Math.max(1, target));
 }
 
 function startCoachPracticeSession(items, firstItem) {

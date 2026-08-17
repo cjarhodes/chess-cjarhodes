@@ -727,6 +727,26 @@
       font-size: 0.86rem;
       line-height: 1.4;
     }
+    .daily-sprint-focus {
+      padding: 0.6rem 0.65rem;
+      background: rgba(255,255,255,0.035);
+      border-left: 2px solid var(--highlight);
+    }
+    .daily-sprint-focus-title {
+      color: var(--highlight);
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .daily-sprint-focus-detail {
+      margin-top: 0.25rem;
+      color: var(--text);
+      font-family: var(--font-reading);
+      font-size: 0.84rem;
+      line-height: 1.4;
+    }
     .coach-daily-plan.is-complete {
       background: linear-gradient(135deg, rgba(107,130,104,0.2), rgba(107,130,104,0.04));
       border-color: rgba(139,171,135,0.62);
@@ -2447,12 +2467,16 @@
   <aside class="coach-panel">
     <div class="coach-panel-section coach-daily-plan" id="coach-daily-plan" aria-labelledby="coach-daily-plan-label">
       <div class="daily-sprint-meta">
-        <span class="section-label" id="coach-daily-plan-label">Daily Sprint · 5–10 min</span>
+        <span class="section-label" id="coach-daily-plan-label">Adaptive session · 5–10 min</span>
         <span class="daily-sprint-streak" id="daily-sprint-streak">Start a streak</span>
       </div>
       <div class="plan-title" id="coach-daily-plan-title">10 reviewed moves</div>
       <div class="plan-detail" id="coach-daily-plan-detail">Play a short coached sprint. Every move gets feedback and mistakes become future drills.</div>
-      <div class="daily-sprint-progress" aria-label="Daily Sprint progress">
+      <div class="daily-sprint-focus" id="daily-sprint-focus" aria-live="polite" style="display:none;">
+        <div class="daily-sprint-focus-title" id="daily-sprint-focus-title"></div>
+        <div class="daily-sprint-focus-detail" id="daily-sprint-focus-detail"></div>
+      </div>
+      <div class="daily-sprint-progress" aria-label="Adaptive session progress">
         <div class="daily-sprint-progress-head">
           <span id="daily-sprint-progress-label">0 of 10 moves</span>
           <span id="daily-sprint-progress-percent">0%</span>
