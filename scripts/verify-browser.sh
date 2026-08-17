@@ -92,11 +92,12 @@ async page => {
   }, insightState);
   await page.reload();
 
-  assert(await page.locator('#coach-daily-plan-title').textContent() === '2 practice drills due', 'daily plan did not prioritize due drills');
-  assert((await page.locator('#btn-coach-next-action').textContent()).includes('2-drill session'), 'daily plan did not offer the due session');
+  assert(await page.locator('#coach-daily-plan-title').textContent() === '2-drill Daily Sprint', 'daily plan did not prioritize a bounded due-drill sprint');
+  assert(await page.locator('#btn-coach-next-action').textContent() === 'Start 2-drill sprint', 'daily plan did not offer the one-click sprint');
+  assert(await page.locator('#daily-sprint-progress-label').textContent() === '0 of 2 drills', 'daily sprint did not explain its bounded target');
   assert(await page.locator('#practice-section').isVisible(), 'practice queue did not render from a reviewed mistake');
   assert(await page.locator('.practice-load').count() === 2, 'expected two due practice drills');
-  await page.locator('.practice-load').first().click();
+  await page.locator('#btn-coach-next-action').click();
   assert(await page.locator('#coach-practice-banner').isVisible(), 'practice banner did not open');
   assert(await page.locator('#coach-practice-session-status').textContent() === 'Drill 1 of 2', 'multi-drill session did not start');
   assert(await page.locator('#btn-coach-resign').isDisabled(), 'normal game controls stayed enabled during practice');
@@ -126,15 +127,21 @@ async page => {
   assert(await page.locator('#practice-empty').isVisible(), 'caught-up state did not render');
   assert(await page.locator('#practice-progress-week').textContent() === '3', 'seven-day attempts did not update');
   assert(await page.locator('#practice-progress-streak').textContent() === '1d', 'practice streak did not update');
+  assert(await page.locator('#coach-daily-plan-title').textContent() === '✓ Today’s training complete', 'daily sprint did not produce a clear completion state');
+  assert(await page.locator('#daily-sprint-progress-label').textContent() === '2 of 2 drills', 'daily sprint completion progress is wrong');
+  assert(await page.locator('#daily-sprint-streak').textContent() === '1-day streak', 'daily sprint completion did not start a streak');
+  assert((await page.locator('#daily-sprint-takeaway').textContent()).startsWith('You trained '), 'daily sprint did not explain what the player learned');
 
   await page.reload();
   assert(await page.locator('#practice-progress-attempts').textContent() === '3', 'practice progress did not survive reload');
   assert(await page.locator('#practice-count').textContent() === '0 due', 'practice schedule did not survive reload');
+  assert(await page.locator('#coach-daily-plan-title').textContent() === '✓ Today’s training complete', 'daily sprint completion did not survive reload');
 
   const accountIsolation = await page.evaluate(() => {
     const accountA = '00000000-0000-0000-0000-000000000001';
     const accountB = '00000000-0000-0000-0000-000000000002';
     const accountAKey = `coach:practice:v2:${accountA}`;
+    const dailyAKey = `coach:daily-sprint:v1:${accountA}`;
     const originalSetItem = Storage.prototype.setItem;
     let failedWritePreserved = false;
     try {
@@ -153,11 +160,15 @@ async page => {
     }
     coachAuthUser = { id: accountA };
     adoptAnonymousPracticeProgress(accountA);
+    adoptAnonymousDailySprint(accountA);
     const moved = JSON.parse(localStorage.getItem(accountAKey));
+    const movedDaily = JSON.parse(localStorage.getItem(dailyAKey));
     coachAuthUser = { id: accountB };
     const other = loadPracticeProgress();
+    const otherDaily = dailySprintToday();
     coachAuthUser = { id: accountA };
     const restored = loadPracticeProgress();
+    const restoredDaily = dailySprintToday();
     coachAuthUser = null;
     return {
       failedWritePreserved,
@@ -165,7 +176,11 @@ async page => {
       importedAttempts: moved.records[Object.keys(moved.records)[0]].attempts,
       importedOwner: moved.events[0].ownerId,
       otherAttempts: Object.keys(other.records).length,
-      restoredEvents: restored.events.length
+      restoredEvents: restored.events.length,
+      anonymousDailyRemoved: localStorage.getItem('coach:daily-sprint:v1') === null,
+      importedDailyCompleted: Object.values(movedDaily.days)[0].completedAt > 0,
+      otherDailyMissing: otherDaily === null,
+      restoredDailyCompleted: restoredDaily.completedAt > 0
     };
   });
   assert(accountIsolation.failedWritePreserved, 'failed account adoption removed anonymous progress');
@@ -174,12 +189,19 @@ async page => {
   assert(accountIsolation.importedOwner === '00000000-0000-0000-0000-000000000001', 'imported attempts were not assigned to the account');
   assert(accountIsolation.otherAttempts === 0, 'practice progress leaked between browser accounts');
   assert(accountIsolation.restoredEvents === 3, 'account progress did not survive an account switch');
+  assert(accountIsolation.anonymousDailyRemoved, 'anonymous daily sprint was not moved into the signed-in account scope');
+  assert(accountIsolation.importedDailyCompleted, 'daily sprint completion did not import into the account scope');
+  assert(accountIsolation.otherDailyMissing, 'daily sprint progress leaked between browser accounts');
+  assert(accountIsolation.restoredDailyCompleted, 'daily sprint completion did not survive an account switch');
 
   await page.evaluate(() => {
     localStorage.removeItem('coach:practice:v1');
     localStorage.removeItem('coach:practice:v2');
     localStorage.removeItem('coach:practice:v2:00000000-0000-0000-0000-000000000001');
     localStorage.removeItem('coach:practice:v2:00000000-0000-0000-0000-000000000002');
+    localStorage.removeItem('coach:daily-sprint:v1');
+    localStorage.removeItem('coach:daily-sprint:v1:00000000-0000-0000-0000-000000000001');
+    localStorage.removeItem('coach:daily-sprint:v1:00000000-0000-0000-0000-000000000002');
   });
   await page.reload();
   await page.locator('.practice-load').first().click();
@@ -193,7 +215,9 @@ async page => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(250);
   const resizedCoachBoard = await page.locator('#coachBoard .board-b72b1').boundingBox();
+  const sprintCard = await page.locator('#coach-daily-plan').boundingBox();
   assert(resizedCoachBoard && resizedCoachBoard.width <= 352, 'existing Coach board did not reflow after desktop-to-mobile resize');
+  assert(sprintCard && sprintCard.width <= 390, 'Daily Sprint card overflowed the mobile viewport');
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.waitForTimeout(250);
 
@@ -234,11 +258,21 @@ async page => {
   await page.goto(page.url().split('?')[0] + '?view=coach');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
-  assert(await page.locator('#coach-daily-plan-title').textContent() === 'Play one coached game', 'clean first visit did not explain the next training action');
-  assert(await page.locator('#btn-coach-next-action').textContent() === 'Start today’s game', 'clean first visit did not offer a direct game action');
+  assert(await page.locator('#coach-daily-plan-title').textContent() === '10-move Daily Sprint', 'clean first visit did not explain the bounded training action');
+  assert(await page.locator('#btn-coach-next-action').textContent() === 'Start Daily Sprint', 'clean first visit did not offer a one-click sprint');
+  assert(await page.locator('#daily-sprint-progress-label').textContent() === '0 of 10 moves', 'clean first visit did not show the sprint target');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(250);
+  const firstVisitSprintBox = await page.locator('#coach-daily-plan').boundingBox();
+  const firstVisitAccountBox = await page.locator('#coach-auth-card').boundingBox();
+  const firstVisitBoardBox = await page.locator('#coachBoard').boundingBox();
+  assert(firstVisitSprintBox && firstVisitAccountBox && firstVisitSprintBox.y < firstVisitAccountBox.y, 'mobile first visit did not show the Daily Sprint before optional account setup');
+  assert(firstVisitSprintBox && firstVisitBoardBox && firstVisitSprintBox.y < firstVisitBoardBox.y, 'mobile first visit hid the Daily Sprint below the chessboard');
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.waitForTimeout(250);
   await page.locator('#coach-fen').fill('7k/8/5KQ1/8/8/8/8/8 w - - 0 1');
   await page.locator('.side-toggle button[data-side="white"]').click();
-  await page.locator('#btn-coach-newgame').click();
+  await page.locator('#btn-coach-next-action').click();
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
   await page.locator('#coach-keyboard-move-input').fill('Qe4');
   await page.locator('#coach-keyboard-move-form button[type=submit]').click();
@@ -247,6 +281,7 @@ async page => {
   }, null, { timeout: 30000 }).catch(() => {});
   assert((await page.locator('#coach-classification').textContent()).includes('Blunder'), 'missed mate was not classified as a blunder');
   assert(await page.locator('#coach-best-move').textContent() === 'Qg7#', 'real review did not preserve the mating move');
+  assert(await page.locator('#daily-sprint-progress-label').textContent() === '1 of 10 moves', 'reviewed move did not advance the Daily Sprint');
   assert(await page.locator('.practice-load').count() >= 1, 'real reviewed mistake did not create a due drill');
   const generatedBest = await page.locator('#coach-best-move').textContent();
   await page.locator('#btn-coach-resign').click();
@@ -270,15 +305,28 @@ async page => {
   }, null, { timeout: 30000 }).catch(() => {});
   assert((await page.locator('#coach-classification').textContent()).includes('Best move'), 'mating move was not classified as best');
 
+  await page.evaluate(() => {
+    for (let ply = 3; ply <= 10; ply++) {
+      recordDailySprintMove({ ply, tier: 'good', tags: [] });
+    }
+    renderCoachDailyPlan();
+  });
+  assert(await page.locator('#coach-daily-plan-title').textContent() === '✓ Today’s training complete', 'ten reviewed moves did not complete the Daily Sprint');
+  assert(await page.locator('#daily-sprint-progress-label').textContent() === '10 of 10 moves', 'move sprint completion total is wrong');
+  assert((await page.locator('#daily-sprint-takeaway').textContent()).length > 20, 'move sprint completion did not provide a learning takeaway');
+  await page.reload();
+  assert(await page.locator('#coach-daily-plan-title').textContent() === '✓ Today’s training complete', 'move sprint completion did not persist across reload');
+
   assert(consoleErrors.length === 0, `console errors: ${consoleErrors.join(' | ')}`);
   assert(pageErrors.length === 0, `page errors: ${pageErrors.join(' | ')}`);
   if (failures.length) throw new Error(failures.join('\n'));
   return {
-    practice: 'multi-drill session graded, persisted, and updated trends',
+    practice: 'bounded Daily Sprint graded, completed, persisted, and updated trends',
     coach: 'replacement-game race stayed clean',
     library: 'keyboard quiz advanced',
     mobile: '390px layout stayed within viewport',
-    closedLoop: 'missed mate became a post-game drill and delivered mate stayed scorable'
+    closedLoop: 'missed mate became a post-game drill and delivered mate stayed scorable',
+    dailyHabit: 'first-visit move sprint and returning drill sprint completed with takeaways, streaks, persistence, and account isolation'
   };
 }
 EOF

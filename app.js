@@ -1959,6 +1959,10 @@ function formatPracticeContext(entry) {
 const PRACTICE_PROGRESS_KEY = 'coach:practice:v2';
 const LEGACY_PRACTICE_PROGRESS_KEY = 'coach:practice:v1';
 const PRACTICE_EVENT_LIMIT = 2000;
+const DAILY_SPRINT_KEY = 'coach:daily-sprint:v1';
+const DAILY_MOVE_TARGET = 10;
+const DAILY_DRILL_TARGET = 3;
+const DAILY_HISTORY_LIMIT = 60;
 const practiceRemoteSyncChains = new Map();
 
 function emptyPracticeProgress() {
@@ -2048,6 +2052,214 @@ function adoptAnonymousPracticeProgress(ownerId) {
     localStorage.removeItem(PRACTICE_PROGRESS_KEY);
     localStorage.removeItem(LEGACY_PRACTICE_PROGRESS_KEY);
   } catch (e) {}
+}
+
+function dailySprintStorageKey(ownerId = activePracticeOwnerId()) {
+  return ownerId ? `${DAILY_SPRINT_KEY}:${ownerId}` : DAILY_SPRINT_KEY;
+}
+
+function emptyDailySprintHistory() {
+  return { v: 1, days: {} };
+}
+
+function loadDailySprintHistory(ownerId = activePracticeOwnerId()) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(dailySprintStorageKey(ownerId)));
+    if (!parsed || parsed.v !== 1 || !parsed.days || typeof parsed.days !== 'object') {
+      return emptyDailySprintHistory();
+    }
+    return { v: 1, days: parsed.days };
+  } catch (e) {
+    return emptyDailySprintHistory();
+  }
+}
+
+function saveDailySprintHistory(history, ownerId = activePracticeOwnerId()) {
+  try {
+    const days = Object.entries(history.days || {})
+      .sort(([a], [b]) => b.localeCompare(a))
+      .slice(0, DAILY_HISTORY_LIMIT)
+      .reduce((result, [key, value]) => {
+        result[key] = value;
+        return result;
+      }, {});
+    localStorage.setItem(dailySprintStorageKey(ownerId), JSON.stringify({ v: 1, days }));
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
+function adoptAnonymousDailySprint(ownerId) {
+  if (!ownerId) return;
+  const anonymous = loadDailySprintHistory(null);
+  if (!Object.keys(anonymous.days).length) return;
+  const account = loadDailySprintHistory(ownerId);
+  Object.entries(anonymous.days).forEach(([day, value]) => {
+    const existing = account.days[day];
+    const incomingProgress = value && (value.completedUnits || 0);
+    const existingProgress = existing && (existing.completedUnits || 0);
+    const incomingComplete = !!(value && value.completedAt);
+    const existingComplete = !!(existing && existing.completedAt);
+    if (!existing ||
+        (incomingComplete && !existingComplete) ||
+        (incomingComplete === existingComplete && incomingProgress > existingProgress) ||
+        (incomingComplete && existingComplete && value.completedAt > existing.completedAt)) {
+      account.days[day] = value;
+    }
+  });
+  const adopted = saveDailySprintHistory(account, ownerId);
+  if (!adopted.ok) return;
+  try { localStorage.removeItem(DAILY_SPRINT_KEY); } catch (e) {}
+}
+
+function dailySprintDayKey(now = Date.now()) {
+  return practiceDayKey(now);
+}
+
+function dailySprintToday(ownerId = activePracticeOwnerId()) {
+  const history = loadDailySprintHistory(ownerId);
+  return history.days[dailySprintDayKey()] || null;
+}
+
+function dailySprintStreak(history = loadDailySprintHistory(), now = Date.now()) {
+  const cursor = new Date(now);
+  cursor.setHours(0, 0, 0, 0);
+  if (!history.days[dailySprintDayKey(cursor.getTime())]?.completedAt) cursor.setDate(cursor.getDate() - 1);
+  let streak = 0;
+  while (history.days[dailySprintDayKey(cursor.getTime())]?.completedAt) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
+
+function updateDailySprint(mutator) {
+  const ownerId = activePracticeOwnerId();
+  const history = loadDailySprintHistory(ownerId);
+  const key = dailySprintDayKey();
+  const current = Object.assign({
+    mode: null,
+    target: 0,
+    completedUnits: 0,
+    unitIds: [],
+    clean: 0,
+    assisted: 0,
+    focus: null,
+    takeaway: null,
+    startedAt: Date.now(),
+    completedAt: null
+  }, history.days[key] || {});
+  const next = mutator(current) || current;
+  history.days[key] = next;
+  const saved = saveDailySprintHistory(history, ownerId);
+  if (!saved.ok) setCoachStatus('Daily Sprint progress could not be saved in this browser.');
+  return next;
+}
+
+function beginDailyMoveSprint() {
+  const existing = dailySprintToday();
+  if (existing && (existing.completedAt || existing.mode === 'drills')) return existing;
+  return updateDailySprint(day => {
+    day.mode = 'moves';
+    day.target = DAILY_MOVE_TARGET;
+    day.completedUnits = Math.min(DAILY_MOVE_TARGET, (day.unitIds || []).length);
+    return day;
+  });
+}
+
+function beginDailyDrillSprint(items) {
+  const existing = dailySprintToday();
+  if (existing && (existing.completedAt || existing.mode === 'moves')) return existing;
+  return updateDailySprint(day => {
+    if (day.mode !== 'drills') {
+      day.mode = 'drills';
+      day.unitIds = [];
+      day.completedUnits = 0;
+      day.clean = 0;
+      day.assisted = 0;
+    }
+    day.target = day.target || Math.min(DAILY_DRILL_TARGET, (items || []).length);
+    const first = items && items[0];
+    if (!day.focus && first && first.meta) day.focus = first.meta.title;
+    return day;
+  });
+}
+
+function dailyMoveSprintTakeaway() {
+  const scored = (coachReviewLog || []).filter(review => review && review.tier && review.tier !== 'unknown');
+  const problem = scored.slice().reverse().find(review => isInsightProblem(review.tier));
+  const tag = problem && (problem.tags || []).find(value => INSIGHT_TAG_META[value]);
+  if (tag) return `Today’s focus: ${INSIGHT_TAG_META[tag].title}. ${INSIGHT_TAG_META[tag].practice}`;
+  const accuracy = accuracyFromTallies(coachStats || {}, scored.length);
+  return accuracy === null
+    ? 'You completed the habit. Return tomorrow for the next focused sprint.'
+    : `Clean sprint: ${accuracy}% accuracy across ${scored.length} reviewed moves.`;
+}
+
+function recordDailySprintMove(review) {
+  const existing = dailySprintToday();
+  if (existing && (existing.completedAt || existing.mode === 'drills')) return existing;
+  const id = `${coachLocalGameId || 'local'}:${review.ply}`;
+  return updateDailySprint(day => {
+    day.mode = 'moves';
+    day.target = DAILY_MOVE_TARGET;
+    day.unitIds = Array.isArray(day.unitIds) ? day.unitIds : [];
+    if (!day.unitIds.includes(id)) day.unitIds.push(id);
+    day.completedUnits = Math.min(day.target, day.unitIds.length);
+    if (day.completedUnits >= day.target && !day.completedAt) {
+      day.completedAt = Date.now();
+      day.takeaway = dailyMoveSprintTakeaway();
+    }
+    return day;
+  });
+}
+
+function recordDailySprintDrill(item, revealed, clean) {
+  const existing = dailySprintToday();
+  if (existing && (existing.completedAt || existing.mode === 'moves')) return existing;
+  return updateDailySprint(day => {
+    if (day.mode !== 'drills') {
+      day.mode = 'drills';
+      day.target = 1;
+      day.unitIds = [];
+      day.completedUnits = 0;
+      day.clean = 0;
+      day.assisted = 0;
+    }
+    day.unitIds = Array.isArray(day.unitIds) ? day.unitIds : [];
+    if (!day.unitIds.includes(item.id)) {
+      day.unitIds.push(item.id);
+      if (clean) day.clean += 1;
+      if (revealed) day.assisted += 1;
+    }
+    if (!day.focus && item.meta) day.focus = item.meta.title;
+    day.completedUnits = Math.min(day.target, day.unitIds.length);
+    if (day.completedUnits >= day.target && !day.completedAt) {
+      day.completedAt = Date.now();
+      day.takeaway = `You trained ${day.focus || 'your recent mistakes'} — ${day.clean}/${day.completedUnits} solved on the first try.`;
+    }
+    return day;
+  });
+}
+
+function setDailySprintProgress(completed, target, unit) {
+  const safeTarget = Math.max(1, target || 1);
+  const safeCompleted = Math.max(0, Math.min(safeTarget, completed || 0));
+  const percent = Math.round(safeCompleted / safeTarget * 100);
+  $('#daily-sprint-progress-label').text(`${safeCompleted} of ${safeTarget} ${unit}${safeTarget === 1 ? '' : 's'}`);
+  $('#daily-sprint-progress-percent').text(`${percent}%`);
+  $('#daily-sprint-fill').css('width', `${percent}%`);
+}
+
+function renderDailySprintChrome(day) {
+  const history = loadDailySprintHistory();
+  const streak = dailySprintStreak(history);
+  $('#daily-sprint-streak').text(streak ? `${streak}-day streak` : 'Start a streak');
+  $('#coach-daily-plan').toggleClass('is-complete', !!(day && day.completedAt));
+  $('#daily-sprint-takeaway')
+    .text(day && day.takeaway ? day.takeaway : '')
+    .toggle(!!(day && day.completedAt && day.takeaway));
 }
 
 function hashPracticeValue(value) {
@@ -2375,17 +2587,42 @@ function renderCoachDailyPlan(queue, due, totals) {
   const dueItems = Array.isArray(due) ? due : items.filter(item => practiceIsDue(item));
   const progress = totals || practiceProgressTotals();
   const $action = $('#btn-coach-next-action');
+  const sprint = dailySprintToday();
+  renderDailySprintChrome(sprint);
+
+  if (sprint && sprint.completedAt) {
+    const unit = sprint.mode === 'drills' ? 'drill' : 'move';
+    setDailySprintProgress(sprint.target, sprint.target, unit);
+    $('#coach-daily-plan-title').text('✓ Today’s training complete');
+    $('#coach-daily-plan-detail').text('You finished a focused session. Your progress is saved — come back tomorrow to keep the streak alive.');
+    $action
+      .text(coachGameActive && !coachPracticeSession ? 'Keep playing' : 'Play an extra game')
+      .attr('data-action', coachGameActive && !coachPracticeSession ? 'continue' : 'extra-game');
+    return;
+  }
 
   if (coachPracticeSession) {
-    $('#coach-daily-plan-title').text('Complete your current drill');
-    $('#coach-daily-plan-detail').text('Solve the position on the board, then continue through the remaining due drills.');
+    const target = sprint && sprint.mode === 'drills' ? sprint.target : (coachPracticeRun ? coachPracticeRun.items.length : 1);
+    const completed = sprint && sprint.mode === 'drills' ? sprint.completedUnits : (coachPracticeRun ? coachPracticeRun.completed : 0);
+    setDailySprintProgress(completed, target, 'drill');
+    $('#coach-daily-plan-title').text('Daily Sprint in progress');
+    $('#coach-daily-plan-detail').text('Solve the position on the board, then continue through this short set.');
     $action.text('Return to the drill').attr('data-action', 'continue');
     return;
   }
 
+  if (sprint && sprint.mode === 'moves') {
+    setDailySprintProgress(sprint.completedUnits, sprint.target || DAILY_MOVE_TARGET, 'move');
+    $('#coach-daily-plan-title').text(coachGameActive ? 'Daily Sprint in progress' : 'Continue your Daily Sprint');
+    $('#coach-daily-plan-detail').text(`${Math.max(0, (sprint.target || DAILY_MOVE_TARGET) - sprint.completedUnits)} reviewed moves remain. Each move gets immediate Coach feedback.`);
+    $action.text(coachGameActive ? 'Return to the board' : 'Continue Daily Sprint').attr('data-action', coachGameActive ? 'continue' : 'game');
+    return;
+  }
+
   if (coachGameActive && coachGame && !coachGame.game_over()) {
-    $('#coach-daily-plan-title').text('Continue your coached game');
-    $('#coach-daily-plan-detail').text('Finish the game so Coach can turn your reviewed mistakes into targeted practice.');
+    setDailySprintProgress(coachStats ? coachStats.moves : 0, DAILY_MOVE_TARGET, 'move');
+    $('#coach-daily-plan-title').text('Daily Sprint in progress');
+    $('#coach-daily-plan-detail').text('Play ten reviewed moves. You can stop when the sprint is complete or keep playing the game.');
     $action.text('Return to the board').attr('data-action', 'continue');
     return;
   }
@@ -2393,20 +2630,23 @@ function renderCoachDailyPlan(queue, due, totals) {
   if (dueItems.length) {
     const first = dueItems[0];
     const focus = first && first.meta ? first.meta.title : 'your recent mistakes';
-    $('#coach-daily-plan-title').text(`${dueItems.length} practice drill${dueItems.length === 1 ? '' : 's'} due`);
-    $('#coach-daily-plan-detail').text(`Start with ${focus}. These positions come directly from your reviewed games.`);
+    const target = Math.min(DAILY_DRILL_TARGET, dueItems.length);
+    setDailySprintProgress(0, target, 'drill');
+    $('#coach-daily-plan-title').text(`${target}-drill Daily Sprint`);
+    $('#coach-daily-plan-detail').text(`Focus: ${focus}. A short set drawn directly from your reviewed mistakes.`);
     $action
-      .text(dueItems.length === 1 ? 'Practice now' : `Start ${dueItems.length}-drill session`)
+      .text(target === 1 ? 'Start Daily Sprint' : `Start ${target}-drill sprint`)
       .attr('data-action', 'practice');
     return;
   }
 
   const returning = progress.attempts > 0 || items.length > 0;
-  $('#coach-daily-plan-title').text(returning ? 'Practice complete — play a coached game' : 'Play one coached game');
+  setDailySprintProgress(0, DAILY_MOVE_TARGET, 'move');
+  $('#coach-daily-plan-title').text('10-move Daily Sprint');
   $('#coach-daily-plan-detail').text(returning
-    ? 'You are caught up. Play a game to find the next positions worth training.'
-    : 'Coach will review every move and turn your mistakes into targeted practice drills.');
-  $action.text(returning ? 'Play the next game' : 'Start today’s game').attr('data-action', 'game');
+    ? 'Your drills are caught up. Play ten reviewed moves to find the next positions worth training.'
+    : 'Play a short coached sprint. Every move gets feedback and mistakes become future drills.');
+  $action.text('Start Daily Sprint').attr('data-action', 'game');
 }
 
 function renderPracticeQueue(entries, counts) {
@@ -2676,7 +2916,10 @@ async function initCoachDb() {
       });
       const { data } = await coachDbClient.auth.getSession();
       coachAuthUser = data && data.session ? data.session.user : null;
-      if (coachAuthUser) adoptAnonymousPracticeProgress(coachAuthUser.id);
+      if (coachAuthUser) {
+        adoptAnonymousPracticeProgress(coachAuthUser.id);
+        adoptAnonymousDailySprint(coachAuthUser.id);
+      }
       coachDbStatus = coachAccountSyncStatus();
       renderCoachAuth();
       renderInsights();
@@ -2686,7 +2929,10 @@ async function initCoachDb() {
       }
       coachDbClient.auth.onAuthStateChange((event, session) => {
         coachAuthUser = session ? session.user : null;
-        if (coachAuthUser) adoptAnonymousPracticeProgress(coachAuthUser.id);
+        if (coachAuthUser) {
+          adoptAnonymousPracticeProgress(coachAuthUser.id);
+          adoptAnonymousDailySprint(coachAuthUser.id);
+        }
         coachRemoteInsightEntries = null;
         coachDbStatus = coachAccountSyncStatus();
         renderCoachAuth();
@@ -4055,6 +4301,7 @@ async function coachHandleUserMove(source, target, promotion, opts) {
     if (review.tier !== 'unknown') {
       coachStats.moves++;
       coachStats[review.tier] = (coachStats[review.tier] || 0) + 1;
+      recordDailySprintMove(logged);
     }
     renderCoachReview(review);
     updateCoachSummary();
@@ -4062,6 +4309,7 @@ async function coachHandleUserMove(source, target, promotion, opts) {
     updateMoveList();
     updateOpeningLabel();
     saveCoachState();
+    renderCoachDailyPlan();
   } catch (err) {
     if (generation !== coachGameGeneration || isAbortError(err)) return 'stale';
     setCoachStatus('Engine error: ' + err.message);
@@ -4992,6 +5240,19 @@ function scrollCoachBoardIntoViewOnMobile() {
   });
 }
 
+function placeDailySprintCard() {
+  const card = document.getElementById('coach-daily-plan');
+  const settings = document.querySelector('.coach-settings');
+  const panel = document.querySelector('.coach-panel');
+  if (!card || !settings || !panel) return;
+  if (isCompactLayout()) {
+    const hero = settings.querySelector('.coach-hero');
+    if (hero && hero.nextElementSibling !== card) hero.insertAdjacentElement('afterend', card);
+    return;
+  }
+  if (panel.firstElementChild !== card) panel.prepend(card);
+}
+
 function orderedPracticeRunItems(items, firstItem) {
   const unique = [];
   const seen = new Set();
@@ -5001,7 +5262,7 @@ function orderedPracticeRunItems(items, firstItem) {
     seen.add(item.id);
     unique.push(item);
   });
-  return unique.slice(0, PRACTICE_QUEUE_LIMIT);
+  return unique.slice(0, DAILY_DRILL_TARGET);
 }
 
 function startCoachPracticeSession(items, firstItem) {
@@ -5018,6 +5279,7 @@ function startCoachPracticeSession(items, firstItem) {
     assisted: 0,
     startedAt: Date.now()
   };
+  beginDailyDrillSprint(runItems);
   startCoachPractice(runItems[0], { preserveRun: true });
 }
 
@@ -5099,6 +5361,7 @@ function coachHandlePracticeMove(source, target, promotion, opts) {
   if (!played) return 'snapback';
   session.completed = true;
   const record = recordPracticeAttempt(session.item, true, session.revealed);
+  const sprint = recordDailySprintDrill(session.item, session.revealed, !session.revealed && session.misses === 0);
   if (opts && opts.updateBoard !== false && coachBoard) coachBoard.position(coachGame.fen());
   updateCapturedDisplay(coachGame.fen());
   updateCoachBoardAccessibility();
@@ -5127,6 +5390,7 @@ function coachHandlePracticeMove(source, target, promotion, opts) {
   }
   updateCoachControlsState();
   renderInsights();
+  if (sprint && sprint.completedAt) renderCoachDailyPlan();
   return 'correct';
 }
 
@@ -5320,6 +5584,7 @@ function startCoachGame() {
     startFen = fenRaw;
   }
   $('#coach-fen-error').hide();
+  beginDailyMoveSprint();
 
   // Resolve "random" side
   const chosenSide = $('.side-toggle button.active').data('side') || 'white';
@@ -7309,6 +7574,7 @@ $(function () {
       boardResizeTimer = null;
       if (board) board.resize();
       if (coachBoard) coachBoard.resize();
+      placeDailySprintCard();
       updateLibraryBoardAccessibility();
       updateCoachBoardAccessibility();
     }, 120);
@@ -7558,6 +7824,7 @@ $(function () {
   bindCoachEvents();
   bindExploreEvents();
   bindGlobalInputEvents();
+  placeDailySprintCard();
   updateSRSidebar();
   validateOpeningData();
   hydrateFromUrl();

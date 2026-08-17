@@ -686,6 +686,53 @@
       font-size: 0.9rem;
       line-height: 1.45;
     }
+    .daily-sprint-meta,
+    .daily-sprint-progress-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      align-items: baseline;
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .daily-sprint-streak { color: var(--accent-soft); }
+    .daily-sprint-progress {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .daily-sprint-track {
+      height: 5px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.08);
+      border-radius: 999px;
+    }
+    .daily-sprint-fill {
+      display: block;
+      width: 0;
+      height: 100%;
+      background: var(--accent-soft);
+      border-radius: inherit;
+      transition: width 0.25s ease;
+    }
+    .daily-sprint-takeaway {
+      padding: 0.55rem 0.65rem;
+      border: 1px solid rgba(184,160,106,0.35);
+      background: rgba(184,160,106,0.08);
+      color: var(--text);
+      font-family: var(--font-reading);
+      font-size: 0.86rem;
+      line-height: 1.4;
+    }
+    .coach-daily-plan.is-complete {
+      background: linear-gradient(135deg, rgba(107,130,104,0.2), rgba(107,130,104,0.04));
+      border-color: rgba(139,171,135,0.62);
+      border-left-color: #9bbf97;
+    }
+    .coach-daily-plan.is-complete .daily-sprint-fill { background: #9bbf97; }
     .coach-daily-plan .ctrl-btn {
       align-self: flex-start;
     }
@@ -2399,10 +2446,21 @@
   <!-- COACH PANEL -->
   <aside class="coach-panel">
     <div class="coach-panel-section coach-daily-plan" id="coach-daily-plan" aria-labelledby="coach-daily-plan-label">
-      <div class="section-label" id="coach-daily-plan-label">Today’s plan</div>
-      <div class="plan-title" id="coach-daily-plan-title">Play one coached game</div>
-      <div class="plan-detail" id="coach-daily-plan-detail">Your mistakes will become targeted practice drills after the game.</div>
-      <button type="button" class="ctrl-btn primary" id="btn-coach-next-action" data-action="game">Start today’s game</button>
+      <div class="daily-sprint-meta">
+        <span class="section-label" id="coach-daily-plan-label">Daily Sprint · 5–10 min</span>
+        <span class="daily-sprint-streak" id="daily-sprint-streak">Start a streak</span>
+      </div>
+      <div class="plan-title" id="coach-daily-plan-title">10 reviewed moves</div>
+      <div class="plan-detail" id="coach-daily-plan-detail">Play a short coached sprint. Every move gets feedback and mistakes become future drills.</div>
+      <div class="daily-sprint-progress" aria-label="Daily Sprint progress">
+        <div class="daily-sprint-progress-head">
+          <span id="daily-sprint-progress-label">0 of 10 moves</span>
+          <span id="daily-sprint-progress-percent">0%</span>
+        </div>
+        <div class="daily-sprint-track" aria-hidden="true"><span class="daily-sprint-fill" id="daily-sprint-fill"></span></div>
+      </div>
+      <div class="daily-sprint-takeaway" id="daily-sprint-takeaway" role="status" aria-live="polite" style="display:none;"></div>
+      <button type="button" class="ctrl-btn primary" id="btn-coach-next-action" data-action="game">Start Daily Sprint</button>
     </div>
     <div id="coach-status" class="coach-status" role="status" aria-live="polite">Set a level and start a new game.</div>
     <div id="coach-premove-hint" class="coach-premove-hint" style="display:none;"></div>
