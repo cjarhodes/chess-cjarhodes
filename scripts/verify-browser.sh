@@ -121,6 +121,12 @@ async page => {
   assert(await page.locator('#coach-practice-banner').isVisible(), 'practice banner did not open');
   assert(await page.locator('#coach-practice-session-status').textContent() === 'Drill 1 of 2', 'multi-drill session did not start');
   assert(await page.locator('#btn-coach-resign').isDisabled(), 'normal game controls stayed enabled during practice');
+  await page.reload();
+  assert(await page.locator('#coach-daily-plan-title').textContent() === 'Continue rehearsing Opening principle gaps', 'reload skipped an unfinished adaptive drill phase');
+  assert(await page.locator('#btn-coach-next-action').textContent() === 'Continue focused drills', 'reload did not restore the adaptive drill action');
+  assert(await page.locator('#daily-sprint-progress-label').textContent() === '0 of 8 steps', 'reload did not preserve adaptive session progress');
+  await page.locator('#btn-coach-next-action').click();
+  assert(await page.locator('#coach-practice-session-status').textContent() === 'Drill 1 of 2', 'restored adaptive drill session did not restart at the due position');
 
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
   await page.locator('#coach-keyboard-move-input').fill('d4');

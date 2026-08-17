@@ -2781,6 +2781,15 @@ function renderCoachDailyPlan(queue, due, totals, entries) {
     return;
   }
 
+  if (sprint && sprint.mode === 'adaptive' && sprint.phase === 'drills') {
+    setDailySprintProgress(sprint.completedUnits, sprint.target, 'step');
+    const remaining = Math.max(0, sprint.drillTarget - (sprint.drillsCompleted || 0));
+    $('#coach-daily-plan-title').text(`Continue rehearsing ${sprint.focus || 'today’s focus'}`);
+    $('#coach-daily-plan-detail').text(`${remaining} focused drill${remaining === 1 ? '' : 's'} remain before live transfer play.`);
+    $action.text('Continue focused drills').attr('data-action', 'practice');
+    return;
+  }
+
   if (sprint && sprint.mode === 'adaptive') {
     setDailySprintProgress(sprint.completedUnits, sprint.target, dailySprintProgressUnit(sprint));
     const remaining = Math.max(0, sprint.moveTarget - (sprint.movesCompleted || 0));
