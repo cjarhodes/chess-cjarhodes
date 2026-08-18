@@ -3908,6 +3908,7 @@ const engineClient = {
   status: 'idle',   // idle | loading | ready
   queue: [],
   current: null,
+  supportedOptions: new Set(),
   _readyResolvers: [],
 
   init() {
@@ -3916,6 +3917,7 @@ const engineClient = {
       return new Promise((resolve, reject) => this._readyResolvers.push({ resolve, reject }));
     }
     this.status = 'loading';
+    this.supportedOptions = new Set();
     return new Promise((resolve, reject) => {
       try {
         this.worker = new Worker('stockfish/stockfish.js');
@@ -3959,6 +3961,11 @@ const engineClient = {
 
   _onMessage(msg) {
     if (typeof msg !== 'string') return;
+    const optionMatch = msg.match(/^option name (.+?) type /);
+    if (optionMatch) {
+      this.supportedOptions.add(optionMatch[1]);
+      return;
+    }
     if (msg === 'uciok') { this.worker.postMessage('isready'); return; }
     if (msg === 'readyok' && this.status === 'loading') {
       this.status = 'ready';
@@ -4011,7 +4018,6 @@ const engineClient = {
         reject: reject,
         lastInfo: null,
         skill: (opts && typeof opts.skill === 'number') ? opts.skill : null,
-        elo: (opts && typeof opts.elo === 'number') ? opts.elo : null,
         multipv: (opts && opts.multipv) || null,
         timeoutId: null
       };
@@ -4042,15 +4048,13 @@ const engineClient = {
     if (this.status !== 'ready' || this.current || this.queue.length === 0) return;
     this.current = this.queue.shift();
     this.worker.postMessage('ucinewgame');
-    // Apply strength options per task
-    if (this.current.elo !== null && this.current.elo !== undefined) {
-      this.worker.postMessage('setoption name UCI_LimitStrength value true');
-      this.worker.postMessage('setoption name UCI_Elo value ' + this.current.elo);
-    } else if (this.current.skill !== null && this.current.skill !== undefined) {
-      this.worker.postMessage('setoption name UCI_LimitStrength value false');
+    // Stockfish.js 10 supports Skill Level but not UCI_Elo. Only send options
+    // announced during the UCI handshake so unsupported commands can never
+    // silently turn a displayed level into full-strength play.
+    if (this.current.skill !== null && this.current.skill !== undefined &&
+        this.supportedOptions.has('Skill Level')) {
       this.worker.postMessage('setoption name Skill Level value ' + this.current.skill);
-    } else {
-      this.worker.postMessage('setoption name UCI_LimitStrength value false');
+    } else if (this.supportedOptions.has('Skill Level')) {
       this.worker.postMessage('setoption name Skill Level value 20');
     }
     // MultiPV
@@ -4123,42 +4127,6 @@ function pvToSan(fen, pvArr, max) {
 function uciFromMove(mv) {
   if (!mv) return null;
   return mv.from + mv.to + (mv.promotion || '');
-}
-
-function materialValue(piece) {
-  return ({ p: 100, n: 300, b: 325, r: 500, q: 900, k: 0 })[piece] || 0;
-}
-
-function moveHeuristicScore(gameObj, mv) {
-  let score = Math.random() * 80;
-  if (mv.captured) score += materialValue(mv.captured) - materialValue(mv.piece) * 0.18;
-  if (mv.flags && mv.flags.includes('p')) score += materialValue(mv.promotion || 'q') - 100;
-  if (mv.san && mv.san.includes('+')) score += 120;
-  if (mv.san && mv.san.includes('#')) score += 5000;
-  if (['n', 'b'].includes(mv.piece)) score += 25;
-  if (mv.piece === 'q') score -= 20;
-  if (mv.piece === 'k' && !(mv.flags || '').includes('k') && !(mv.flags || '').includes('q')) score -= 35;
-  return score;
-}
-
-function chooseWeakOpponentMove(fen, elo) {
-  const g = new Chess(fen);
-  const moves = g.moves({ verbose: true });
-  if (!moves.length) return null;
-  if (elo <= 500) {
-    return uciFromMove(moves[Math.floor(Math.random() * moves.length)]);
-  }
-  const randomRate = elo < 700 ? 0.65 : (elo < 900 ? 0.42 : 0.22);
-  if (Math.random() < randomRate) {
-    return uciFromMove(moves[Math.floor(Math.random() * moves.length)]);
-  }
-  const noise = elo < 700 ? 650 : (elo < 900 ? 380 : 180);
-  const ranked = moves
-    .map(mv => ({ mv, score: moveHeuristicScore(g, mv) + (Math.random() * noise) }))
-    .sort((a, b) => b.score - a.score);
-  const poolSize = elo < 700 ? 8 : (elo < 900 ? 5 : 3);
-  const pool = ranked.slice(0, Math.min(poolSize, ranked.length));
-  return uciFromMove(pool[Math.floor(Math.random() * pool.length)].mv);
 }
 
 // ─────────────────────────────────────────────
@@ -4323,7 +4291,7 @@ function coachIsUserTurn() {
          (turn === 'b' && coachUserColor() === 'black');
 }
 
-// Opponent search depth matches review depth; strength is controlled by Elo.
+// Opponent difficulty is controlled by a monotonic engine-compatible model.
 function strengthTierLabel(elo) {
   if (elo < 600)  return 'Absolute beginner';
   if (elo < 800)  return 'Learning the rules';
@@ -4335,34 +4303,77 @@ function strengthTierLabel(elo) {
   return 'Master';
 }
 
-// Translate the slider's displayed Elo into opponent behavior. Very low levels
-// need explicit noisy move selection; shallow Stockfish still finds too many
-// forcing moves and does not feel like a 400-rated opponent.
+// The numeric slider is an estimated difficulty, not a claim about Stockfish's
+// unsupported UCI_Elo option. Every field moves monotonically: higher settings
+// search deeper, use a higher native skill, inspect fewer alternatives, and
+// accept less centipawn loss when selecting a plausible move.
+const COACH_DIFFICULTY_KEYFRAMES = [
+  { level: 400,  skill: 0,  depth: 2,  multipv: 18, targetLoss: 500, spread: 220 },
+  { level: 600,  skill: 1,  depth: 3,  multipv: 16, targetLoss: 400, spread: 190 },
+  { level: 800,  skill: 2,  depth: 4,  multipv: 14, targetLoss: 300, spread: 155 },
+  { level: 1000, skill: 4,  depth: 5,  multipv: 12, targetLoss: 220, spread: 120 },
+  { level: 1200, skill: 6,  depth: 6,  multipv: 10, targetLoss: 150, spread: 90 },
+  { level: 1400, skill: 9,  depth: 8,  multipv: 8,  targetLoss: 95,  spread: 65 },
+  { level: 1600, skill: 12, depth: 10, multipv: 6,  targetLoss: 55,  spread: 42 },
+  { level: 1800, skill: 15, depth: 12, multipv: 5,  targetLoss: 30,  spread: 28 },
+  { level: 2000, skill: 17, depth: 14, multipv: 4,  targetLoss: 15,  spread: 18 },
+  { level: 2200, skill: 19, depth: 16, multipv: 3,  targetLoss: 5,   spread: 10 },
+  { level: 2400, skill: 20, depth: 18, multipv: 1,  targetLoss: 0,   spread: 0 }
+];
+
+function interpolateDifficultyField(a, b, t, field) {
+  return a[field] + (b[field] - a[field]) * t;
+}
+
 function coachStrengthOpts(elo) {
-  if (elo < 1000) {
-    return { weak: true };
+  const level = Math.max(400, Math.min(2400, Number(elo) || 1200));
+  const upperIndex = COACH_DIFFICULTY_KEYFRAMES.findIndex(frame => frame.level >= level);
+  if (upperIndex <= 0) return Object.assign({}, COACH_DIFFICULTY_KEYFRAMES[0]);
+  const upper = COACH_DIFFICULTY_KEYFRAMES[upperIndex];
+  const lower = COACH_DIFFICULTY_KEYFRAMES[upperIndex - 1];
+  const t = (level - lower.level) / (upper.level - lower.level);
+  return {
+    level,
+    skill: Math.round(interpolateDifficultyField(lower, upper, t, 'skill')),
+    depth: Math.round(interpolateDifficultyField(lower, upper, t, 'depth')),
+    multipv: Math.round(interpolateDifficultyField(lower, upper, t, 'multipv')),
+    targetLoss: Math.round(interpolateDifficultyField(lower, upper, t, 'targetLoss')),
+    spread: Math.round(interpolateDifficultyField(lower, upper, t, 'spread'))
+  };
+}
+
+function calibratedOpponentCandidates(result) {
+  const lines = (result && result.lines) || [];
+  if (!lines.length) return [];
+  const bestScore = scoreToCp(lines[0]);
+  const seen = new Set();
+  return lines.map(line => {
+    const uci = line && line.pv && line.pv[0];
+    if (!uci || seen.has(uci)) return null;
+    seen.add(uci);
+    return { uci, loss: Math.max(0, bestScore - scoreToCp(line)) };
+  }).filter(Boolean);
+}
+
+function chooseCalibratedOpponentMove(result, config, random = Math.random) {
+  const candidates = calibratedOpponentCandidates(result);
+  if (!candidates.length) return result && result.bestmove;
+  if (candidates.length === 1 || !config.targetLoss) return candidates[0].uci;
+  const jitter = (random() + random() - 1) * config.spread;
+  const desiredLoss = Math.max(0, config.targetLoss + jitter);
+  const scale = Math.max(18, config.spread * 0.6);
+  const lossCap = config.targetLoss + Math.max(100, config.spread * 2);
+  const weighted = candidates.map(candidate => ({
+    candidate,
+    weight: Math.exp(-Math.abs(Math.min(candidate.loss, lossCap) - desiredLoss) / scale)
+  }));
+  const total = weighted.reduce((sum, item) => sum + item.weight, 0);
+  let cursor = random() * total;
+  for (const item of weighted) {
+    cursor -= item.weight;
+    if (cursor <= 0) return item.candidate.uci;
   }
-  if (elo < 1320) {
-    // 1000 -> skill 4, depth 3; 1300 -> skill 9, depth 6.
-    const t = Math.max(0, Math.min(1, (elo - 1000) / 320));
-    const skill = 4 + Math.round(t * 5);
-    const depth = 3 + Math.round(t * 3);
-    return { skill, depth };
-  }
-  if (elo < 1400) {
-    // Stockfish's native UCI_Elo floor is around 1320.
-    const depth = 6;
-    return { elo: Math.max(1320, elo), depth };
-  }
-  if (elo < 1600) {
-    const t = Math.max(0, Math.min(1, (elo - 1400) / 200));
-    const skill = Math.round(t * 8);
-    const depth = 6 + Math.round(t * 2);
-    return { skill, depth };
-  }
-  // 1600+: Stockfish's native Elo limiter, with depth tiered for realism.
-  const depth = elo < 2000 ? 10 : 16;
-  return { elo, depth };
+  return weighted[weighted.length - 1].candidate.uci;
 }
 
 // Weight per classification tier for accuracy %.
@@ -4542,17 +4553,15 @@ async function coachOpponentRespond() {
   setCoachStatus('Opponent thinking…');
   const fen = coachGame.fen();
   try {
-    // Opponent uses configured strength. Below 1000, explicit noisy move
-    // selection is more realistic than asking Stockfish for a shallow best move.
+    // Evaluate several plausible candidates and select one from a calibrated
+    // loss distribution. This produces realistic inaccuracies without random
+    // legal moves or unsupported Elo commands.
     const opts = coachStrengthOpts(coachEngineElo);
-    let bestmove;
-    if (opts.weak) {
-      bestmove = chooseWeakOpponentMove(fen, coachEngineElo);
-    } else {
-      const { depth, ...strength } = opts;
-      const result = await engineClient.evaluate(fen, depth, strength);
-      bestmove = result.bestmove;
-    }
+    const result = await engineClient.evaluate(fen, opts.depth, {
+      skill: opts.skill,
+      multipv: opts.multipv
+    });
+    const bestmove = chooseCalibratedOpponentMove(result, opts);
     if (generation !== coachGameGeneration || coachGame !== gameRef || !coachMode ||
         !coachGameActive || coachIsUserTurn() || coachGame.fen() !== fen) return;
     if (!bestmove) { setCoachStatus('Your move.'); return; }
@@ -4708,6 +4717,7 @@ function coachHandleGameOver() {
   coachSync.saveGame(msg).catch(handleCoachDbError);
   // Roll this game's stats into lifetime totals (guarded against double-count).
   rollGameIntoLifetime();
+  if (typeof recordRatedCoachResult === 'function') recordRatedCoachResult(msg);
   // Let the user take in the final position before the review overlay arrives.
   scheduleSummaryReveal(msg, 1200);
 }
@@ -7568,6 +7578,7 @@ $(function () {
     saveCoachState();
     coachSync.saveGame(msg).catch(handleCoachDbError);
     rollGameIntoLifetime();
+    if (typeof recordRatedCoachResult === 'function') recordRatedCoachResult(msg);
     // User-initiated — keep it snappy but still buffer with a small beat + animation.
     scheduleSummaryReveal(msg, 350);
   });

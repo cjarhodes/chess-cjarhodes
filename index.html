@@ -2405,18 +2405,18 @@
       <div class="section-label">Training profile</div>
       <form id="player-profile-form">
         <div class="growth-grid">
-          <div><label for="player-rating">Approx. rating</label><input id="player-rating" type="number" min="400" max="2800" step="50" value="1200"></div>
+          <div><label for="player-rating">Starting estimate</label><input id="player-rating" type="number" min="400" max="2800" step="50" value="1200"></div>
           <div><label for="player-minutes">Daily minutes</label><input id="player-minutes" type="number" min="5" max="60" step="5" value="10"></div>
           <div class="wide"><label for="player-goal">Primary goal</label><select id="player-goal"><option value="balanced">Balanced improvement</option><option value="tactics">Reduce tactical mistakes</option><option value="repertoire">Build an opening repertoire</option><option value="endgames">Improve endgames</option></select></div>
         </div>
         <div class="growth-actions"><button class="ctrl-btn primary" type="submit">Save profile</button><button class="ctrl-btn" type="button" id="btn-install-app" style="display:none">Install app</button></div>
-        <div class="growth-status" id="player-profile-status">Set this once; Coach will tune difficulty and session emphasis.</div>
+        <div class="growth-status" id="player-profile-status">Set a starting estimate; completed standard games will calibrate it.</div>
       </form>
     </div>
 
     <div class="field-group">
       <div class="strength-row">
-        <label class="strength-label" id="coach-strength-label" for="coach-strength">Opponent level</label>
+        <label class="strength-label" id="coach-strength-label" for="coach-strength">Estimated difficulty</label>
         <span class="strength-value" id="coach-strength-value">1200</span>
       </div>
       <input type="range" class="strength-slider" id="coach-strength"

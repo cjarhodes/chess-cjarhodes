@@ -143,14 +143,61 @@ async page => {
     library: { records: { italian: { quality: 5, lastReviewed: 40 }, london: { quality: 4, lastReviewed: 35 } } }
   }));
   assert(growthMerge.profile.rating === 1300, 'cross-device growth merge ignored the newer profile');
+  assert(growthMerge.profile.ratingEstimate === 1300, 'existing profile rating did not become the initial calibrated estimate');
   assert(growthMerge.repertoire.ids.length === 1 && growthMerge.repertoire.ids[0] === 'queens-gambit', 'cross-device growth merge ignored the newer repertoire');
   assert(growthMerge.library.records.italian.quality === 5 && growthMerge.library.records.london.quality === 4, 'cross-device growth merge lost Library progress');
+
+  const ratingCalibration = await page.evaluate(async () => {
+    const levels = [];
+    for (let level = 400; level <= 2400; level += 50) levels.push(coachStrengthOpts(level));
+    const monotonic = levels.every((item, index) => !index || (
+      item.skill >= levels[index - 1].skill &&
+      item.depth >= levels[index - 1].depth &&
+      item.multipv <= levels[index - 1].multipv &&
+      item.targetLoss <= levels[index - 1].targetLoss &&
+      item.spread <= levels[index - 1].spread
+    ));
+    const candidates = {
+      bestmove: 'e2e4',
+      lines: [
+        { cp: 100, mate: null, pv: ['e2e4'] },
+        { cp: 0, mate: null, pv: ['d2d4'] },
+        { cp: -100, mate: null, pv: ['g1f3'] },
+        { cp: -300, mate: null, pv: ['a2a3'] }
+      ]
+    };
+    const lowMove = chooseCalibratedOpponentMove(candidates, coachStrengthOpts(400), () => 0.5);
+    const highMove = chooseCalibratedOpponentMove(candidates, coachStrengthOpts(2400), () => 0.5);
+    const base = emptyGrowthState().profile;
+    const win = nextPlayerRatingEstimate(base, 1200, 1, 'rating-win', 1000);
+    const duplicate = nextPlayerRatingEstimate(win.profile, 1200, 1, 'rating-win', 2000);
+    const loss = nextPlayerRatingEstimate(win.profile, 1200, 0, 'rating-loss', 3000);
+    await engineClient.init();
+    return {
+      monotonic,
+      lowMove,
+      highMove,
+      winRaisedEstimate: win.after > win.before,
+      confidenceNarrowed: win.deviation < base.ratingDeviation,
+      duplicateIgnored: duplicate.duplicate && duplicate.profile.ratingGames === 1,
+      lossLoweredEstimate: loss.after < win.after,
+      skillSupported: engineClient.supportedOptions.has('Skill Level'),
+      unsupportedEloAbsent: !engineClient.supportedOptions.has('UCI_Elo') && !engineClient.supportedOptions.has('UCI_LimitStrength')
+    };
+  });
+  assert(ratingCalibration.monotonic, 'opponent difficulty mapping was not monotonic at every slider step');
+  assert(ratingCalibration.lowMove === 'a2a3' && ratingCalibration.highMove === 'e2e4', 'candidate selection did not tighten as difficulty increased');
+  assert(ratingCalibration.winRaisedEstimate && ratingCalibration.lossLoweredEstimate, 'completed results did not move the player estimate in the correct direction');
+  assert(ratingCalibration.confidenceNarrowed, 'player estimate uncertainty did not narrow after evidence');
+  assert(ratingCalibration.duplicateIgnored, 'the same completed game updated the player estimate twice');
+  assert(ratingCalibration.skillSupported && ratingCalibration.unsupportedEloAbsent, 'engine capability detection did not match the bundled Stockfish options');
 
   await page.locator('#player-rating').fill('1350');
   await page.locator('#player-minutes').fill('5');
   await page.locator('#player-goal').selectOption('tactics');
   await page.locator('#player-profile-form button[type=submit]').click();
   assert((await page.locator('#player-profile-status').textContent()).includes('Profile saved'), 'training profile did not save through onboarding UI');
+  assert((await page.locator('#player-profile-status').textContent()).includes('Player estimate 1350'), 'changing the starting estimate did not reset calibration evidence');
   assert(await page.locator('#coach-auto-elo').isChecked(), 'adaptive opponent strength was not enabled by default');
   assert(Number(await page.locator('#coach-strength').inputValue()) > 0, 'adaptive opponent strength did not produce a rating');
   await page.evaluate(() => {

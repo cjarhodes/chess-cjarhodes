@@ -47,7 +47,19 @@ function emptyGrowthState() {
   return {
     v: PLAYER_GROWTH_VERSION,
     updatedAt: 0,
-    profile: { rating: 1200, minutes: 10, goal: 'balanced', autoElo: true, onboarded: false, updatedAt: 0 },
+    profile: {
+      rating: 1200,
+      ratingEstimate: 1200,
+      ratingDeviation: 350,
+      ratingGames: 0,
+      ratedGameIds: [],
+      ratingHistory: [],
+      minutes: 10,
+      goal: 'balanced',
+      autoElo: true,
+      onboarded: false,
+      updatedAt: 0
+    },
     repertoire: { ids: [], updatedAt: 0 },
     library: { records: {} }
   };
@@ -56,8 +68,20 @@ function emptyGrowthState() {
 function normalizeGrowthState(value) {
   const base = emptyGrowthState();
   if (!value || value.v !== PLAYER_GROWTH_VERSION) return base;
-  const profile = Object.assign({}, base.profile, value.profile || {});
+  const rawProfile = value.profile || {};
+  const profile = Object.assign({}, base.profile, rawProfile);
   profile.rating = Math.max(400, Math.min(2800, Number(profile.rating) || 1200));
+  profile.ratingEstimate = Math.max(400, Math.min(2800,
+    rawProfile.ratingEstimate == null ? profile.rating : (Number(rawProfile.ratingEstimate) || profile.rating)
+  ));
+  profile.ratingGames = Math.max(0, Math.floor(Number(profile.ratingGames) || 0));
+  profile.ratingDeviation = Math.max(80, Math.min(350, Number(profile.ratingDeviation) || 350));
+  profile.ratedGameIds = Array.isArray(profile.ratedGameIds)
+    ? profile.ratedGameIds.filter(id => typeof id === 'string').slice(-50)
+    : [];
+  profile.ratingHistory = Array.isArray(profile.ratingHistory)
+    ? profile.ratingHistory.filter(item => item && Number.isFinite(item.at)).slice(-30)
+    : [];
   profile.minutes = Math.max(5, Math.min(60, Number(profile.minutes) || 10));
   profile.goal = ['balanced', 'tactics', 'repertoire', 'endgames'].includes(profile.goal) ? profile.goal : 'balanced';
   profile.autoElo = profile.autoElo !== false;
@@ -205,7 +229,16 @@ function repertoireIds() {
 
 function savePlayerProfile(values) {
   const state = loadGrowthState();
+  const suppliedRating = Number(values && values.rating);
+  const ratingChanged = Number.isFinite(suppliedRating) && suppliedRating !== state.profile.rating;
   state.profile = Object.assign({}, state.profile, values, { onboarded: true, updatedAt: Date.now() });
+  if (ratingChanged) {
+    state.profile.ratingEstimate = suppliedRating;
+    state.profile.ratingDeviation = 350;
+    state.profile.ratingGames = 0;
+    state.profile.ratedGameIds = [];
+    state.profile.ratingHistory = [];
+  }
   state.updatedAt = Date.now();
   return saveGrowthState(state);
 }
@@ -248,11 +281,90 @@ function renderRepertoireUI() {
 
 function recommendedCoachElo() {
   const profile = playerProfile();
-  const entries = loadInsights().entries.filter(entry => entry && entry.tier && entry.tier !== 'unknown').slice(-40);
-  const problems = entries.filter(entry => isInsightProblem(entry.tier)).length;
-  const problemRate = entries.length ? problems / entries.length : 0.25;
-  const adjustment = problemRate > 0.45 ? -150 : (problemRate < 0.2 && entries.length >= 10 ? 150 : 0);
-  return Math.max(400, Math.min(2400, Math.round((profile.rating + adjustment) / 50) * 50));
+  return Math.max(400, Math.min(2400, Math.round(profile.ratingEstimate / 50) * 50));
+}
+
+function playerRatingConfidence(profile = playerProfile()) {
+  if (!profile.ratingGames) return 'provisional';
+  if (profile.ratingGames < 5) return 'low confidence';
+  if (profile.ratingGames < 15) return 'developing';
+  return 'calibrated';
+}
+
+function userScoreFromGameResult(result) {
+  if (result === '1/2-1/2') return 0.5;
+  if (result === '1-0') return coachUserColor() === 'white' ? 1 : 0;
+  if (result === '0-1') return coachUserColor() === 'black' ? 1 : 0;
+  return null;
+}
+
+function ratedCoachEligibility(endReason) {
+  if (!coachGame || !coachLocalGameId) return { eligible: false, reason: 'missing game' };
+  if (coachStartFen !== new Chess().fen()) return { eligible: false, reason: 'custom position' };
+  if (!coachStats || coachStats.moves < 4) return { eligible: false, reason: 'fewer than four reviewed moves' };
+  const result = remoteGameResult(endReason);
+  if (result === '*') return { eligible: false, reason: 'unfinished result' };
+  return { eligible: true, result, score: userScoreFromGameResult(result) };
+}
+
+function nextPlayerRatingEstimate(profileValue, opponent, score, gameId, at = Date.now()) {
+  const profile = Object.assign({}, profileValue, {
+    ratedGameIds: (profileValue.ratedGameIds || []).slice(),
+    ratingHistory: (profileValue.ratingHistory || []).slice()
+  });
+  if (!gameId || profile.ratedGameIds.includes(gameId)) {
+    return { profile, rated: false, duplicate: true };
+  }
+  const before = profile.ratingEstimate;
+  const expected = 1 / (1 + Math.pow(10, (opponent - before) / 400));
+  const k = profile.ratingGames < 5 ? 64 : (profile.ratingGames < 15 ? 40 : 24);
+  const after = Math.max(400, Math.min(2800, Math.round(before + k * (score - expected))));
+  const games = profile.ratingGames + 1;
+  const deviation = Math.max(80, Math.round(350 / Math.sqrt(1 + games * 0.35)));
+  profile.ratingEstimate = after;
+  profile.ratingDeviation = deviation;
+  profile.ratingGames = games;
+  profile.ratedGameIds = profile.ratedGameIds.concat(gameId).slice(-50);
+  profile.ratingHistory = profile.ratingHistory.concat({
+    gameId, at, opponent, score, before, after
+  }).slice(-30);
+  profile.updatedAt = at;
+  return { profile, rated: true, before, after, games, deviation };
+}
+
+function recordRatedCoachResult(endReason) {
+  const eligibility = ratedCoachEligibility(endReason);
+  if (!eligibility.eligible || eligibility.score === null) return eligibility;
+  const state = loadGrowthState();
+  const update = nextPlayerRatingEstimate(
+    state.profile, coachEngineElo, eligibility.score, coachLocalGameId
+  );
+  if (!update.rated) return Object.assign({ eligible: true }, update);
+  state.profile = update.profile;
+  state.updatedAt = update.profile.updatedAt;
+  const saved = saveGrowthState(state);
+  if (saved.ok) {
+    renderPlayerProfileStatus(saved.state.profile);
+    renderAutoDifficultyNote(saved.state.profile);
+  }
+  return Object.assign({ eligible: true, saved: saved.ok }, update, { rated: saved.ok });
+}
+
+function renderPlayerProfileStatus(profile = playerProfile()) {
+  const confidence = playerRatingConfidence(profile);
+  $('#player-profile-status').text(profile.onboarded || profile.ratingGames
+    ? `Player estimate ${Math.round(profile.ratingEstimate)} ±${Math.round(profile.ratingDeviation)} · ${confidence} · ${profile.ratingGames} rated game${profile.ratingGames === 1 ? '' : 's'}.`
+    : 'Set a starting estimate; completed standard games will calibrate it.');
+}
+
+function renderAutoDifficultyNote(profile = playerProfile()) {
+  const recommended = recommendedCoachElo();
+  const evidence = profile.ratingGames
+    ? `${profile.ratingGames} completed rated game${profile.ratingGames === 1 ? '' : 's'}`
+    : 'your starting estimate';
+  $('#coach-auto-elo-note').text(profile.autoElo
+    ? `Next opponent target: ${recommended}, based on ${evidence}. Difficulty updates only after completed standard games.`
+    : `Automatic adjustment is off. Current evidence-based target: ${recommended}.`);
 }
 
 function personalizeAdaptivePlan(plan) {
@@ -275,9 +387,7 @@ function applyAdaptiveCoachElo() {
   const profile = playerProfile();
   $('#coach-auto-elo').prop('checked', profile.autoElo);
   const recommended = recommendedCoachElo();
-  $('#coach-auto-elo-note').text(profile.autoElo
-    ? `Coach recommends ${recommended} from your ${profile.rating} rating and recent review quality.`
-    : `Automatic adjustment is off. Current recommendation: ${recommended}.`);
+  renderAutoDifficultyNote(profile);
   if (!profile.autoElo) return coachEngineElo;
   coachEngineElo = recommended;
   $('#coach-strength').val(recommended);
@@ -389,9 +499,7 @@ function hydrateGrowthUI() {
   $('#player-rating').val(profile.rating);
   $('#player-minutes').val(profile.minutes);
   $('#player-goal').val(profile.goal);
-  $('#player-profile-status').text(profile.onboarded
-    ? `Profile active · ${profile.rating} rating · ${profile.minutes} min/day.`
-    : 'Set this once; Coach will tune difficulty and session emphasis.');
+  renderPlayerProfileStatus(profile);
   renderRepertoireUI();
   applyAdaptiveCoachElo();
   renderWeeklyReview();
@@ -539,7 +647,10 @@ function initGrowthFeatures() {
       $('#player-profile-status').addClass('error').text('Profile could not be saved in this browser.');
       return;
     }
-    $('#player-profile-status').removeClass('error').addClass('success').text('Profile saved. Today’s recommendations have been updated.');
+    const profile = result.state.profile;
+    $('#player-profile-status').removeClass('error').addClass('success').text(
+      `Profile saved. Player estimate ${Math.round(profile.ratingEstimate)} ±${Math.round(profile.ratingDeviation)} · ${playerRatingConfidence(profile)}.`
+    );
     applyAdaptiveCoachElo();
     renderWeeklyReview();
   });
