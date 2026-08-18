@@ -5549,14 +5549,19 @@ function readURL() {
 // ─────────────────────────────────────────────
 const PIECE_THEME_GLYPHS = {
   bB: '♝', bK: '♚', bN: '♞', bP: '♟', bQ: '♛', bR: '♜',
-  wB: '♗', wK: '♔', wN: '♘', wP: '♙', wQ: '♕', wR: '♖'
+  // Use filled silhouettes for both colours. The Unicode "white" glyphs are
+  // hollow outlines, which disappear against the board's cream squares at
+  // mobile sizes. Colour and a strong outline distinguish the white set.
+  wB: '♝', wK: '♚', wN: '♞', wP: '♟', wQ: '♛', wR: '♜'
 };
 
 function localPieceTheme(piece) {
   const glyph = PIECE_THEME_GLYPHS[piece] || '';
-  const fill = piece && piece[0] === 'w' ? '#fff8ed' : '#17100c';
-  const stroke = piece && piece[0] === 'w' ? '#2a1f17' : '#f1ebe0';
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="45" height="45" viewBox="0 0 45 45"><text x="22.5" y="36" text-anchor="middle" font-family="Georgia,serif" font-size="41" fill="${fill}" stroke="${stroke}" stroke-width="0.45">${glyph}</text></svg>`;
+  const isWhite = piece && piece[0] === 'w';
+  const fill = isWhite ? '#fffaf0' : '#17100c';
+  const stroke = isWhite ? '#2a1f17' : '#f1ebe0';
+  const strokeWidth = isWhite ? '1.35' : '0.55';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="45" height="45" viewBox="0 0 45 45"><text x="22.5" y="36" text-anchor="middle" font-family="Georgia,serif" font-size="41" font-weight="700" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" paint-order="stroke fill">${glyph}</text></svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 

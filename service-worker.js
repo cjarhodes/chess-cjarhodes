@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chess-coach-shell-v2';
+const CACHE_NAME = 'chess-coach-shell-v3';
 const APP_SHELL = [
   '/',
   '/index.html',
