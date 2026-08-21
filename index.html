@@ -1711,6 +1711,19 @@
     .coach-opening-card .name {
       color: var(--text);
     }
+    .coach-opening-actions { display: flex; justify-content: flex-end; margin-top: 0.45rem; }
+    .network-status {
+      color: var(--accent-soft);
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      line-height: 1.35;
+      padding: 0.35rem 0.5rem;
+      border: 1px solid var(--border);
+      border-left: 2px solid var(--accent);
+      background: var(--surface);
+    }
+    .network-status.offline { color: #d9b37c; border-left-color: #d9b37c; }
+    .training-data-actions { display: flex; gap: 0.45rem; flex-wrap: wrap; }
 
     /* Move list */
     .movelist-head {
@@ -2387,6 +2400,7 @@
       <div class="title">Coach</div>
       <div class="tagline">Sharpen your reactive play</div>
     </div>
+    <div id="network-status" class="network-status" role="status" aria-live="polite" hidden></div>
 
     <div class="field-group">
       <div class="section-label">Account</div>
@@ -2463,6 +2477,17 @@
       <div class="growth-actions"><button class="ctrl-btn primary" id="btn-analyse-pgn" type="button">Analyse game</button></div>
       <div class="import-progress" aria-hidden="true"><span id="game-inbox-progress"></span></div>
       <div class="growth-status" id="game-inbox-status" role="status" aria-live="polite">Analysis stays in this browser; signed-in insights and drills sync normally.</div>
+    </div>
+
+    <div class="field-group growth-card" id="training-data-card">
+      <div class="section-label">Your training data</div>
+      <div class="growth-status">Export a backup or merge one from another device. Existing local progress is kept.</div>
+      <div class="training-data-actions">
+        <button class="ctrl-btn" id="btn-export-training-data" type="button">Export backup</button>
+        <button class="ctrl-btn" id="btn-import-training-data" type="button">Import backup</button>
+        <input id="training-data-file" type="file" accept="application/json,.json" hidden>
+      </div>
+      <div class="growth-status" id="training-data-status" role="status" aria-live="polite"></div>
     </div>
 
     <div class="field-group toggle-row">
@@ -2594,6 +2619,7 @@
       <div class="coach-opening-card">
         <span class="eco" id="coach-opening-eco"></span><span class="name" id="coach-opening-name"></span>
       </div>
+      <div class="coach-opening-actions"><button type="button" class="movelist-copy" id="btn-coach-opening-study">Study this opening</button></div>
     </div>
 
     <div class="coach-panel-section" id="liveeval-section" style="display:none;">

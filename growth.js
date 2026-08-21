@@ -4,6 +4,7 @@
 const PLAYER_GROWTH_KEY = 'coach:growth:v1';
 const PLAYER_GROWTH_VERSION = 1;
 const IMPORT_REVIEW_LIMIT = 30;
+const TRAINING_BACKUP_VERSION = 1;
 const growthRemoteSync = { timer: null, chain: Promise.resolve() };
 let installPromptEvent = null;
 let importedGameAnalysisActive = false;
@@ -129,6 +130,117 @@ function saveGrowthState(state, ownerId = growthOwnerId(), opts = {}) {
   } catch (error) {
     return { ok: false, error };
   }
+}
+
+function trainingBackupKeys(ownerId = growthOwnerId()) {
+  return [
+    growthStorageKey(ownerId),
+    ...(ownerId ? [] : ['chess_sr_v1']),
+    practiceProgressStorageKey(ownerId),
+    dailySprintStorageKey(ownerId),
+    INSIGHTS_KEY,
+    LIFETIME_KEY
+  ];
+}
+
+function readTrainingBackup() {
+  const data = {};
+  trainingBackupKeys().forEach(key => {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return;
+    try { data[key] = JSON.parse(raw); } catch (e) { /* skip malformed local values */ }
+  });
+  return {
+    schema: 'chess-coach-training-backup',
+    version: TRAINING_BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    ownerScope: growthOwnerId() || 'local',
+    data
+  };
+}
+
+function downloadTrainingBackup() {
+  const payload = readTrainingBackup();
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `chess-coach-training-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return Object.keys(payload.data).length;
+}
+
+function importedBackupValue(data, exactKey, prefixKey) {
+  if (Object.prototype.hasOwnProperty.call(data, exactKey)) return data[exactKey];
+  const match = Object.keys(data).find(key => key === prefixKey || key.startsWith(prefixKey + ':'));
+  return match ? data[match] : null;
+}
+
+function mergeImportedTrainingData(payload) {
+  if (!payload || payload.schema !== 'chess-coach-training-backup' || payload.version !== TRAINING_BACKUP_VERSION || !payload.data || typeof payload.data !== 'object') {
+    throw new Error('That file is not a Chess Coach training backup.');
+  }
+  const ownerId = growthOwnerId();
+  const data = payload.data;
+  const incomingGrowth = importedBackupValue(data, growthStorageKey(ownerId), PLAYER_GROWTH_KEY);
+  if (incomingGrowth) saveGrowthState(mergeGrowthStates(loadGrowthState(ownerId), incomingGrowth), ownerId);
+
+  const incomingPractice = importedBackupValue(data, practiceProgressStorageKey(ownerId), PRACTICE_PROGRESS_KEY);
+  if (incomingPractice && incomingPractice.v === 2) {
+    const current = loadPracticeProgress(ownerId);
+    const merged = { v: 2, records: Object.assign({}, current.records), events: current.events.slice() };
+    Object.entries(incomingPractice.records || {}).forEach(([id, record]) => {
+      const existing = merged.records[id];
+      if (!existing || (record.lastAttemptAt || 0) > (existing.lastAttemptAt || 0) || ((record.lastAttemptAt || 0) === (existing.lastAttemptAt || 0) && (record.attempts || 0) > (existing.attempts || 0))) merged.records[id] = record;
+    });
+    const ids = new Set(merged.events.map(event => event && event.id));
+    (incomingPractice.events || []).forEach(event => { if (event && event.id && !ids.has(event.id)) { merged.events.push(event); ids.add(event.id); } });
+    savePracticeProgress(merged, ownerId);
+  }
+
+  const incomingDaily = importedBackupValue(data, dailySprintStorageKey(ownerId), DAILY_SPRINT_KEY);
+  if (incomingDaily && incomingDaily.v === 1) {
+    const current = loadDailySprintHistory(ownerId);
+    Object.entries(incomingDaily.days || {}).forEach(([day, value]) => {
+      current.days[day] = typeof mergeDailySprintDay === 'function' ? mergeDailySprintDay(current.days[day], value) : (current.days[day] || value);
+    });
+    saveDailySprintHistory(current, ownerId);
+  }
+
+  const incomingInsights = data[INSIGHTS_KEY];
+  if (incomingInsights && incomingInsights.v === 1) {
+    const current = loadInsights();
+    const ids = new Set(current.entries.map(entry => entry && (entry.id || `${entry.ts}|${entry.fenBefore}|${entry.userUci}`)));
+    (incomingInsights.entries || []).forEach(entry => {
+      const id = entry && (entry.id || `${entry.ts}|${entry.fenBefore}|${entry.userUci}`);
+      if (entry && !ids.has(id)) { current.entries.push(entry); ids.add(id); }
+    });
+    saveInsights(current);
+  }
+
+  const incomingLifetime = data[LIFETIME_KEY];
+  if (incomingLifetime && typeof incomingLifetime === 'object') {
+    const current = loadLifetime();
+    const incomingRollups = incomingLifetime.rollups && typeof incomingLifetime.rollups === 'object' ? incomingLifetime.rollups : {};
+    const currentRollups = current.rollups && typeof current.rollups === 'object' ? current.rollups : {};
+    const mergedRollups = Object.assign({}, currentRollups, incomingRollups);
+    const currentScore = (current.games || 0) * 100000 + (current.moves || 0);
+    const incomingScore = (incomingLifetime.games || 0) * 100000 + (incomingLifetime.moves || 0);
+    const richer = incomingScore > currentScore ? incomingLifetime : current;
+    saveLifetime(Object.assign(emptyLifetime(), richer, { rollups: mergedRollups }));
+  }
+  hydrateGrowthUI();
+  if (typeof renderInsights === 'function') renderInsights();
+  return Object.keys(data).length;
+}
+
+async function importTrainingBackupFile(file) {
+  if (!file || file.size > 5 * 1024 * 1024) throw new Error('Choose a JSON backup smaller than 5 MB.');
+  const payload = JSON.parse(await file.text());
+  return mergeImportedTrainingData(payload);
 }
 
 function loadSyncedLibrarySR() {
@@ -359,12 +471,14 @@ function renderPlayerProfileStatus(profile = playerProfile()) {
 
 function renderAutoDifficultyNote(profile = playerProfile()) {
   const recommended = recommendedCoachElo();
+  const confidence = playerRatingConfidence(profile);
+  const uncertainty = `Player estimate ${Math.round(profile.ratingEstimate)} ±${Math.round(profile.ratingDeviation)} · ${confidence}`;
   const evidence = profile.ratingGames
     ? `${profile.ratingGames} completed rated game${profile.ratingGames === 1 ? '' : 's'}`
     : 'your starting estimate';
   $('#coach-auto-elo-note').text(profile.autoElo
-    ? `Next opponent target: ${recommended}, based on ${evidence}. Difficulty updates only after completed standard games.`
-    : `Automatic adjustment is off. Current evidence-based target: ${recommended}.`);
+    ? `${uncertainty}. Next opponent target: ${recommended}, based on ${evidence}. Difficulty updates only after completed standard games.`
+    : `${uncertainty}. Automatic adjustment is off; current evidence-based target: ${recommended}.`);
 }
 
 function personalizeAdaptivePlan(plan) {
@@ -515,36 +629,56 @@ function pgnStartFen(parsed) {
   }
 }
 
+function splitPgnGames(pgn) {
+  const source = String(pgn || '').trim();
+  if (!source) return [];
+  const markers = [];
+  const markerRe = /(?:^|\n)\s*\[Event\b/g;
+  let match;
+  while ((match = markerRe.exec(source))) {
+    markers.push(match.index + (match[0].startsWith('\n') ? 1 : 0));
+  }
+  if (markers.length <= 1) return [source];
+  return markers.map((start, index) => source.slice(start, markers[index + 1] || source.length).trim()).filter(Boolean);
+}
+
 async function analyseImportedPgn() {
   if (importedGameAnalysisActive) return;
   const pgn = ($('#game-inbox-pgn').val() || '').trim();
   const side = $('#game-inbox-side').val() === 'black' ? 'black' : 'white';
-  const parsed = new Chess();
-  let loaded = false;
-  try { loaded = !!pgn && parsed.load_pgn(pgn, { sloppy: true }); } catch (e) { loaded = false; }
-  if (!loaded || !parsed.history().length) {
-    $('#game-inbox-status').addClass('error').removeClass('success').text('That PGN could not be read. Paste one complete game and try again.');
+  const parsedGames = splitPgnGames(pgn).map(gamePgn => {
+    const game = new Chess();
+    try {
+      return gamePgn && game.load_pgn(gamePgn, { sloppy: true }) && game.history().length ? game : null;
+    } catch (e) {
+      return null;
+    }
+  }).filter(Boolean);
+  if (!parsedGames.length) {
+    $('#game-inbox-status').addClass('error').removeClass('success').text('Those PGNs could not be read. Paste one or more complete games and try again.');
     return;
   }
-  const allMoves = parsed.history({ verbose: true });
-  const startFen = pgnStartFen(parsed);
-  const replay = new Chess(startFen);
   const targets = [];
-  allMoves.forEach((move, index) => {
-    const fenBefore = replay.fen();
-    const mover = replay.turn() === 'b' ? 'black' : 'white';
-    const played = replay.move(move.san);
-    if (!played) return;
-    if (mover === side && targets.length < IMPORT_REVIEW_LIMIT) {
-      targets.push({
-        fenBefore,
-        fenAfter: replay.fen(),
-        userUci: uciFromMove(played),
-        userSan: played.san,
-        ply: index + 1,
-        pairNum: Math.ceil((index + 1) / 2)
-      });
-    }
+  parsedGames.forEach((parsed, gameIndex) => {
+    const allMoves = parsed.history({ verbose: true });
+    const replay = new Chess(pgnStartFen(parsed));
+    allMoves.forEach((move, index) => {
+      const fenBefore = replay.fen();
+      const mover = replay.turn() === 'b' ? 'black' : 'white';
+      const played = replay.move(move.san);
+      if (!played || targets.length >= IMPORT_REVIEW_LIMIT) return;
+      if (mover === side) {
+        targets.push({
+          fenBefore,
+          fenAfter: replay.fen(),
+          userUci: uciFromMove(played),
+          userSan: played.san,
+          ply: index + 1,
+          pairNum: Math.ceil((index + 1) / 2),
+          gameIndex: gameIndex + 1
+        });
+      }
+    });
   });
   if (!targets.length) {
     $('#game-inbox-status').addClass('error').text('No moves were found for the selected side.');
@@ -553,22 +687,23 @@ async function analyseImportedPgn() {
 
   importedGameAnalysisActive = true;
   $('#btn-analyse-pgn').prop('disabled', true);
-  $('#game-inbox-status').removeClass('error success').text(`Preparing Stockfish to review ${targets.length} of your moves…`);
+  $('#game-inbox-status').removeClass('error success').text(`Preparing Stockfish to review ${targets.length} moves from ${parsedGames.length} game${parsedGames.length === 1 ? '' : 's'}…`);
   $('#game-inbox-progress').css('width', '2%');
   try {
     await engineClient.init();
-    resetCoachState(startFen);
+    const displayGame = parsedGames[parsedGames.length - 1];
+    resetCoachState(pgnStartFen(displayGame));
     const generation = coachGameGeneration;
     coachUserSide = side;
-    coachGame = parsed;
-    coachStartFen = startFen;
+    coachGame = displayGame;
+    coachStartFen = pgnStartFen(displayGame);
     coachLocalGameId = createCoachGameId();
     coachReviewLog = [];
     coachStats = { moves: 0, best: 0, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
     const insightState = loadInsights();
     for (let i = 0; i < targets.length; i++) {
       const target = targets[i];
-      $('#game-inbox-status').text(`Reviewing move ${i + 1} of ${targets.length}…`);
+      $('#game-inbox-status').text(`Reviewing move ${i + 1} of ${targets.length} (${parsedGames.length} game${parsedGames.length === 1 ? '' : 's'})…`);
       $('#game-inbox-progress').css('width', `${Math.round((i + 1) / targets.length * 100)}%`);
       const result = await classifyMove(target.fenBefore, target.userUci, target.fenAfter);
       if (generation !== coachGameGeneration) throw new Error('Import review was replaced by another game.');
@@ -604,7 +739,7 @@ async function analyseImportedPgn() {
     rollGameIntoLifetime();
     coachSync.saveGame('Imported game reviewed').catch(handleCoachDbError);
     showPostGameSummary('Imported game reviewed');
-    $('#game-inbox-status').addClass('success').text(`${targets.length} move${targets.length === 1 ? '' : 's'} reviewed. Mistakes are now in Coach Insights and the practice queue.`);
+    $('#game-inbox-status').addClass('success').text(`${targets.length} move${targets.length === 1 ? '' : 's'} reviewed from ${parsedGames.length} game${parsedGames.length === 1 ? '' : 's'}. Mistakes are now in Coach Insights and the practice queue.`);
   } catch (error) {
     $('#game-inbox-status').addClass('error').removeClass('success').text((error && error.message) || 'The imported game could not be analysed.');
   } finally {
@@ -677,6 +812,27 @@ function initGrowthFeatures() {
     $('#game-inbox-status').removeClass('error').text(`${file.name} loaded. Choose your side, then analyse.`);
   });
   $('#btn-analyse-pgn').on('click', () => analyseImportedPgn());
+  $('#btn-export-training-data').on('click', () => {
+    try {
+      const count = downloadTrainingBackup();
+      $('#training-data-status').removeClass('error').addClass('success').text(`Backup downloaded with ${count} local data sets.`);
+    } catch (error) {
+      $('#training-data-status').removeClass('success').addClass('error').text('Backup could not be created in this browser.');
+    }
+  });
+  $('#btn-import-training-data').on('click', () => $('#training-data-file').trigger('click'));
+  $('#training-data-file').on('change', async function() {
+    const file = this.files && this.files[0];
+    if (!file) return;
+    try {
+      const count = await importTrainingBackupFile(file);
+      $('#training-data-status').removeClass('error').addClass('success').text(`Merged ${count} data sets. Your existing progress was kept.`);
+    } catch (error) {
+      $('#training-data-status').removeClass('success').addClass('error').text((error && error.message) || 'That backup could not be imported.');
+    } finally {
+      this.value = '';
+    }
+  });
   $('#btn-install-app').on('click', async () => {
     if (!installPromptEvent) return;
     installPromptEvent.prompt();

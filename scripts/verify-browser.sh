@@ -217,6 +217,29 @@ async page => {
     renderCoachDailyPlan();
   });
   assert((await page.locator('#weekly-review-list .weekly-item').count()) === 3, 'weekly coaching review did not render its three evidence sections');
+  const roadmapFeatures = await page.evaluate(() => {
+    const multiGame = splitPgnGames('[Event "One"]\n\n1. e4 *\n\n[Event "Two"]\n\n1. d4 *');
+    const backup = readTrainingBackup();
+    const imported = mergeImportedTrainingData({
+      schema: 'chess-coach-training-backup',
+      version: 1,
+      data: { 'coach:insights:v1': { v: 1, entries: [{ id: 'roadmap-backup', ts: Date.now(), tier: 'mistake', tags: ['candidate_moves'] }] } }
+    });
+    coachGame = new Chess();
+    ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4'].forEach(move => coachGame.move(move));
+    updateOpeningLabel();
+    const openingId = coachOpeningId;
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
+    window.dispatchEvent(new Event('offline'));
+    const offline = document.querySelector('#network-status')?.textContent || '';
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => true });
+    window.dispatchEvent(new Event('online'));
+    return { multiGameCount: multiGame.length, backupSets: Object.keys(backup.data).length, imported, backupEntry: loadInsights().entries.some(entry => entry.id === 'roadmap-backup'), openingId, offline };
+  });
+  assert(roadmapFeatures.multiGameCount === 2, 'PGN Inbox did not split multiple games');
+  assert(roadmapFeatures.backupSets >= 1 && roadmapFeatures.backupEntry, 'training backup merge did not preserve data');
+  assert(roadmapFeatures.openingId === 'italian', 'Coach did not identify the opening bridge target');
+  assert(roadmapFeatures.offline.includes('Offline mode'), 'offline state was not announced in Coach');
   const pwaReady = await page.evaluate(async () => {
     const manifestHref = document.querySelector('link[rel="manifest"]')?.getAttribute('href');
     const manifestResponse = await fetch(manifestHref);

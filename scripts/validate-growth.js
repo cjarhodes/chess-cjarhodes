@@ -32,13 +32,21 @@ if (/function chooseWeakOpponentMove/.test(app)) errors.push('random weak-move h
 requirePattern(growth, /function transferMeasurement[\s\S]+beforeRate[\s\S]+afterRate[\s\S]+function renderWeeklyReview/, 'weekly review must compare problem recurrence before and after practice');
 requirePattern(growth, /const ENDGAME_LESSONS[\s\S]+function renderEndgameTrack[\s\S]+startCoachPractice/, 'structured endgames must reuse the graded Coach practice loop');
 requirePattern(growth, /const IMPORT_REVIEW_LIMIT = 30[\s\S]+function analyseImportedPgn[\s\S]+load_pgn[\s\S]+classifyMove/, 'PGN Inbox must parse and bound engine analysis of imported games');
+requirePattern(growth, /function splitPgnGames[\s\S]+parsedGames[\s\S]+gameIndex/, 'PGN Inbox must support bounded multi-game imports');
+requirePattern(growth, /const TRAINING_BACKUP_VERSION = 1[\s\S]+function readTrainingBackup[\s\S]+function mergeImportedTrainingData/, 'training data must have a versioned local export and safe merge path');
+requirePattern(app, /function applyAdaptiveGoalBoost[\s\S]+adaptiveFocusProfile/, 'adaptive curriculum must honour the selected training goal');
+requirePattern(app, /function updateNetworkStatus[\s\S]+Offline mode/, 'Coach must communicate offline persistence and reconnect state');
 requirePattern(html, /id="player-profile-form"[\s\S]+id="coach-auto-elo"[\s\S]+id="game-inbox-pgn"[\s\S]+id="weekly-review-section"[\s\S]+id="endgame-track-section"/, 'Coach UI must expose profile, adaptive strength, Game Inbox, weekly review, and endgames');
+requirePattern(html, /id="training-data-card"[\s\S]+id="btn-export-training-data"[\s\S]+id="btn-import-training-data"/, 'Coach UI must expose portable training-data backup controls');
+requirePattern(html, /id="opening-section"[\s\S]+id="btn-coach-opening-study"[\s\S]+Study this opening/, 'Coach opening context must bridge directly into the study library');
+requirePattern(html, /id="network-status"[^>]+role="status"[^>]+aria-live="polite"/, 'offline state must be announced accessibly');
 requirePattern(html, /rel="manifest"[\s\S]+growth\.js/, 'the installable app must load its manifest and growth feature layer');
 requirePattern(worker, /APP_SHELL[\s\S]+stockfish\/stockfish\.wasm[\s\S]+request\.mode === 'navigate'[\s\S]+caches\.match\('\/index\.html'\)/, 'offline shell must cache the engine and provide a navigation fallback');
 if (manifest.display !== 'standalone' || manifest.scope !== '/') errors.push('manifest must install as a root-scoped standalone app');
 requirePattern(migration, /create table public\.player_training_profiles[\s\S]+enable row level security[\s\S]+for select to authenticated[\s\S]+for insert to authenticated[\s\S]+for update to authenticated[\s\S]+grant select, insert, update/, 'training profile sync must use explicit grants and owner-only RLS');
 requirePattern(dbTest, /plan\(12\)[\s\S]+another account cannot read the first account profile[\s\S]+another account cannot insert for the first account/, 'database tests must prove training-profile account isolation');
 requirePattern(smoke, /cross-device growth merge lost Library progress[\s\S]+training profile did not save through onboarding UI[\s\S]+installable offline app shell did not register[\s\S]+personal repertoire did not persist across reload[\s\S]+structured endgame lesson was not graded[\s\S]+PGN Game Inbox did not complete a bounded imported review/, 'browser smoke must cover the complete player-growth journey');
+requirePattern(smoke, /training backup merge did not preserve data[\s\S]+offline state was not announced in Coach/, 'browser smoke must cover portable backup and offline recovery');
 requirePattern(smoke, /difficulty mapping was not monotonic at every slider step[\s\S]+candidate selection did not tighten as difficulty increased[\s\S]+completed results did not move the player estimate[\s\S]+same completed game updated the player estimate twice[\s\S]+engine capability detection did not match/, 'browser smoke must prove monotonic difficulty, result-based estimation, idempotency, and real engine capabilities');
 
 if (errors.length) {

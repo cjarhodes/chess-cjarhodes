@@ -1223,6 +1223,7 @@ let coachLastReview = null;        // most recent review (for take back / show b
 let coachThinking = false;
 let coachUserSide = 'white';       // 'white' | 'black'
 let coachEngineElo = 1200;         // displayed opponent level
+let coachOpeningId = null;         // deepest identified opening in the current game
 let coachBoard = null;             // separate Chessboard.js instance
 let coachBoardFlipped = false;
 let coachGameActive = false;       // true once user hits New Game
@@ -2266,6 +2267,16 @@ function updateDailySprint(mutator) {
   return next;
 }
 
+function applyAdaptiveGoalBoost(profiles) {
+  const goal = typeof playerProfile === 'function' ? playerProfile().goal : 'balanced';
+  const tags = {
+    tactics: new Set(['missed_mate', 'missed_check', 'missed_capture', 'allowed_mate', 'allowed_forcing', 'fork_risk', 'hung_material', 'piece_left_en_prise', 'pin_pressure']),
+    repertoire: new Set(['development', 'time_to_castle', 'missed_center_break', 'pawn_structure', 'opening_principles', 'premature_queen', 'candidate_moves']),
+    endgames: new Set(['endgame_technique', 'endgame_conversion', 'passed_pawns', 'back_rank'])
+  }[goal];
+  if (tags) Object.values(profiles).forEach(profile => { if (tags.has(profile.tag)) profile.score += 0.75; });
+}
+
 function adaptiveFocusProfile(entries, now = Date.now()) {
   const profiles = {};
   const ensure = tag => {
@@ -2301,6 +2312,7 @@ function adaptiveFocusProfile(entries, now = Date.now()) {
     }
     profile.latestAt = Math.max(profile.latestAt, event.at);
   });
+  applyAdaptiveGoalBoost(profiles);
   return Object.values(profiles).sort((a, b) =>
     b.score - a.score || b.occurrences - a.occurrences || b.latestAt - a.latestAt
   );
@@ -5970,6 +5982,23 @@ function switchView(view) {
   updateURL();
 }
 
+function updateNetworkStatus(announce) {
+  const $status = $('#network-status');
+  if (!$status.length) return;
+  if (navigator.onLine) {
+    if (announce) {
+      $status.removeAttr('hidden').removeClass('offline').text('Back online — local progress will sync when available.');
+      clearTimeout(updateNetworkStatus.onlineTimer);
+      updateNetworkStatus.onlineTimer = setTimeout(() => $status.attr('hidden', true), 4500);
+    } else {
+      $status.attr('hidden', true).text('');
+    }
+  } else {
+    clearTimeout(updateNetworkStatus.onlineTimer);
+    $status.removeAttr('hidden').addClass('offline').text('Offline mode — your Coach progress is saved locally and will sync when you reconnect.');
+  }
+}
+
 function isValidFen(fen) {
   try {
     const g = new Chess();
@@ -6369,6 +6398,7 @@ function identifyOpening(sans) {
 }
 
 function updateOpeningLabel() {
+  coachOpeningId = null;
   if (!coachGame) {
     $('#opening-section').hide();
     return;
@@ -6387,6 +6417,10 @@ function updateOpeningLabel() {
     $('#opening-section').hide();
     return;
   }
+  const matchedSans = sans.slice(0, info.matchedPlies);
+  const opening = OPENINGS.find(candidate => candidate.name === info.match.name &&
+    candidate.moves.slice(0, matchedSans.length).join(' ') === matchedSans.join(' '));
+  coachOpeningId = opening ? opening.id : null;
   $('#coach-opening-eco').text(info.match.eco);
   if (info.exact) {
     // Still in book — just show the current opening name.
@@ -7553,6 +7587,13 @@ $(function () {
     }
     startCoachPracticeSession([item], item);
   });
+  $('#btn-coach-opening-study').on('click', function() {
+    if (!coachOpeningId || !OPENINGS.some(opening => opening.id === coachOpeningId)) {
+      setCoachStatus('This opening is not in the local study library yet.');
+      return;
+    }
+    loadOpening(coachOpeningId);
+  });
 
   // Sound toggle — restore prior preference, persist on change. The first
   // change is also a user gesture so we can prime the AudioContext here.
@@ -8256,4 +8297,7 @@ $(function () {
   updateSRSidebar();
   validateOpeningData();
   hydrateFromUrl();
+  updateNetworkStatus(false);
+  window.addEventListener('offline', () => updateNetworkStatus(false));
+  window.addEventListener('online', () => updateNetworkStatus(true));
 });
