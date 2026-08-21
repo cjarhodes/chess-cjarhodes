@@ -2973,11 +2973,11 @@ function renderCoachDailyPlan(queue, due, totals, entries) {
   const returning = progress.attempts > 0 || items.length > 0;
   const plan = renderedAdaptivePlan;
   setDailySprintProgress(0, plan.moveTarget, 'move');
-  $('#coach-daily-plan-title').text(returning && plan.focusTag ? `Transfer ${plan.focus}` : 'Build your 10-move baseline');
+  $('#coach-daily-plan-title').text(returning && plan.focusTag ? `Transfer ${plan.focus}` : 'Start your first coached session');
   $('#coach-daily-plan-detail').text(returning && plan.focusTag
     ? `${plan.moveTarget} reviewed moves using one personalised cue. Coach will check whether the pattern returns.`
-    : 'Play naturally for ten reviewed moves. Coach will use the result to choose your first training focus.');
-  $action.text(returning ? 'Start focused game' : 'Start baseline').attr('data-action', 'game');
+    : 'Play ten reviewed moves and Coach will choose your first training focus.');
+  $action.text(returning ? 'Start focused game' : 'Start training').attr('data-action', 'game');
 }
 
 function renderPracticeQueue(entries, counts) {
@@ -5613,14 +5613,13 @@ function scrollCoachBoardIntoViewOnMobile() {
 function placeDailySprintCard() {
   const card = document.getElementById('coach-daily-plan');
   const settings = document.querySelector('.coach-settings');
-  const panel = document.querySelector('.coach-panel');
-  if (!card || !settings || !panel) return;
-  if (isCompactLayout()) {
-    const hero = settings.querySelector('.coach-hero');
-    if (hero && hero.nextElementSibling !== card) hero.insertAdjacentElement('afterend', card);
-    return;
-  }
-  if (panel.firstElementChild !== card) panel.prepend(card);
+  if (!card || !settings) return;
+  // Coach's next action is the product's primary job. Keep it immediately
+  // below the heading at every breakpoint; settings and account controls are
+  // still available underneath it, while the right panel can focus on live
+  // status, review, and progress.
+  const hero = settings.querySelector('.coach-hero');
+  if (hero && hero.nextElementSibling !== card) hero.insertAdjacentElement('afterend', card);
 }
 
 function orderedPracticeRunItems(items, firstItem) {

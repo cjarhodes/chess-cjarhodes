@@ -416,8 +416,8 @@ async page => {
   await page.goto(page.url().split('?')[0] + '?view=coach');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
-  assert(await page.locator('#coach-daily-plan-title').textContent() === 'Build your 10-move baseline', 'clean first visit did not explain the bounded baseline');
-  assert(await page.locator('#btn-coach-next-action').textContent() === 'Start baseline', 'clean first visit did not offer a one-click baseline');
+  assert(await page.locator('#coach-daily-plan-title').textContent() === 'Start your first coached session', 'clean first visit did not explain the bounded baseline');
+  assert(await page.locator('#btn-coach-next-action').textContent() === 'Start training', 'clean first visit did not offer a one-click training start');
   assert(await page.locator('#daily-sprint-focus-title').textContent() === 'Focus · Build your baseline', 'clean first visit did not explain how adaptation begins');
   assert(await page.locator('#daily-sprint-progress-label').textContent() === '0 of 10 moves', 'clean first visit did not show the sprint target');
   await page.setViewportSize({ width: 390, height: 844 });
