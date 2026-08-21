@@ -432,6 +432,7 @@ async page => {
   await page.locator('#coach-fen').fill('7k/8/5KQ1/8/8/8/8/8 w - - 0 1');
   await page.locator('.side-toggle button[data-side="white"]').click();
   await page.locator('#btn-coach-next-action').click();
+  assert(await page.locator('#coach-daily-plan-title').textContent() === 'Build your baseline in play', 'active baseline did not explain its in-progress state');
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
   await page.locator('#coach-keyboard-move-input').fill('Qe4');
   await page.locator('#coach-keyboard-move-form button[type=submit]').click();

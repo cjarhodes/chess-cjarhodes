@@ -2933,6 +2933,15 @@ function renderCoachDailyPlan(queue, due, totals, entries) {
     return;
   }
 
+  if (sprint && sprint.mode === 'adaptive' && !sprint.focusTag) {
+    setDailySprintProgress(sprint.completedUnits, sprint.target, dailySprintProgressUnit(sprint));
+    const remaining = Math.max(0, sprint.moveTarget - (sprint.movesCompleted || 0));
+    $('#coach-daily-plan-title').text('Build your baseline in play');
+    $('#coach-daily-plan-detail').text(`${remaining} reviewed move${remaining === 1 ? '' : 's'} remain. Each move gets immediate Coach feedback.`);
+    $action.text(coachGameActive ? 'Return to the board' : 'Start training').attr('data-action', coachGameActive ? 'continue' : 'game');
+    return;
+  }
+
   if (sprint && sprint.mode === 'adaptive') {
     setDailySprintProgress(sprint.completedUnits, sprint.target, dailySprintProgressUnit(sprint));
     const remaining = Math.max(0, sprint.moveTarget - (sprint.movesCompleted || 0));
