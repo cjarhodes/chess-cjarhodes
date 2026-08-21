@@ -838,6 +838,15 @@
     }
     .coach-review-moves .label { color: var(--muted); }
     .coach-review-moves .value { color: var(--text); font-family: var(--font-reading); font-size: 0.95rem; }
+    .coach-review-cue {
+      padding: 0.55rem 0.65rem;
+      border-left: 2px solid var(--accent-soft);
+      background: rgba(207,109,123,0.08);
+      color: var(--text);
+      font-family: var(--font-reading);
+      font-size: 0.88rem;
+      line-height: 1.4;
+    }
     /* Premove highlights — claret tint on the source + target squares while
        the premove is queued. */
     #coachBoard .coach-premove-from,
@@ -2557,6 +2566,7 @@
         <span class="label">Best move</span><span class="value" id="coach-best-move">—</span>
       </div>
       <div id="coach-explanation" style="font-size:0.82rem; color:var(--muted); line-height:1.45;"></div>
+      <div id="coach-review-cue" class="coach-review-cue" role="note" aria-live="polite"></div>
       <div class="coach-review-pv" id="coach-pv" style="display:none"></div>
       <div class="coach-review-alts" id="coach-alts" style="display:none">
         <div class="coach-review-alts-label">Better candidates</div>

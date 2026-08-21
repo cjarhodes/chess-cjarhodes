@@ -440,6 +440,7 @@ async page => {
     return (document.querySelector('#coach-classification')?.textContent || '').includes('Blunder');
   }, null, { timeout: 30000 }).catch(() => {});
   assert((await page.locator('#coach-classification').textContent()).includes('Blunder'), 'missed mate was not classified as a blunder');
+  assert((await page.locator('#coach-review-cue').textContent()).startsWith('Next time:'), 'review did not surface an actionable Coach cue');
   assert(await page.locator('#coach-best-move').textContent() === 'Qg7#', 'real review did not preserve the mating move');
   assert(await page.locator('#daily-sprint-progress-label').textContent() === '1 of 10 moves', 'reviewed move did not advance the Daily Sprint');
   assert(await page.locator('.practice-load').count() >= 1, 'real reviewed mistake did not create a due drill');

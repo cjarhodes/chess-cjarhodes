@@ -4462,6 +4462,14 @@ function renderCoachReview(review) {
     if (review.whyBetter) msg += ' ' + review.whyBetter;
   }
   $('#coach-explanation').text(msg);
+  const cue = isUnknown
+    ? 'Coach cue: Keep playing — this move was not scored, so there is no lesson to carry forward yet.'
+    : isBest
+      ? 'Keep this habit: you found the engine’s first choice.'
+      : isExcellent
+        ? 'Keep this habit: your move was in the engine’s top three.'
+        : `Next time: pause and look for ${review.bestSan || 'the preferred move'} before committing.`;
+  $('#coach-review-cue').text(cue);
   if (review.pvSan && review.pvSan.length > 1) {
     $('#coach-pv').show().text('Engine line: ' + review.pvSan.join(' '));
   } else {
