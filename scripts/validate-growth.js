@@ -22,6 +22,8 @@ requirePattern(growth, /function loadGrowthState[\s\S]+function mergeGrowthState
 requirePattern(growth, /function syncGrowthState[\s\S]+player_training_profiles[\s\S]+\.upsert/, 'growth state must sync through the account-scoped table');
 requirePattern(app, /function loadSR\(\)[\s\S]{0,180}loadSyncedLibrarySR[\s\S]{0,220}function saveSR[\s\S]{0,180}saveSyncedLibrarySR/, 'Library spaced repetition must use the synced growth store');
 requirePattern(growth, /function toggleRepertoireOpening[\s\S]+function renderRepertoireUI/, 'players must be able to build and render a personal repertoire');
+requirePattern(growth, /function renderPersonalRepertoire[\s\S]+function recordImportedOpenings/, 'imported games must build a personal repertoire view and repair queue');
+requirePattern(growth, /recordImportedOpenings\(parsedGames, side, coachReviewLog\)/, 'PGN analysis must feed the personal repertoire');
 requirePattern(growth, /function nextPlayerRatingEstimate[\s\S]+ratingGames[\s\S]+ratingDeviation[\s\S]+function recordRatedCoachResult/, 'player strength must update from completed game results with confidence and idempotency');
 requirePattern(growth, /function recommendedCoachElo[\s\S]+ratingEstimate[\s\S]+function applyAdaptiveCoachElo/, 'automatic difficulty must follow the evidence-based player estimate');
 requirePattern(app, /supportedOptions: new Set[\s\S]+option name \(\.\+\?\) type[\s\S]+supportedOptions\.has\('Skill Level'\)/, 'engine wrapper must detect and use only UCI options announced by the bundled engine');
@@ -36,9 +38,12 @@ requirePattern(growth, /function splitPgnGames[\s\S]+parsedGames[\s\S]+gameIndex
 requirePattern(growth, /const TRAINING_BACKUP_VERSION = 1[\s\S]+function readTrainingBackup[\s\S]+function mergeImportedTrainingData/, 'training data must have a versioned local export and safe merge path');
 requirePattern(app, /function applyAdaptiveGoalBoost[\s\S]+adaptiveFocusProfile/, 'adaptive curriculum must honour the selected training goal');
 requirePattern(app, /function updateNetworkStatus[\s\S]+Offline mode/, 'Coach must communicate offline persistence and reconnect state');
+requirePattern(app, /function coachExplanationContext[\s\S]+opponentThreat[\s\S]+classifyMove/, 'Coach explanations must name a chess concept and the opponent threat');
 requirePattern(html, /id="player-profile-form"[\s\S]+id="coach-auto-elo"[\s\S]+id="game-inbox-pgn"[\s\S]+id="weekly-review-section"[\s\S]+id="endgame-track-section"/, 'Coach UI must expose profile, adaptive strength, Game Inbox, weekly review, and endgames');
 requirePattern(html, /id="training-data-card"[\s\S]+id="btn-export-training-data"[\s\S]+id="btn-import-training-data"/, 'Coach UI must expose portable training-data backup controls');
 requirePattern(html, /id="opening-section"[\s\S]+id="btn-coach-opening-study"[\s\S]+Study this opening/, 'Coach opening context must bridge directly into the study library');
+requirePattern(html, /id="personal-repertoire-card"[\s\S]+id="personal-repertoire-summary"[\s\S]+id="personal-repertoire-list"/, 'Coach must show the repertoire discovered from imported games');
+requirePattern(html, /id="coach-review-lesson"[\s\S]+id="coach-review-threat"/, 'Coach review must show the lesson and opponent threat separately');
 requirePattern(html, /id="network-status"[^>]+role="status"[^>]+aria-live="polite"/, 'offline state must be announced accessibly');
 requirePattern(html, /rel="manifest"[\s\S]+growth\.js/, 'the installable app must load its manifest and growth feature layer');
 requirePattern(worker, /APP_SHELL[\s\S]+stockfish\/stockfish\.wasm[\s\S]+request\.mode === 'navigate'[\s\S]+caches\.match\('\/index\.html'\)/, 'offline shell must cache the engine and provide a navigation fallback');

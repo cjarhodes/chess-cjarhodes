@@ -229,17 +229,32 @@ async page => {
     ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4'].forEach(move => coachGame.move(move));
     updateOpeningLabel();
     const openingId = coachOpeningId;
+    const importedGame = new Chess();
+    importedGame.move('e4');
+    const repairAfter = new Chess();
+    repairAfter.move('h4');
+    const repairReview = {
+      gameIndex: 1, tier: 'blunder', loss: 250, ply: 1, pairNum: 1,
+      fenBefore: new Chess().fen(), fenAfter: repairAfter.fen(),
+      userUci: 'h2h4', userSan: 'h4', bestUci: 'e2e4', bestSan: 'e4'
+    };
+    recordImportedOpenings([importedGame], 'white', [repairReview]);
+    const repertoire = loadGrowthState().repertoire;
+    const explanation = coachExplanationContext(repairReview.fenBefore, repairReview.userUci, repairReview.bestUci, repairReview.fenAfter, { pv: ['d7d5'] });
     Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
     window.dispatchEvent(new Event('offline'));
     const offline = document.querySelector('#network-status')?.textContent || '';
     Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => true });
     window.dispatchEvent(new Event('online'));
-    return { multiGameCount: multiGame.length, backupSets: Object.keys(backup.data).length, imported, backupEntry: loadInsights().entries.some(entry => entry.id === 'roadmap-backup'), openingId, offline };
+    return { multiGameCount: multiGame.length, backupSets: Object.keys(backup.data).length, imported, backupEntry: loadInsights().entries.some(entry => entry.id === 'roadmap-backup'), openingId, offline, observed: repertoire.observed.length, repairs: repertoire.repairs.length, lesson: explanation.lesson, threat: explanation.opponentThreat };
   });
   assert(roadmapFeatures.multiGameCount === 2, 'PGN Inbox did not split multiple games');
   assert(roadmapFeatures.backupSets >= 1 && roadmapFeatures.backupEntry, 'training backup merge did not preserve data');
   assert(roadmapFeatures.openingId === 'italian', 'Coach did not identify the opening bridge target');
   assert(roadmapFeatures.offline.includes('Offline mode'), 'offline state was not announced in Coach');
+  assert(roadmapFeatures.observed >= 1 && roadmapFeatures.repairs >= 1, 'imported games did not build a repertoire repair queue');
+  assert(roadmapFeatures.lesson.includes('King safety'), 'Coach explanation did not name the chess concept');
+  assert(roadmapFeatures.threat.includes('Opponent’s best reply'), 'Coach explanation did not surface the opponent threat');
   const pwaReady = await page.evaluate(async () => {
     const manifestHref = document.querySelector('link[rel="manifest"]')?.getAttribute('href');
     const manifestResponse = await fetch(manifestHref);

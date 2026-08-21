@@ -1832,7 +1832,10 @@ function insightEntryFromReview(review) {
     fenBefore: review.fenBefore || null,
     userUci: review.userUci || null,
     bestUci: review.bestUci || null,
-    opening: currentCoachOpeningName()
+    opening: review.opening || currentCoachOpeningName(),
+    openingId: review.openingId || null,
+    lesson: review.lesson || null,
+    opponentThreat: review.opponentThreat || null
   };
 }
 
@@ -3481,7 +3484,7 @@ function remoteMovePayload(review, gameId) {
     centipawn_loss: Math.round(review.loss || 0),
     rank: review.rank || null,
     tags,
-    explanation: review.whyBetter || null,
+    explanation: [review.whyBetter, review.lesson, review.opponentThreat].filter(Boolean).join(' ') || null,
     pv_san: review.pvSan || [],
     top_alternatives: review.topAlternatives || [],
     eval_before: review.evalBefore || null,
@@ -4220,6 +4223,33 @@ function movePurposeText(fenBefore, bestUci, userUciMove, bestLine, afterInfo) {
   return `${best.san} is better because ${reasons.slice(0, 2).join('; ')}.`;
 }
 
+function coachExplanationContext(fenBefore, userUci, bestUci, fenAfter, afterInfo) {
+  const user = moveFromUci(fenBefore, userUci);
+  const best = moveFromUci(fenBefore, bestUci);
+  const reply = afterInfo && afterInfo.pv && afterInfo.pv[0]
+    ? moveFromUci(fenAfter, afterInfo.pv[0])
+    : null;
+  let lesson = 'Candidate selection: compare checks, captures, threats, and at least one improving move before committing.';
+  if (best && best.san && best.san.includes('#')) lesson = 'Forcing move: the position contains an immediate checkmate, so calculation should start with checks.';
+  else if (best && best.captured) lesson = `Tactical awareness: ${best.san} wins a ${PIECE_NAME[best.captured]?.toLowerCase() || 'piece'} before a quiet plan matters.`;
+  else if (best && best.san && best.san.includes('+')) lesson = 'Forcing checks: a check narrows the opponent’s replies and should be examined before quiet moves.';
+  else if (best && best.promotion) lesson = 'Pawn-race calculation: the passed pawn can promote now, so count the queening move before manoeuvring.';
+  else if (best && best.flags && (best.flags.includes('k') || best.flags.includes('q'))) lesson = 'King safety: castling solves king safety and activates a rook in one tempo.';
+  else if (user && user.piece === 'q' && !user.captured) lesson = 'Development: an early queen move can lose time to attacks; develop a minor piece unless there is a concrete tactic.';
+  else if (user && user.piece === 'p' && ['f', 'g', 'h'].includes(user.from[0]) && !user.captured) lesson = 'King safety: pawn moves near your king are permanent commitments and need a concrete reason.';
+  else if (best && ['n', 'b'].includes(best.piece) && user && !['n', 'b'].includes(user.piece)) lesson = 'Development: bring a new minor piece into the game before making another low-impact move.';
+  else if (best && best.piece === 'p' && ['c', 'd', 'e', 'f'].includes(best.from[0])) lesson = 'Central break: challenge the centre while the opponent is still organising their pieces.';
+
+  let opponentThreat = '';
+  if (reply) {
+    if (reply.san && reply.san.includes('#')) opponentThreat = `Opponent’s threat: ${reply.san} is checkmate after your move.`;
+    else if (reply.san && reply.san.includes('+')) opponentThreat = `Opponent’s threat: ${reply.san} gives check and takes the initiative.`;
+    else if (reply.captured) opponentThreat = `Opponent’s threat: ${reply.san} wins your ${PIECE_NAME[reply.captured]?.toLowerCase() || 'piece'} on ${reply.to}.`;
+    else opponentThreat = `Opponent’s best reply is ${reply.san}; check whether your move allows that plan before committing.`;
+  }
+  return { lesson, opponentThreat };
+}
+
 // Side-to-move perspective: score is always in the mover's favor.
 // We pull MultiPV=3 before the move so we know if the user picked #1/#2/#3.
 async function classifyMove(fenBefore, userUciMove, fenAfter) {
@@ -4295,6 +4325,7 @@ async function classifyMove(fenBefore, userUciMove, fenAfter) {
     };
   }).filter(a => a.san);
   const whyBetter = movePurposeText(fenBefore, bestUci, userUciMove, bestLine, afterInfo);
+  const explanation = coachExplanationContext(fenBefore, userUciMove, bestUci, fenAfter, afterInfo);
 
   return {
     tier: cls.tier,
@@ -4308,6 +4339,8 @@ async function classifyMove(fenBefore, userUciMove, fenAfter) {
     pvSan: bestLine ? pvToSan(fenBefore, bestLine.pv || [], 5) : [],
     topAlternatives,
     whyBetter,
+    lesson: explanation.lesson,
+    opponentThreat: explanation.opponentThreat,
     evalBefore: bestLine || null,
     evalAfter: afterInfo
   };
@@ -4486,6 +4519,12 @@ function renderCoachReview(review) {
     if (review.whyBetter) msg += ' ' + review.whyBetter;
   }
   $('#coach-explanation').text(msg);
+  $('#coach-review-lesson')
+    .text(review.lesson ? 'Lesson · ' + review.lesson : '')
+    .toggle(!!review.lesson);
+  $('#coach-review-threat')
+    .text(review.opponentThreat || '')
+    .toggle(!!review.opponentThreat);
   const cue = isUnknown
     ? 'Coach cue: Keep playing — this move was not scored, so there is no lesson to carry forward yet.'
     : isBest
@@ -6397,6 +6436,16 @@ function identifyOpening(sans) {
   return { match: last, exact: walked === sans.length, matchedPlies: lastDepth };
 }
 
+function openingDefinitionForSans(sans) {
+  const history = Array.isArray(sans) ? sans : [];
+  const info = identifyOpening(history);
+  if (!info.match) return { info, opening: null };
+  const matchedSans = history.slice(0, info.matchedPlies);
+  const opening = OPENINGS.find(candidate => candidate.name === info.match.name &&
+    candidate.moves.slice(0, matchedSans.length).join(' ') === matchedSans.join(' '));
+  return { info, opening: opening || null };
+}
+
 function updateOpeningLabel() {
   coachOpeningId = null;
   if (!coachGame) {
@@ -6412,15 +6461,13 @@ function updateOpeningLabel() {
     $('#opening-section').hide();
     return;
   }
-  const info = identifyOpening(sans);
+  const definition = openingDefinitionForSans(sans);
+  const info = definition.info;
   if (!info.match) {
     $('#opening-section').hide();
     return;
   }
-  const matchedSans = sans.slice(0, info.matchedPlies);
-  const opening = OPENINGS.find(candidate => candidate.name === info.match.name &&
-    candidate.moves.slice(0, matchedSans.length).join(' ') === matchedSans.join(' '));
-  coachOpeningId = opening ? opening.id : null;
+  coachOpeningId = definition.opening ? definition.opening.id : null;
   $('#coach-opening-eco').text(info.match.eco);
   if (info.exact) {
     // Still in book — just show the current opening name.
