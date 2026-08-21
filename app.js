@@ -1944,6 +1944,18 @@ function practiceItemsForEntries(entries, counts) {
   });
 }
 
+function practiceItemFromReview(review) {
+  if (!review || !isInsightProblem(review.tier) || !review.fenBefore || !review.bestUci) return null;
+  const entry = insightEntryFromReview(Object.assign({}, review));
+  const tag = insightTagForEntry(entry);
+  return {
+    entry,
+    tag,
+    id: practiceItemId(entry, tag),
+    meta: INSIGHT_TAG_META[tag] || INSIGHT_TAG_META.candidate_moves
+  };
+}
+
 function currentGameDuePracticeItems() {
   const entries = (coachReviewLog || [])
     .filter(review => review && isInsightProblem(review.tier))
@@ -4470,6 +4482,11 @@ function renderCoachReview(review) {
         ? 'Keep this habit: your move was in the engine’s top three.'
         : `Next time: pause and look for ${review.bestSan || 'the preferred move'} before committing.`;
   $('#coach-review-cue').text(cue);
+  const practiceItem = practiceItemFromReview(review);
+  $('#btn-coach-review-practice')
+    .text('Practice this move')
+    .attr('data-practice-id', practiceItem ? practiceItem.id : '')
+    .toggle(!!practiceItem && practiceIsDue(practiceItem));
   if (review.pvSan && review.pvSan.length > 1) {
     $('#coach-pv').show().text('Engine line: ' + review.pvSan.join(' '));
   } else {
@@ -4679,7 +4696,7 @@ async function coachHandleUserMove(source, target, promotion, opts) {
       coachStats[review.tier] = (coachStats[review.tier] || 0) + 1;
       recordDailySprintMove(logged);
     }
-    renderCoachReview(review);
+    renderCoachReview(logged);
     updateCoachSummary();
     updateCoachControlsState();
     updateMoveList();
@@ -7527,6 +7544,15 @@ $(function () {
   $('#btn-coach-practice-answer').on('click', revealCoachPracticeAnswer);
   $('#btn-coach-practice-next').on('click', advanceCoachPractice);
   $('#btn-coach-practice-exit').on('click', function() { exitCoachPractice(); });
+  $('#btn-coach-review-practice').on('click', function() {
+    const item = practiceItemFromReview(coachLastReview);
+    if (!item || !practiceIsDue(item)) {
+      $(this).hide();
+      setCoachStatus('This move is already scheduled for later practice.');
+      return;
+    }
+    startCoachPracticeSession([item], item);
+  });
 
   // Sound toggle — restore prior preference, persist on change. The first
   // change is also a user gesture so we can prime the AudioContext here.

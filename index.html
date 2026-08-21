@@ -847,6 +847,8 @@
       font-size: 0.88rem;
       line-height: 1.4;
     }
+    .coach-review-actions { display: flex; gap: 0.45rem; flex-wrap: wrap; }
+    .coach-review-actions .ctrl-btn { width: 100%; }
     /* Premove highlights — claret tint on the source + target squares while
        the premove is queued. */
     #coachBoard .coach-premove-from,
@@ -2567,6 +2569,9 @@
       </div>
       <div id="coach-explanation" style="font-size:0.82rem; color:var(--muted); line-height:1.45;"></div>
       <div id="coach-review-cue" class="coach-review-cue" role="note" aria-live="polite"></div>
+      <div class="coach-review-actions">
+        <button type="button" class="ctrl-btn primary" id="btn-coach-review-practice" style="display:none;">Practice this move</button>
+      </div>
       <div class="coach-review-pv" id="coach-pv" style="display:none"></div>
       <div class="coach-review-alts" id="coach-alts" style="display:none">
         <div class="coach-review-alts-label">Better candidates</div>

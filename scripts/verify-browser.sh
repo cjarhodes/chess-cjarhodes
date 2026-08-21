@@ -441,6 +441,7 @@ async page => {
   }, null, { timeout: 30000 }).catch(() => {});
   assert((await page.locator('#coach-classification').textContent()).includes('Blunder'), 'missed mate was not classified as a blunder');
   assert((await page.locator('#coach-review-cue').textContent()).startsWith('Next time:'), 'review did not surface an actionable Coach cue');
+  assert(await page.locator('#btn-coach-review-practice').isVisible(), 'review did not offer one-click practice for the mistake');
   assert(await page.locator('#coach-best-move').textContent() === 'Qg7#', 'real review did not preserve the mating move');
   assert(await page.locator('#daily-sprint-progress-label').textContent() === '1 of 10 moves', 'reviewed move did not advance the Daily Sprint');
   assert(await page.locator('.practice-load').count() >= 1, 'real reviewed mistake did not create a due drill');
@@ -494,6 +495,23 @@ async page => {
     return (document.querySelector('#game-inbox-status')?.textContent || '').includes('reviewed. Mistakes');
   }, null, { timeout: 30000 }).catch(() => {});
   assert((await page.locator('#game-inbox-status').textContent()).includes('1 move reviewed'), 'PGN Game Inbox did not complete a bounded imported review');
+
+  await page.goto(page.url().split('?')[0] + '?view=coach');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.locator('#coach-fen').fill('7k/8/5KQ1/8/8/8/8/8 w - - 0 1');
+  await page.locator('.side-toggle button[data-side="white"]').click();
+  await page.locator('#btn-coach-next-action').click();
+  await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
+  await page.locator('#coach-keyboard-move-input').fill('Qe4');
+  await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+  await page.waitForFunction(() => {
+    return (document.querySelector('#coach-classification')?.textContent || '').includes('Blunder');
+  }, null, { timeout: 30000 }).catch(() => {});
+  assert(await page.locator('#btn-coach-review-practice').isVisible(), 'review did not offer one-click practice for the mistake');
+  await page.locator('#btn-coach-review-practice').click();
+  assert(await page.locator('#coach-practice-banner').isVisible(), 'review practice action did not open the drill');
+  assert((await page.locator('#coach-practice-prompt').textContent()).includes('Find the best move'), 'review practice action did not open the current position');
 
   assert(consoleErrors.length === 0, `console errors: ${consoleErrors.join(' | ')}`);
   assert(pageErrors.length === 0, `page errors: ${pageErrors.join(' | ')}`);
