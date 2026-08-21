@@ -1213,7 +1213,7 @@ let promotionReturnFocus = null;
 let summaryReturnFocus = null;
 
 // Coach mode (standalone page)
-let appView = 'library';           // 'library' | 'coach'
+let appView = 'coach';             // 'library' | 'coach' — Coach is the product home
 let coachMode = false;             // true when coach view is active
 let coachGame = null;
 let coachStartFen = null;
@@ -5527,6 +5527,9 @@ function updateURL() {
   if (appView === 'coach') {
     params.set('view', 'coach');
   } else {
+    // Preserve an intentional switch to the Library when no opening has been
+    // selected. Opening links remain compact and continue to imply Library.
+    if (!currentOpening) params.set('view', 'library');
     if (currentOpening) params.set('opening', currentOpening.id);
     if (currentOpening && currentLineId && currentLineId !== 'main') params.set('line', currentLineId);
     if (quizMode) params.set('mode', 'quiz');
@@ -6899,6 +6902,10 @@ function handleSnapEnd() {
 function loadOpening(id, lineId) {
   currentOpening = OPENINGS.find(o => o.id === id);
   if (!currentOpening) return;
+  // Opening links are an explicit request for Library, even though Coach is
+  // the app's default home. This also keeps shared opening URLs backwards
+  // compatible after the default view change.
+  if (appView !== 'library') switchView('library');
   setActiveLine(lineId || 'main');
 
   // Exit explore mode when user picks an opening
@@ -8186,8 +8193,16 @@ $(function () {
       else if (initial.mode === 'explore') setMode('explore');
       else if (!isNaN(initial.move) && initial.move >= 0) goToMove(initial.move);
     }
+  } else if (initial.view === 'library') {
+    switchView('library');
+    if (initial.mode === 'explore') setMode('explore');
   } else if (initial.mode === 'explore') {
+    switchView('library');
     setMode('explore');
+  } else {
+    // Coach is the app's home: make the default explicit so direct visits,
+    // reloads, and clients with no prior URL state all start there.
+    switchView('coach');
   }
   }
 

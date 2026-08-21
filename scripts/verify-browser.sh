@@ -37,7 +37,7 @@ for _ in {1..30}; do
 done
 curl -fsS "$BASE_URL/health.html" >/dev/null
 
-"${CLI[@]}" -s="$SESSION" open "$BASE_URL/?view=coach" >/dev/null
+"${CLI[@]}" -s="$SESSION" open "$BASE_URL/" >/dev/null
 
 SMOKE_CODE=$(cat <<'EOF'
 async page => {
@@ -86,6 +86,17 @@ async page => {
   };
 
   await page.setViewportSize({ width: 1280, height: 800 });
+  assert(page.url().endsWith('?view=coach'), 'direct app visit did not default to Coach');
+  assert(await page.locator('#nav-coach').getAttribute('aria-selected') === 'true', 'Coach was not selected on the default app visit');
+  assert(await page.locator('#coach-view').isVisible(), 'Coach view was not visible on the default app visit');
+  assert(!(await page.locator('#library-view').isVisible()), 'Library view was not secondary on the default app visit');
+  await page.goto(page.url().split('?')[0] + '?opening=italian');
+  assert(await page.locator('#nav-library').getAttribute('aria-selected') === 'true', 'an opening deep link did not select Library');
+  assert(await page.locator('#opening-title').textContent() === 'Italian Game', 'an opening deep link did not load the requested opening');
+  await page.goto(page.url().split('?')[0]);
+  await page.waitForFunction(() => location.search === '?view=coach', null, { timeout: 3000 }).catch(() => {});
+  assert(page.url().endsWith('?view=coach'), 'returning to the app root did not restore Coach as home');
+
   const legacyUpgrade = await page.evaluate(() => {
     const baseline = {
       focusTag: null, focus: 'Build your baseline', cue: 'Play naturally.',

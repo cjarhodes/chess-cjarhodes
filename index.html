@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chess Opening Library — Alex Rhodes</title>
+  <title>Chess Coach &amp; Opening Library — Alex Rhodes</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/favicon.svg">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -2157,8 +2157,8 @@
   <a class="back" href="https://cjarhodes.com">← cjarhodes.com</a>
   <h1>chess<span class="tld">.cjarhodes.com</span><span class="dot" aria-hidden="true"></span></h1>
   <div class="top-nav" role="tablist" aria-label="Application sections">
-    <button class="top-nav-btn active" id="nav-library" role="tab" aria-selected="true" aria-controls="library-view" tabindex="0">Library</button>
-    <button class="top-nav-btn" id="nav-coach" role="tab" aria-selected="false" aria-controls="coach-view" tabindex="-1">Coach</button>
+    <button class="top-nav-btn" id="nav-library" role="tab" aria-selected="false" aria-controls="library-view" tabindex="-1">Library</button>
+    <button class="top-nav-btn active" id="nav-coach" role="tab" aria-selected="true" aria-controls="coach-view" tabindex="0">Coach</button>
   </div>
 </header>
 
@@ -2172,7 +2172,7 @@
   </div>
 </div>
 
-<div class="app" id="library-view" role="tabpanel" aria-labelledby="nav-library" aria-hidden="false">
+<div class="app" id="library-view" role="tabpanel" aria-labelledby="nav-library" aria-hidden="true" style="display:none;">
 
   <!-- ── LIBRARY SIDEBAR ── -->
   <aside class="library" id="library">
@@ -2368,7 +2368,7 @@
 </div>
 
 <!-- ── COACH VIEW (standalone page) ── -->
-<section class="coach-view" id="coach-view" role="tabpanel" aria-labelledby="nav-coach" style="display:none;" aria-hidden="true">
+<section class="coach-view" id="coach-view" role="tabpanel" aria-labelledby="nav-coach" aria-hidden="false">
 
   <!-- SETTINGS -->
   <aside class="coach-settings">
