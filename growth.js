@@ -7,6 +7,7 @@ const IMPORT_REVIEW_LIMIT = 30;
 const TRAINING_BACKUP_VERSION = 1;
 const REPERTOIRE_OBSERVED_LIMIT = 30;
 const REPERTOIRE_REPAIR_LIMIT = 24;
+const REPERTOIRE_COMPARISON_LIMIT = 8;
 const growthRemoteSync = { timer: null, chain: Promise.resolve() };
 let installPromptEvent = null;
 let importedGameAnalysisActive = false;
@@ -59,11 +60,12 @@ function emptyGrowthState() {
       ratingHistory: [],
       minutes: 10,
       goal: 'balanced',
+      sessionStyle: 'balanced',
       autoElo: true,
       onboarded: false,
       updatedAt: 0
     },
-    repertoire: { ids: [], updatedAt: 0, observed: [], repairs: [] },
+    repertoire: { ids: [], updatedAt: 0, focusKey: null, focusUpdatedAt: 0, observed: [], repairs: [], comparisons: [] },
     library: { records: {} }
   };
 }
@@ -87,6 +89,7 @@ function normalizeGrowthState(value) {
     : [];
   profile.minutes = Math.max(5, Math.min(60, Number(profile.minutes) || 10));
   profile.goal = ['balanced', 'tactics', 'repertoire', 'endgames'].includes(profile.goal) ? profile.goal : 'balanced';
+  profile.sessionStyle = ['balanced', 'drills', 'play'].includes(profile.sessionStyle) ? profile.sessionStyle : 'balanced';
   profile.autoElo = profile.autoElo !== false;
   const repertoireIds = value.repertoire && Array.isArray(value.repertoire.ids)
     ? value.repertoire.ids.filter(id => typeof id === 'string' && OPENINGS.some(opening => opening.id === id))
@@ -99,8 +102,14 @@ function normalizeGrowthState(value) {
         moves: Math.max(0, Math.floor(Number(item.moves) || 0)),
         deviations: Math.max(0, Math.floor(Number(item.deviations) || 0)),
         mistakes: Math.max(0, Math.floor(Number(item.mistakes) || 0)),
+        bookMoves: Math.max(0, Math.floor(Number(item.bookMoves) || 0)),
+        practiceAttempts: Math.max(0, Math.floor(Number(item.practiceAttempts) || 0)),
+        practiceCorrect: Math.max(0, Math.floor(Number(item.practiceCorrect) || 0)),
+        practiceAssisted: Math.max(0, Math.floor(Number(item.practiceAssisted) || 0)),
+        confidence: Math.max(0, Math.min(100, Number(item.confidence) || 0)),
         updatedAt: Number(item.updatedAt) || 0,
         lastSeen: Number(item.lastSeen) || 0,
+        lastPracticedAt: Number(item.lastPracticedAt) || 0,
         openingId: typeof item.openingId === 'string' ? item.openingId : null,
         side: item.side === 'black' ? 'black' : 'white'
       })).slice(-REPERTOIRE_OBSERVED_LIMIT)
@@ -109,6 +118,9 @@ function normalizeGrowthState(value) {
     ? rawRepertoire.repairs.filter(item => item && typeof item.id === 'string' && item.entry && typeof item.entry === 'object')
       .slice(-REPERTOIRE_REPAIR_LIMIT)
     : [];
+  const comparisons = Array.isArray(rawRepertoire.comparisons)
+    ? rawRepertoire.comparisons.filter(item => item && Number(item.at) > 0).slice(-REPERTOIRE_COMPARISON_LIMIT)
+    : [];
   return {
     v: PLAYER_GROWTH_VERSION,
     updatedAt: Number(value.updatedAt) || 0,
@@ -116,8 +128,11 @@ function normalizeGrowthState(value) {
     repertoire: {
       ids: Array.from(new Set(repertoireIds)),
       updatedAt: Number(rawRepertoire.updatedAt) || 0,
+      focusKey: typeof rawRepertoire.focusKey === 'string' ? rawRepertoire.focusKey : null,
+      focusUpdatedAt: Number(rawRepertoire.focusUpdatedAt) || 0,
       observed,
-      repairs
+      repairs,
+      comparisons
     },
     library: {
       records: value.library && value.library.records && typeof value.library.records === 'object'
@@ -294,6 +309,11 @@ function mergeGrowthStates(localValue, remoteValue) {
       moves: Math.max(existing.moves || 0, item.moves || 0),
       deviations: Math.max(existing.deviations || 0, item.deviations || 0),
       mistakes: Math.max(existing.mistakes || 0, item.mistakes || 0),
+      bookMoves: Math.max(existing.bookMoves || 0, item.bookMoves || 0),
+      practiceAttempts: Math.max(existing.practiceAttempts || 0, item.practiceAttempts || 0),
+      practiceCorrect: Math.max(existing.practiceCorrect || 0, item.practiceCorrect || 0),
+      practiceAssisted: Math.max(existing.practiceAssisted || 0, item.practiceAssisted || 0),
+      confidence: Math.max(existing.confidence || 0, item.confidence || 0),
       updatedAt: Math.max(existing.updatedAt || 0, item.updatedAt || 0),
       lastSeen: Math.max(existing.lastSeen || 0, item.lastSeen || 0)
     }));
@@ -303,11 +323,19 @@ function mergeGrowthStates(localValue, remoteValue) {
     const existing = repairs.get(item.id);
     if (!existing || (item.lastSeen || item.createdAt || 0) > (existing.lastSeen || existing.createdAt || 0)) repairs.set(item.id, item);
   });
+  const comparisons = [...local.repertoire.comparisons, ...remote.repertoire.comparisons]
+    .sort((a, b) => (b.at || 0) - (a.at || 0))
+    .slice(0, REPERTOIRE_COMPARISON_LIMIT);
+  const focusSource = (remote.repertoire.focusUpdatedAt || 0) > (local.repertoire.focusUpdatedAt || 0)
+    ? remote.repertoire : local.repertoire;
   merged.repertoire = {
     ids: newerRepertoire.ids.slice(),
     updatedAt: Math.max(local.repertoire.updatedAt || 0, remote.repertoire.updatedAt || 0),
+    focusKey: focusSource.focusKey || null,
+    focusUpdatedAt: Math.max(local.repertoire.focusUpdatedAt || 0, remote.repertoire.focusUpdatedAt || 0),
     observed: Array.from(observed.values()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, REPERTOIRE_OBSERVED_LIMIT),
-    repairs: Array.from(repairs.values()).sort((a, b) => (b.lastSeen || b.createdAt || 0) - (a.lastSeen || a.createdAt || 0)).slice(0, REPERTOIRE_REPAIR_LIMIT)
+    repairs: Array.from(repairs.values()).sort((a, b) => (b.lastSeen || b.createdAt || 0) - (a.lastSeen || a.createdAt || 0)).slice(0, REPERTOIRE_REPAIR_LIMIT),
+    comparisons
   };
   const ids = new Set([...Object.keys(local.library.records), ...Object.keys(remote.library.records)]);
   ids.forEach(id => {
@@ -415,6 +443,100 @@ function toggleRepertoireOpening(id) {
   renderWeeklyReview();
 }
 
+function repertoireConfidence(record) {
+  if (!record) return 0;
+  const reviewed = Math.max(0, Number(record.moves) || 0);
+  const mistakes = Math.max(0, Number(record.mistakes) || 0);
+  const deviations = Math.max(0, Number(record.deviations) || 0);
+  const practiceAttempts = Math.max(0, Number(record.practiceAttempts) || 0);
+  const practiceCorrect = Math.max(0, Number(record.practiceCorrect) || 0);
+  const practiceRate = practiceAttempts ? practiceCorrect / practiceAttempts : 0;
+  const reviewPenalty = reviewed ? Math.min(55, mistakes / reviewed * 100 * 70) : 25;
+  const deviationPenalty = Math.min(25, deviations * 8);
+  const practiceBoost = practiceAttempts ? Math.min(40, practiceRate * 40) : 0;
+  return Math.max(0, Math.min(100, Math.round(35 - reviewPenalty - deviationPenalty + practiceBoost + (reviewed ? Math.min(25, reviewed / 4) : 0))));
+}
+
+function repertoireConfidenceLabel(value) {
+  const confidence = Math.max(0, Math.min(100, Number(value) || 0));
+  if (confidence >= 75) return 'stable';
+  if (confidence >= 45) return 'familiar';
+  if (confidence >= 20) return 'shaky';
+  return 'unseen';
+}
+
+function setRepertoireFocus(key) {
+  const state = loadGrowthState();
+  state.repertoire = Object.assign({}, state.repertoire, {
+    focusKey: key || null,
+    focusUpdatedAt: Date.now(),
+    updatedAt: Date.now()
+  });
+  state.updatedAt = Date.now();
+  saveGrowthState(state);
+  renderPersonalRepertoire();
+  renderOpeningBridgeTrack();
+  if (typeof renderCoachDailyPlan === 'function') renderCoachDailyPlan();
+}
+
+function repertoireFocusOpening() {
+  const focusKey = loadGrowthState().repertoire.focusKey;
+  if (!focusKey) return null;
+  return OPENINGS.find(opening => opening.id === focusKey) || null;
+}
+
+function openingBridgeItem(opening) {
+  if (!opening || !Array.isArray(opening.moves) || opening.moves.length < 14) return null;
+  const targetIndex = opening.category === 'black' ? 13 : 12;
+  const position = new Chess();
+  for (let i = 0; i < targetIndex; i++) {
+    if (!position.move(opening.moves[i])) return null;
+  }
+  const best = position.move(opening.moves[targetIndex]);
+  if (!best) return null;
+  return {
+    id: `opening-bridge:${opening.id}`,
+    tag: 'opening_principles',
+    entry: {
+      id: `opening-bridge:${opening.id}`,
+      fenBefore: position.fen(),
+      bestUci: typeof uciFromMove === 'function' ? uciFromMove(best) : `${best.from}${best.to}${best.promotion || ''}`,
+      bestSan: best.san,
+      opening: opening.name,
+      openingId: opening.id,
+      pairNum: 7,
+      ply: targetIndex + 1,
+      phase: 'middlegame'
+    },
+    meta: {
+      title: `${opening.name} → middlegame`,
+      practice: opening.keyIdeas && opening.keyIdeas[0]
+        ? `Carry the opening idea forward: ${opening.keyIdeas[0]}.`
+        : 'Find the first plan after development is complete.',
+      theory: opening.description
+    }
+  };
+}
+
+function recordRepertoirePracticeResult(item, clean, revealed) {
+  if (!item || !item.entry || !item.entry.openingId) return;
+  const state = loadGrowthState();
+  const side = item.entry.fenBefore && new Chess(item.entry.fenBefore).turn() === 'b' ? 'black' : 'white';
+  const key = `${item.entry.openingId}|${side}`;
+  const observed = state.repertoire.observed.find(record => `${record.key}|${record.side}` === key);
+  if (!observed) return;
+  observed.practiceAttempts = (observed.practiceAttempts || 0) + 1;
+  if (clean) observed.practiceCorrect = (observed.practiceCorrect || 0) + 1;
+  if (revealed) observed.practiceAssisted = (observed.practiceAssisted || 0) + 1;
+  observed.lastPracticedAt = Date.now();
+  observed.confidence = repertoireConfidence(observed);
+  state.repertoire.updatedAt = Date.now();
+  state.updatedAt = Date.now();
+  saveGrowthState(state);
+  renderPersonalRepertoire();
+  renderOpeningBridgeTrack();
+}
+
 function renderRepertoireUI() {
   const ids = repertoireIds();
   const selected = new Set(ids);
@@ -466,8 +588,12 @@ function renderPersonalRepertoire() {
   });
   const gameCount = observed.reduce((sum, item) => sum + (item.games || 0), 0);
   const repairCount = state.repertoire.repairs.length;
+  const latestComparison = state.repertoire.comparisons[0];
+  const comparisonText = latestComparison
+    ? ` Last import: ${latestComparison.bookCoverage}% book coverage, ${latestComparison.deviations} deviation${latestComparison.deviations === 1 ? '' : 's'} and ${latestComparison.mistakes} repair${latestComparison.mistakes === 1 ? '' : 's'}.`
+    : '';
   $summary.text(observed.length
-    ? `${observed.length} opening${observed.length === 1 ? '' : 's'} found across ${gameCount} imported game${gameCount === 1 ? '' : 's'}. ${repairCount ? `${repairCount} repair position${repairCount === 1 ? '' : 's'} ready.` : 'Import more games to find repair opportunities.'}`
+    ? `${observed.length} opening${observed.length === 1 ? '' : 's'} found across ${gameCount} imported game${gameCount === 1 ? '' : 's'}. ${repairCount ? `${repairCount} repair position${repairCount === 1 ? '' : 's'} ready.` : 'Import more games to find repair opportunities.'}${comparisonText}`
     : 'Import your games to see the openings you actually play and the positions worth repairing.');
   if (!observed.length) return;
   observed.forEach(item => {
@@ -476,9 +602,11 @@ function renderPersonalRepertoire() {
     const $row = $('<div class="repertoire-observed-row"></div>');
     const side = item.side === 'black' ? 'Black' : 'White';
     const deviations = item.deviations ? ` · ${item.deviations} out-of-book` : '';
+    const confidence = Number.isFinite(item.confidence) ? item.confidence : repertoireConfidence(item);
+    const focus = state.repertoire.focusKey === item.openingId;
     $row.append($('<div class="repertoire-observed-copy"></div>').append(
       $('<strong></strong>').text(item.name + (item.eco ? ` · ${item.eco}` : '')),
-      $('<span></span>').text(`${side} · ${item.games} game${item.games === 1 ? '' : 's'} · ${item.moves} reviewed moves${deviations}`)
+      $('<span></span>').text(`${side} · ${item.games} game${item.games === 1 ? '' : 's'} · ${item.moves} reviewed moves${deviations} · ${repertoireConfidenceLabel(confidence)} ${confidence}%`)
     ));
     const $actions = $('<div class="repertoire-observed-actions"></div>');
     if (item.openingId) {
@@ -486,6 +614,7 @@ function renderPersonalRepertoire() {
       if (!selected.has(item.openingId)) {
         $('<button type="button" class="movelist-copy">Add</button>').on('click', () => toggleRepertoireOpening(item.openingId)).appendTo($actions);
       }
+      $('<button type="button" class="movelist-copy"></button>').text(focus ? 'Focused' : 'Focus').prop('disabled', focus).on('click', () => setRepertoireFocus(item.openingId)).appendTo($actions);
     }
     if (repairs.length) {
       $('<button type="button" class="movelist-copy"></button>').text(`Repair ${repairs.length}`).on('click', () => {
@@ -498,6 +627,38 @@ function renderPersonalRepertoire() {
     $row.append($actions);
     $list.append($row);
   });
+}
+
+function renderOpeningBridgeTrack() {
+  const $section = $('#opening-bridge-section');
+  const $list = $('#opening-bridge-list').empty();
+  if (!$section.length || !$list.length) return;
+  const state = loadGrowthState();
+  const chosen = [];
+  const ids = state.repertoire.ids.slice();
+  if (state.repertoire.focusKey) ids.unshift(state.repertoire.focusKey);
+  state.repertoire.observed.forEach(item => { if (item.openingId) ids.push(item.openingId); });
+  ids.push('italian', 'sicilian', 'queens-gambit');
+  Array.from(new Set(ids)).forEach(id => {
+    const opening = OPENINGS.find(candidate => candidate.id === id);
+    if (opening && !chosen.some(item => item.id === opening.id)) chosen.push(opening);
+  });
+  chosen.slice(0, 3).forEach(opening => {
+    const item = openingBridgeItem(opening);
+    if (!item) return;
+    const record = typeof practiceRecordFor === 'function' ? practiceRecordFor(item) : null;
+    const $row = $('<div class="opening-bridge-row"></div>');
+    $row.append($('<div class="opening-bridge-copy"></div>').append(
+      $('<strong></strong>').text(item.meta.title),
+      $('<span></span>').text(`${item.meta.practice} ${record ? ` ${record.correct || 0}/${record.attempts || 0} correct.` : ' Not rehearsed yet.'}`)
+    ));
+    $('<button type="button" class="movelist-copy"></button>')
+      .text(record && record.correct ? 'Review' : 'Rehearse')
+      .on('click', () => { switchView('coach'); startCoachPractice(item); })
+      .appendTo($row);
+    $list.append($row);
+  });
+  $section.toggle($list.children().length > 0);
 }
 
 function recordImportedOpenings(parsedGames, side, reviews) {
@@ -522,16 +683,29 @@ function recordImportedOpenings(parsedGames, side, reviews) {
       moves: 0,
       deviations: 0,
       mistakes: 0,
+      bookMoves: 0,
+      practiceAttempts: 0,
+      practiceCorrect: 0,
+      practiceAssisted: 0,
+      confidence: 0,
       lastSeen: 0,
+      lastPracticedAt: 0,
+      line: '',
+      firstDeviationPly: null,
       updatedAt: 0
     }, observed.get(recordKey) || {});
     const gameReviews = (reviews || []).filter(review => review.gameIndex === index + 1);
     record.games += 1;
     record.moves += gameReviews.filter(review => review.tier !== 'unknown').length;
     record.mistakes += gameReviews.filter(review => isInsightProblem(review.tier)).length;
+    record.bookMoves += gameReviews.filter(review => review.tier !== 'unknown' && review.ply <= definition.info.matchedPlies).length;
+    record.line = game.history().slice(0, Math.min(definition.info.matchedPlies, 16)).join(' ');
+    const firstDeviation = gameReviews.find(review => review.ply > definition.info.matchedPlies);
+    if (firstDeviation && !record.firstDeviationPly) record.firstDeviationPly = firstDeviation.ply;
     if (!definition.info.exact) record.deviations += 1;
     record.lastSeen = Date.now();
     record.updatedAt = record.lastSeen;
+    record.confidence = repertoireConfidence(record);
     observed.set(recordKey, record);
     changed = true;
     gameReviews.filter(review => isInsightProblem(review.tier)).forEach(review => {
@@ -550,13 +724,36 @@ function recordImportedOpenings(parsedGames, side, reviews) {
     });
   });
   if (!changed) return;
+  const reviewedMoves = (reviews || []).filter(review => review && review.tier !== 'unknown').length;
+  const bookMoves = (reviews || []).filter(review => review && review.tier !== 'unknown' && parsedGames.some((game, index) => {
+    const definition = openingDefinitionForSans(game.history());
+    return review.gameIndex === index + 1 && review.ply <= definition.info.matchedPlies;
+  })).length;
+  const deviations = parsedGames.reduce((total, game) => total + (openingDefinitionForSans(game.history()).info.exact ? 0 : 1), 0);
+  const mistakes = (reviews || []).filter(review => review && isInsightProblem(review.tier)).length;
+  const comparison = {
+    at: Date.now(),
+    side,
+    games: parsedGames.length,
+    reviewedMoves,
+    bookMoves,
+    bookCoverage: reviewedMoves ? Math.round(bookMoves / reviewedMoves * 100) : 0,
+    deviations,
+    mistakes,
+    openings: parsedGames.map(game => {
+      const definition = openingDefinitionForSans(game.history());
+      return definition.info.match ? definition.info.match.name : null;
+    }).filter(Boolean)
+  };
   state.repertoire = Object.assign({}, state.repertoire, {
     updatedAt: Date.now(),
-    observed: Array.from(observed.values()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, REPERTOIRE_OBSERVED_LIMIT),
-    repairs: Array.from(repairs.values()).sort((a, b) => (b.lastSeen || b.createdAt || 0) - (a.lastSeen || a.createdAt || 0)).slice(0, REPERTOIRE_REPAIR_LIMIT)
+    observed: Array.from(observed.values()).map(item => Object.assign(item, { confidence: repertoireConfidence(item) })).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, REPERTOIRE_OBSERVED_LIMIT),
+    repairs: Array.from(repairs.values()).sort((a, b) => (b.lastSeen || b.createdAt || 0) - (a.lastSeen || a.createdAt || 0)).slice(0, REPERTOIRE_REPAIR_LIMIT),
+    comparisons: [comparison, ...(state.repertoire.comparisons || [])].slice(0, REPERTOIRE_COMPARISON_LIMIT)
   });
   saveGrowthState(state);
   renderPersonalRepertoire();
+  renderOpeningBridgeTrack();
 }
 
 function recommendedCoachElo() {
@@ -652,6 +849,7 @@ function renderAutoDifficultyNote(profile = playerProfile()) {
 function personalizeAdaptivePlan(plan) {
   const profile = playerProfile();
   const adjusted = Object.assign({}, plan);
+  adjusted.sessionStyle = profile.sessionStyle || 'balanced';
   if (profile.minutes <= 5) {
     adjusted.drillTarget = Math.min(adjusted.drillTarget, 1);
     adjusted.moveTarget = Math.min(adjusted.moveTarget, 4);
@@ -661,6 +859,19 @@ function personalizeAdaptivePlan(plan) {
   }
   if (profile.goal === 'tactics' && adjusted.drillTarget) {
     adjusted.drillTarget = Math.min(3, adjusted.drillTarget + 1);
+  }
+  if (profile.sessionStyle === 'drills' && adjusted.moveTarget) {
+    adjusted.drillTarget = Math.min(3, Math.max(1, adjusted.drillTarget || 1));
+    adjusted.moveTarget = Math.max(4, adjusted.moveTarget - 2);
+  } else if (profile.sessionStyle === 'play') {
+    adjusted.drillTarget = 0;
+    adjusted.moveTarget = Math.max(6, adjusted.moveTarget);
+    adjusted.kind = adjusted.kind === 'focus-transfer' ? 'transfer' : adjusted.kind;
+  }
+  const focus = typeof repertoireFocusOpening === 'function' ? repertoireFocusOpening() : null;
+  if (profile.goal === 'repertoire' && focus) {
+    adjusted.repertoireFocus = focus.name;
+    adjusted.cue = `${focus.name}: ${adjusted.cue}`;
   }
   return adjusted;
 }
@@ -781,10 +992,12 @@ function hydrateGrowthUI() {
   $('#player-rating').val(profile.rating);
   $('#player-minutes').val(profile.minutes);
   $('#player-goal').val(profile.goal);
+  $('#player-style').val(profile.sessionStyle || 'balanced');
   renderPlayerProfileStatus(profile);
   renderRepertoireUI();
   applyAdaptiveCoachElo();
   renderPersonalRepertoire();
+  renderOpeningBridgeTrack();
   renderWeeklyReview();
   renderEndgameTrack();
 }
@@ -956,6 +1169,7 @@ function initGrowthFeatures() {
       rating: Number($('#player-rating').val()),
       minutes: Number($('#player-minutes').val()),
       goal: $('#player-goal').val(),
+      sessionStyle: $('#player-style').val(),
       autoElo: $('#coach-auto-elo').prop('checked')
     });
     if (!result.ok) {
@@ -971,14 +1185,14 @@ function initGrowthFeatures() {
   });
   $('#coach-auto-elo').on('change', function() {
     const profile = playerProfile();
-    savePlayerProfile({ autoElo: $(this).prop('checked'), rating: profile.rating, minutes: profile.minutes, goal: profile.goal });
+    savePlayerProfile({ autoElo: $(this).prop('checked'), rating: profile.rating, minutes: profile.minutes, goal: profile.goal, sessionStyle: profile.sessionStyle });
     applyAdaptiveCoachElo();
   });
   $('#coach-strength').on('input', () => {
     if (!$('#coach-auto-elo').prop('checked')) return;
     $('#coach-auto-elo').prop('checked', false);
     const profile = playerProfile();
-    savePlayerProfile({ autoElo: false, rating: profile.rating, minutes: profile.minutes, goal: profile.goal });
+    savePlayerProfile({ autoElo: false, rating: profile.rating, minutes: profile.minutes, goal: profile.goal, sessionStyle: profile.sessionStyle });
     applyAdaptiveCoachElo();
   });
   $('#game-inbox-file').on('change', async function() {

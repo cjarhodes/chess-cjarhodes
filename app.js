@@ -1866,6 +1866,50 @@ function insightTagCounts(entries) {
   );
 }
 
+function recurringMistakeSummaries(entries, now = Date.now()) {
+  const currentStart = now - 30 * DAY_MS;
+  const previousStart = currentStart - 30 * DAY_MS;
+  const summaries = {};
+  (entries || []).filter(entry => isInsightProblem(entry.tier)).forEach(entry => {
+    const tags = entry.tags || [];
+    tags.forEach(tag => {
+      if (!INSIGHT_TAG_META[tag]) return;
+      if (!summaries[tag]) summaries[tag] = { tag, current: 0, previous: 0, latestAt: 0, loss: 0 };
+      const summary = summaries[tag];
+      const at = Number(entry.ts) || 0;
+      if (at >= currentStart) {
+        summary.current += 1;
+        summary.loss += Math.min(entry.loss || 0, ACPL_CAP);
+        summary.latestAt = Math.max(summary.latestAt, at);
+      } else if (at >= previousStart) {
+        summary.previous += 1;
+      }
+    });
+  });
+  return Object.values(summaries)
+    .filter(summary => summary.current || summary.previous)
+    .sort((a, b) => b.current - a.current || (b.current - b.previous) - (a.current - a.previous) || b.latestAt - a.latestAt);
+}
+
+function renderRecurringMistakeDashboard(entries) {
+  const $list = $('#insights-recurring-list').empty();
+  if (!$list.length) return;
+  const summaries = recurringMistakeSummaries(entries);
+  if (!summaries.length) {
+    $list.append($('<div class="insight-empty"></div>').text('No recurring pattern across the last 60 days yet.'));
+    return;
+  }
+  summaries.slice(0, 4).forEach(summary => {
+    const meta = INSIGHT_TAG_META[summary.tag];
+    const delta = summary.current - summary.previous;
+    const direction = delta > 0 ? `↑ ${delta} vs prior month` : delta < 0 ? `↓ ${Math.abs(delta)} vs prior month` : 'Flat vs prior month';
+    const $row = $('<div class="insight-recurring-row"></div>');
+    $row.append($('<strong></strong>').text(meta.title));
+    $row.append($('<span></span>').text(`${summary.current} recent · ${direction}`));
+    $list.append($row);
+  });
+}
+
 function weakestInsightPhase(entries) {
   const phaseName = { opening: 'Opening', middlegame: 'Middlegame', endgame: 'Endgame' };
   const phases = {
@@ -2544,8 +2588,16 @@ function renderDailySprintChrome(day) {
   const focus = day && day.focus
     ? { title: day.focus, cue: day.focusCue, reason: day.focusReason }
     : renderedAdaptivePlan && { title: renderedAdaptivePlan.focus, cue: renderedAdaptivePlan.cue, reason: renderedAdaptivePlan.reason };
+  const style = renderedAdaptivePlan && renderedAdaptivePlan.sessionStyle === 'drills'
+    ? 'Drills-first session.'
+    : renderedAdaptivePlan && renderedAdaptivePlan.sessionStyle === 'play'
+      ? 'Play-first session.'
+      : 'Balanced session.';
+  const repertoire = renderedAdaptivePlan && renderedAdaptivePlan.repertoireFocus
+    ? ` Repertoire focus: ${renderedAdaptivePlan.repertoireFocus}.`
+    : '';
   $('#daily-sprint-focus-title').text(focus ? `Focus · ${focus.title}` : '');
-  $('#daily-sprint-focus-detail').text(focus ? `${focus.cue} ${focus.reason}` : '');
+  $('#daily-sprint-focus-detail').text(focus ? `${focus.cue} ${focus.reason} ${style}${repertoire}` : '');
   $('#daily-sprint-focus').toggle(!!focus);
   $('#daily-sprint-takeaway')
     .text(day && day.takeaway ? day.takeaway : '')
@@ -3099,6 +3151,7 @@ function renderInsights() {
   const entries = remoteEntries.length ? remoteEntries : localEntries;
   const usingRemote = remoteEntries.length > 0;
   if (typeof renderWeeklyReview === 'function') renderWeeklyReview(entries);
+  renderRecurringMistakeDashboard(entries);
   const $section = $('#insights-section');
   if (!entries.length) {
     $section.hide();
@@ -4496,6 +4549,45 @@ function updateCoachSummary() {
   }
 }
 
+function reviewBoardMarkup(fen) {
+  if (!fen) return '';
+  try {
+    const position = new Chess(fen);
+    return position.board().map((row, rowIndex) => row.map((piece, colIndex) => {
+      const dark = (rowIndex + colIndex) % 2 === 1;
+      const glyph = piece
+        ? (piece.color === 'w' ? PIECE_GLYPH_WHITE[piece.type] : PIECE_GLYPH_BLACK[piece.type])
+        : '';
+      return `<span class="review-board-square ${dark ? 'dark' : 'light'}">${glyph || '&nbsp;'}</span>`;
+    }).join('')).join('');
+  } catch (e) {
+    return '';
+  }
+}
+
+function renderCoachReviewEvidence(review) {
+  if (!review || !review.fenBefore || !review.fenAfter) {
+    $('#coach-review-evidence').hide().empty();
+    return;
+  }
+  const replyUci = review.evalAfter && review.evalAfter.pv && review.evalAfter.pv[0];
+  const reply = replyUci ? moveFromUci(review.fenAfter, replyUci) : null;
+  const replyText = reply ? ` → ${reply.san}` : '';
+  let bestFen = review.fenBefore;
+  try {
+    const bestPosition = new Chess(review.fenBefore);
+    if (review.bestUci) bestPosition.move({ from: review.bestUci.slice(0, 2), to: review.bestUci.slice(2, 4), promotion: review.bestUci[4] || undefined });
+    bestFen = bestPosition.fen();
+  } catch (e) {}
+  $('#coach-review-evidence').html(
+    `<div class="coach-review-evidence-head">Position change <span>${escapeHtml(review.userSan || 'Your move')} → ${escapeHtml(review.bestSan || 'Best move')}${escapeHtml(replyText)}</span></div>` +
+    `<div class="coach-review-evidence-boards">` +
+      `<div><div class="review-board-label">After your move</div><div class="review-board">${reviewBoardMarkup(review.fenAfter)}</div></div>` +
+      `<div><div class="review-board-label">After the best move</div><div class="review-board">${reviewBoardMarkup(bestFen)}</div></div>` +
+    `</div>`
+  ).show();
+}
+
 function renderCoachReview(review) {
   if (!review) { $('#coach-review').hide(); return; }
   const $badge = $('#coach-classification');
@@ -4525,6 +4617,7 @@ function renderCoachReview(review) {
   $('#coach-review-threat')
     .text(review.opponentThreat || '')
     .toggle(!!review.opponentThreat);
+  renderCoachReviewEvidence(review);
   const cue = isUnknown
     ? 'Coach cue: Keep playing — this move was not scored, so there is no lesson to carry forward yet.'
     : isBest
@@ -5816,6 +5909,9 @@ function coachHandlePracticeMove(source, target, promotion, opts) {
   if (!played) return 'snapback';
   session.completed = true;
   const record = recordPracticeAttempt(session.item, true, session.revealed);
+  if (typeof recordRepertoirePracticeResult === 'function') {
+    recordRepertoirePracticeResult(session.item, !session.revealed && session.misses === 0, session.revealed);
+  }
   const sprint = recordDailySprintDrill(session.item, session.revealed, !session.revealed && session.misses === 0);
   if (opts && opts.updateBoard !== false && coachBoard) coachBoard.position(coachGame.fen());
   updateCapturedDisplay(coachGame.fen());

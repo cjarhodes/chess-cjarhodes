@@ -857,6 +857,15 @@
       line-height: 1.4;
     }
     .coach-review-threat { border-left-color: var(--accent-soft); background: rgba(207,109,123,0.06); }
+    .coach-review-evidence { padding-top: 0.35rem; border-top: 1px solid var(--border); }
+    .coach-review-evidence-head { display: flex; justify-content: space-between; gap: 0.5rem; color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; }
+    .coach-review-evidence-head span { color: var(--text); font-family: var(--font-mono); text-transform: none; letter-spacing: 0; }
+    .coach-review-evidence-boards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; margin-top: 0.45rem; }
+    .review-board-label { color: var(--muted); font-size: 0.62rem; margin-bottom: 0.2rem; }
+    .review-board { display: grid; grid-template-columns: repeat(8, 1fr); aspect-ratio: 1; border: 1px solid var(--border); }
+    .review-board-square { display: grid; place-items: center; font-family: Georgia, serif; font-size: clamp(0.58rem, 1.5vw, 0.95rem); line-height: 1; }
+    .review-board-square.light { background: #d8c8a8; color: #f8f4e8; text-shadow: 0 1px 2px #473d31; }
+    .review-board-square.dark { background: #806b54; color: #f8f4e8; text-shadow: 0 1px 2px #30271f; }
     .coach-review-actions { display: flex; gap: 0.45rem; flex-wrap: wrap; }
     .coach-review-actions .ctrl-btn { width: 100%; }
     /* Premove highlights — claret tint on the source + target squares while
@@ -1741,6 +1750,17 @@
     .repertoire-observed-copy strong { color: var(--text); font-size: 0.76rem; }
     .repertoire-observed-copy span { color: var(--muted); font-size: 0.68rem; line-height: 1.4; margin-top: 0.18rem; }
     .repertoire-observed-actions { display: flex; gap: 0.3rem; flex-wrap: wrap; justify-content: flex-end; }
+    .opening-bridge-list { display: grid; gap: 0.45rem; margin-top: 0.6rem; }
+    .opening-bridge-row { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; padding: 0.55rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); }
+    .opening-bridge-copy strong, .opening-bridge-copy span { display: block; }
+    .opening-bridge-copy strong { color: var(--text); font-size: 0.76rem; }
+    .opening-bridge-copy span { color: var(--muted); font-size: 0.68rem; line-height: 1.4; margin-top: 0.18rem; }
+    .insight-recurring { padding: 0.65rem 0.7rem; border: 1px solid var(--border); border-radius: 2px; background: var(--surface); }
+    .insight-recurring-label { color: var(--muted); font-family: var(--font-mono); font-size: 0.64rem; letter-spacing: 0.08em; text-transform: uppercase; }
+    .insight-recurring-list { display: grid; gap: 0.3rem; margin-top: 0.45rem; }
+    .insight-recurring-row { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.72rem; }
+    .insight-recurring-row strong { color: var(--text); font-weight: 500; }
+    .insight-recurring-row span { color: var(--muted); text-align: right; }
     @media (max-width: 620px) { .repertoire-observed-row { grid-template-columns: 1fr; } .repertoire-observed-actions { justify-content: flex-start; } }
 
     /* Move list */
@@ -2450,7 +2470,8 @@
         <div class="growth-grid">
           <div><label for="player-rating">Starting estimate</label><input id="player-rating" type="number" min="400" max="2800" step="50" value="1200"></div>
           <div><label for="player-minutes">Daily minutes</label><input id="player-minutes" type="number" min="5" max="60" step="5" value="10"></div>
-          <div class="wide"><label for="player-goal">Primary goal</label><select id="player-goal"><option value="balanced">Balanced improvement</option><option value="tactics">Reduce tactical mistakes</option><option value="repertoire">Build an opening repertoire</option><option value="endgames">Improve endgames</option></select></div>
+          <div><label for="player-goal">Primary goal</label><select id="player-goal"><option value="balanced">Balanced improvement</option><option value="tactics">Reduce tactical mistakes</option><option value="repertoire">Build an opening repertoire</option><option value="endgames">Improve endgames</option></select></div>
+          <div><label for="player-style">Session style</label><select id="player-style"><option value="balanced">Balanced</option><option value="drills">Drills first</option><option value="play">Play first</option></select></div>
         </div>
         <div class="growth-actions"><button class="ctrl-btn primary" type="submit">Save profile</button><button class="ctrl-btn" type="button" id="btn-install-app" style="display:none">Install app</button></div>
         <div class="growth-status" id="player-profile-status">Set a starting estimate; completed standard games will calibrate it.</div>
@@ -2619,6 +2640,7 @@
       <div id="coach-explanation" style="font-size:0.82rem; color:var(--muted); line-height:1.45;"></div>
       <div id="coach-review-lesson" class="coach-review-lesson" role="note" style="display:none;"></div>
       <div id="coach-review-threat" class="coach-review-threat" role="note" style="display:none;"></div>
+      <div id="coach-review-evidence" class="coach-review-evidence" role="figure" aria-label="Before and after position comparison" style="display:none;"></div>
       <div id="coach-review-cue" class="coach-review-cue" role="note" aria-live="polite"></div>
       <div class="coach-review-actions">
         <button type="button" class="ctrl-btn primary" id="btn-coach-review-practice" style="display:none;">Practice this move</button>
@@ -2702,6 +2724,12 @@
       <div class="endgame-list" id="endgame-track-list"></div>
     </div>
 
+    <div class="coach-panel-section" id="opening-bridge-section">
+      <div class="section-label">Opening → middlegame</div>
+      <div class="growth-status">Rehearse the first plan after your opening setup instead of memorising moves in isolation.</div>
+      <div class="opening-bridge-list" id="opening-bridge-list"></div>
+    </div>
+
     <div class="coach-panel-section" id="insights-section" style="display:none;">
       <div class="lifetime-head">
         <span class="section-label">Coach Insights</span>
@@ -2718,6 +2746,10 @@
       </div>
       <div class="insight-list" id="insights-list"></div>
       <div class="insight-theory" id="insights-theory"></div>
+      <div class="insight-recurring">
+        <div class="insight-recurring-label">Recurring pattern trend</div>
+        <div class="insight-recurring-list" id="insights-recurring-list"></div>
+      </div>
     </div>
 
     <div class="coach-panel-section" id="practice-section" style="display:none;">

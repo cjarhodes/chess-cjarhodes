@@ -45,7 +45,7 @@ requirePattern(app, /function placeDailySprintCard[\s\S]{0,700}coach-hero/, 'Dai
 requirePattern(html, /id="coach-practice-banner"[\s\S]{0,800}id="btn-coach-practice-answer"[\s\S]{0,300}id="btn-coach-practice-exit"/, 'practice mode needs answer and exit controls');
 requirePattern(html, /id="coach-practice-session-status"[\s\S]{0,800}id="btn-coach-practice-next"/, 'practice mode needs session position and next-drill controls');
 requirePattern(html, /id="btn-summary-practice"/, 'post-game review needs a direct practice action');
-requirePattern(html, /id="coach-review"[\s\S]{0,900}id="coach-review-cue"/, 'move review must surface an actionable Coach cue');
+requirePattern(html, /id="coach-review"[\s\S]{0,1300}id="coach-review-cue"/, 'move review must surface an actionable Coach cue');
 requirePattern(html, /id="btn-coach-review-practice"/, 'move review must offer a direct practice action');
 requirePattern(html, /id="practice-progress-attempts"[\s\S]{0,400}id="practice-progress-success"[\s\S]{0,400}id="practice-progress-mastered"/, 'practice queue must display progress metrics');
 requirePattern(html, /id="practice-progress-week"[\s\S]{0,300}id="practice-progress-streak"[\s\S]{0,500}id="practice-trend-bars"/, 'practice progress must render seven-day activity and streaks');

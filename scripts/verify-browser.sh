@@ -206,13 +206,15 @@ async page => {
   await page.locator('#player-rating').fill('1350');
   await page.locator('#player-minutes').fill('5');
   await page.locator('#player-goal').selectOption('tactics');
+  await page.locator('#player-style').selectOption('play');
   await page.locator('#player-profile-form button[type=submit]').click();
   assert((await page.locator('#player-profile-status').textContent()).includes('Profile saved'), 'training profile did not save through onboarding UI');
   assert((await page.locator('#player-profile-status').textContent()).includes('Player estimate 1350'), 'changing the starting estimate did not reset calibration evidence');
   assert(await page.locator('#coach-auto-elo').isChecked(), 'adaptive opponent strength was not enabled by default');
   assert(Number(await page.locator('#coach-strength').inputValue()) > 0, 'adaptive opponent strength did not produce a rating');
+  assert((await page.evaluate(() => loadGrowthState().profile.sessionStyle)) === 'play', 'session style did not persist through the training profile');
   await page.evaluate(() => {
-    savePlayerProfile({ rating: 1200, minutes: 10, goal: 'balanced', autoElo: true });
+    savePlayerProfile({ rating: 1200, minutes: 10, goal: 'balanced', sessionStyle: 'balanced', autoElo: true });
     hydrateGrowthUI();
     renderCoachDailyPlan();
   });
@@ -241,20 +243,31 @@ async page => {
     recordImportedOpenings([importedGame], 'white', [repairReview]);
     const repertoire = loadGrowthState().repertoire;
     const explanation = coachExplanationContext(repairReview.fenBefore, repairReview.userUci, repairReview.bestUci, repairReview.fenAfter, { pv: ['d7d5'] });
+    const bridge = openingBridgeItem(OPENINGS.find(opening => opening.id === 'italian'));
+    const recurring = recurringMistakeSummaries([
+      { ts: Date.now(), tier: 'blunder', tags: ['opening_principles'], loss: 200 },
+      { ts: Date.now() - 40 * DAY_MS, tier: 'mistake', tags: ['opening_principles'], loss: 120 }
+    ]);
+    const evidence = reviewBoardMarkup(repairReview.fenAfter).length > 100 && reviewBoardMarkup(repairReview.fenBefore).length > 100;
+    setRepertoireFocus('italian');
+    const focused = loadGrowthState().repertoire.focusKey;
     Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
     window.dispatchEvent(new Event('offline'));
     const offline = document.querySelector('#network-status')?.textContent || '';
     Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => true });
     window.dispatchEvent(new Event('online'));
-    return { multiGameCount: multiGame.length, backupSets: Object.keys(backup.data).length, imported, backupEntry: loadInsights().entries.some(entry => entry.id === 'roadmap-backup'), openingId, offline, observed: repertoire.observed.length, repairs: repertoire.repairs.length, lesson: explanation.lesson, threat: explanation.opponentThreat };
+    return { multiGameCount: multiGame.length, backupSets: Object.keys(backup.data).length, imported, backupEntry: loadInsights().entries.some(entry => entry.id === 'roadmap-backup'), openingId, offline, observed: repertoire.observed.length, repairs: repertoire.repairs.length, confidence: repertoire.observed[0]?.confidence, bridge: !!bridge && bridge.entry.bestUci, recurring: recurring[0]?.current, evidence, focused, lesson: explanation.lesson, threat: explanation.opponentThreat };
   });
   assert(roadmapFeatures.multiGameCount === 2, 'PGN Inbox did not split multiple games');
   assert(roadmapFeatures.backupSets >= 1 && roadmapFeatures.backupEntry, 'training backup merge did not preserve data');
   assert(roadmapFeatures.openingId === 'italian', 'Coach did not identify the opening bridge target');
-  assert(roadmapFeatures.offline.includes('Offline mode'), 'offline state was not announced in Coach');
+  assert((roadmapFeatures.offline || '').includes('Offline mode'), 'offline state was not announced in Coach');
   assert(roadmapFeatures.observed >= 1 && roadmapFeatures.repairs >= 1, 'imported games did not build a repertoire repair queue');
-  assert(roadmapFeatures.lesson.includes('King safety'), 'Coach explanation did not name the chess concept');
-  assert(roadmapFeatures.threat.includes('Opponent’s best reply'), 'Coach explanation did not surface the opponent threat');
+  assert(Number.isFinite(roadmapFeatures.confidence), 'repertoire confidence was not calculated');
+  assert(roadmapFeatures.bridge && roadmapFeatures.recurring >= 1 && roadmapFeatures.evidence, 'repertoire bridge, recurring trends, or visual evidence did not initialise');
+  assert(roadmapFeatures.focused === 'italian', 'repertoire focus did not persist');
+  assert((roadmapFeatures.lesson || '').includes('King safety'), 'Coach explanation did not name the chess concept');
+  assert((roadmapFeatures.threat || '').includes('Opponent’s best reply'), 'Coach explanation did not surface the opponent threat');
   const pwaReady = await page.evaluate(async () => {
     const manifestHref = document.querySelector('link[rel="manifest"]')?.getAttribute('href');
     const manifestResponse = await fetch(manifestHref);
