@@ -3243,28 +3243,46 @@ function createMemoryAuthStorage() {
 }
 
 function coachAuthStorage() {
+  const storage = coachAuthStoragePersistent ? localStorage : sessionStorage;
   return {
     getItem(key) {
-      try { return sessionStorage.getItem(key); } catch (e) { return null; }
+      try { return storage.getItem(key); } catch (e) { return null; }
     },
     setItem(key, value) {
-      try { sessionStorage.setItem(key, value); } catch (e) {}
+      try { storage.setItem(key, value); } catch (e) {}
     },
     removeItem(key) {
-      try { sessionStorage.removeItem(key); } catch (e) {}
+      try { storage.removeItem(key); } catch (e) {}
     }
   };
 }
 function checkCoachAuthStorage() {
   const key = 'coach:auth-storage-test';
   try {
-    sessionStorage.setItem(key, '1');
-    sessionStorage.removeItem(key);
+    localStorage.setItem(key, '1');
+    localStorage.removeItem(key);
+    // Older builds used sessionStorage. Preserve an existing Supabase session
+    // when upgrading, while making future magic-link returns work across tabs.
+    try {
+      for (let i = 0; i < sessionStorage.length; i += 1) {
+        const storageKey = sessionStorage.key(i);
+        if (!storageKey || !storageKey.startsWith('sb-') || localStorage.getItem(storageKey)) continue;
+        const value = sessionStorage.getItem(storageKey);
+        if (value) localStorage.setItem(storageKey, value);
+      }
+    } catch (migrationError) { /* a fresh session can still be created */ }
     coachAuthStoragePersistent = true;
     return { ok: true, storage: coachAuthStorage() };
   } catch (e) {
-    coachAuthStoragePersistent = false;
-    return { ok: false, storage: createMemoryAuthStorage(), error: e };
+    try {
+      sessionStorage.setItem(key, '1');
+      sessionStorage.removeItem(key);
+      coachAuthStoragePersistent = false;
+      return { ok: true, storage: coachAuthStorage() };
+    } catch (fallbackError) {
+      coachAuthStoragePersistent = false;
+      return { ok: false, storage: createMemoryAuthStorage(), error: fallbackError || e };
+    }
   }
 }
 

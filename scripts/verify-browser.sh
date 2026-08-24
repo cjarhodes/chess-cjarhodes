@@ -251,12 +251,17 @@ async page => {
     const evidence = reviewBoardMarkup(repairReview.fenAfter).length > 100 && reviewBoardMarkup(repairReview.fenBefore).length > 100;
     setRepertoireFocus('italian');
     const focused = loadGrowthState().repertoire.focusKey;
+    sessionStorage.setItem('sb-smoke-auth', 'legacy-session');
+    const authStorage = checkCoachAuthStorage();
+    const authMigrated = localStorage.getItem('sb-smoke-auth') === 'legacy-session' && authStorage.ok;
+    sessionStorage.removeItem('sb-smoke-auth');
+    localStorage.removeItem('sb-smoke-auth');
     Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
     window.dispatchEvent(new Event('offline'));
     const offline = document.querySelector('#network-status')?.textContent || '';
     Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => true });
     window.dispatchEvent(new Event('online'));
-    return { multiGameCount: multiGame.length, backupSets: Object.keys(backup.data).length, imported, backupEntry: loadInsights().entries.some(entry => entry.id === 'roadmap-backup'), openingId, offline, observed: repertoire.observed.length, repairs: repertoire.repairs.length, confidence: repertoire.observed[0]?.confidence, bridge: !!bridge && bridge.entry.bestUci, recurring: recurring[0]?.current, evidence, focused, lesson: explanation.lesson, threat: explanation.opponentThreat };
+    return { multiGameCount: multiGame.length, backupSets: Object.keys(backup.data).length, imported, backupEntry: loadInsights().entries.some(entry => entry.id === 'roadmap-backup'), openingId, offline, observed: repertoire.observed.length, repairs: repertoire.repairs.length, confidence: repertoire.observed[0]?.confidence, bridge: !!bridge && bridge.entry.bestUci, recurring: recurring[0]?.current, evidence, focused, authMigrated, lesson: explanation.lesson, threat: explanation.opponentThreat };
   });
   assert(roadmapFeatures.multiGameCount === 2, 'PGN Inbox did not split multiple games');
   assert(roadmapFeatures.backupSets >= 1 && roadmapFeatures.backupEntry, 'training backup merge did not preserve data');
@@ -266,6 +271,7 @@ async page => {
   assert(Number.isFinite(roadmapFeatures.confidence), 'repertoire confidence was not calculated');
   assert(roadmapFeatures.bridge && roadmapFeatures.recurring >= 1 && roadmapFeatures.evidence, 'repertoire bridge, recurring trends, or visual evidence did not initialise');
   assert(roadmapFeatures.focused === 'italian', 'repertoire focus did not persist');
+  assert(roadmapFeatures.authMigrated, 'legacy tab-scoped auth session did not migrate to persistent storage');
   assert((roadmapFeatures.lesson || '').includes('King safety'), 'Coach explanation did not name the chess concept');
   assert((roadmapFeatures.threat || '').includes('Opponent’s best reply'), 'Coach explanation did not surface the opponent threat');
   const pwaReady = await page.evaluate(async () => {
