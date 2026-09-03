@@ -293,7 +293,10 @@ async page => {
   }));
   assert(codeEntry.visible && codeEntry.email === 'smoke@example.com', 'pending sign-in code entry did not render');
   await page.evaluate(() => sessionStorage.removeItem('coach:auth-pending-email'));
-  await page.goto(page.url().split('?')[0] + '?view=coach#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired');
+  // A fragment-only change is a same-document navigation, so leave the page
+  // first to guarantee a full load with the fragment present at startup.
+  await page.goto(page.url().split('?')[0] + 'health.html');
+  await page.goto(page.url().replace(/health\.html$/, '') + '?view=coach#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired');
   await page.waitForFunction(() => {
     return (document.querySelector('#coach-auth-status')?.textContent || '').includes('expired');
   }, null, { timeout: 15000 }).catch(() => {});
