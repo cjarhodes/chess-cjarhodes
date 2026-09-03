@@ -31,6 +31,8 @@ requirePattern(/Mate scan unavailable/, 'threat panel must render mate-scan fail
 requirePattern(/function createMemoryAuthStorage/, 'Supabase auth needs an in-memory storage fallback');
 requirePattern(/function verifyCoachLoginCode[\s\S]{0,1200}auth\.verifyOtp\(\{ email, token: code, type: 'email' \}\)/, 'sign-in must accept the emailed 6-digit code so it can finish in the requesting tab');
 requirePattern(/const COACH_AUTH_PENDING_EMAIL_KEY = 'coach:auth-pending-email'/, 'pending sign-in email must survive a reload for code entry');
+requirePattern(/function coachEmailCodeEnabled\(\)[\s\S]{0,120}\.emailCodeEnabled/, 'the emailed code must be gated by the emailCodeEnabled config flag');
+requirePattern(/toggle\(coachEmailCodeEnabled\(\) && !!pendingEmail\)/, 'the emailed code field must stay hidden until the project email template carries the code');
 requirePattern(/function readCoachAuthUrlState[\s\S]{0,900}function clearCoachAuthUrlState[\s\S]{0,300}history\.replaceState/, 'magic-link tokens must be stripped from the URL after the session is read');
 requirePattern(/Sign-in link is invalid or has expired/, 'expired magic links must show a visible status');
 requirePattern(/function updateURL\(\)[\s\S]{0,1200}readCoachAuthUrlState\(\)\.present \? location\.hash : ''[\s\S]{0,80}history\.replaceState\(null, '', url \+ authHash\)/, 'URL sync must not drop the magic-link fragment before the Supabase client reads it');

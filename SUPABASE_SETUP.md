@@ -24,12 +24,17 @@ Library spaced-repetition schedules, trends, and theory cards:
    - Site URL: `https://chess.cjarhodes.com`
    - Redirect URL: `https://chess.cjarhodes.com/?view=coach`
    - Optional local redirect: `http://127.0.0.1:4173/index.html?view=coach`
-4. In Authentication -> Email Templates -> Magic Link, paste the contents of
-   `supabase/templates/magic_link.html` and set the subject to "Your Chess
-   Coach sign-in link and code". The template includes `{{ .Token }}`, the
-   6-digit code that lets sign-in finish in the browser tab that requested it
-   instead of wherever the link happens to open. A linked checkout can push
-   the same template with `supabase config push`.
+4. Optional, for code-based sign-in. Supabase's built-in email service only
+   sends its default templates, so the Magic Link template is read-only until
+   one of these is in place: custom SMTP (Authentication -> Emails -> SMTP
+   Settings, any provider such as Resend or Postmark), a Pro plan, or a Send
+   Email auth hook. Once editing is unlocked, open Authentication -> Emails ->
+   Magic link or OTP, paste `supabase/templates/magic_link.html` as the body,
+   set the subject to "Your Chess Coach sign-in link and code", and save. The
+   template includes `{{ .Token }}`, the 6-digit code that lets sign-in finish
+   in the browser tab that requested it. Then set `emailCodeEnabled: true` in
+   `coach-config.js`; until that flag is on, the app hides the code field and
+   sign-in works by link only.
 5. Copy the project URL and publishable key into `coach-config.js`. Existing
    projects may use the legacy anon public key instead.
 6. Commit and push. Vercel will deploy `main` automatically.

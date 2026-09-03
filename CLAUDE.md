@@ -8,7 +8,7 @@ Static single-page chess training app served at https://chess.cjarhodes.com.
 - Lichess Opening Explorer API for Explore mode (user supplies their own Lichess Personal Access Token, kept in sessionStorage only)
 - Optional Supabase account sync; Coach remains fully usable in local-only mode
 - Browser-only by design: no web app manifest, no service worker registration, no install prompt. Installed copies captured magic-link URLs and opened them outside the browser. `service-worker.js` stays as a kill switch for earlier installs.
-- Sign-in is a Supabase magic link plus the emailed 6-digit code (`verifyOtp`), so it can finish in the tab that requested it. The email template lives in `supabase/templates/magic_link.html`.
+- Sign-in is a Supabase magic link, plus an emailed 6-digit code (`verifyOtp`) when `emailCodeEnabled` is true in `coach-config.js`. The flag stays off until the project's Magic Link email template carries `{{ .Token }}`, which needs custom SMTP, a Pro plan, or a Send Email hook. The template lives in `supabase/templates/magic_link.html`.
 
 ## Hosting
 - **Vercel project:** `chess-cjarhodes`

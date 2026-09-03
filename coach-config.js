@@ -4,5 +4,8 @@
 // Leaving them blank keeps Coach in local-only mode.
 window.COACH_SUPABASE_CONFIG = {
   url: 'https://szbrgdmjsgrybptznogb.supabase.co',
-  publishableKey: 'sb_publishable_zB-penByBUcM8PX9q4CdpQ_8Bjz25Pe'
+  publishableKey: 'sb_publishable_zB-penByBUcM8PX9q4CdpQ_8Bjz25Pe',
+  // Set to true only after the Magic Link email template includes {{ .Token }}
+  // (see SUPABASE_SETUP.md). Until then the emailed code field stays hidden.
+  emailCodeEnabled: false
 };

@@ -2028,8 +2028,16 @@ function supabaseRuntimeConfig() {
   const cfg = window.COACH_SUPABASE_CONFIG || {};
   return {
     url: (cfg.url || cfg.supabaseUrl || '').trim(),
-    anonKey: (cfg.publishableKey || cfg.anonKey || cfg.key || cfg.supabaseAnonKey || '').trim()
+    anonKey: (cfg.publishableKey || cfg.anonKey || cfg.key || cfg.supabaseAnonKey || '').trim(),
+    emailCodeEnabled: cfg.emailCodeEnabled === true
   };
+}
+
+// The emailed 6-digit code only exists when the project's Magic Link email
+// template includes {{ .Token }}, which Supabase allows only with custom SMTP,
+// a Pro plan, or a Send Email hook. Keep the field hidden until then.
+function coachEmailCodeEnabled() {
+  return supabaseRuntimeConfig().emailCodeEnabled;
 }
 
 function isSupabaseConfigured() {
@@ -2160,7 +2168,7 @@ function renderCoachAuth() {
     setCoachAuthStatus(coachDbStatus || 'Account sync on.');
   } else {
     const pendingEmail = pendingCoachAuthEmail();
-    $('#coach-auth-code-form').toggle(!!pendingEmail);
+    $('#coach-auth-code-form').toggle(coachEmailCodeEnabled() && !!pendingEmail);
     if (pendingEmail && !$('#coach-auth-email').val()) $('#coach-auth-email').val(pendingEmail);
     setCoachAuthStatus(coachDbStatus === 'loading' ? 'Connecting...' : (coachDbStatus || 'Sign in to sync games.'));
   }
@@ -2282,9 +2290,13 @@ async function sendCoachLoginLink() {
     return;
   }
   setPendingCoachAuthEmail(email);
-  $('#coach-auth-code-form').show();
-  $('#coach-auth-code').val('').trigger('focus');
-  coachDbStatus = 'Link sent to ' + email + '. Open it in this browser, or enter the 6-digit code from that email here.';
+  if (coachEmailCodeEnabled()) {
+    $('#coach-auth-code-form').show();
+    $('#coach-auth-code').val('').trigger('focus');
+    coachDbStatus = 'Link sent to ' + email + '. Open it in this browser, or enter the 6-digit code from that email here.';
+  } else {
+    coachDbStatus = 'Link sent to ' + email + '. Open it in this browser to finish signing in.';
+  }
   setCoachAuthStatus(coachDbStatus);
 }
 
@@ -2293,6 +2305,10 @@ async function verifyCoachLoginCode() {
     await coachSync.init();
   }
   if (!coachDbClient) return;
+  if (!coachEmailCodeEnabled()) {
+    setCoachAuthStatus('Code sign-in is not enabled for this project yet. Use the emailed link.');
+    return;
+  }
   const email = (($('#coach-auth-email').val() || '').trim()) || pendingCoachAuthEmail();
   const code = ($('#coach-auth-code').val() || '').replace(/\D/g, '');
   if (!email) {
