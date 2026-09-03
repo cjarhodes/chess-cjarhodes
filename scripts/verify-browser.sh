@@ -555,6 +555,22 @@ async page => {
   assert(await page.locator('#practice-progress-success').textContent() === '100%', 'generated drill result was not measured');
 
   await page.locator('#btn-coach-practice-exit').click();
+  // A capture exercises insight tagging's material path; the opponent must
+  // still reply afterwards instead of the move handler dying mid-flight.
+  await page.locator('#coach-fen').fill('rnbqkbnr/pppp1ppp/8/4p3/3P4/8/PPP1PPPP/RNBQKBNR w KQkq e6 0 2');
+  await page.locator('.side-toggle button[data-side="white"]').click();
+  await page.locator('#btn-coach-newgame').click();
+  await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
+  await page.locator('#coach-keyboard-move-input').fill('dxe5');
+  await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+  await page.waitForFunction(() => document.querySelectorAll('#movelist .ply').length >= 2, null, { timeout: 45000 }).catch(() => {});
+  const afterCapture = await page.evaluate(() => ({
+    plies: document.querySelectorAll('#movelist .ply').length,
+    status: document.querySelector('#coach-status')?.textContent || ''
+  }));
+  assert(afterCapture.plies >= 2 && !afterCapture.status.includes('Engine error'), `opponent did not reply after a capture (${afterCapture.plies} plies, ${afterCapture.status})`);
+  await page.locator('#coach-fen').fill('7k/8/5KQ1/8/8/8/8/8 w - - 0 1');
+  await page.locator('.side-toggle button[data-side="white"]').click();
   await page.locator('#btn-coach-newgame').click();
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
   await page.locator('#coach-keyboard-move-input').fill('Qg7#');

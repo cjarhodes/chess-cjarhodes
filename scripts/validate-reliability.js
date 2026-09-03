@@ -46,6 +46,7 @@ requirePattern(/function invalidateCoachAsyncWork[\s\S]{0,500}engineClient\.canc
 requirePattern(/generation !== coachGameGeneration|coachGameGeneration !== generation/, 'async Coach work must reject stale game generations');
 requirePattern(/const gameRef = coachGame/, 'move analysis must retain and verify the game object it started against');
 requirePattern(/function createCoachGameId/, 'Coach games must have stable local ids');
+requirePattern(/function materialValue\(piece\)[\s\S]{0,400}function insightTagsForReview/, 'insight tagging needs materialValue defined; captures throw without it');
 requirePattern(/rollups:\s*\{\}/, 'lifetime stats must track per-game rollups');
 requirePattern(/function unrollGameFromLifetime/, 'takeback must be able to remove a completed-game lifetime rollup');
 requirePattern(/if \(coachLifetimeRolledForThisGame\) unrollGameFromLifetime\(\)/, 'takeback must unroll completed lifetime stats before resuming');

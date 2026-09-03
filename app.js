@@ -552,6 +552,12 @@ function isLikelyPinPressure(mv) {
   return ['b', 'r', 'q'].includes(mv.piece) && (mv.san.includes('+') || mv.san.includes('x'));
 }
 
+// Piece values in centipawns for insight tagging. Removed by mistake when the
+// old weak-move scorer was deleted; insightTagsForReview still depends on it.
+function materialValue(piece) {
+  return ({ p: 100, n: 300, b: 325, r: 500, q: 900, k: 0 })[piece] || 0;
+}
+
 function insightTagsForReview(review) {
   if (!review || !isInsightProblem(review.tier)) return [];
   const tags = [];
