@@ -2602,7 +2602,7 @@ function loadSupabaseScript() {
   if (window.__coachSupabaseScriptPromise) return window.__coachSupabaseScriptPromise;
   window.__coachSupabaseScriptPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = 'vendor/supabase/supabase-2.105.1.js';
+    script.src = 'vendor/supabase/supabase-2.114.0.js';
     script.async = true;
     script.onload = () => resolve();
     script.onerror = () => reject(new Error('Supabase client failed to load'));
