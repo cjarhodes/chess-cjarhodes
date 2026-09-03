@@ -353,8 +353,29 @@
       </div>
     </details>
 
+    <details class="rail-group" id="group-board">
+      <summary><span class="section-label">Board &amp; sounds</span></summary>
+      <div class="rail-group-body">
+        <div class="pref-row">
+          <label class="pref-label" for="board-theme">Board colours</label>
+          <select id="board-theme" class="pref-select">
+            <option value="walnut">Walnut (classic brown)</option>
+            <option value="green">Green</option>
+            <option value="blue">Blue</option>
+            <option value="ivory">Ivory</option>
+          </select>
+        </div>
+        <div class="board-theme-preview" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+      <div class="field-group toggle-row">
+      <label class="toggle-label" for="coach-sound-toggle">
+        <input type="checkbox" id="coach-sound-toggle" />
+        <span>Move sounds</span>
+      </label>
+      </div>
+      </div>
+    </details>
     <details class="rail-group" id="group-data">
-      <summary><span class="section-label">Training data &amp; sounds</span></summary>
+      <summary><span class="section-label">Training data</span></summary>
       <div class="rail-group-body">
       <div class="growth-card" id="training-data-card">
       <div class="growth-status">Export a backup or merge one from another device. Existing local progress is kept.</div>
@@ -364,12 +385,6 @@
         <input id="training-data-file" type="file" accept="application/json,.json" hidden>
       </div>
       <div class="growth-status" id="training-data-status" role="status" aria-live="polite"></div>
-      </div>
-      <div class="field-group toggle-row">
-      <label class="toggle-label" for="coach-sound-toggle">
-        <input type="checkbox" id="coach-sound-toggle" />
-        <span>Move sounds</span>
-      </label>
       </div>
       </div>
     </details>

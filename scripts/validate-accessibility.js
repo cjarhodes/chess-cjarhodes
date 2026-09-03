@@ -52,9 +52,15 @@ requirePattern(css, /@media \(max-width:\s*1023px\)[\s\S]+?\.desktop-notice \{ d
 requirePattern(html, /class="top-nav-btn active"[^>]+id="nav-coach"[^>]+aria-selected="true"/, 'Coach must be the default selected application section');
 requirePattern(html, /class="app"[^>]+id="library-view"[^>]+aria-hidden="true"[^>]+style="display:none;"/, 'Library must be hidden in the initial application shell');
 requirePattern(html, /class="coach-view"[^>]+id="coach-view"[^>]+aria-hidden="false"/, 'Coach must be visible in the initial application shell');
-requirePattern(app, /wB:\s*'♝'[\s\S]{0,100}wK:\s*'♚'[\s\S]{0,100}wN:\s*'♞'/, 'white pieces must use filled silhouettes rather than low-contrast hollow glyphs');
-requirePattern(app, /const strokeWidth = isWhite \? '1\.35' : '0\.55'/, 'white pieces must retain a strong dark outline');
-requirePattern(app, /paint-order="stroke fill"/, 'piece SVGs must render their contrast outline behind the fill');
+requirePattern(app, /function localPieceTheme\(piece\)[\s\S]{0,120}vendor\/pieces\/cburnett\/\$\{piece\}\.svg/, 'pieces must use the vendored vector set so white stays legible on light squares');
+requirePattern(css, /--sq-light:[\s\S]{0,200}--sq-dark:[\s\S]{0,400}html\[data-board-theme="green"\]/, 'board colours must be themeable with a green option');
+for (const piece of ['wK','wQ','wR','wB','wN','wP','bK','bQ','bR','bB','bN','bP']) {
+  if (!fs.existsSync(path.join(root, 'vendor/pieces/cburnett/' + piece + '.svg'))) errors.push('missing vendored piece ' + piece);
+}
+const whiteKing = fs.readFileSync(path.join(root, 'vendor/pieces/cburnett/wK.svg'), 'utf8');
+if (!/stroke="#000"/.test(whiteKing) || !/fill="#fff"/.test(whiteKing)) errors.push('white pieces must keep a dark outline around a white fill');
+requirePattern(app, /function observeBoardLastMove[\s\S]{0,600}MutationObserver/, 'last-move highlight must survive chessboard.js redraws');
+requirePattern(css, /\.square-55d63\.last-move \{ box-shadow: inset 0 0 0 100px var\(--sq-last-move\); \}/, 'last move must be highlighted on the board');
 
 if (errors.length) {
   console.error(errors.join('\n'));

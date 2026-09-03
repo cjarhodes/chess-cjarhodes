@@ -2772,7 +2772,7 @@ function tryApplyPremove() {
   clearPremove();
   if (!mv) return; // illegal in the new position — silently drop
   // Update the board immediately, then run classification asynchronously.
-  if (coachBoard) coachBoard.position(tmp.fen());
+  if (coachBoard) { coachBoard.position(tmp.fen()); setBoardLastMove('coachBoard', mv); }
   coachHandleUserMove(pm.from, pm.to, pm.promotion, { updateBoard: false });
 }
 
@@ -3692,6 +3692,7 @@ async function coachOpponentRespond() {
         if (!coachIsReviewing()) {
           if (!coachBoard) throw new Error('Coach board is not ready.');
           coachBoard.position(coachGame.fen());
+          coachSyncLastMove();
           updateCapturedDisplay(coachGame.fen());
         }
         playSound(soundForMove(mv, coachGame));
@@ -3738,6 +3739,7 @@ async function coachHandleUserMove(source, target, promotion, opts) {
   const fenAfter = coachGame.fen();
   const userUci = source + target + (move.promotion || '');
   if (opts.updateBoard !== false && coachBoard && !coachIsReviewing()) coachBoard.position(fenAfter);
+  if (!coachIsReviewing()) setBoardLastMove('coachBoard', userMv);
   updateCapturedDisplay(fenAfter);
   playSound(soundForMove(userMv, coachGame));
 
@@ -4667,22 +4669,75 @@ function readURL() {
 // ─────────────────────────────────────────────
 // BOARD INIT (lazy — board is created on first opening load)
 // ─────────────────────────────────────────────
-const PIECE_THEME_GLYPHS = {
-  bB: '♝', bK: '♚', bN: '♞', bP: '♟', bQ: '♛', bR: '♜',
-  // Use filled silhouettes for both colours. The Unicode "white" glyphs are
-  // hollow outlines, which disappear against the board's cream squares at
-  // mobile sizes. Colour and a strong outline distinguish the white set.
-  wB: '♝', wK: '♚', wN: '♞', wP: '♟', wQ: '♛', wR: '♜'
-};
-
+// Pieces: the cburnett vector set (Colin M.L. Burnett, CC BY-SA 3.0, as
+// shipped by Lichess). Strong outlines and interior shading keep white pieces
+// legible on light squares at every board size. Files live in vendor/pieces.
 function localPieceTheme(piece) {
-  const glyph = PIECE_THEME_GLYPHS[piece] || '';
-  const isWhite = piece && piece[0] === 'w';
-  const fill = isWhite ? '#fffaf0' : '#17100c';
-  const stroke = isWhite ? '#2a1f17' : '#f1ebe0';
-  const strokeWidth = isWhite ? '1.35' : '0.55';
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="45" height="45" viewBox="0 0 45 45"><text x="22.5" y="36" text-anchor="middle" font-family="Georgia,serif" font-size="41" font-weight="700" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" paint-order="stroke fill">${glyph}</text></svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  return `vendor/pieces/cburnett/${piece}.svg`;
+}
+
+// Last-move highlight. chessboard.js rebuilds the square elements whenever a
+// position is drawn, so the highlight is re-applied by a mutation observer on
+// the board container rather than set once.
+const boardLastMove = { myBoard: null, coachBoard: null };
+
+function applyBoardLastMove(boardId) {
+  const root = document.getElementById(boardId);
+  if (!root) return;
+  root.querySelectorAll('.square-55d63.last-move').forEach(el => el.classList.remove('last-move'));
+  const mv = boardLastMove[boardId];
+  if (!mv) return;
+  [mv.from, mv.to].forEach(sq => {
+    const el = root.querySelector('.square-' + sq);
+    if (el) el.classList.add('last-move');
+  });
+}
+
+function setBoardLastMove(boardId, move) {
+  boardLastMove[boardId] = move ? { from: move.from, to: move.to } : null;
+  applyBoardLastMove(boardId);
+}
+
+function observeBoardLastMove(boardId) {
+  const root = document.getElementById(boardId);
+  if (!root || root.__lastMoveObserver || typeof MutationObserver === 'undefined') return;
+  const observer = new MutationObserver(() => applyBoardLastMove(boardId));
+  observer.observe(root, { childList: true, subtree: true });
+  root.__lastMoveObserver = observer;
+}
+
+// Coach: highlight the move that produced the displayed position (live or
+// while stepping through the review).
+function coachSyncLastMove() {
+  if (!coachGame) { setBoardLastMove('coachBoard', null); return; }
+  const hist = coachGame.history({ verbose: true });
+  const n = coachReviewCursor === null ? hist.length : coachReviewCursor;
+  setBoardLastMove('coachBoard', n > 0 ? hist[n - 1] : null);
+}
+
+function librarySyncLastMove(gameObj) {
+  const hist = gameObj ? gameObj.history({ verbose: true }) : [];
+  setBoardLastMove('myBoard', hist.length ? hist[hist.length - 1] : null);
+}
+
+// Board colour themes. "walnut" is the brown pairing most players know from
+// Lichess; "green" matches the chess.com default; all four keep a light/dark
+// square contrast that piece outlines were tuned against.
+const BOARD_THEME_KEY = 'ui:board-theme';
+const BOARD_THEMES = ['walnut', 'green', 'blue', 'ivory'];
+
+function applyBoardTheme(name) {
+  const theme = BOARD_THEMES.includes(name) ? name : 'walnut';
+  document.documentElement.setAttribute('data-board-theme', theme);
+  $('#board-theme').val(theme);
+  try { localStorage.setItem(BOARD_THEME_KEY, theme); } catch (e) { /* preference stays for this page */ }
+}
+
+function initBoardTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem(BOARD_THEME_KEY); } catch (e) { /* default */ }
+  applyBoardTheme(saved || 'walnut');
+  $('#board-theme').on('change', function() { applyBoardTheme($(this).val()); });
 }
 
 function describeChessPosition(gameObj) {
@@ -4877,6 +4932,7 @@ function coachHandlePracticeMove(source, target, promotion, opts) {
   }
   const sprint = recordDailySprintDrill(session.item, session.revealed, !session.revealed && session.misses === 0);
   if (opts && opts.updateBoard !== false && coachBoard) coachBoard.position(coachGame.fen());
+  coachSyncLastMove();
   updateCapturedDisplay(coachGame.fen());
   updateCoachBoardAccessibility();
   playSound(soundForMove(played, coachGame));
@@ -4957,6 +5013,7 @@ function createBoard(position, draggable, orientation) {
     onDrop: handleDrop,
     onSnapEnd: handleSnapEnd,
   });
+  observeBoardLastMove('myBoard');
   updateLibraryBoardAccessibility();
 }
 
@@ -5016,9 +5073,11 @@ function createCoachBoard(position, orientation) {
       return 'snapback';
     },
     onSnapEnd: function() {
-      if (coachGame) coachBoard.position(coachGame.fen());
+      if (coachGame) { coachBoard.position(coachGame.fen()); coachSyncLastMove(); }
     }
   });
+  observeBoardLastMove('coachBoard');
+  coachSyncLastMove();
   updateCoachBoardAccessibility();
   setTimeout(() => {
     if (coachBoard) coachBoard.resize();
@@ -5239,6 +5298,7 @@ function coachGotoPly(n) {
   coachReviewCursor = n === total ? null : n;
   const fen = coachFenAtPly(n);
   if (coachBoard && fen) coachBoard.position(fen);
+  coachSyncLastMove();
   if (coachIsReviewing()) {
     CoachController.setPhase('reviewing');
     $('#threats-section').hide();
@@ -5265,6 +5325,7 @@ function coachGotoLive() {
   if (!coachGame) return;
   coachReviewCursor = null;
   if (coachBoard) coachBoard.position(coachGame.fen());
+  coachSyncLastMove();
   if (coachLastReview) renderCoachReview(coachLastReview);
   CoachController.setPhase(coachGameActive
     ? (coachIsUserTurn() ? 'userTurn' : 'opponentThinking')
@@ -5841,6 +5902,7 @@ function setLineStartPosition() {
   quizAttempts = 0;
   game.reset();
   board.position('start', false);
+  librarySyncLastMove(null);
   renderMoveList();
   renderExplanation(-1);
   updateProgress();
@@ -5896,6 +5958,7 @@ function loadQuizReviewPosition() {
   currentMoveIdx = idx - 1;
   quizAttempts = 0;
   board.position(game.fen(), false);
+  librarySyncLastMove(game);
   renderMoveList();
   renderExplanation(idx - 1);
   updateProgress();
@@ -5952,6 +6015,7 @@ function autoPlayOpponent() {
     game.move(moves[nextIdx]);
     currentMoveIdx = nextIdx;
     board.position(game.fen(), false);
+    librarySyncLastMove(game);
     renderMoveList();
     updateProgress();
     if (currentMoveIdx >= moves.length - 1) {
@@ -5968,6 +6032,7 @@ function applyExploreMove(source, target, promotion, opts) {
   const move = exploreGame.move({ from: source, to: target, promotion: promotion || 'q' });
   if (!move) return false;
   if (opts.updateBoard !== false) board.position(exploreGame.fen());
+  librarySyncLastMove(exploreGame);
   fetchExploreData();
   return true;
 }
@@ -5987,6 +6052,7 @@ function handleQuizDrop(source, target, promotion) {
       game.move({ from: source, to: target, promotion });
       currentMoveIdx = expectedIdx;
       board.position(game.fen(), false);
+      librarySyncLastMove(game);
       renderMoveList();
       renderExplanation(expectedIdx);
       updateProgress();
@@ -6020,6 +6086,7 @@ function handleQuizDrop(source, target, promotion) {
     showFeedback('correct', '✓ ' + (exp ? exp.text : moveLabelForIndex(nextIdx)));
     setTimeout(() => {
       board.position(game.fen());
+      librarySyncLastMove(game);
       renderMoveList();
       updateProgress();
       autoPlayOpponent();
@@ -6062,10 +6129,12 @@ function handleDrop(source, target) {
 function handleSnapEnd() {
   if (exploreMode) {
     board.position(exploreGame.fen());
+    librarySyncLastMove(exploreGame);
     return;
   }
   if (!quizMode) return;
   board.position(game.fen());
+  librarySyncLastMove(game);
 }
 
 // ─────────────────────────────────────────────
@@ -6140,6 +6209,7 @@ function goToMove(idx) {
   }
   currentMoveIdx = idx;
   board.position(idx === -1 ? 'start' : game.fen(), false);
+  librarySyncLastMove(idx === -1 ? null : game);
   renderMoveList();
   renderExplanation(idx);
   updateProgress();
@@ -6470,6 +6540,7 @@ function renderContinuations(data, opts) {
     const san = $(this).attr('data-san');
     if (exploreGame.move(san)) {
       board.position(exploreGame.fen());
+      librarySyncLastMove(exploreGame);
       fetchExploreData();
     }
   });
@@ -6487,6 +6558,7 @@ function formatNum(n) {
 $(function () {
   // Board is initialized lazily on first opening selection
   initDesktopNotice();
+  initBoardTheme();
   initCoachPanelTabs();
   coachSync.init();
   let applySearch;
@@ -6821,6 +6893,7 @@ $(function () {
     CoachController.setPhase('userTurn');
     coachReviewCursor = null;
     if (coachBoard) coachBoard.position(coachGame.fen());
+    coachSyncLastMove();
     updateCapturedDisplay(coachGame.fen());
     // Also remove the rolled-back review from the log so rolling accuracy and
     // the move list's tier coloring reflect the takeback.
@@ -7116,6 +7189,7 @@ $(function () {
     if (exploreGame.fen() === exploreStartFen) return; // already at start
     exploreGame.undo();
     board.position(exploreGame.fen());
+    librarySyncLastMove(exploreGame);
     fetchExploreData();
   });
 
@@ -7291,6 +7365,7 @@ $(function () {
         if (result !== 'snapback') {
           // handleDrop already updated game; update board position
           board.position(game.fen());
+          librarySyncLastMove(game);
         }
       }
       clearTapSelection();
