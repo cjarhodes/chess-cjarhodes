@@ -6,7 +6,6 @@
   <title>Chess Coach &amp; Opening Library — Alex Rhodes</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/favicon.svg">
-  <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#2a1f17">
   <link rel="stylesheet" href="vendor/chessboardjs/chessboard-1.0.0.min.css">
   <style>
@@ -2452,6 +2451,11 @@
             <input type="email" class="auth-input" id="coach-auth-email" placeholder="email@example.com" autocomplete="email" />
             <button type="submit" class="ctrl-btn" id="btn-coach-login">Send link</button>
           </form>
+          <form class="auth-row" id="coach-auth-code-form" style="display:none;">
+            <label class="sr-only" for="coach-auth-code">Six-digit sign-in code from the email</label>
+            <input type="text" class="auth-input" id="coach-auth-code" placeholder="6-digit code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" />
+            <button type="submit" class="ctrl-btn" id="btn-coach-verify-code">Verify code</button>
+          </form>
         </div>
         <div id="coach-auth-session" style="display:none;">
           <div class="auth-user">Signed in as <strong id="coach-auth-user">-</strong></div>
@@ -2473,7 +2477,7 @@
           <div><label for="player-goal">Primary goal</label><select id="player-goal"><option value="balanced">Balanced improvement</option><option value="tactics">Reduce tactical mistakes</option><option value="repertoire">Build an opening repertoire</option><option value="endgames">Improve endgames</option></select></div>
           <div><label for="player-style">Session style</label><select id="player-style"><option value="balanced">Balanced</option><option value="drills">Drills first</option><option value="play">Play first</option></select></div>
         </div>
-        <div class="growth-actions"><button class="ctrl-btn primary" type="submit">Save profile</button><button class="ctrl-btn" type="button" id="btn-install-app" style="display:none">Install app</button></div>
+        <div class="growth-actions"><button class="ctrl-btn primary" type="submit">Save profile</button></div>
         <div class="growth-status" id="player-profile-status">Set a starting estimate; completed standard games will calibrate it.</div>
       </form>
     </div>

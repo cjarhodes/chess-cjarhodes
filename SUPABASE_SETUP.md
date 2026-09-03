@@ -24,11 +24,19 @@ Library spaced-repetition schedules, trends, and theory cards:
    - Site URL: `https://chess.cjarhodes.com`
    - Redirect URL: `https://chess.cjarhodes.com/?view=coach`
    - Optional local redirect: `http://127.0.0.1:4173/index.html?view=coach`
-4. Copy the project URL and publishable key into `coach-config.js`. Existing
+4. In Authentication -> Email Templates -> Magic Link, paste the contents of
+   `supabase/templates/magic_link.html` and set the subject to "Your Chess
+   Coach sign-in link and code". The template includes `{{ .Token }}`, the
+   6-digit code that lets sign-in finish in the browser tab that requested it
+   instead of wherever the link happens to open. A linked checkout can push
+   the same template with `supabase config push`.
+5. Copy the project URL and publishable key into `coach-config.js`. Existing
    projects may use the legacy anon public key instead.
-5. Commit and push. Vercel will deploy `main` automatically.
-6. Smoke test:
-   - Open Coach, send a magic link, and finish a game with a review mistake.
+6. Commit and push. Vercel will deploy `main` automatically.
+7. Smoke test:
+   - Open Coach, send a sign-in link, and sign in once by clicking the link
+     and once by typing the emailed code into the original tab.
+   - Finish a game with a review mistake.
    - Complete at least two practice drills, including one incorrect attempt.
    - Reload the page and verify the attempts, schedule, and 7-day trend remain.
    - Sign in on a second browser and verify the same progress appears.

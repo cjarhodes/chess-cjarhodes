@@ -1,63 +1,18 @@
-const CACHE_NAME = 'chess-coach-shell-v8';
-const APP_SHELL = [
-  '/',
-  '/index.html',
-  '/openings.js',
-  '/app.js',
-  '/growth.js',
-  '/coach-config.js',
-  '/manifest.webmanifest',
-  '/favicon.svg',
-  '/vendor/jquery/jquery-3.6.0.min.js',
-  '/vendor/chess.js/chess-0.10.3.min.js',
-  '/vendor/chessboardjs/chessboard-1.0.0.min.css',
-  '/vendor/chessboardjs/chessboard-1.0.0.min.js',
-  '/stockfish/stockfish.js',
-  '/stockfish/stockfish.wasm'
-];
-
-self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)));
+// Retired service worker. The app is browser-only and no longer registers a
+// worker, but browsers that installed an earlier version keep checking this
+// URL. This kill switch clears every cache, unregisters itself, and reloads
+// open pages so they are served from the network again. Keep this file in
+// place; do not re-add registration or precaching.
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))))
-      .then(() => self.clients.claim())
-  );
-});
-
-self.addEventListener('fetch', event => {
-  const request = event.request;
-  if (request.method !== 'GET') return;
-  const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;
-
-  if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then(response => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put('/index.html', copy));
-          return response;
-        })
-        .catch(() => caches.match('/index.html'))
-    );
-    return;
-  }
-
-  event.respondWith(
-    caches.match(request).then(cached => {
-      const refreshed = fetch(request).then(response => {
-        if (response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
-        }
-        return response;
-      }).catch(() => cached);
-      return cached || refreshed;
-    })
-  );
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.map(key => caches.delete(key)));
+    await self.registration.unregister();
+    const clients = await self.clients.matchAll({ type: 'window' });
+    await Promise.all(clients.map(client => client.navigate(client.url)));
+  })());
 });

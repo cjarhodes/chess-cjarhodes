@@ -274,15 +274,34 @@ async page => {
   assert(roadmapFeatures.authMigrated, 'legacy tab-scoped auth session did not migrate to persistent storage');
   assert((roadmapFeatures.lesson || '').includes('King safety'), 'Coach explanation did not name the chess concept');
   assert((roadmapFeatures.threat || '').includes('Opponent’s best reply'), 'Coach explanation did not surface the opponent threat');
-  const pwaReady = await page.evaluate(async () => {
-    const manifestHref = document.querySelector('link[rel="manifest"]')?.getAttribute('href');
-    const manifestResponse = await fetch(manifestHref);
-    const registration = 'serviceWorker' in navigator
-      ? await Promise.race([navigator.serviceWorker.ready, new Promise(resolve => setTimeout(() => resolve(null), 5000))])
-      : null;
-    return manifestResponse.ok && !!registration;
+  const browserOnly = await page.evaluate(async () => {
+    const registrations = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistrations() : [];
+    return !document.querySelector('link[rel="manifest"]')
+      && document.querySelectorAll('#btn-install-app').length === 0
+      && registrations.length === 0;
   });
-  assert(pwaReady, 'installable offline app shell did not register');
+  assert(browserOnly, 'browser-only shell still exposes an installable app');
+  await page.evaluate(() => sessionStorage.setItem('coach:auth-pending-email', 'smoke@example.com'));
+  await page.reload();
+  await page.waitForFunction(() => {
+    const status = document.querySelector('#coach-auth-status')?.textContent || '';
+    return status && status !== 'Connecting...';
+  }, null, { timeout: 15000 }).catch(() => {});
+  const codeEntry = await page.evaluate(() => ({
+    visible: !!document.querySelector('#coach-auth-code-form') && getComputedStyle(document.querySelector('#coach-auth-code-form')).display !== 'none',
+    email: document.querySelector('#coach-auth-email')?.value || ''
+  }));
+  assert(codeEntry.visible && codeEntry.email === 'smoke@example.com', 'pending sign-in code entry did not render');
+  await page.evaluate(() => sessionStorage.removeItem('coach:auth-pending-email'));
+  await page.goto(page.url().split('?')[0] + '?view=coach#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired');
+  await page.waitForFunction(() => {
+    return (document.querySelector('#coach-auth-status')?.textContent || '').includes('expired');
+  }, null, { timeout: 15000 }).catch(() => {});
+  const expiredLink = await page.evaluate(() => ({
+    status: document.querySelector('#coach-auth-status')?.textContent || '',
+    hash: location.hash
+  }));
+  assert(expiredLink.status.includes('Sign-in link is invalid or has expired') && expiredLink.hash === '', `expired sign-in link was not reported (${expiredLink.status} ${expiredLink.hash})`);
 
   assert(await page.locator('#coach-daily-plan-title').textContent() === 'Train Opening principle gaps, then transfer', 'adaptive plan did not choose the highest-severity focus');
   assert(await page.locator('#btn-coach-next-action').textContent() === 'Start adaptive session', 'adaptive plan did not offer the one-click session');

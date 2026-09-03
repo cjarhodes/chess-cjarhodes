@@ -226,6 +226,13 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
+# Magic-link email carries both the link and the one-time code so sign-in can
+# finish in the tab that requested it. Apply the same template to the hosted
+# project (see SUPABASE_SETUP.md).
+[auth.email.template.magic_link]
+subject = "Your Chess Coach sign-in link and code"
+content_path = "./supabase/templates/magic_link.html"
+
 # Uncomment to customize email template
 # [auth.email.template.invite]
 # subject = "You have been invited"

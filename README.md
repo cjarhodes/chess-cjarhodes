@@ -45,10 +45,10 @@ browsers. Leaving `coach-config.js` blank keeps Coach local-only.
   - Stockfish (WASM build: `stockfish.js` + `stockfish.wasm`)
 - Lichess Opening Explorer API for Explore mode
 - Optional Supabase project for account-backed Coach sync
-- Installable as a PWA: `manifest.webmanifest` plus `service-worker.js`
-  precache the app shell (including the engine) for offline use. Any new
-  script loaded by `index.html` must be added to the worker's `APP_SHELL`
-  list; `scripts/validate-growth.js` enforces this.
+- Browser-only by design: there is no web app manifest and nothing registers
+  a service worker. `service-worker.js` remains only as a kill switch that
+  unregisters and clears caches for browsers that installed an earlier
+  version; `scripts/validate-growth.js` enforces this.
 
 ## Local preview
 

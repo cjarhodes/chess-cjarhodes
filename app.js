@@ -2100,6 +2100,36 @@ function checkCoachAuthStorage() {
   }
 }
 
+const COACH_AUTH_PENDING_EMAIL_KEY = 'coach:auth-pending-email';
+
+function pendingCoachAuthEmail() {
+  try { return sessionStorage.getItem(COACH_AUTH_PENDING_EMAIL_KEY) || ''; } catch (e) { return ''; }
+}
+
+function setPendingCoachAuthEmail(email) {
+  try {
+    if (email) sessionStorage.setItem(COACH_AUTH_PENDING_EMAIL_KEY, email);
+    else sessionStorage.removeItem(COACH_AUTH_PENDING_EMAIL_KEY);
+  } catch (e) { /* code entry still works within this page */ }
+}
+
+// Magic links return with the session (or an error) in the URL fragment.
+// Read it before the Supabase client consumes it so expired-link errors can be
+// shown, and strip it afterwards so tokens never linger in the address bar.
+function readCoachAuthUrlState() {
+  const hash = (location.hash || '').replace(/^#/, '');
+  if (!hash) return { present: false, error: '' };
+  const params = new URLSearchParams(hash);
+  const present = ['access_token', 'refresh_token', 'error', 'error_description', 'error_code'].some(key => params.has(key));
+  if (!present) return { present: false, error: '' };
+  const error = params.get('error_description') || params.get('error') || '';
+  return { present: true, error: error.replace(/\+/g, ' ') };
+}
+
+function clearCoachAuthUrlState() {
+  try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* cosmetic */ }
+}
+
 function coachAccountSyncStatus() {
   if (!coachAuthStoragePersistent) {
     return 'Account sync cannot persist in this browser session.';
@@ -2129,6 +2159,9 @@ function renderCoachAuth() {
     $('#coach-auth-user').text(coachAuthUser.email || coachAuthUser.id);
     setCoachAuthStatus(coachDbStatus || 'Account sync on.');
   } else {
+    const pendingEmail = pendingCoachAuthEmail();
+    $('#coach-auth-code-form').toggle(!!pendingEmail);
+    if (pendingEmail && !$('#coach-auth-email').val()) $('#coach-auth-email').val(pendingEmail);
     setCoachAuthStatus(coachDbStatus === 'loading' ? 'Connecting...' : (coachDbStatus || 'Sign in to sync games.'));
   }
 }
@@ -2160,6 +2193,7 @@ async function initCoachDb() {
       const cfg = supabaseRuntimeConfig();
       const storageCheck = checkCoachAuthStorage();
       if (!storageCheck.ok) coachDbStatus = coachAccountSyncStatus();
+      const authUrlState = readCoachAuthUrlState();
       coachDbClient = window.supabase.createClient(cfg.url, cfg.anonKey, {
         auth: {
           persistSession: true,
@@ -2170,12 +2204,19 @@ async function initCoachDb() {
       });
       const { data } = await coachDbClient.auth.getSession();
       coachAuthUser = data && data.session ? data.session.user : null;
+      if (authUrlState.present) clearCoachAuthUrlState();
       if (coachAuthUser) {
+        setPendingCoachAuthEmail('');
         adoptAnonymousPracticeProgress(coachAuthUser.id);
         adoptAnonymousDailySprint(coachAuthUser.id);
         if (typeof adoptAnonymousGrowthState === 'function') adoptAnonymousGrowthState(coachAuthUser.id);
       }
       coachDbStatus = coachAccountSyncStatus();
+      if (!coachAuthUser && authUrlState.present) {
+        coachDbStatus = authUrlState.error
+          ? 'Sign-in link is invalid or has expired. Send a new link.'
+          : 'Sign-in link could not be used. Send a new link.';
+      }
       renderCoachAuth();
       renderInsights();
       if (coachAuthUser) {
@@ -2183,8 +2224,12 @@ async function initCoachDb() {
         if (coachGameActive) ensureRemoteCoachGame().catch(handleCoachDbError);
       }
       coachDbClient.auth.onAuthStateChange((event, session) => {
+        // The initial session was already applied above; replaying it here
+        // would blank a link-error status and reload insights a second time.
+        if (event === 'INITIAL_SESSION') return;
         coachAuthUser = session ? session.user : null;
         if (coachAuthUser) {
+          setPendingCoachAuthEmail('');
           adoptAnonymousPracticeProgress(coachAuthUser.id);
           adoptAnonymousDailySprint(coachAuthUser.id);
           if (typeof adoptAnonymousGrowthState === 'function') adoptAnonymousGrowthState(coachAuthUser.id);
@@ -2225,6 +2270,7 @@ async function sendCoachLoginLink() {
     setCoachAuthStatus('Enter an email address.');
     return;
   }
+  coachDbStatus = '';
   setCoachAuthStatus('Sending link...');
   const redirectTo = location.origin + location.pathname + '?view=coach';
   const { error } = await coachDbClient.auth.signInWithOtp({
@@ -2233,9 +2279,42 @@ async function sendCoachLoginLink() {
   });
   if (error) {
     setCoachAuthStatus(error.message);
-  } else {
-    setCoachAuthStatus('Check your email for the sign-in link.');
+    return;
   }
+  setPendingCoachAuthEmail(email);
+  $('#coach-auth-code-form').show();
+  $('#coach-auth-code').val('').trigger('focus');
+  coachDbStatus = 'Link sent to ' + email + '. Open it in this browser, or enter the 6-digit code from that email here.';
+  setCoachAuthStatus(coachDbStatus);
+}
+
+async function verifyCoachLoginCode() {
+  if (!coachDbClient) {
+    await coachSync.init();
+  }
+  if (!coachDbClient) return;
+  const email = (($('#coach-auth-email').val() || '').trim()) || pendingCoachAuthEmail();
+  const code = ($('#coach-auth-code').val() || '').replace(/\D/g, '');
+  if (!email) {
+    setCoachAuthStatus('Enter the email address you requested the code with.');
+    $('#coach-auth-email').trigger('focus');
+    return;
+  }
+  if (code.length !== 6) {
+    setCoachAuthStatus('Enter the 6-digit code from the sign-in email.');
+    $('#coach-auth-code').trigger('focus');
+    return;
+  }
+  setCoachAuthStatus('Checking code...');
+  const { error } = await coachDbClient.auth.verifyOtp({ email, token: code, type: 'email' });
+  if (error) {
+    setCoachAuthStatus('That code is invalid or has expired. Send a new link for a fresh code.');
+    $('#coach-auth-code').trigger('focus');
+    return;
+  }
+  setPendingCoachAuthEmail('');
+  $('#coach-auth-code').val('');
+  setCoachAuthStatus('Signed in.');
 }
 
 async function signOutCoach() {
@@ -2250,6 +2329,7 @@ async function signOutCoach() {
     growthRemoteSync.timer = null;
   }
   await coachDbClient.auth.signOut();
+  setPendingCoachAuthEmail('');
   coachAuthUser = null;
   coachRemoteInsightEntries = null;
   coachRemoteGameId = null;
@@ -4550,7 +4630,10 @@ function updateURL() {
   }
   const q = params.toString();
   const url = q ? `?${q}` : location.pathname;
-  history.replaceState(null, '', url);
+  // A magic link returns with the session in the fragment. Keep it until the
+  // Supabase client has consumed it; clearCoachAuthUrlState removes it after.
+  const authHash = readCoachAuthUrlState().present ? location.hash : '';
+  history.replaceState(null, '', url + authHash);
 }
 function readURL() {
   const p = new URLSearchParams(location.search);
@@ -6476,6 +6559,10 @@ $(function () {
   $('#coach-auth-email-form').on('submit', function(event) {
     event.preventDefault();
     sendCoachLoginLink().catch(handleCoachDbError);
+  });
+  $('#coach-auth-code-form').on('submit', function(event) {
+    event.preventDefault();
+    verifyCoachLoginCode().catch(handleCoachDbError);
   });
   $('#btn-coach-logout').on('click', function() {
     signOutCoach().catch(handleCoachDbError);

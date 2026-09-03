@@ -7,7 +7,6 @@ const root = path.resolve(__dirname, '..');
 const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 const growth = fs.readFileSync(path.join(root, 'growth.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.webmanifest'), 'utf8'));
 const worker = fs.readFileSync(path.join(root, 'service-worker.js'), 'utf8');
 const smoke = fs.readFileSync(path.join(root, 'scripts/verify-browser.sh'), 'utf8');
 const migration = fs.readFileSync(path.join(root, 'supabase/migrations/20260817030844_sync_player_training_profile.sql'), 'utf8');
@@ -51,19 +50,18 @@ requirePattern(html, /id="coach-review-lesson"[\s\S]+id="coach-review-threat"/, 
 requirePattern(html, /id="coach-review-evidence"[\s\S]+id="opening-bridge-section"[\s\S]+id="insights-recurring-list"/, 'Coach UI must expose visual evidence, opening-to-middlegame training, and recurring trends');
 requirePattern(html, /id="player-style"/, 'training profile must let players choose a drills-first, play-first, or balanced session style');
 requirePattern(html, /id="network-status"[^>]+role="status"[^>]+aria-live="polite"/, 'offline state must be announced accessibly');
-requirePattern(html, /rel="manifest"[\s\S]+growth\.js/, 'the installable app must load its manifest and growth feature layer');
-requirePattern(worker, /APP_SHELL[\s\S]+stockfish\/stockfish\.wasm[\s\S]+request\.mode === 'navigate'[\s\S]+caches\.match\('\/index\.html'\)/, 'offline shell must cache the engine and provide a navigation fallback');
-if (manifest.display !== 'standalone' || manifest.scope !== '/') errors.push('manifest must install as a root-scoped standalone app');
-
-const shellBlock = (worker.match(/const APP_SHELL = \[([\s\S]*?)\];/) || [])[1] || '';
-const shellPaths = new Set((shellBlock.match(/'[^']+'/g) || []).map(entry => entry.slice(1, -1)));
-for (const src of html.match(/<script src="([^"]+)"/g) || []) {
-  const file = '/' + src.replace(/^<script src="/, '').replace(/"$/, '');
-  if (!shellPaths.has(file)) errors.push(`offline shell must precache ${file} because index.html loads it`);
-}
+// Browser-only by design: the site must never become an installable app again,
+// because installed copies capture magic-link URLs and open them outside the browser.
+if (/rel="manifest"/.test(html)) errors.push('app must stay browser-only: index.html must not link a web app manifest');
+if (fs.existsSync(path.join(root, 'manifest.webmanifest'))) errors.push('app must stay browser-only: manifest.webmanifest must not exist');
+if (/serviceWorker\.register|beforeinstallprompt|appinstalled/.test(growth + app)) errors.push('app must stay browser-only: no service worker registration or install prompt');
+if (/btn-install-app/.test(html + growth)) errors.push('app must stay browser-only: no install button');
+requirePattern(worker, /registration\.unregister\(\)/, 'service-worker.js must remain a kill switch that unregisters earlier installs');
+requirePattern(worker, /caches\.keys\(\)[\s\S]+caches\.delete\(/, 'service-worker.js kill switch must clear every cache left by earlier installs');
+if (/addEventListener\('fetch'/.test(worker)) errors.push('service-worker.js must not intercept fetches');
 requirePattern(migration, /create table public\.player_training_profiles[\s\S]+enable row level security[\s\S]+for select to authenticated[\s\S]+for insert to authenticated[\s\S]+for update to authenticated[\s\S]+grant select, insert, update/, 'training profile sync must use explicit grants and owner-only RLS');
 requirePattern(dbTest, /plan\(12\)[\s\S]+another account cannot read the first account profile[\s\S]+another account cannot insert for the first account/, 'database tests must prove training-profile account isolation');
-requirePattern(smoke, /cross-device growth merge lost Library progress[\s\S]+training profile did not save through onboarding UI[\s\S]+installable offline app shell did not register[\s\S]+personal repertoire did not persist across reload[\s\S]+structured endgame lesson was not graded[\s\S]+PGN Game Inbox did not complete a bounded imported review/, 'browser smoke must cover the complete player-growth journey');
+requirePattern(smoke, /cross-device growth merge lost Library progress[\s\S]+training profile did not save through onboarding UI[\s\S]+browser-only shell still exposes an installable app[\s\S]+pending sign-in code entry did not render[\s\S]+expired sign-in link was not reported[\s\S]+personal repertoire did not persist across reload[\s\S]+structured endgame lesson was not graded[\s\S]+PGN Game Inbox did not complete a bounded imported review/, 'browser smoke must cover the complete player-growth journey');
 requirePattern(smoke, /training backup merge did not preserve data[\s\S]+offline state was not announced in Coach/, 'browser smoke must cover portable backup and offline recovery');
 requirePattern(smoke, /session style did not persist[\s\S]+repertoire bridge, recurring trends, or visual evidence did not initialise[\s\S]+repertoire focus did not persist/, 'browser smoke must cover session personalisation, repertoire rehearsal, comparison evidence, and recurring mistakes');
 requirePattern(smoke, /difficulty mapping was not monotonic at every slider step[\s\S]+candidate selection did not tighten as difficulty increased[\s\S]+completed results did not move the player estimate[\s\S]+same completed game updated the player estimate twice[\s\S]+engine capability detection did not match/, 'browser smoke must prove monotonic difficulty, result-based estimation, idempotency, and real engine capabilities');

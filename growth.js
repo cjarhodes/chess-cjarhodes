@@ -1,5 +1,5 @@
 // Personal training layer: profile, repertoire, imported games, endgames,
-// effectiveness reporting, cross-device Library sync, and PWA installation.
+// effectiveness reporting, and cross-device Library sync.
 
 const PLAYER_GROWTH_KEY = 'coach:growth:v1';
 const PLAYER_GROWTH_VERSION = 1;
@@ -9,7 +9,6 @@ const REPERTOIRE_OBSERVED_LIMIT = 30;
 const REPERTOIRE_REPAIR_LIMIT = 24;
 const REPERTOIRE_COMPARISON_LIMIT = 8;
 const growthRemoteSync = { timer: null, chain: Promise.resolve() };
-let installPromptEvent = null;
 let importedGameAnalysisActive = false;
 
 const ENDGAME_LESSONS = [
@@ -1141,25 +1140,8 @@ async function analyseImportedPgn() {
   }
 }
 
-function initPwa() {
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/service-worker.js').catch(() => {});
-  }
-  window.addEventListener('beforeinstallprompt', event => {
-    event.preventDefault();
-    installPromptEvent = event;
-    $('#btn-install-app').show();
-  });
-  window.addEventListener('appinstalled', () => {
-    installPromptEvent = null;
-    $('#btn-install-app').hide();
-    $('#player-profile-status').text('Chess app installed for quick offline access.');
-  });
-}
-
 function initGrowthFeatures() {
   hydrateGrowthUI();
-  initPwa();
   $('#btn-repertoire-toggle').on('click', () => {
     if (currentOpening) toggleRepertoireOpening(currentOpening.id);
   });
@@ -1226,13 +1208,6 @@ function initGrowthFeatures() {
     } finally {
       this.value = '';
     }
-  });
-  $('#btn-install-app').on('click', async () => {
-    if (!installPromptEvent) return;
-    installPromptEvent.prompt();
-    await installPromptEvent.userChoice;
-    installPromptEvent = null;
-    $('#btn-install-app').hide();
   });
 }
 
