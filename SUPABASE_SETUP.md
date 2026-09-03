@@ -1,7 +1,8 @@
 # Supabase setup for durable Coach progress
 
 Coach works locally without Supabase. To enable account-backed games, mistakes,
-practice attempts, spaced-repetition schedules, trends, and theory cards:
+practice attempts, adaptive sessions, player preferences, personal repertoire,
+Library spaced-repetition schedules, trends, and theory cards:
 
 1. Create a dedicated Supabase project for Chess. Do not reuse another app's
    project.
@@ -32,13 +33,17 @@ practice attempts, spaced-repetition schedules, trends, and theory cards:
    - Reload the page and verify the attempts, schedule, and 7-day trend remain.
    - Sign in on a second browser and verify the same progress appears.
    - Confirm rows exist in `coach_games`, `coach_moves`, `drill_queue`,
-     `practice_attempts`, and `theory_cards`.
+     `practice_attempts`, `daily_training_sessions`,
+     `player_training_profiles`, and `theory_cards`.
 
 Practice storage is scoped by account in the browser. Anonymous practice is
 moved into the account on sign-in, and it is only removed from the anonymous
 scope after that account-scoped write succeeds. Offline events retain stable
 IDs; retries are idempotent, and the database replays each drill's history by
 attempt time so a late event from another device cannot rewind its schedule.
+The player training profile uses field-aware reconciliation: the newest profile
+and repertoire choices win, while Library opening records merge individually so
+progress made on either device is retained.
 
 Only a publishable or legacy anon public key belongs in `coach-config.js`. Do
 not put secret keys, service-role keys, database passwords, or access tokens in

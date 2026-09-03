@@ -44,6 +44,12 @@ requirePattern(html, /id="feedback-bar"[^>]+aria-live="polite"/, 'quiz feedback 
 requirePattern(app, /document\.createElement\('button'\)[\s\S]{0,100}\.type = 'button'/, 'post-game moment rows must be real buttons');
 requirePattern(html, /@media \(max-width:\s*600px\)[\s\S]+?\.top-nav/, 'header navigation must have a narrow-mobile layout');
 requirePattern(html, /id="btn-mobile-openings"[^>]+aria-expanded=/, 'mobile opening picker must expose expansion state');
+requirePattern(html, /class="top-nav-btn active"[^>]+id="nav-coach"[^>]+aria-selected="true"/, 'Coach must be the default selected application section');
+requirePattern(html, /class="app"[^>]+id="library-view"[^>]+aria-hidden="true"[^>]+style="display:none;"/, 'Library must be hidden in the initial application shell');
+requirePattern(html, /class="coach-view"[^>]+id="coach-view"[^>]+aria-hidden="false"/, 'Coach must be visible in the initial application shell');
+requirePattern(app, /wB:\s*'♝'[\s\S]{0,100}wK:\s*'♚'[\s\S]{0,100}wN:\s*'♞'/, 'white pieces must use filled silhouettes rather than low-contrast hollow glyphs');
+requirePattern(app, /const strokeWidth = isWhite \? '1\.35' : '0\.55'/, 'white pieces must retain a strong dark outline');
+requirePattern(app, /paint-order="stroke fill"/, 'piece SVGs must render their contrast outline behind the fill');
 
 if (errors.length) {
   console.error(errors.join('\n'));

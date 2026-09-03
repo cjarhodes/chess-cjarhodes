@@ -30,6 +30,7 @@ requirePattern(/function detectMateThreat\(fen\)[\s\S]{0,700}status:\s*'unavaila
 requirePattern(/Mate scan unavailable/, 'threat panel must render mate-scan failures');
 requirePattern(/function createMemoryAuthStorage/, 'Supabase auth needs an in-memory storage fallback');
 requirePattern(/checkCoachAuthStorage\(\)/, 'Supabase auth storage must be capability-checked');
+requirePattern(/localStorage\.setItem\(key, '1'\)[\s\S]{0,900}storageKey\.startsWith\('sb-'\)/, 'Supabase auth must persist across email-link tabs and migrate legacy sessions');
 requirePattern(/Account sync cannot persist in this browser session/, 'Supabase storage fallback must be visible to users');
 requirePattern(/Promise\.allSettled/, 'manual sync must aggregate partial failures');
 requirePattern(/Game saved, insights failed|Insights loaded, game save failed/, 'manual sync must report partial sync failures');

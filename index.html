@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chess Opening Library — Alex Rhodes</title>
+  <title>Chess Coach &amp; Opening Library — Alex Rhodes</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/favicon.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#2a1f17">
   <link rel="stylesheet" href="vendor/chessboardjs/chessboard-1.0.0.min.css">
   <style>
@@ -236,6 +237,10 @@
     }
 
     #myBoard {
+      width: 440px;
+    }
+
+    #coachBoard {
       width: 440px;
     }
 
@@ -663,6 +668,95 @@
       margin-bottom: 0.5rem;
       letter-spacing: 0.01em;
     }
+    .coach-daily-plan {
+      padding: 0.8rem;
+      background: linear-gradient(135deg, rgba(162,51,70,0.16), rgba(162,51,70,0.04));
+      border: 1px solid rgba(198,103,119,0.55);
+      border-left: 3px solid var(--accent-soft);
+      border-radius: 2px;
+    }
+    .coach-daily-plan .plan-title {
+      color: var(--text);
+      font-weight: 600;
+      font-size: 0.92rem;
+      line-height: 1.3;
+    }
+    .coach-daily-plan .plan-detail {
+      color: var(--muted);
+      font-family: var(--font-reading);
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+    .daily-sprint-meta,
+    .daily-sprint-progress-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      align-items: baseline;
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .daily-sprint-streak { color: var(--accent-soft); }
+    .daily-sprint-progress {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .daily-sprint-track {
+      height: 5px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.08);
+      border-radius: 999px;
+    }
+    .daily-sprint-fill {
+      display: block;
+      width: 0;
+      height: 100%;
+      background: var(--accent-soft);
+      border-radius: inherit;
+      transition: width 0.25s ease;
+    }
+    .daily-sprint-takeaway {
+      padding: 0.55rem 0.65rem;
+      border: 1px solid rgba(184,160,106,0.35);
+      background: rgba(184,160,106,0.08);
+      color: var(--text);
+      font-family: var(--font-reading);
+      font-size: 0.86rem;
+      line-height: 1.4;
+    }
+    .daily-sprint-focus {
+      padding: 0.6rem 0.65rem;
+      background: rgba(255,255,255,0.035);
+      border-left: 2px solid var(--highlight);
+    }
+    .daily-sprint-focus-title {
+      color: var(--highlight);
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .daily-sprint-focus-detail {
+      margin-top: 0.25rem;
+      color: var(--text);
+      font-family: var(--font-reading);
+      font-size: 0.84rem;
+      line-height: 1.4;
+    }
+    .coach-daily-plan.is-complete {
+      background: linear-gradient(135deg, rgba(107,130,104,0.2), rgba(107,130,104,0.04));
+      border-color: rgba(139,171,135,0.62);
+      border-left-color: #9bbf97;
+    }
+    .coach-daily-plan.is-complete .daily-sprint-fill { background: #9bbf97; }
+    .coach-daily-plan .ctrl-btn {
+      align-self: flex-start;
+    }
     .coach-practice-banner {
       width: 440px;
       max-width: 100%;
@@ -744,6 +838,36 @@
     }
     .coach-review-moves .label { color: var(--muted); }
     .coach-review-moves .value { color: var(--text); font-family: var(--font-reading); font-size: 0.95rem; }
+    .coach-review-cue {
+      padding: 0.55rem 0.65rem;
+      border-left: 2px solid var(--accent-soft);
+      background: rgba(207,109,123,0.08);
+      color: var(--text);
+      font-family: var(--font-reading);
+      font-size: 0.88rem;
+      line-height: 1.4;
+    }
+    .coach-review-lesson,
+    .coach-review-threat {
+      padding: 0.45rem 0.55rem;
+      border-left: 2px solid var(--accent);
+      background: rgba(184,160,106,0.08);
+      color: var(--text);
+      font-size: 0.78rem;
+      line-height: 1.4;
+    }
+    .coach-review-threat { border-left-color: var(--accent-soft); background: rgba(207,109,123,0.06); }
+    .coach-review-evidence { padding-top: 0.35rem; border-top: 1px solid var(--border); }
+    .coach-review-evidence-head { display: flex; justify-content: space-between; gap: 0.5rem; color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; }
+    .coach-review-evidence-head span { color: var(--text); font-family: var(--font-mono); text-transform: none; letter-spacing: 0; }
+    .coach-review-evidence-boards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; margin-top: 0.45rem; }
+    .review-board-label { color: var(--muted); font-size: 0.62rem; margin-bottom: 0.2rem; }
+    .review-board { display: grid; grid-template-columns: repeat(8, 1fr); aspect-ratio: 1; border: 1px solid var(--border); }
+    .review-board-square { display: grid; place-items: center; font-family: Georgia, serif; font-size: clamp(0.58rem, 1.5vw, 0.95rem); line-height: 1; }
+    .review-board-square.light { background: #d8c8a8; color: #f8f4e8; text-shadow: 0 1px 2px #473d31; }
+    .review-board-square.dark { background: #806b54; color: #f8f4e8; text-shadow: 0 1px 2px #30271f; }
+    .coach-review-actions { display: flex; gap: 0.45rem; flex-wrap: wrap; }
+    .coach-review-actions .ctrl-btn { width: 100%; }
     /* Premove highlights — claret tint on the source + target squares while
        the premove is queued. */
     #coachBoard .coach-premove-from,
@@ -1606,6 +1730,38 @@
     .coach-opening-card .name {
       color: var(--text);
     }
+    .coach-opening-actions { display: flex; justify-content: flex-end; margin-top: 0.45rem; }
+    .network-status {
+      color: var(--accent-soft);
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      line-height: 1.35;
+      padding: 0.35rem 0.5rem;
+      border: 1px solid var(--border);
+      border-left: 2px solid var(--accent);
+      background: var(--surface);
+    }
+    .network-status.offline { color: #d9b37c; border-left-color: #d9b37c; }
+    .training-data-actions { display: flex; gap: 0.45rem; flex-wrap: wrap; }
+    .personal-repertoire-list { display: grid; gap: 0.45rem; margin-top: 0.6rem; }
+    .repertoire-observed-row { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; padding: 0.55rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); }
+    .repertoire-observed-copy { min-width: 0; }
+    .repertoire-observed-copy strong, .repertoire-observed-copy span { display: block; }
+    .repertoire-observed-copy strong { color: var(--text); font-size: 0.76rem; }
+    .repertoire-observed-copy span { color: var(--muted); font-size: 0.68rem; line-height: 1.4; margin-top: 0.18rem; }
+    .repertoire-observed-actions { display: flex; gap: 0.3rem; flex-wrap: wrap; justify-content: flex-end; }
+    .opening-bridge-list { display: grid; gap: 0.45rem; margin-top: 0.6rem; }
+    .opening-bridge-row { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; padding: 0.55rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); }
+    .opening-bridge-copy strong, .opening-bridge-copy span { display: block; }
+    .opening-bridge-copy strong { color: var(--text); font-size: 0.76rem; }
+    .opening-bridge-copy span { color: var(--muted); font-size: 0.68rem; line-height: 1.4; margin-top: 0.18rem; }
+    .insight-recurring { padding: 0.65rem 0.7rem; border: 1px solid var(--border); border-radius: 2px; background: var(--surface); }
+    .insight-recurring-label { color: var(--muted); font-family: var(--font-mono); font-size: 0.64rem; letter-spacing: 0.08em; text-transform: uppercase; }
+    .insight-recurring-list { display: grid; gap: 0.3rem; margin-top: 0.45rem; }
+    .insight-recurring-row { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.72rem; }
+    .insight-recurring-row strong { color: var(--text); font-weight: 500; }
+    .insight-recurring-row span { color: var(--muted); text-align: right; }
+    @media (max-width: 620px) { .repertoire-observed-row { grid-template-columns: 1fr; } .repertoire-observed-actions { justify-content: flex-start; } }
 
     /* Move list */
     .movelist-head {
@@ -1946,6 +2102,23 @@
     .summary-actions { display: flex; gap: 0.5rem; margin-top: 0.25rem; flex-wrap: wrap; }
 
     /* Responsive */
+    @media (max-width: 700px) {
+      header {
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.75rem 1rem;
+        padding: 1rem;
+      }
+      header h1 { font-size: 0.95rem; }
+      .top-nav {
+        margin-left: 0;
+        width: 100%;
+      }
+      .top-nav-btn {
+        flex: 1;
+      }
+    }
+
     @media (max-width: 1100px) {
       .coach-view { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; }
       .coach-settings { border-right: none; border-bottom: 1px solid var(--border); }
@@ -1959,12 +2132,14 @@
     @media (max-width: 1100px) {
       .app { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; }
       .library { border-right: none; border-bottom: 1px solid var(--border); padding: 1rem; overflow-y: visible; }
+      .library, .board-area, .info-panel { min-width: 0; }
       .library-search { padding: 0 0 0.75rem; }
+      .library-search, .cat-tabs, .library-section, .sr-due-section { width: 100%; max-width: 100%; }
       .library-section, .sr-due-section { margin-bottom: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
       .sr-due-section { width: 100%; }
       .library-label { display: none; }
       .cat-tabs { flex-wrap: wrap; padding: 0 0 0.5rem; border-bottom: none; }
-      .opening-btn { border-radius: 4px; border-left: none; border: 1px solid var(--border); padding: 0.35rem 0.75rem; width: auto; display: inline-block; }
+      .opening-btn { border-radius: 4px; border-left: none; border: 1px solid var(--border); padding: 0.35rem 0.75rem; width: auto; max-width: 100%; display: inline-block; white-space: normal; }
       .info-panel { border-left: none; border-top: 1px solid var(--border); overflow-y: visible; }
       .board-area { overflow-y: visible; padding: 1rem; }
       #myBoard { width: 90vw; max-width: 440px; }
@@ -2009,6 +2184,33 @@
       .keyboard-move-form { flex-wrap: wrap; }
       .keyboard-move-form input { flex-basis: 12rem; }
     }
+    .growth-card { padding: 0.85rem; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+    .growth-card + .growth-card { margin-top: 0.75rem; }
+    .growth-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; margin-top: 0.65rem; }
+    .growth-grid .wide { grid-column: 1 / -1; }
+    .growth-card label { display: block; color: var(--muted); font-size: 0.72rem; margin-bottom: 0.25rem; }
+    .growth-card input, .growth-card select, .growth-card textarea {
+      width: 100%; border: 1px solid var(--rule-3); border-radius: 4px; background: var(--bg);
+      color: var(--text); padding: 0.5rem; font: 0.78rem var(--font-mono);
+    }
+    .growth-card textarea { resize: vertical; min-height: 6rem; }
+    .growth-actions { display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap; margin-top: 0.65rem; }
+    .growth-status { color: var(--muted); font-size: 0.72rem; line-height: 1.4; margin-top: 0.5rem; }
+    .growth-status.error { color: #d88484; }
+    .growth-status.success { color: #9db49a; }
+    .repertoire-action { margin-top: 0.6rem; }
+    .opening-btn.in-repertoire::after { content: '★'; color: var(--highlight); float: right; margin-left: 0.5rem; }
+    .weekly-list, .endgame-list { display: grid; gap: 0.55rem; margin-top: 0.65rem; }
+    .weekly-item, .endgame-item { padding: 0.65rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); }
+    .weekly-item strong, .endgame-item strong { display: block; color: var(--text); font-size: 0.78rem; margin-bottom: 0.2rem; }
+    .weekly-item span, .endgame-item span { color: var(--muted); font-size: 0.72rem; line-height: 1.45; }
+    .endgame-item { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; }
+    .endgame-item.is-complete { border-color: rgba(107,130,104,0.55); }
+    .import-progress { height: 4px; background: var(--rule-1); border-radius: 4px; overflow: hidden; margin-top: 0.55rem; }
+    .import-progress > span { display: block; width: 0; height: 100%; background: var(--accent); transition: width 0.2s ease; }
+    .auto-elo-note { color: var(--muted); font-size: 0.68rem; margin-top: 0.35rem; line-height: 1.35; }
+    #repertoire-section:empty { display: none; }
+    @media (max-width: 620px) { .growth-grid { grid-template-columns: 1fr; } .growth-grid .wide { grid-column: auto; } }
   </style>
 </head>
 <body>
@@ -2017,8 +2219,8 @@
   <a class="back" href="https://cjarhodes.com">← cjarhodes.com</a>
   <h1>chess<span class="tld">.cjarhodes.com</span><span class="dot" aria-hidden="true"></span></h1>
   <div class="top-nav" role="tablist" aria-label="Application sections">
-    <button class="top-nav-btn active" id="nav-library" role="tab" aria-selected="true" aria-controls="library-view" tabindex="0">Library</button>
-    <button class="top-nav-btn" id="nav-coach" role="tab" aria-selected="false" aria-controls="coach-view" tabindex="-1">Coach</button>
+    <button class="top-nav-btn" id="nav-library" role="tab" aria-selected="false" aria-controls="library-view" tabindex="-1">Library</button>
+    <button class="top-nav-btn active" id="nav-coach" role="tab" aria-selected="true" aria-controls="coach-view" tabindex="0">Coach</button>
   </div>
 </header>
 
@@ -2032,7 +2234,7 @@
   </div>
 </div>
 
-<div class="app" id="library-view" role="tabpanel" aria-labelledby="nav-library" aria-hidden="false">
+<div class="app" id="library-view" role="tabpanel" aria-labelledby="nav-library" aria-hidden="true" style="display:none;">
 
   <!-- ── LIBRARY SIDEBAR ── -->
   <aside class="library" id="library">
@@ -2048,6 +2250,8 @@
       <div class="library-label">Due for Review</div>
       <div id="sr-due-list"></div>
     </div>
+
+    <div class="library-section" id="repertoire-section"></div>
 
     <!-- Category filter tabs -->
     <div class="cat-tabs">
@@ -2154,6 +2358,7 @@
         <div class="opening-title" id="opening-title"></div>
         <div class="opening-tagline" id="opening-tagline"></div>
         <button class="btn-share" id="btn-share" title="Copy shareable link">Share link</button>
+        <button class="btn-share repertoire-action" id="btn-repertoire-toggle" type="button">☆ Add to my repertoire</button>
       </div>
       <div class="opening-desc" id="opening-desc"></div>
       <div id="sr-status-panel" class="sr-panel" style="display:none"></div>
@@ -2225,7 +2430,7 @@
 </div>
 
 <!-- ── COACH VIEW (standalone page) ── -->
-<section class="coach-view" id="coach-view" role="tabpanel" aria-labelledby="nav-coach" style="display:none;" aria-hidden="true">
+<section class="coach-view" id="coach-view" role="tabpanel" aria-labelledby="nav-coach" aria-hidden="false">
 
   <!-- SETTINGS -->
   <aside class="coach-settings">
@@ -2233,6 +2438,7 @@
       <div class="title">Coach</div>
       <div class="tagline">Sharpen your reactive play</div>
     </div>
+    <div id="network-status" class="network-status" role="status" aria-live="polite" hidden></div>
 
     <div class="field-group">
       <div class="section-label">Account</div>
@@ -2258,14 +2464,30 @@
       </div>
     </div>
 
+    <div class="field-group growth-card" id="player-profile-card">
+      <div class="section-label">Training profile</div>
+      <form id="player-profile-form">
+        <div class="growth-grid">
+          <div><label for="player-rating">Starting estimate</label><input id="player-rating" type="number" min="400" max="2800" step="50" value="1200"></div>
+          <div><label for="player-minutes">Daily minutes</label><input id="player-minutes" type="number" min="5" max="60" step="5" value="10"></div>
+          <div><label for="player-goal">Primary goal</label><select id="player-goal"><option value="balanced">Balanced improvement</option><option value="tactics">Reduce tactical mistakes</option><option value="repertoire">Build an opening repertoire</option><option value="endgames">Improve endgames</option></select></div>
+          <div><label for="player-style">Session style</label><select id="player-style"><option value="balanced">Balanced</option><option value="drills">Drills first</option><option value="play">Play first</option></select></div>
+        </div>
+        <div class="growth-actions"><button class="ctrl-btn primary" type="submit">Save profile</button><button class="ctrl-btn" type="button" id="btn-install-app" style="display:none">Install app</button></div>
+        <div class="growth-status" id="player-profile-status">Set a starting estimate; completed standard games will calibrate it.</div>
+      </form>
+    </div>
+
     <div class="field-group">
       <div class="strength-row">
-        <label class="strength-label" id="coach-strength-label" for="coach-strength">Opponent level</label>
+        <label class="strength-label" id="coach-strength-label" for="coach-strength">Estimated difficulty</label>
         <span class="strength-value" id="coach-strength-value">1200</span>
       </div>
       <input type="range" class="strength-slider" id="coach-strength"
              min="400" max="2400" step="50" value="1200" />
       <div class="strength-tier" id="coach-strength-tier">Club novice</div>
+      <label class="toggle-label" for="coach-auto-elo"><input type="checkbox" id="coach-auto-elo" checked> <span>Adapt level automatically</span></label>
+      <div class="auto-elo-note" id="coach-auto-elo-note"></div>
     </div>
 
     <div class="field-group">
@@ -2282,6 +2504,35 @@
       <textarea class="fen-input" id="coach-fen" rows="3"
                 placeholder="FEN (optional) — leave empty for the initial position"></textarea>
       <div class="fen-error" id="coach-fen-error" style="display:none;"></div>
+    </div>
+
+    <div class="field-group growth-card" id="game-inbox-card">
+      <div class="section-label">Game Inbox</div>
+      <div class="growth-grid">
+        <div class="wide"><label for="game-inbox-pgn">Paste a PGN</label><textarea id="game-inbox-pgn" placeholder="Paste a Lichess, Chess.com, or tournament PGN…"></textarea></div>
+        <div><label for="game-inbox-side">Analyse my moves as</label><select id="game-inbox-side"><option value="white">White</option><option value="black">Black</option></select></div>
+        <div><label for="game-inbox-file">Or choose a .pgn file</label><input id="game-inbox-file" type="file" accept=".pgn,text/plain,application/x-chess-pgn"></div>
+      </div>
+      <div class="growth-actions"><button class="ctrl-btn primary" id="btn-analyse-pgn" type="button">Analyse game</button></div>
+      <div class="import-progress" aria-hidden="true"><span id="game-inbox-progress"></span></div>
+      <div class="growth-status" id="game-inbox-status" role="status" aria-live="polite">Analysis stays in this browser; signed-in insights and drills sync normally.</div>
+    </div>
+
+    <div class="field-group growth-card" id="personal-repertoire-card">
+      <div class="section-label">Personal repertoire</div>
+      <div class="growth-status" id="personal-repertoire-summary">Import your games to see the openings you actually play and the positions worth repairing.</div>
+      <div class="personal-repertoire-list" id="personal-repertoire-list"></div>
+    </div>
+
+    <div class="field-group growth-card" id="training-data-card">
+      <div class="section-label">Your training data</div>
+      <div class="growth-status">Export a backup or merge one from another device. Existing local progress is kept.</div>
+      <div class="training-data-actions">
+        <button class="ctrl-btn" id="btn-export-training-data" type="button">Export backup</button>
+        <button class="ctrl-btn" id="btn-import-training-data" type="button">Import backup</button>
+        <input id="training-data-file" type="file" accept="application/json,.json" hidden>
+      </div>
+      <div class="growth-status" id="training-data-status" role="status" aria-live="polite"></div>
     </div>
 
     <div class="field-group toggle-row">
@@ -2353,6 +2604,27 @@
 
   <!-- COACH PANEL -->
   <aside class="coach-panel">
+    <div class="coach-panel-section coach-daily-plan" id="coach-daily-plan" aria-labelledby="coach-daily-plan-label">
+      <div class="daily-sprint-meta">
+        <span class="section-label" id="coach-daily-plan-label">Adaptive session · 5–10 min</span>
+        <span class="daily-sprint-streak" id="daily-sprint-streak">Start a streak</span>
+      </div>
+      <div class="plan-title" id="coach-daily-plan-title">Start your first coached session</div>
+      <div class="plan-detail" id="coach-daily-plan-detail">Play ten reviewed moves and Coach will choose your first training focus.</div>
+      <div class="daily-sprint-focus" id="daily-sprint-focus" aria-live="polite" style="display:none;">
+        <div class="daily-sprint-focus-title" id="daily-sprint-focus-title"></div>
+        <div class="daily-sprint-focus-detail" id="daily-sprint-focus-detail"></div>
+      </div>
+      <div class="daily-sprint-progress" aria-label="Adaptive session progress">
+        <div class="daily-sprint-progress-head">
+          <span id="daily-sprint-progress-label">0 of 10 moves</span>
+          <span id="daily-sprint-progress-percent">0%</span>
+        </div>
+        <div class="daily-sprint-track" aria-hidden="true"><span class="daily-sprint-fill" id="daily-sprint-fill"></span></div>
+      </div>
+      <div class="daily-sprint-takeaway" id="daily-sprint-takeaway" role="status" aria-live="polite" style="display:none;"></div>
+      <button type="button" class="ctrl-btn primary" id="btn-coach-next-action" data-action="game">Start training</button>
+    </div>
     <div id="coach-status" class="coach-status" role="status" aria-live="polite">Set a level and start a new game.</div>
     <div id="coach-premove-hint" class="coach-premove-hint" style="display:none;"></div>
 
@@ -2366,6 +2638,13 @@
         <span class="label">Best move</span><span class="value" id="coach-best-move">—</span>
       </div>
       <div id="coach-explanation" style="font-size:0.82rem; color:var(--muted); line-height:1.45;"></div>
+      <div id="coach-review-lesson" class="coach-review-lesson" role="note" style="display:none;"></div>
+      <div id="coach-review-threat" class="coach-review-threat" role="note" style="display:none;"></div>
+      <div id="coach-review-evidence" class="coach-review-evidence" role="figure" aria-label="Before and after position comparison" style="display:none;"></div>
+      <div id="coach-review-cue" class="coach-review-cue" role="note" aria-live="polite"></div>
+      <div class="coach-review-actions">
+        <button type="button" class="ctrl-btn primary" id="btn-coach-review-practice" style="display:none;">Practice this move</button>
+      </div>
       <div class="coach-review-pv" id="coach-pv" style="display:none"></div>
       <div class="coach-review-alts" id="coach-alts" style="display:none">
         <div class="coach-review-alts-label">Better candidates</div>
@@ -2388,6 +2667,7 @@
       <div class="coach-opening-card">
         <span class="eco" id="coach-opening-eco"></span><span class="name" id="coach-opening-name"></span>
       </div>
+      <div class="coach-opening-actions"><button type="button" class="movelist-copy" id="btn-coach-opening-study">Study this opening</button></div>
     </div>
 
     <div class="coach-panel-section" id="liveeval-section" style="display:none;">
@@ -2434,6 +2714,22 @@
       </div>
     </div>
 
+    <div class="coach-panel-section" id="weekly-review-section">
+      <div class="section-label">Weekly coaching review</div>
+      <div class="weekly-list" id="weekly-review-list"></div>
+    </div>
+
+    <div class="coach-panel-section" id="endgame-track-section">
+      <div class="lifetime-head"><span class="section-label">Endgame essentials</span><span class="practice-tag" id="endgame-track-progress">0/4</span></div>
+      <div class="endgame-list" id="endgame-track-list"></div>
+    </div>
+
+    <div class="coach-panel-section" id="opening-bridge-section">
+      <div class="section-label">Opening → middlegame</div>
+      <div class="growth-status">Rehearse the first plan after your opening setup instead of memorising moves in isolation.</div>
+      <div class="opening-bridge-list" id="opening-bridge-list"></div>
+    </div>
+
     <div class="coach-panel-section" id="insights-section" style="display:none;">
       <div class="lifetime-head">
         <span class="section-label">Coach Insights</span>
@@ -2450,6 +2746,10 @@
       </div>
       <div class="insight-list" id="insights-list"></div>
       <div class="insight-theory" id="insights-theory"></div>
+      <div class="insight-recurring">
+        <div class="insight-recurring-label">Recurring pattern trend</div>
+        <div class="insight-recurring-list" id="insights-recurring-list"></div>
+      </div>
     </div>
 
     <div class="coach-panel-section" id="practice-section" style="display:none;">
@@ -2572,5 +2872,6 @@
 
 <script src="openings.js"></script>
 <script src="app.js"></script>
+<script src="growth.js"></script>
 </body>
 </html>

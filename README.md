@@ -33,7 +33,9 @@ browsers. Leaving `coach-config.js` blank keeps Coach local-only.
 
 ## Stack
 
-- `index.html` + `app.js` (runtime) + `openings.js` (opening content data) — no build tooling, no package manager,
+- `index.html` + `app.js` (runtime) + `openings.js` (opening content data)
+  + `growth.js` (personal training layer: profile, repertoire, imported games,
+  endgames, cross-device sync) — no build tooling, no package manager,
   no framework
 - Vendored libraries (see `vendor/` and `stockfish/`):
   - `chess.js` 0.10.3
@@ -43,6 +45,10 @@ browsers. Leaving `coach-config.js` blank keeps Coach local-only.
   - Stockfish (WASM build: `stockfish.js` + `stockfish.wasm`)
 - Lichess Opening Explorer API for Explore mode
 - Optional Supabase project for account-backed Coach sync
+- Installable as a PWA: `manifest.webmanifest` plus `service-worker.js`
+  precache the app shell (including the engine) for offline use. Any new
+  script loaded by `index.html` must be added to the worker's `APP_SHELL`
+  list; `scripts/validate-growth.js` enforces this.
 
 ## Local preview
 

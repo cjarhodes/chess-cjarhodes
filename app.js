@@ -27,7 +27,7 @@ let promotionReturnFocus = null;
 let summaryReturnFocus = null;
 
 // Coach mode (standalone page)
-let appView = 'library';           // 'library' | 'coach'
+let appView = 'coach';             // 'library' | 'coach' — Coach is the product home
 let coachMode = false;             // true when coach view is active
 let coachGame = null;
 let coachStartFen = null;
@@ -37,6 +37,7 @@ let coachLastReview = null;        // most recent review (for take back / show b
 let coachThinking = false;
 let coachUserSide = 'white';       // 'white' | 'black'
 let coachEngineElo = 1200;         // displayed opponent level
+let coachOpeningId = null;         // deepest identified opening in the current game
 let coachBoard = null;             // separate Chessboard.js instance
 let coachBoardFlipped = false;
 let coachGameActive = false;       // true once user hits New Game
@@ -64,7 +65,10 @@ let coachDbStatus = 'local';
 let remoteGameUpdateTimer = null;
 let pendingRemoteGameEndReason = null;
 let pendingRemoteGameGeneration = null;
+let dailySprintSyncTimer = null;
+let dailySprintSyncChain = Promise.resolve();
 const REMOTE_GAME_SYNC_DEBOUNCE_MS = 2500;
+const DAILY_SPRINT_SYNC_DEBOUNCE_MS = 800;
 
 const CoachController = {
   phase: 'idle',
@@ -642,7 +646,10 @@ function insightEntryFromReview(review) {
     fenBefore: review.fenBefore || null,
     userUci: review.userUci || null,
     bestUci: review.bestUci || null,
-    opening: currentCoachOpeningName()
+    opening: review.opening || currentCoachOpeningName(),
+    openingId: review.openingId || null,
+    lesson: review.lesson || null,
+    opponentThreat: review.opponentThreat || null
   };
 }
 
@@ -671,6 +678,50 @@ function insightTagCounts(entries) {
   return Object.values(counts).sort((a, b) =>
     b.score - a.score || b.count - a.count || b.loss - a.loss
   );
+}
+
+function recurringMistakeSummaries(entries, now = Date.now()) {
+  const currentStart = now - 30 * DAY_MS;
+  const previousStart = currentStart - 30 * DAY_MS;
+  const summaries = {};
+  (entries || []).filter(entry => isInsightProblem(entry.tier)).forEach(entry => {
+    const tags = entry.tags || [];
+    tags.forEach(tag => {
+      if (!INSIGHT_TAG_META[tag]) return;
+      if (!summaries[tag]) summaries[tag] = { tag, current: 0, previous: 0, latestAt: 0, loss: 0 };
+      const summary = summaries[tag];
+      const at = Number(entry.ts) || 0;
+      if (at >= currentStart) {
+        summary.current += 1;
+        summary.loss += Math.min(entry.loss || 0, ACPL_CAP);
+        summary.latestAt = Math.max(summary.latestAt, at);
+      } else if (at >= previousStart) {
+        summary.previous += 1;
+      }
+    });
+  });
+  return Object.values(summaries)
+    .filter(summary => summary.current || summary.previous)
+    .sort((a, b) => b.current - a.current || (b.current - b.previous) - (a.current - a.previous) || b.latestAt - a.latestAt);
+}
+
+function renderRecurringMistakeDashboard(entries) {
+  const $list = $('#insights-recurring-list').empty();
+  if (!$list.length) return;
+  const summaries = recurringMistakeSummaries(entries);
+  if (!summaries.length) {
+    $list.append($('<div class="insight-empty"></div>').text('No recurring pattern across the last 60 days yet.'));
+    return;
+  }
+  summaries.slice(0, 4).forEach(summary => {
+    const meta = INSIGHT_TAG_META[summary.tag];
+    const delta = summary.current - summary.previous;
+    const direction = delta > 0 ? `↑ ${delta} vs prior month` : delta < 0 ? `↓ ${Math.abs(delta)} vs prior month` : 'Flat vs prior month';
+    const $row = $('<div class="insight-recurring-row"></div>');
+    $row.append($('<strong></strong>').text(meta.title));
+    $row.append($('<span></span>').text(`${summary.current} recent · ${direction}`));
+    $list.append($row);
+  });
 }
 
 function weakestInsightPhase(entries) {
@@ -755,6 +806,18 @@ function practiceItemsForEntries(entries, counts) {
   });
 }
 
+function practiceItemFromReview(review) {
+  if (!review || !isInsightProblem(review.tier) || !review.fenBefore || !review.bestUci) return null;
+  const entry = insightEntryFromReview(Object.assign({}, review));
+  const tag = insightTagForEntry(entry);
+  return {
+    entry,
+    tag,
+    id: practiceItemId(entry, tag),
+    meta: INSIGHT_TAG_META[tag] || INSIGHT_TAG_META.candidate_moves
+  };
+}
+
 function currentGameDuePracticeItems() {
   const entries = (coachReviewLog || [])
     .filter(review => review && isInsightProblem(review.tier))
@@ -773,7 +836,13 @@ function formatPracticeContext(entry) {
 const PRACTICE_PROGRESS_KEY = 'coach:practice:v2';
 const LEGACY_PRACTICE_PROGRESS_KEY = 'coach:practice:v1';
 const PRACTICE_EVENT_LIMIT = 2000;
+const DAILY_SPRINT_KEY = 'coach:daily-sprint:v1';
+const DAILY_MOVE_TARGET = 10;
+const DAILY_DRILL_TARGET = 2;
+const DAILY_TRANSFER_TARGET = 6;
+const DAILY_HISTORY_LIMIT = 60;
 const practiceRemoteSyncChains = new Map();
+let renderedAdaptivePlan = null;
 
 function emptyPracticeProgress() {
   return { v: 2, records: {}, events: [] };
@@ -862,6 +931,491 @@ function adoptAnonymousPracticeProgress(ownerId) {
     localStorage.removeItem(PRACTICE_PROGRESS_KEY);
     localStorage.removeItem(LEGACY_PRACTICE_PROGRESS_KEY);
   } catch (e) {}
+}
+
+function dailySprintStorageKey(ownerId = activePracticeOwnerId()) {
+  return ownerId ? `${DAILY_SPRINT_KEY}:${ownerId}` : DAILY_SPRINT_KEY;
+}
+
+function emptyDailySprintHistory() {
+  return { v: 1, days: {} };
+}
+
+function loadDailySprintHistory(ownerId = activePracticeOwnerId()) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(dailySprintStorageKey(ownerId)));
+    if (!parsed || parsed.v !== 1 || !parsed.days || typeof parsed.days !== 'object') {
+      return emptyDailySprintHistory();
+    }
+    return { v: 1, days: parsed.days };
+  } catch (e) {
+    return emptyDailySprintHistory();
+  }
+}
+
+function saveDailySprintHistory(history, ownerId = activePracticeOwnerId()) {
+  try {
+    const days = Object.entries(history.days || {})
+      .sort(([a], [b]) => b.localeCompare(a))
+      .slice(0, DAILY_HISTORY_LIMIT)
+      .reduce((result, [key, value]) => {
+        result[key] = value;
+        return result;
+      }, {});
+    localStorage.setItem(dailySprintStorageKey(ownerId), JSON.stringify({ v: 1, days }));
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
+function adoptAnonymousDailySprint(ownerId) {
+  if (!ownerId) return;
+  const anonymous = loadDailySprintHistory(null);
+  if (!Object.keys(anonymous.days).length) return;
+  const account = loadDailySprintHistory(ownerId);
+  Object.entries(anonymous.days).forEach(([day, value]) => {
+    const existing = account.days[day];
+    const incomingProgress = value && (value.completedUnits || 0);
+    const existingProgress = existing && (existing.completedUnits || 0);
+    const incomingComplete = !!(value && value.completedAt);
+    const existingComplete = !!(existing && existing.completedAt);
+    if (!existing ||
+        (incomingComplete && !existingComplete) ||
+        (incomingComplete === existingComplete && incomingProgress > existingProgress) ||
+        (incomingComplete && existingComplete && value.completedAt > existing.completedAt)) {
+      account.days[day] = value;
+    }
+  });
+  const adopted = saveDailySprintHistory(account, ownerId);
+  if (!adopted.ok) return;
+  try { localStorage.removeItem(DAILY_SPRINT_KEY); } catch (e) {}
+}
+
+function dailySprintStringIds(values) {
+  return Array.from(new Set((Array.isArray(values) ? values : [])
+    .filter(value => typeof value === 'string' && value.length <= 240)))
+    .slice(0, 100);
+}
+
+function dailySprintIdsFrom(day, field) {
+  return day && Array.isArray(day[field]) ? day[field] : [];
+}
+
+function mergeDailySprintDay(localDay, remoteDay) {
+  if (!localDay) return remoteDay ? Object.assign({}, remoteDay) : null;
+  if (!remoteDay) return Object.assign({}, localDay);
+  const localProgress = Number(localDay.completedUnits) || 0;
+  const remoteProgress = Number(remoteDay.completedUnits) || 0;
+  const localUpdated = Number(localDay.updatedAt) || Number(localDay.completedAt) || Number(localDay.startedAt) || 0;
+  const remoteUpdated = Number(remoteDay.updatedAt) || Number(remoteDay.completedAt) || Number(remoteDay.startedAt) || 0;
+  const localRank = (localDay.completedAt ? 10000 : 0) + localProgress;
+  const remoteRank = (remoteDay.completedAt ? 10000 : 0) + remoteProgress;
+  const preferred = remoteRank > localRank || (remoteRank === localRank && remoteUpdated > localUpdated)
+    ? remoteDay
+    : localDay;
+  const merged = Object.assign({}, preferred);
+  merged.drillIds = dailySprintStringIds([...dailySprintIdsFrom(localDay, 'drillIds'), ...dailySprintIdsFrom(remoteDay, 'drillIds')]);
+  merged.moveIds = dailySprintStringIds([...dailySprintIdsFrom(localDay, 'moveIds'), ...dailySprintIdsFrom(remoteDay, 'moveIds')]);
+  merged.unitIds = dailySprintStringIds([
+    ...dailySprintIdsFrom(localDay, 'unitIds'), ...dailySprintIdsFrom(remoteDay, 'unitIds'),
+    ...merged.drillIds, ...merged.moveIds
+  ]);
+  merged.cleanDrillIds = dailySprintStringIds([...dailySprintIdsFrom(localDay, 'cleanDrillIds'), ...dailySprintIdsFrom(remoteDay, 'cleanDrillIds')]);
+  merged.assistedDrillIds = dailySprintStringIds([...dailySprintIdsFrom(localDay, 'assistedDrillIds'), ...dailySprintIdsFrom(remoteDay, 'assistedDrillIds')]);
+  merged.drillTarget = Math.max(0, Number(preferred.drillTarget) || 0);
+  merged.moveTarget = Math.max(0, Number(preferred.moveTarget) || Number(preferred.target) || 0);
+  merged.target = merged.drillTarget + merged.moveTarget;
+  merged.drillsCompleted = Math.min(merged.drillTarget, Math.max(
+    Number(localDay.drillsCompleted) || 0,
+    Number(remoteDay.drillsCompleted) || 0,
+    merged.drillIds.length
+  ));
+  merged.movesCompleted = Math.min(merged.moveTarget, Math.max(
+    Number(localDay.movesCompleted) || 0,
+    Number(remoteDay.movesCompleted) || 0,
+    merged.moveIds.length
+  ));
+  merged.completedUnits = merged.drillsCompleted + merged.movesCompleted;
+  merged.clean = Math.min(merged.drillsCompleted, Math.max(
+    Number(localDay.clean) || 0,
+    Number(remoteDay.clean) || 0,
+    merged.cleanDrillIds.length
+  ));
+  merged.assisted = Math.min(merged.drillsCompleted, Math.max(
+    Number(localDay.assisted) || 0,
+    Number(remoteDay.assisted) || 0,
+    merged.assistedDrillIds.length
+  ));
+  merged.startedAt = Math.min(
+    Number(localDay.startedAt) || Number(remoteDay.startedAt) || Date.now(),
+    Number(remoteDay.startedAt) || Number(localDay.startedAt) || Date.now()
+  );
+  merged.updatedAt = Math.max(localUpdated, remoteUpdated);
+  merged.completedAt = localDay.completedAt && remoteDay.completedAt
+    ? Math.min(Number(localDay.completedAt), Number(remoteDay.completedAt))
+    : (Number(localDay.completedAt) || Number(remoteDay.completedAt) || null);
+  if (merged.completedAt || (merged.target > 0 && merged.completedUnits >= merged.target)) {
+    merged.completedAt = merged.completedAt || merged.updatedAt || Date.now();
+    merged.phase = 'complete';
+  } else {
+    merged.phase = merged.drillsCompleted < merged.drillTarget ? 'drills' : 'moves';
+  }
+  return merged;
+}
+
+function mergeDailySprintHistories(localHistory, remoteRows) {
+  const merged = { v: 1, days: Object.assign({}, (localHistory && localHistory.days) || {}) };
+  (remoteRows || []).forEach(row => {
+    if (!row || !/^\d{4}-\d{2}-\d{2}$/.test(row.day_key) || !row.state || typeof row.state !== 'object') return;
+    merged.days[row.day_key] = mergeDailySprintDay(merged.days[row.day_key], row.state);
+  });
+  return merged;
+}
+
+function dailySprintDayKey(now = Date.now()) {
+  return practiceDayKey(now);
+}
+
+function dailySprintToday(ownerId = activePracticeOwnerId()) {
+  const history = loadDailySprintHistory(ownerId);
+  return history.days[dailySprintDayKey()] || null;
+}
+
+function dailySprintStreak(history = loadDailySprintHistory(), now = Date.now()) {
+  const cursor = new Date(now);
+  cursor.setHours(0, 0, 0, 0);
+  if (!history.days[dailySprintDayKey(cursor.getTime())]?.completedAt) cursor.setDate(cursor.getDate() - 1);
+  let streak = 0;
+  while (history.days[dailySprintDayKey(cursor.getTime())]?.completedAt) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
+
+function updateDailySprint(mutator) {
+  const ownerId = activePracticeOwnerId();
+  const history = loadDailySprintHistory(ownerId);
+  const key = dailySprintDayKey();
+  const current = Object.assign({
+    mode: null,
+    target: 0,
+    completedUnits: 0,
+    unitIds: [],
+    clean: 0,
+    assisted: 0,
+    focus: null,
+    focusTag: null,
+    focusCue: null,
+    phase: null,
+    drillTarget: 0,
+    drillsCompleted: 0,
+    drillIds: [],
+    moveTarget: 0,
+    movesCompleted: 0,
+    moveIds: [],
+    takeaway: null,
+    startedAt: Date.now(),
+    completedAt: null
+  }, history.days[key] || {});
+  const next = mutator(current) || current;
+  next.updatedAt = Date.now();
+  history.days[key] = next;
+  const saved = saveDailySprintHistory(history, ownerId);
+  if (!saved.ok) setCoachStatus('Daily Sprint progress could not be saved in this browser.');
+  else queueRemoteDailySprintSync();
+  return next;
+}
+
+function applyAdaptiveGoalBoost(profiles) {
+  const goal = typeof playerProfile === 'function' ? playerProfile().goal : 'balanced';
+  const tags = {
+    tactics: new Set(['missed_mate', 'missed_check', 'missed_capture', 'allowed_mate', 'allowed_forcing', 'fork_risk', 'hung_material', 'piece_left_en_prise', 'pin_pressure']),
+    repertoire: new Set(['development', 'time_to_castle', 'missed_center_break', 'pawn_structure', 'opening_principles', 'premature_queen', 'candidate_moves']),
+    endgames: new Set(['endgame_technique', 'endgame_conversion', 'passed_pawns', 'back_rank'])
+  }[goal];
+  if (tags) Object.values(profiles).forEach(profile => { if (tags.has(profile.tag)) profile.score += 0.75; });
+}
+
+function adaptiveFocusProfile(entries, now = Date.now()) {
+  const profiles = {};
+  const ensure = tag => {
+    if (!INSIGHT_TAG_META[tag]) return null;
+    if (!profiles[tag]) profiles[tag] = {
+      tag, score: 0, occurrences: 0, attempts: 0, correct: 0, latestAt: 0
+    };
+    return profiles[tag];
+  };
+  (entries || []).forEach(entry => {
+    if (!entry || !isInsightProblem(entry.tier)) return;
+    const ageDays = Math.max(0, (now - (entry.ts || 0)) / DAY_MS);
+    const recency = ageDays <= 7 ? 1.5 : (ageDays <= 30 ? 1 : 0.55);
+    const severity = INSIGHT_TIER_WEIGHT[entry.tier] || 1;
+    (entry.tags || []).forEach(tag => {
+      const profile = ensure(tag);
+      if (!profile) return;
+      profile.score += severity * recency;
+      profile.occurrences += 1;
+      profile.latestAt = Math.max(profile.latestAt, entry.ts || 0);
+    });
+  });
+  loadPracticeProgress().events.forEach(event => {
+    if (!event || !event.tag || !Number.isFinite(event.at) || now - event.at > 30 * DAY_MS) return;
+    const profile = ensure(event.tag);
+    if (!profile) return;
+    profile.attempts += 1;
+    if (event.correct && !event.revealed) {
+      profile.correct += 1;
+      profile.score = Math.max(0, profile.score - 0.4);
+    } else {
+      profile.score += event.revealed ? 2 : 2.5;
+    }
+    profile.latestAt = Math.max(profile.latestAt, event.at);
+  });
+  applyAdaptiveGoalBoost(profiles);
+  return Object.values(profiles).sort((a, b) =>
+    b.score - a.score || b.occurrences - a.occurrences || b.latestAt - a.latestAt
+  );
+}
+
+function adaptiveFocusReason(profile) {
+  if (!profile) return 'Coach needs a short baseline before choosing a focus.';
+  const mistakes = `${profile.occurrences} reviewed error${profile.occurrences === 1 ? '' : 's'}`;
+  if (!profile.attempts) return `${mistakes}; this pattern has not been rehearsed yet.`;
+  const rate = Math.round(profile.correct / profile.attempts * 100);
+  return `${mistakes} and ${rate}% first-try practice success across ${profile.attempts} attempt${profile.attempts === 1 ? '' : 's'}.`;
+}
+
+function prioritizeAdaptivePractice(items, profiles) {
+  const scoreByTag = new Map((profiles || []).map(profile => [profile.tag, profile.score]));
+  return (items || []).slice().sort((a, b) => {
+    const score = (scoreByTag.get(b.tag) || 0) - (scoreByTag.get(a.tag) || 0);
+    if (score) return score;
+    const aDue = (practiceRecordFor(a) || {}).dueAt || 0;
+    const bDue = (practiceRecordFor(b) || {}).dueAt || 0;
+    return aDue - bDue;
+  });
+}
+
+function adaptiveDailyPlan(entries, queue, due, totals) {
+  const profiles = adaptiveFocusProfile(entries);
+  const orderedDue = prioritizeAdaptivePractice(due, profiles);
+  const focusProfile = orderedDue.length
+    ? profiles.find(profile => profile.tag === orderedDue[0].tag) || { tag: orderedDue[0].tag, occurrences: 1, attempts: 0, correct: 0 }
+    : profiles[0] || null;
+  const meta = focusProfile ? INSIGHT_TAG_META[focusProfile.tag] : null;
+  const returning = !!((entries || []).length || (queue || []).length || (totals && totals.attempts));
+  if (orderedDue.length) {
+    const plan = {
+      kind: 'focus-transfer',
+      focusTag: focusProfile.tag,
+      focus: meta.title,
+      cue: meta.practice,
+      reason: adaptiveFocusReason(focusProfile),
+      drillTarget: Math.min(DAILY_DRILL_TARGET, orderedDue.length),
+      moveTarget: DAILY_TRANSFER_TARGET,
+      orderedDue
+    };
+    return typeof personalizeAdaptivePlan === 'function' ? personalizeAdaptivePlan(plan) : plan;
+  }
+  if (returning && meta) {
+    const plan = {
+      kind: 'transfer', focusTag: focusProfile.tag, focus: meta.title,
+      cue: meta.practice, reason: adaptiveFocusReason(focusProfile),
+      drillTarget: 0, moveTarget: 8, orderedDue: []
+    };
+    return typeof personalizeAdaptivePlan === 'function' ? personalizeAdaptivePlan(plan) : plan;
+  }
+  const plan = {
+    kind: 'baseline', focusTag: null, focus: 'Build your baseline',
+    cue: 'Play naturally. Coach will turn recurring mistakes into tomorrow’s focus.',
+    reason: 'No reviewed history yet.', drillTarget: 0, moveTarget: DAILY_MOVE_TARGET, orderedDue: []
+  };
+  return typeof personalizeAdaptivePlan === 'function' ? personalizeAdaptivePlan(plan) : plan;
+}
+
+function initializeAdaptiveDay(day, plan) {
+  const selected = plan || renderedAdaptivePlan || adaptiveDailyPlan([], [], [], practiceProgressTotals());
+  day.mode = 'adaptive';
+  day.phase = selected.drillTarget ? 'drills' : 'moves';
+  day.focusTag = selected.focusTag;
+  day.focus = selected.focus;
+  day.focusCue = selected.cue;
+  day.focusReason = selected.reason;
+  day.drillTarget = selected.drillTarget;
+  day.moveTarget = selected.moveTarget;
+  day.target = selected.drillTarget + selected.moveTarget;
+  day.drillsCompleted = 0;
+  day.movesCompleted = 0;
+  day.completedUnits = 0;
+  day.drillIds = [];
+  day.moveIds = [];
+  day.unitIds = [];
+  day.clean = 0;
+  day.assisted = 0;
+  day.cleanDrillIds = [];
+  day.assistedDrillIds = [];
+  return day;
+}
+
+function upgradeLegacyDailySprint(day, plan) {
+  if (!day || day.mode === 'adaptive') return day;
+  const selected = plan || renderedAdaptivePlan || adaptiveDailyPlan([], [], [], practiceProgressTotals());
+  const legacyMode = day.mode;
+  const legacyIds = Array.isArray(day.unitIds) ? day.unitIds.slice() : [];
+  const legacyCompleted = Math.min(day.target || legacyIds.length, day.completedUnits || legacyIds.length);
+  day.mode = 'adaptive';
+  day.focusTag = selected.focusTag;
+  day.focus = day.focus || selected.focus;
+  day.focusCue = selected.cue;
+  day.focusReason = 'Continued from the Daily Sprint already started before this update.';
+  day.clean = day.clean || 0;
+  day.assisted = day.assisted || 0;
+  if (legacyMode === 'drills') {
+    day.drillsCompleted = legacyCompleted;
+    day.drillIds = legacyIds;
+    day.drillTarget = Math.max(
+      day.drillsCompleted,
+      Math.min(day.target || DAILY_DRILL_TARGET, selected.drillTarget || DAILY_DRILL_TARGET)
+    );
+    day.phase = day.drillsCompleted >= day.drillTarget ? 'moves' : 'drills';
+    day.moveTarget = DAILY_TRANSFER_TARGET;
+    day.movesCompleted = 0;
+    day.moveIds = [];
+  } else {
+    day.phase = 'moves';
+    day.drillTarget = 0;
+    day.drillsCompleted = 0;
+    day.drillIds = [];
+    day.moveTarget = day.target || DAILY_MOVE_TARGET;
+    day.movesCompleted = legacyCompleted;
+    day.moveIds = legacyIds;
+  }
+  day.target = day.drillTarget + day.moveTarget;
+  day.completedUnits = day.drillsCompleted + day.movesCompleted;
+  return day;
+}
+
+function beginDailyMoveSprint() {
+  const existing = dailySprintToday();
+  if (existing && (existing.completedAt || existing.mode === 'adaptive')) return existing;
+  return updateDailySprint(day => {
+    if (day.mode) return upgradeLegacyDailySprint(day, renderedAdaptivePlan);
+    return initializeAdaptiveDay(day, renderedAdaptivePlan);
+  });
+}
+
+function beginDailyDrillSprint(items) {
+  const existing = dailySprintToday();
+  if (existing && (existing.completedAt || existing.mode === 'adaptive')) return existing;
+  return updateDailySprint(day => {
+    if (day.mode) return upgradeLegacyDailySprint(day, renderedAdaptivePlan);
+    initializeAdaptiveDay(day, renderedAdaptivePlan);
+    day.drillTarget = Math.min(day.drillTarget || DAILY_DRILL_TARGET, (items || []).length);
+    day.target = day.drillTarget + day.moveTarget;
+    return day;
+  });
+}
+
+function dailyMoveSprintTakeaway(day) {
+  const scored = (coachReviewLog || []).filter(review => review && review.tier && review.tier !== 'unknown');
+  if (day && day.focusTag && INSIGHT_TAG_META[day.focusTag]) {
+    const repeats = scored.filter(review => (review.insightTags || review.tags || []).includes(day.focusTag)).length;
+    const result = repeats
+      ? `The pattern resurfaced ${repeats} time${repeats === 1 ? '' : 's'} in transfer play.`
+      : 'The pattern did not repeat during the transfer moves.';
+    return `${day.focus}: ${day.clean || 0}/${day.drillsCompleted || 0} drills first-try. ${result} Keep using this cue: ${day.focusCue}`;
+  }
+  const problem = scored.slice().reverse().find(review => isInsightProblem(review.tier));
+  const tag = problem && (problem.tags || []).find(value => INSIGHT_TAG_META[value]);
+  if (tag) return `Today’s focus: ${INSIGHT_TAG_META[tag].title}. ${INSIGHT_TAG_META[tag].practice}`;
+  const accuracy = accuracyFromTallies(coachStats || {}, scored.length);
+  return accuracy === null
+    ? 'You completed the habit. Return tomorrow for the next focused sprint.'
+    : `Clean sprint: ${accuracy}% accuracy across ${scored.length} reviewed moves.`;
+}
+
+function recordDailySprintMove(review) {
+  const existing = dailySprintToday();
+  if (existing && (existing.completedAt || existing.mode === 'drills' || (existing.mode === 'adaptive' && existing.phase === 'drills'))) return existing;
+  const id = `${coachLocalGameId || 'local'}:${review.ply}`;
+  return updateDailySprint(day => {
+    if (day.mode && day.mode !== 'adaptive') upgradeLegacyDailySprint(day, renderedAdaptivePlan);
+    else if (day.mode !== 'adaptive') initializeAdaptiveDay(day, renderedAdaptivePlan);
+    day.phase = 'moves';
+    day.moveIds = Array.isArray(day.moveIds) ? day.moveIds : [];
+    if (!day.moveIds.includes(id)) day.moveIds.push(id);
+    day.movesCompleted = Math.min(day.moveTarget, day.moveIds.length);
+    day.completedUnits = (day.drillsCompleted || 0) + day.movesCompleted;
+    if (day.completedUnits >= day.target && !day.completedAt) {
+      day.completedAt = Date.now();
+      day.phase = 'complete';
+      day.takeaway = dailyMoveSprintTakeaway(day);
+    }
+    return day;
+  });
+}
+
+function recordDailySprintDrill(item, revealed, clean) {
+  const existing = dailySprintToday();
+  if (existing && (existing.completedAt || existing.mode === 'moves')) return existing;
+  return updateDailySprint(day => {
+    if (day.mode && day.mode !== 'adaptive') upgradeLegacyDailySprint(day, renderedAdaptivePlan);
+    else if (day.mode !== 'adaptive') initializeAdaptiveDay(day, renderedAdaptivePlan);
+    day.drillIds = Array.isArray(day.drillIds) ? day.drillIds : [];
+    day.cleanDrillIds = Array.isArray(day.cleanDrillIds) ? day.cleanDrillIds : [];
+    day.assistedDrillIds = Array.isArray(day.assistedDrillIds) ? day.assistedDrillIds : [];
+    if (!day.drillIds.includes(item.id)) {
+      day.drillIds.push(item.id);
+      if (clean) day.cleanDrillIds.push(item.id);
+      if (revealed) day.assistedDrillIds.push(item.id);
+    }
+    day.drillsCompleted = Math.min(day.drillTarget, day.drillIds.length);
+    day.clean = Math.min(day.drillsCompleted, Math.max(day.clean || 0, day.cleanDrillIds.length));
+    day.assisted = Math.min(day.drillsCompleted, Math.max(day.assisted || 0, day.assistedDrillIds.length));
+    day.completedUnits = day.drillsCompleted + (day.movesCompleted || 0);
+    if (day.drillsCompleted >= day.drillTarget) day.phase = 'moves';
+    return day;
+  });
+}
+
+function setDailySprintProgress(completed, target, unit) {
+  const safeTarget = Math.max(1, target || 1);
+  const safeCompleted = Math.max(0, Math.min(safeTarget, completed || 0));
+  const percent = Math.round(safeCompleted / safeTarget * 100);
+  $('#daily-sprint-progress-label').text(`${safeCompleted} of ${safeTarget} ${unit}${safeTarget === 1 ? '' : 's'}`);
+  $('#daily-sprint-progress-percent').text(`${percent}%`);
+  $('#daily-sprint-fill').css('width', `${percent}%`);
+}
+
+function dailySprintProgressUnit(day) {
+  if (!day || day.mode !== 'adaptive') return day && day.mode === 'drills' ? 'drill' : 'move';
+  return day.drillTarget > 0 ? 'step' : 'move';
+}
+
+function renderDailySprintChrome(day) {
+  const history = loadDailySprintHistory();
+  const streak = dailySprintStreak(history);
+  $('#daily-sprint-streak').text(streak ? `${streak}-day streak` : 'Start a streak');
+  $('#coach-daily-plan').toggleClass('is-complete', !!(day && day.completedAt));
+  const focus = day && day.focus
+    ? { title: day.focus, cue: day.focusCue, reason: day.focusReason }
+    : renderedAdaptivePlan && { title: renderedAdaptivePlan.focus, cue: renderedAdaptivePlan.cue, reason: renderedAdaptivePlan.reason };
+  const style = renderedAdaptivePlan && renderedAdaptivePlan.sessionStyle === 'drills'
+    ? 'Drills-first session.'
+    : renderedAdaptivePlan && renderedAdaptivePlan.sessionStyle === 'play'
+      ? 'Play-first session.'
+      : 'Balanced session.';
+  const repertoire = renderedAdaptivePlan && renderedAdaptivePlan.repertoireFocus
+    ? ` Repertoire focus: ${renderedAdaptivePlan.repertoireFocus}.`
+    : '';
+  $('#daily-sprint-focus-title').text(focus ? `Focus · ${focus.title}` : '');
+  $('#daily-sprint-focus-detail').text(focus ? `${focus.cue} ${focus.reason} ${style}${repertoire}` : '');
+  $('#daily-sprint-focus').toggle(!!focus);
+  $('#daily-sprint-takeaway')
+    .text(day && day.takeaway ? day.takeaway : '')
+    .toggle(!!(day && day.completedAt && day.takeaway));
 }
 
 function hashPracticeValue(value) {
@@ -1059,6 +1613,8 @@ function recordPracticeAttempt(item, correct, revealed) {
   const saved = savePracticeProgress(state);
   if (!saved.ok) setCoachStatus('Practice result could not be saved in this browser.');
   queueRemotePracticeProgressSync(event);
+  if (typeof renderEndgameTrack === 'function') renderEndgameTrack();
+  if (typeof renderWeeklyReview === 'function') renderWeeklyReview();
   return record;
 }
 
@@ -1178,14 +1734,157 @@ async function syncPendingPracticeEvents() {
   }
 }
 
+function queueRemoteDailySprintSync() {
+  if (!hasCoachDbSession()) return;
+  if (dailySprintSyncTimer) clearTimeout(dailySprintSyncTimer);
+  dailySprintSyncTimer = setTimeout(() => {
+    dailySprintSyncTimer = null;
+    dailySprintSyncChain = dailySprintSyncChain
+      .catch(() => {})
+      .then(() => syncRemoteDailySprints({ silent: true }))
+      .catch(handleCoachDbError);
+  }, DAILY_SPRINT_SYNC_DEBOUNCE_MS);
+}
+
+async function syncRemoteDailySprints(opts = {}) {
+  if (!hasCoachDbSession()) return;
+  const ownerId = activePracticeOwnerId();
+  if (!opts.silent) setCoachDbStatus('Syncing training sessions...');
+  const { data, error } = await coachDbClient
+    .from('daily_training_sessions')
+    .select('day_key,state,updated_at')
+    .eq('user_id', ownerId)
+    .order('day_key', { ascending: false })
+    .limit(DAILY_HISTORY_LIMIT);
+  if (error) throw error;
+  if (activePracticeOwnerId() !== ownerId) return;
+
+  const merged = mergeDailySprintHistories(loadDailySprintHistory(ownerId), data || []);
+  const saved = saveDailySprintHistory(merged, ownerId);
+  if (!saved.ok) throw saved.error || new Error('Training history could not be saved locally');
+  const latest = loadDailySprintHistory(ownerId);
+  const payload = Object.entries(latest.days).map(([dayKey, state]) => ({
+    user_id: ownerId,
+    day_key: dayKey,
+    state,
+    client_updated_at: new Date(Number(state.updatedAt) || Number(state.completedAt) || Number(state.startedAt) || Date.now()).toISOString()
+  }));
+  if (payload.length) {
+    const result = await coachDbClient
+      .from('daily_training_sessions')
+      .upsert(payload, { onConflict: 'user_id,day_key' });
+    if (result.error) throw result.error;
+  }
+  if (activePracticeOwnerId() !== ownerId) return;
+  renderCoachDailyPlan();
+  if (!opts.silent) setCoachDbStatus('Training sessions synced.');
+}
+
 function formatPracticeDue(record) {
   if (!record || !record.dueAt || record.dueAt <= Date.now()) return 'Due now';
   const days = Math.max(1, Math.ceil((record.dueAt - Date.now()) / DAY_MS));
   return `Due in ${days}d`;
 }
 
+function renderCoachDailyPlan(queue, due, totals, entries) {
+  const items = Array.isArray(queue) ? queue : Array.from(renderedPracticeItems.values());
+  const dueItems = Array.isArray(due) ? due : items.filter(item => practiceIsDue(item));
+  const progress = totals || practiceProgressTotals();
+  const $action = $('#btn-coach-next-action');
+  const sprint = dailySprintToday();
+  if (!sprint) renderedAdaptivePlan = adaptiveDailyPlan(entries || [], items, dueItems, progress);
+  renderDailySprintChrome(sprint);
+
+  if (sprint && sprint.completedAt) {
+    setDailySprintProgress(sprint.target, sprint.target, dailySprintProgressUnit(sprint));
+    $('#coach-daily-plan-title').text('✓ Today’s training complete');
+    $('#coach-daily-plan-detail').text(sprint.mode === 'adaptive'
+      ? 'You rehearsed a priority, tested it in live play, and saved the result. Come back tomorrow for an updated focus.'
+      : 'You finished today’s sprint. Come back tomorrow for a newly adaptive session.');
+    $action
+      .text(coachGameActive && !coachPracticeSession ? 'Keep playing' : 'Play an extra game')
+      .attr('data-action', coachGameActive && !coachPracticeSession ? 'continue' : 'extra-game');
+    return;
+  }
+
+  if (coachPracticeSession) {
+    const target = sprint && sprint.mode === 'adaptive' ? sprint.target : (coachPracticeRun ? coachPracticeRun.items.length : 1);
+    const completed = sprint && sprint.mode === 'adaptive' ? sprint.completedUnits : (coachPracticeRun ? coachPracticeRun.completed : 0);
+    setDailySprintProgress(completed, target, sprint && sprint.mode === 'adaptive' ? 'step' : 'drill');
+    $('#coach-daily-plan-title').text(`Rehearse ${sprint && sprint.focus ? sprint.focus : 'today’s focus'}`);
+    $('#coach-daily-plan-detail').text('Solve the focused positions first. Live transfer moves come next.');
+    $action.text('Return to the drill').attr('data-action', 'continue');
+    return;
+  }
+
+  if (sprint && sprint.mode === 'adaptive' && sprint.phase === 'drills') {
+    setDailySprintProgress(sprint.completedUnits, sprint.target, 'step');
+    const remaining = Math.max(0, sprint.drillTarget - (sprint.drillsCompleted || 0));
+    $('#coach-daily-plan-title').text(`Continue rehearsing ${sprint.focus || 'today’s focus'}`);
+    $('#coach-daily-plan-detail').text(`${remaining} focused drill${remaining === 1 ? '' : 's'} remain before live transfer play.`);
+    $action.text('Continue focused drills').attr('data-action', 'practice');
+    return;
+  }
+
+  if (sprint && sprint.mode === 'adaptive' && !sprint.focusTag) {
+    setDailySprintProgress(sprint.completedUnits, sprint.target, dailySprintProgressUnit(sprint));
+    const remaining = Math.max(0, sprint.moveTarget - (sprint.movesCompleted || 0));
+    $('#coach-daily-plan-title').text('Build your baseline in play');
+    $('#coach-daily-plan-detail').text(`${remaining} reviewed move${remaining === 1 ? '' : 's'} remain. Each move gets immediate Coach feedback.`);
+    $action.text(coachGameActive ? 'Return to the board' : 'Start training').attr('data-action', coachGameActive ? 'continue' : 'game');
+    return;
+  }
+
+  if (sprint && sprint.mode === 'adaptive') {
+    setDailySprintProgress(sprint.completedUnits, sprint.target, dailySprintProgressUnit(sprint));
+    const remaining = Math.max(0, sprint.moveTarget - (sprint.movesCompleted || 0));
+    $('#coach-daily-plan-title').text(`Transfer ${sprint.focus || 'the lesson'} into play`);
+    $('#coach-daily-plan-detail').text(`${remaining} reviewed move${remaining === 1 ? '' : 's'} remain. Use the focus cue before every move.`);
+    $action.text(coachGameActive ? 'Return to the board' : 'Start transfer game').attr('data-action', coachGameActive ? 'continue' : 'game');
+    return;
+  }
+
+  if (sprint && sprint.mode === 'moves') {
+    setDailySprintProgress(sprint.completedUnits, sprint.target || DAILY_MOVE_TARGET, 'move');
+    $('#coach-daily-plan-title').text(coachGameActive ? 'Daily Sprint in progress' : 'Continue your Daily Sprint');
+    $('#coach-daily-plan-detail').text(`${Math.max(0, (sprint.target || DAILY_MOVE_TARGET) - sprint.completedUnits)} reviewed moves remain. Each move gets immediate Coach feedback.`);
+    $action.text(coachGameActive ? 'Return to the board' : 'Continue Daily Sprint').attr('data-action', coachGameActive ? 'continue' : 'game');
+    return;
+  }
+
+  if (coachGameActive && coachGame && !coachGame.game_over()) {
+    setDailySprintProgress(coachStats ? coachStats.moves : 0, DAILY_MOVE_TARGET, 'move');
+    $('#coach-daily-plan-title').text('Daily Sprint in progress');
+    $('#coach-daily-plan-detail').text('Play ten reviewed moves. You can stop when the sprint is complete or keep playing the game.');
+    $action.text('Return to the board').attr('data-action', 'continue');
+    return;
+  }
+
+  if (dueItems.length) {
+    const plan = renderedAdaptivePlan;
+    const target = plan.drillTarget + plan.moveTarget;
+    setDailySprintProgress(0, target, 'step');
+    $('#coach-daily-plan-title').text(`Train ${plan.focus}, then transfer`);
+    $('#coach-daily-plan-detail').text(`${plan.drillTarget} focused drill${plan.drillTarget === 1 ? '' : 's'} → ${plan.moveTarget} reviewed game moves. Coach chose this from your recent errors and practice results.`);
+    $action
+      .text('Start adaptive session')
+      .attr('data-action', 'practice');
+    return;
+  }
+
+  const returning = progress.attempts > 0 || items.length > 0;
+  const plan = renderedAdaptivePlan;
+  setDailySprintProgress(0, plan.moveTarget, 'move');
+  $('#coach-daily-plan-title').text(returning && plan.focusTag ? `Transfer ${plan.focus}` : 'Start your first coached session');
+  $('#coach-daily-plan-detail').text(returning && plan.focusTag
+    ? `${plan.moveTarget} reviewed moves using one personalised cue. Coach will check whether the pattern returns.`
+    : 'Play ten reviewed moves and Coach will choose your first training focus.');
+  $action.text(returning ? 'Start focused game' : 'Start training').attr('data-action', 'game');
+}
+
 function renderPracticeQueue(entries, counts) {
-  const queue = practiceItemsForEntries(entries, counts);
+  const profiles = adaptiveFocusProfile(entries);
+  const queue = prioritizeAdaptivePractice(practiceItemsForEntries(entries, counts), profiles);
   const $section = $('#practice-section');
   const $list = $('#practice-list').empty();
   const totals = practiceProgressTotals();
@@ -1193,6 +1892,7 @@ function renderPracticeQueue(entries, counts) {
   if (!queue.length) {
     if (!totals.attempts) {
       $section.hide();
+      renderCoachDailyPlan(queue, [], totals, entries);
       return;
     }
     $('#practice-count').text('0 due');
@@ -1203,6 +1903,7 @@ function renderPracticeQueue(entries, counts) {
     $('#btn-practice-session-start').text('Start practice').prop('disabled', true);
     renderPracticeTrends();
     $section.show();
+    renderCoachDailyPlan(queue, [], totals, entries);
     return;
   }
   const due = queue.filter(item => practiceIsDue(item));
@@ -1231,6 +1932,7 @@ function renderPracticeQueue(entries, counts) {
     $list.append($row);
   });
   $section.show();
+  renderCoachDailyPlan(queue, due, totals, entries);
 }
 
 function renderTheoryCards(entries, counts) {
@@ -1262,6 +1964,8 @@ function renderInsights() {
     : [];
   const entries = remoteEntries.length ? remoteEntries : localEntries;
   const usingRemote = remoteEntries.length > 0;
+  if (typeof renderWeeklyReview === 'function') renderWeeklyReview(entries);
+  renderRecurringMistakeDashboard(entries);
   const $section = $('#insights-section');
   if (!entries.length) {
     $section.hide();
@@ -1353,28 +2057,46 @@ function createMemoryAuthStorage() {
 }
 
 function coachAuthStorage() {
+  const storage = coachAuthStoragePersistent ? localStorage : sessionStorage;
   return {
     getItem(key) {
-      try { return sessionStorage.getItem(key); } catch (e) { return null; }
+      try { return storage.getItem(key); } catch (e) { return null; }
     },
     setItem(key, value) {
-      try { sessionStorage.setItem(key, value); } catch (e) {}
+      try { storage.setItem(key, value); } catch (e) {}
     },
     removeItem(key) {
-      try { sessionStorage.removeItem(key); } catch (e) {}
+      try { storage.removeItem(key); } catch (e) {}
     }
   };
 }
 function checkCoachAuthStorage() {
   const key = 'coach:auth-storage-test';
   try {
-    sessionStorage.setItem(key, '1');
-    sessionStorage.removeItem(key);
+    localStorage.setItem(key, '1');
+    localStorage.removeItem(key);
+    // Older builds used sessionStorage. Preserve an existing Supabase session
+    // when upgrading, while making future magic-link returns work across tabs.
+    try {
+      for (let i = 0; i < sessionStorage.length; i += 1) {
+        const storageKey = sessionStorage.key(i);
+        if (!storageKey || !storageKey.startsWith('sb-') || localStorage.getItem(storageKey)) continue;
+        const value = sessionStorage.getItem(storageKey);
+        if (value) localStorage.setItem(storageKey, value);
+      }
+    } catch (migrationError) { /* a fresh session can still be created */ }
     coachAuthStoragePersistent = true;
     return { ok: true, storage: coachAuthStorage() };
   } catch (e) {
-    coachAuthStoragePersistent = false;
-    return { ok: false, storage: createMemoryAuthStorage(), error: e };
+    try {
+      sessionStorage.setItem(key, '1');
+      sessionStorage.removeItem(key);
+      coachAuthStoragePersistent = false;
+      return { ok: true, storage: coachAuthStorage() };
+    } catch (fallbackError) {
+      coachAuthStoragePersistent = false;
+      return { ok: false, storage: createMemoryAuthStorage(), error: fallbackError || e };
+    }
   }
 }
 
@@ -1448,7 +2170,11 @@ async function initCoachDb() {
       });
       const { data } = await coachDbClient.auth.getSession();
       coachAuthUser = data && data.session ? data.session.user : null;
-      if (coachAuthUser) adoptAnonymousPracticeProgress(coachAuthUser.id);
+      if (coachAuthUser) {
+        adoptAnonymousPracticeProgress(coachAuthUser.id);
+        adoptAnonymousDailySprint(coachAuthUser.id);
+        if (typeof adoptAnonymousGrowthState === 'function') adoptAnonymousGrowthState(coachAuthUser.id);
+      }
       coachDbStatus = coachAccountSyncStatus();
       renderCoachAuth();
       renderInsights();
@@ -1458,7 +2184,11 @@ async function initCoachDb() {
       }
       coachDbClient.auth.onAuthStateChange((event, session) => {
         coachAuthUser = session ? session.user : null;
-        if (coachAuthUser) adoptAnonymousPracticeProgress(coachAuthUser.id);
+        if (coachAuthUser) {
+          adoptAnonymousPracticeProgress(coachAuthUser.id);
+          adoptAnonymousDailySprint(coachAuthUser.id);
+          if (typeof adoptAnonymousGrowthState === 'function') adoptAnonymousGrowthState(coachAuthUser.id);
+        }
         coachRemoteInsightEntries = null;
         coachDbStatus = coachAccountSyncStatus();
         renderCoachAuth();
@@ -1511,6 +2241,14 @@ async function sendCoachLoginLink() {
 async function signOutCoach() {
   if (!coachDbClient) return;
   clearQueuedRemoteCoachGameUpdate();
+  if (dailySprintSyncTimer) {
+    clearTimeout(dailySprintSyncTimer);
+    dailySprintSyncTimer = null;
+  }
+  if (typeof growthRemoteSync !== 'undefined' && growthRemoteSync.timer) {
+    clearTimeout(growthRemoteSync.timer);
+    growthRemoteSync.timer = null;
+  }
   await coachDbClient.auth.signOut();
   coachAuthUser = null;
   coachRemoteInsightEntries = null;
@@ -1631,7 +2369,7 @@ function remoteMovePayload(review, gameId) {
     centipawn_loss: Math.round(review.loss || 0),
     rank: review.rank || null,
     tags,
-    explanation: review.whyBetter || null,
+    explanation: [review.whyBetter, review.lesson, review.opponentThreat].filter(Boolean).join(' ') || null,
     pv_san: review.pvSan || [],
     top_alternatives: review.topAlternatives || [],
     eval_before: review.evalBefore || null,
@@ -1841,7 +2579,11 @@ async function refreshRemoteInsights(opts = {}) {
   }
   const ownerId = activePracticeOwnerId();
   if (!opts.silent) setCoachDbStatus('Loading account insights...');
-  await syncPendingPracticeEvents().catch(handleCoachDbError);
+  await Promise.all([
+    syncPendingPracticeEvents(),
+    syncRemoteDailySprints({ silent: true }),
+    typeof syncGrowthState === 'function' ? syncGrowthState({ silent: true }) : Promise.resolve()
+  ]);
   const [movesResult, drillsResult, attemptsResult] = await Promise.all([
     coachDbClient
       .from('coach_moves')
@@ -1887,6 +2629,9 @@ const coachSync = {
   },
   loadInsights(opts) {
     return refreshRemoteInsights(opts || {});
+  },
+  syncDailySessions(opts) {
+    return syncRemoteDailySprints(opts || {});
   }
 };
 
@@ -2084,6 +2829,7 @@ const engineClient = {
   status: 'idle',   // idle | loading | ready
   queue: [],
   current: null,
+  supportedOptions: new Set(),
   _readyResolvers: [],
 
   init() {
@@ -2092,6 +2838,7 @@ const engineClient = {
       return new Promise((resolve, reject) => this._readyResolvers.push({ resolve, reject }));
     }
     this.status = 'loading';
+    this.supportedOptions = new Set();
     return new Promise((resolve, reject) => {
       try {
         this.worker = new Worker('stockfish/stockfish.js');
@@ -2135,6 +2882,11 @@ const engineClient = {
 
   _onMessage(msg) {
     if (typeof msg !== 'string') return;
+    const optionMatch = msg.match(/^option name (.+?) type /);
+    if (optionMatch) {
+      this.supportedOptions.add(optionMatch[1]);
+      return;
+    }
     if (msg === 'uciok') { this.worker.postMessage('isready'); return; }
     if (msg === 'readyok' && this.status === 'loading') {
       this.status = 'ready';
@@ -2187,7 +2939,6 @@ const engineClient = {
         reject: reject,
         lastInfo: null,
         skill: (opts && typeof opts.skill === 'number') ? opts.skill : null,
-        elo: (opts && typeof opts.elo === 'number') ? opts.elo : null,
         multipv: (opts && opts.multipv) || null,
         timeoutId: null
       };
@@ -2218,15 +2969,13 @@ const engineClient = {
     if (this.status !== 'ready' || this.current || this.queue.length === 0) return;
     this.current = this.queue.shift();
     this.worker.postMessage('ucinewgame');
-    // Apply strength options per task
-    if (this.current.elo !== null && this.current.elo !== undefined) {
-      this.worker.postMessage('setoption name UCI_LimitStrength value true');
-      this.worker.postMessage('setoption name UCI_Elo value ' + this.current.elo);
-    } else if (this.current.skill !== null && this.current.skill !== undefined) {
-      this.worker.postMessage('setoption name UCI_LimitStrength value false');
+    // Stockfish.js 10 supports Skill Level but not UCI_Elo. Only send options
+    // announced during the UCI handshake so unsupported commands can never
+    // silently turn a displayed level into full-strength play.
+    if (this.current.skill !== null && this.current.skill !== undefined &&
+        this.supportedOptions.has('Skill Level')) {
       this.worker.postMessage('setoption name Skill Level value ' + this.current.skill);
-    } else {
-      this.worker.postMessage('setoption name UCI_LimitStrength value false');
+    } else if (this.supportedOptions.has('Skill Level')) {
       this.worker.postMessage('setoption name Skill Level value 20');
     }
     // MultiPV
@@ -2301,42 +3050,6 @@ function uciFromMove(mv) {
   return mv.from + mv.to + (mv.promotion || '');
 }
 
-function materialValue(piece) {
-  return ({ p: 100, n: 300, b: 325, r: 500, q: 900, k: 0 })[piece] || 0;
-}
-
-function moveHeuristicScore(gameObj, mv) {
-  let score = Math.random() * 80;
-  if (mv.captured) score += materialValue(mv.captured) - materialValue(mv.piece) * 0.18;
-  if (mv.flags && mv.flags.includes('p')) score += materialValue(mv.promotion || 'q') - 100;
-  if (mv.san && mv.san.includes('+')) score += 120;
-  if (mv.san && mv.san.includes('#')) score += 5000;
-  if (['n', 'b'].includes(mv.piece)) score += 25;
-  if (mv.piece === 'q') score -= 20;
-  if (mv.piece === 'k' && !(mv.flags || '').includes('k') && !(mv.flags || '').includes('q')) score -= 35;
-  return score;
-}
-
-function chooseWeakOpponentMove(fen, elo) {
-  const g = new Chess(fen);
-  const moves = g.moves({ verbose: true });
-  if (!moves.length) return null;
-  if (elo <= 500) {
-    return uciFromMove(moves[Math.floor(Math.random() * moves.length)]);
-  }
-  const randomRate = elo < 700 ? 0.65 : (elo < 900 ? 0.42 : 0.22);
-  if (Math.random() < randomRate) {
-    return uciFromMove(moves[Math.floor(Math.random() * moves.length)]);
-  }
-  const noise = elo < 700 ? 650 : (elo < 900 ? 380 : 180);
-  const ranked = moves
-    .map(mv => ({ mv, score: moveHeuristicScore(g, mv) + (Math.random() * noise) }))
-    .sort((a, b) => b.score - a.score);
-  const poolSize = elo < 700 ? 8 : (elo < 900 ? 5 : 3);
-  const pool = ranked.slice(0, Math.min(poolSize, ranked.length));
-  return uciFromMove(pool[Math.floor(Math.random() * pool.length)].mv);
-}
-
 // ─────────────────────────────────────────────
 // COACH CLASSIFICATION
 // ─────────────────────────────────────────────
@@ -2393,6 +3106,33 @@ function movePurposeText(fenBefore, bestUci, userUciMove, bestLine, afterInfo) {
     return `${best.san} keeps the engine's preferred plan; your move gives the opponent a better version of the position.`;
   }
   return `${best.san} is better because ${reasons.slice(0, 2).join('; ')}.`;
+}
+
+function coachExplanationContext(fenBefore, userUci, bestUci, fenAfter, afterInfo) {
+  const user = moveFromUci(fenBefore, userUci);
+  const best = moveFromUci(fenBefore, bestUci);
+  const reply = afterInfo && afterInfo.pv && afterInfo.pv[0]
+    ? moveFromUci(fenAfter, afterInfo.pv[0])
+    : null;
+  let lesson = 'Candidate selection: compare checks, captures, threats, and at least one improving move before committing.';
+  if (best && best.san && best.san.includes('#')) lesson = 'Forcing move: the position contains an immediate checkmate, so calculation should start with checks.';
+  else if (best && best.captured) lesson = `Tactical awareness: ${best.san} wins a ${PIECE_NAME[best.captured]?.toLowerCase() || 'piece'} before a quiet plan matters.`;
+  else if (best && best.san && best.san.includes('+')) lesson = 'Forcing checks: a check narrows the opponent’s replies and should be examined before quiet moves.';
+  else if (best && best.promotion) lesson = 'Pawn-race calculation: the passed pawn can promote now, so count the queening move before manoeuvring.';
+  else if (best && best.flags && (best.flags.includes('k') || best.flags.includes('q'))) lesson = 'King safety: castling solves king safety and activates a rook in one tempo.';
+  else if (user && user.piece === 'q' && !user.captured) lesson = 'Development: an early queen move can lose time to attacks; develop a minor piece unless there is a concrete tactic.';
+  else if (user && user.piece === 'p' && ['f', 'g', 'h'].includes(user.from[0]) && !user.captured) lesson = 'King safety: pawn moves near your king are permanent commitments and need a concrete reason.';
+  else if (best && ['n', 'b'].includes(best.piece) && user && !['n', 'b'].includes(user.piece)) lesson = 'Development: bring a new minor piece into the game before making another low-impact move.';
+  else if (best && best.piece === 'p' && ['c', 'd', 'e', 'f'].includes(best.from[0])) lesson = 'Central break: challenge the centre while the opponent is still organising their pieces.';
+
+  let opponentThreat = '';
+  if (reply) {
+    if (reply.san && reply.san.includes('#')) opponentThreat = `Opponent’s threat: ${reply.san} is checkmate after your move.`;
+    else if (reply.san && reply.san.includes('+')) opponentThreat = `Opponent’s threat: ${reply.san} gives check and takes the initiative.`;
+    else if (reply.captured) opponentThreat = `Opponent’s threat: ${reply.san} wins your ${PIECE_NAME[reply.captured]?.toLowerCase() || 'piece'} on ${reply.to}.`;
+    else opponentThreat = `Opponent’s best reply is ${reply.san}; check whether your move allows that plan before committing.`;
+  }
+  return { lesson, opponentThreat };
 }
 
 // Side-to-move perspective: score is always in the mover's favor.
@@ -2470,6 +3210,7 @@ async function classifyMove(fenBefore, userUciMove, fenAfter) {
     };
   }).filter(a => a.san);
   const whyBetter = movePurposeText(fenBefore, bestUci, userUciMove, bestLine, afterInfo);
+  const explanation = coachExplanationContext(fenBefore, userUciMove, bestUci, fenAfter, afterInfo);
 
   return {
     tier: cls.tier,
@@ -2483,6 +3224,8 @@ async function classifyMove(fenBefore, userUciMove, fenAfter) {
     pvSan: bestLine ? pvToSan(fenBefore, bestLine.pv || [], 5) : [],
     topAlternatives,
     whyBetter,
+    lesson: explanation.lesson,
+    opponentThreat: explanation.opponentThreat,
     evalBefore: bestLine || null,
     evalAfter: afterInfo
   };
@@ -2499,7 +3242,7 @@ function coachIsUserTurn() {
          (turn === 'b' && coachUserColor() === 'black');
 }
 
-// Opponent search depth matches review depth; strength is controlled by Elo.
+// Opponent difficulty is controlled by a monotonic engine-compatible model.
 function strengthTierLabel(elo) {
   if (elo < 600)  return 'Absolute beginner';
   if (elo < 800)  return 'Learning the rules';
@@ -2511,34 +3254,77 @@ function strengthTierLabel(elo) {
   return 'Master';
 }
 
-// Translate the slider's displayed Elo into opponent behavior. Very low levels
-// need explicit noisy move selection; shallow Stockfish still finds too many
-// forcing moves and does not feel like a 400-rated opponent.
+// The numeric slider is an estimated difficulty, not a claim about Stockfish's
+// unsupported UCI_Elo option. Every field moves monotonically: higher settings
+// search deeper, use a higher native skill, inspect fewer alternatives, and
+// accept less centipawn loss when selecting a plausible move.
+const COACH_DIFFICULTY_KEYFRAMES = [
+  { level: 400,  skill: 0,  depth: 2,  multipv: 18, targetLoss: 500, spread: 220 },
+  { level: 600,  skill: 1,  depth: 3,  multipv: 16, targetLoss: 400, spread: 190 },
+  { level: 800,  skill: 2,  depth: 4,  multipv: 14, targetLoss: 300, spread: 155 },
+  { level: 1000, skill: 4,  depth: 5,  multipv: 12, targetLoss: 220, spread: 120 },
+  { level: 1200, skill: 6,  depth: 6,  multipv: 10, targetLoss: 150, spread: 90 },
+  { level: 1400, skill: 9,  depth: 8,  multipv: 8,  targetLoss: 95,  spread: 65 },
+  { level: 1600, skill: 12, depth: 10, multipv: 6,  targetLoss: 55,  spread: 42 },
+  { level: 1800, skill: 15, depth: 12, multipv: 5,  targetLoss: 30,  spread: 28 },
+  { level: 2000, skill: 17, depth: 14, multipv: 4,  targetLoss: 15,  spread: 18 },
+  { level: 2200, skill: 19, depth: 16, multipv: 3,  targetLoss: 5,   spread: 10 },
+  { level: 2400, skill: 20, depth: 18, multipv: 1,  targetLoss: 0,   spread: 0 }
+];
+
+function interpolateDifficultyField(a, b, t, field) {
+  return a[field] + (b[field] - a[field]) * t;
+}
+
 function coachStrengthOpts(elo) {
-  if (elo < 1000) {
-    return { weak: true };
+  const level = Math.max(400, Math.min(2400, Number(elo) || 1200));
+  const upperIndex = COACH_DIFFICULTY_KEYFRAMES.findIndex(frame => frame.level >= level);
+  if (upperIndex <= 0) return Object.assign({}, COACH_DIFFICULTY_KEYFRAMES[0]);
+  const upper = COACH_DIFFICULTY_KEYFRAMES[upperIndex];
+  const lower = COACH_DIFFICULTY_KEYFRAMES[upperIndex - 1];
+  const t = (level - lower.level) / (upper.level - lower.level);
+  return {
+    level,
+    skill: Math.round(interpolateDifficultyField(lower, upper, t, 'skill')),
+    depth: Math.round(interpolateDifficultyField(lower, upper, t, 'depth')),
+    multipv: Math.round(interpolateDifficultyField(lower, upper, t, 'multipv')),
+    targetLoss: Math.round(interpolateDifficultyField(lower, upper, t, 'targetLoss')),
+    spread: Math.round(interpolateDifficultyField(lower, upper, t, 'spread'))
+  };
+}
+
+function calibratedOpponentCandidates(result) {
+  const lines = (result && result.lines) || [];
+  if (!lines.length) return [];
+  const bestScore = scoreToCp(lines[0]);
+  const seen = new Set();
+  return lines.map(line => {
+    const uci = line && line.pv && line.pv[0];
+    if (!uci || seen.has(uci)) return null;
+    seen.add(uci);
+    return { uci, loss: Math.max(0, bestScore - scoreToCp(line)) };
+  }).filter(Boolean);
+}
+
+function chooseCalibratedOpponentMove(result, config, random = Math.random) {
+  const candidates = calibratedOpponentCandidates(result);
+  if (!candidates.length) return result && result.bestmove;
+  if (candidates.length === 1 || !config.targetLoss) return candidates[0].uci;
+  const jitter = (random() + random() - 1) * config.spread;
+  const desiredLoss = Math.max(0, config.targetLoss + jitter);
+  const scale = Math.max(18, config.spread * 0.6);
+  const lossCap = config.targetLoss + Math.max(100, config.spread * 2);
+  const weighted = candidates.map(candidate => ({
+    candidate,
+    weight: Math.exp(-Math.abs(Math.min(candidate.loss, lossCap) - desiredLoss) / scale)
+  }));
+  const total = weighted.reduce((sum, item) => sum + item.weight, 0);
+  let cursor = random() * total;
+  for (const item of weighted) {
+    cursor -= item.weight;
+    if (cursor <= 0) return item.candidate.uci;
   }
-  if (elo < 1320) {
-    // 1000 -> skill 4, depth 3; 1300 -> skill 9, depth 6.
-    const t = Math.max(0, Math.min(1, (elo - 1000) / 320));
-    const skill = 4 + Math.round(t * 5);
-    const depth = 3 + Math.round(t * 3);
-    return { skill, depth };
-  }
-  if (elo < 1400) {
-    // Stockfish's native UCI_Elo floor is around 1320.
-    const depth = 6;
-    return { elo: Math.max(1320, elo), depth };
-  }
-  if (elo < 1600) {
-    const t = Math.max(0, Math.min(1, (elo - 1400) / 200));
-    const skill = Math.round(t * 8);
-    const depth = 6 + Math.round(t * 2);
-    return { skill, depth };
-  }
-  // 1600+: Stockfish's native Elo limiter, with depth tiered for realism.
-  const depth = elo < 2000 ? 10 : 16;
-  return { elo, depth };
+  return weighted[weighted.length - 1].candidate.uci;
 }
 
 // Weight per classification tier for accuracy %.
@@ -2595,6 +3381,45 @@ function updateCoachSummary() {
   }
 }
 
+function reviewBoardMarkup(fen) {
+  if (!fen) return '';
+  try {
+    const position = new Chess(fen);
+    return position.board().map((row, rowIndex) => row.map((piece, colIndex) => {
+      const dark = (rowIndex + colIndex) % 2 === 1;
+      const glyph = piece
+        ? (piece.color === 'w' ? PIECE_GLYPH_WHITE[piece.type] : PIECE_GLYPH_BLACK[piece.type])
+        : '';
+      return `<span class="review-board-square ${dark ? 'dark' : 'light'}">${glyph || '&nbsp;'}</span>`;
+    }).join('')).join('');
+  } catch (e) {
+    return '';
+  }
+}
+
+function renderCoachReviewEvidence(review) {
+  if (!review || !review.fenBefore || !review.fenAfter) {
+    $('#coach-review-evidence').hide().empty();
+    return;
+  }
+  const replyUci = review.evalAfter && review.evalAfter.pv && review.evalAfter.pv[0];
+  const reply = replyUci ? moveFromUci(review.fenAfter, replyUci) : null;
+  const replyText = reply ? ` → ${reply.san}` : '';
+  let bestFen = review.fenBefore;
+  try {
+    const bestPosition = new Chess(review.fenBefore);
+    if (review.bestUci) bestPosition.move({ from: review.bestUci.slice(0, 2), to: review.bestUci.slice(2, 4), promotion: review.bestUci[4] || undefined });
+    bestFen = bestPosition.fen();
+  } catch (e) {}
+  $('#coach-review-evidence').html(
+    `<div class="coach-review-evidence-head">Position change <span>${escapeHtml(review.userSan || 'Your move')} → ${escapeHtml(review.bestSan || 'Best move')}${escapeHtml(replyText)}</span></div>` +
+    `<div class="coach-review-evidence-boards">` +
+      `<div><div class="review-board-label">After your move</div><div class="review-board">${reviewBoardMarkup(review.fenAfter)}</div></div>` +
+      `<div><div class="review-board-label">After the best move</div><div class="review-board">${reviewBoardMarkup(bestFen)}</div></div>` +
+    `</div>`
+  ).show();
+}
+
 function renderCoachReview(review) {
   if (!review) { $('#coach-review').hide(); return; }
   const $badge = $('#coach-classification');
@@ -2618,6 +3443,26 @@ function renderCoachReview(review) {
     if (review.whyBetter) msg += ' ' + review.whyBetter;
   }
   $('#coach-explanation').text(msg);
+  $('#coach-review-lesson')
+    .text(review.lesson ? 'Lesson · ' + review.lesson : '')
+    .toggle(!!review.lesson);
+  $('#coach-review-threat')
+    .text(review.opponentThreat || '')
+    .toggle(!!review.opponentThreat);
+  renderCoachReviewEvidence(review);
+  const cue = isUnknown
+    ? 'Coach cue: Keep playing — this move was not scored, so there is no lesson to carry forward yet.'
+    : isBest
+      ? 'Keep this habit: you found the engine’s first choice.'
+      : isExcellent
+        ? 'Keep this habit: your move was in the engine’s top three.'
+        : `Next time: pause and look for ${review.bestSan || 'the preferred move'} before committing.`;
+  $('#coach-review-cue').text(cue);
+  const practiceItem = practiceItemFromReview(review);
+  $('#btn-coach-review-practice')
+    .text('Practice this move')
+    .attr('data-practice-id', practiceItem ? practiceItem.id : '')
+    .toggle(!!practiceItem && practiceIsDue(practiceItem));
   if (review.pvSan && review.pvSan.length > 1) {
     $('#coach-pv').show().text('Engine line: ' + review.pvSan.join(' '));
   } else {
@@ -2718,17 +3563,15 @@ async function coachOpponentRespond() {
   setCoachStatus('Opponent thinking…');
   const fen = coachGame.fen();
   try {
-    // Opponent uses configured strength. Below 1000, explicit noisy move
-    // selection is more realistic than asking Stockfish for a shallow best move.
+    // Evaluate several plausible candidates and select one from a calibrated
+    // loss distribution. This produces realistic inaccuracies without random
+    // legal moves or unsupported Elo commands.
     const opts = coachStrengthOpts(coachEngineElo);
-    let bestmove;
-    if (opts.weak) {
-      bestmove = chooseWeakOpponentMove(fen, coachEngineElo);
-    } else {
-      const { depth, ...strength } = opts;
-      const result = await engineClient.evaluate(fen, depth, strength);
-      bestmove = result.bestmove;
-    }
+    const result = await engineClient.evaluate(fen, opts.depth, {
+      skill: opts.skill,
+      multipv: opts.multipv
+    });
+    const bestmove = chooseCalibratedOpponentMove(result, opts);
     if (generation !== coachGameGeneration || coachGame !== gameRef || !coachMode ||
         !coachGameActive || coachIsUserTurn() || coachGame.fen() !== fen) return;
     if (!bestmove) { setCoachStatus('Your move.'); return; }
@@ -2827,13 +3670,15 @@ async function coachHandleUserMove(source, target, promotion, opts) {
     if (review.tier !== 'unknown') {
       coachStats.moves++;
       coachStats[review.tier] = (coachStats[review.tier] || 0) + 1;
+      recordDailySprintMove(logged);
     }
-    renderCoachReview(review);
+    renderCoachReview(logged);
     updateCoachSummary();
     updateCoachControlsState();
     updateMoveList();
     updateOpeningLabel();
     saveCoachState();
+    renderCoachDailyPlan();
   } catch (err) {
     if (generation !== coachGameGeneration || isAbortError(err)) return 'stale';
     setCoachStatus('Engine error: ' + err.message);
@@ -2882,6 +3727,7 @@ function coachHandleGameOver() {
   coachSync.saveGame(msg).catch(handleCoachDbError);
   // Roll this game's stats into lifetime totals (guarded against double-count).
   rollGameIntoLifetime();
+  if (typeof recordRatedCoachResult === 'function') recordRatedCoachResult(msg);
   // Let the user take in the final position before the review overlay arrives.
   scheduleSummaryReveal(msg, 1200);
 }
@@ -3556,10 +4402,12 @@ const SR_KEY = 'chess_sr_v1';
 const DAY_MS = 86400000;
 
 function loadSR() {
+  if (typeof loadSyncedLibrarySR === 'function') return loadSyncedLibrarySR();
   try { return JSON.parse(localStorage.getItem(SR_KEY)) || {}; }
   catch(e) { return {}; }
 }
 function saveSR(data) {
+  if (typeof saveSyncedLibrarySR === 'function') return saveSyncedLibrarySR(data);
   try {
     localStorage.setItem(SR_KEY, JSON.stringify(data));
     return { ok: true };
@@ -3689,6 +4537,9 @@ function updateURL() {
   if (appView === 'coach') {
     params.set('view', 'coach');
   } else {
+    // Preserve an intentional switch to the Library when no opening has been
+    // selected. Opening links remain compact and continue to imply Library.
+    if (!currentOpening) params.set('view', 'library');
     if (currentOpening) params.set('opening', currentOpening.id);
     if (currentOpening && currentLineId && currentLineId !== 'main') params.set('line', currentLineId);
     if (quizMode) params.set('mode', 'quiz');
@@ -3711,14 +4562,19 @@ function readURL() {
 // ─────────────────────────────────────────────
 const PIECE_THEME_GLYPHS = {
   bB: '♝', bK: '♚', bN: '♞', bP: '♟', bQ: '♛', bR: '♜',
-  wB: '♗', wK: '♔', wN: '♘', wP: '♙', wQ: '♕', wR: '♖'
+  // Use filled silhouettes for both colours. The Unicode "white" glyphs are
+  // hollow outlines, which disappear against the board's cream squares at
+  // mobile sizes. Colour and a strong outline distinguish the white set.
+  wB: '♝', wK: '♚', wN: '♞', wP: '♟', wQ: '♛', wR: '♜'
 };
 
 function localPieceTheme(piece) {
   const glyph = PIECE_THEME_GLYPHS[piece] || '';
-  const fill = piece && piece[0] === 'w' ? '#fff8ed' : '#17100c';
-  const stroke = piece && piece[0] === 'w' ? '#2a1f17' : '#f1ebe0';
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="45" height="45" viewBox="0 0 45 45"><text x="22.5" y="36" text-anchor="middle" font-family="Georgia,serif" font-size="41" fill="${fill}" stroke="${stroke}" stroke-width="0.45">${glyph}</text></svg>`;
+  const isWhite = piece && piece[0] === 'w';
+  const fill = isWhite ? '#fffaf0' : '#17100c';
+  const stroke = isWhite ? '#2a1f17' : '#f1ebe0';
+  const strokeWidth = isWhite ? '1.35' : '0.55';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="45" height="45" viewBox="0 0 45 45"><text x="22.5" y="36" text-anchor="middle" font-family="Georgia,serif" font-size="41" font-weight="700" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" paint-order="stroke fill">${glyph}</text></svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
@@ -3764,6 +4620,18 @@ function scrollCoachBoardIntoViewOnMobile() {
   });
 }
 
+function placeDailySprintCard() {
+  const card = document.getElementById('coach-daily-plan');
+  const settings = document.querySelector('.coach-settings');
+  if (!card || !settings) return;
+  // Coach's next action is the product's primary job. Keep it immediately
+  // below the heading at every breakpoint; settings and account controls are
+  // still available underneath it, while the right panel can focus on live
+  // status, review, and progress.
+  const hero = settings.querySelector('.coach-hero');
+  if (hero && hero.nextElementSibling !== card) hero.insertAdjacentElement('afterend', card);
+}
+
 function orderedPracticeRunItems(items, firstItem) {
   const unique = [];
   const seen = new Set();
@@ -3773,7 +4641,8 @@ function orderedPracticeRunItems(items, firstItem) {
     seen.add(item.id);
     unique.push(item);
   });
-  return unique.slice(0, PRACTICE_QUEUE_LIMIT);
+  const target = renderedAdaptivePlan ? renderedAdaptivePlan.drillTarget : DAILY_DRILL_TARGET;
+  return unique.slice(0, Math.max(1, target));
 }
 
 function startCoachPracticeSession(items, firstItem) {
@@ -3790,6 +4659,7 @@ function startCoachPracticeSession(items, firstItem) {
     assisted: 0,
     startedAt: Date.now()
   };
+  beginDailyDrillSprint(runItems);
   startCoachPractice(runItems[0], { preserveRun: true });
 }
 
@@ -3837,6 +4707,7 @@ function startCoachPractice(item, opts = {}) {
   $('#coach-keyboard-move-status').text('');
   setCoachStatus('Practice drill — find the best move.');
   updateCoachControlsState();
+  renderCoachDailyPlan();
   scrollCoachBoardIntoViewOnMobile();
 }
 
@@ -3870,6 +4741,10 @@ function coachHandlePracticeMove(source, target, promotion, opts) {
   if (!played) return 'snapback';
   session.completed = true;
   const record = recordPracticeAttempt(session.item, true, session.revealed);
+  if (typeof recordRepertoirePracticeResult === 'function') {
+    recordRepertoirePracticeResult(session.item, !session.revealed && session.misses === 0, session.revealed);
+  }
+  const sprint = recordDailySprintDrill(session.item, session.revealed, !session.revealed && session.misses === 0);
   if (opts && opts.updateBoard !== false && coachBoard) coachBoard.position(coachGame.fen());
   updateCapturedDisplay(coachGame.fen());
   updateCoachBoardAccessibility();
@@ -3898,6 +4773,7 @@ function coachHandlePracticeMove(source, target, promotion, opts) {
   }
   updateCoachControlsState();
   renderInsights();
+  if (sprint && sprint.completedAt) renderCoachDailyPlan();
   return 'correct';
 }
 
@@ -3937,6 +4813,7 @@ function exitCoachPractice(message) {
   $('#coach-practice-banner').hide();
   setCoachStatus(message || 'Practice closed. Start a game or choose another due drill.');
   updateCoachControlsState();
+  renderInsights();
 }
 
 function createBoard(position, draggable, orientation) {
@@ -4012,6 +4889,9 @@ function createCoachBoard(position, orientation) {
     }
   });
   updateCoachBoardAccessibility();
+  setTimeout(() => {
+    if (coachBoard) coachBoard.resize();
+  }, 0);
 }
 
 // ─────────────────────────────────────────────
@@ -4069,6 +4949,23 @@ function switchView(view) {
   updateURL();
 }
 
+function updateNetworkStatus(announce) {
+  const $status = $('#network-status');
+  if (!$status.length) return;
+  if (navigator.onLine) {
+    if (announce) {
+      $status.removeAttr('hidden').removeClass('offline').text('Back online — local progress will sync when available.');
+      clearTimeout(updateNetworkStatus.onlineTimer);
+      updateNetworkStatus.onlineTimer = setTimeout(() => $status.attr('hidden', true), 4500);
+    } else {
+      $status.attr('hidden', true).text('');
+    }
+  } else {
+    clearTimeout(updateNetworkStatus.onlineTimer);
+    $status.removeAttr('hidden').addClass('offline').text('Offline mode — your Coach progress is saved locally and will sync when you reconnect.');
+  }
+}
+
 function isValidFen(fen) {
   try {
     const g = new Chess();
@@ -4077,6 +4974,7 @@ function isValidFen(fen) {
 }
 
 function startCoachGame() {
+  if (typeof applyAdaptiveCoachElo === 'function') applyAdaptiveCoachElo();
   const fenRaw = ($('#coach-fen').val() || '').trim();
   let startFen = null;
   if (fenRaw) {
@@ -4087,6 +4985,7 @@ function startCoachGame() {
     startFen = fenRaw;
   }
   $('#coach-fen-error').hide();
+  beginDailyMoveSprint();
 
   // Resolve "random" side
   const chosenSide = $('.side-toggle button.active').data('side') || 'white';
@@ -4116,6 +5015,7 @@ function startCoachGame() {
   setCoachStatus(opening);
 
   updateCoachControlsState();
+  renderCoachDailyPlan();
   ensureRemoteCoachGame(generation).catch(err => {
     if (!isAbortError(err)) handleCoachDbError(err);
   });
@@ -4464,7 +5364,18 @@ function identifyOpening(sans) {
   return { match: last, exact: walked === sans.length, matchedPlies: lastDepth };
 }
 
+function openingDefinitionForSans(sans) {
+  const history = Array.isArray(sans) ? sans : [];
+  const info = identifyOpening(history);
+  if (!info.match) return { info, opening: null };
+  const matchedSans = history.slice(0, info.matchedPlies);
+  const opening = OPENINGS.find(candidate => candidate.name === info.match.name &&
+    candidate.moves.slice(0, matchedSans.length).join(' ') === matchedSans.join(' '));
+  return { info, opening: opening || null };
+}
+
 function updateOpeningLabel() {
+  coachOpeningId = null;
   if (!coachGame) {
     $('#opening-section').hide();
     return;
@@ -4478,11 +5389,13 @@ function updateOpeningLabel() {
     $('#opening-section').hide();
     return;
   }
-  const info = identifyOpening(sans);
+  const definition = openingDefinitionForSans(sans);
+  const info = definition.info;
   if (!info.match) {
     $('#opening-section').hide();
     return;
   }
+  coachOpeningId = definition.opening ? definition.opening.id : null;
   $('#coach-opening-eco').text(info.match.eco);
   if (info.exact) {
     // Still in book — just show the current opening name.
@@ -5031,6 +5944,10 @@ function handleSnapEnd() {
 function loadOpening(id, lineId) {
   currentOpening = OPENINGS.find(o => o.id === id);
   if (!currentOpening) return;
+  // Opening links are an explicit request for Library, even though Coach is
+  // the app's default home. This also keeps shared opening URLs backwards
+  // compatible after the default view change.
+  if (appView !== 'library') switchView('library');
   setActiveLine(lineId || 'main');
 
   // Exit explore mode when user picks an opening
@@ -5068,6 +5985,7 @@ function loadOpening(id, lineId) {
   $('.app').addClass('has-opening');
   setMobileLibraryOpen(false);
   renderOpeningDetails();
+  if (typeof renderRepertoireUI === 'function') renderRepertoireUI();
 
   renderLineSelector();
   renderKeyIdeas();
@@ -5581,7 +6499,7 @@ $(function () {
     } else if (gameError) {
       setCoachDbStatus('Insights loaded, game save failed: ' + ((gameError && gameError.message) || 'Unknown error'));
     } else {
-      setCoachDbStatus('Game and insights synced.');
+      setCoachDbStatus('Games, insights, and training sessions synced.');
     }
   });
 
@@ -5618,9 +6536,39 @@ $(function () {
     const due = Array.from(renderedPracticeItems.values()).filter(item => practiceIsDue(item));
     startCoachPracticeSession(due, due[0]);
   });
+  $('#btn-coach-next-action').on('click', function() {
+    const action = $(this).attr('data-action');
+    if (action === 'practice') {
+      const due = Array.from(renderedPracticeItems.values()).filter(item => practiceIsDue(item));
+      startCoachPracticeSession(due, due[0]);
+      return;
+    }
+    if (action === 'continue') {
+      document.querySelector('.coach-board-area')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      document.getElementById('coachBoard')?.focus({ preventScroll: true });
+      return;
+    }
+    startCoachGame();
+  });
   $('#btn-coach-practice-answer').on('click', revealCoachPracticeAnswer);
   $('#btn-coach-practice-next').on('click', advanceCoachPractice);
   $('#btn-coach-practice-exit').on('click', function() { exitCoachPractice(); });
+  $('#btn-coach-review-practice').on('click', function() {
+    const item = practiceItemFromReview(coachLastReview);
+    if (!item || !practiceIsDue(item)) {
+      $(this).hide();
+      setCoachStatus('This move is already scheduled for later practice.');
+      return;
+    }
+    startCoachPracticeSession([item], item);
+  });
+  $('#btn-coach-opening-study').on('click', function() {
+    if (!coachOpeningId || !OPENINGS.some(opening => opening.id === coachOpeningId)) {
+      setCoachStatus('This opening is not in the local study library yet.');
+      return;
+    }
+    loadOpening(coachOpeningId);
+  });
 
   // Sound toggle — restore prior preference, persist on change. The first
   // change is also a user gesture so we can prime the AudioContext here.
@@ -5700,6 +6648,7 @@ $(function () {
     saveCoachState();
     coachSync.saveGame(msg).catch(handleCoachDbError);
     rollGameIntoLifetime();
+    if (typeof recordRatedCoachResult === 'function') recordRatedCoachResult(msg);
     // User-initiated — keep it snappy but still buffer with a small beat + animation.
     scheduleSummaryReveal(msg, 350);
   });
@@ -6061,6 +7010,7 @@ $(function () {
       boardResizeTimer = null;
       if (board) board.resize();
       if (coachBoard) coachBoard.resize();
+      placeDailySprintCard();
       updateLibraryBoardAccessibility();
       updateCoachBoardAccessibility();
     }, 120);
@@ -6301,8 +7251,16 @@ $(function () {
       else if (initial.mode === 'explore') setMode('explore');
       else if (!isNaN(initial.move) && initial.move >= 0) goToMove(initial.move);
     }
+  } else if (initial.view === 'library') {
+    switchView('library');
+    if (initial.mode === 'explore') setMode('explore');
   } else if (initial.mode === 'explore') {
+    switchView('library');
     setMode('explore');
+  } else {
+    // Coach is the app's home: make the default explicit so direct visits,
+    // reloads, and clients with no prior URL state all start there.
+    switchView('coach');
   }
   }
 
@@ -6310,7 +7268,11 @@ $(function () {
   bindCoachEvents();
   bindExploreEvents();
   bindGlobalInputEvents();
+  placeDailySprintCard();
   updateSRSidebar();
   validateOpeningData();
   hydrateFromUrl();
+  updateNetworkStatus(false);
+  window.addEventListener('offline', () => updateNetworkStatus(false));
+  window.addEventListener('online', () => updateNetworkStatus(true));
 });
