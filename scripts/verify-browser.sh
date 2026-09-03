@@ -54,7 +54,13 @@ async page => {
   const consoleErrors = [];
   const pageErrors = [];
   page.on('console', message => {
-    if (message.type() === 'error') consoleErrors.push(message.text());
+    if (message.type() !== 'error') return;
+    const location = message.location ? message.location() : null;
+    const url = (location && location.url) || '';
+    // Chromium requests /favicon.ico for pages without an icon link and some
+    // builds report the 404 as a console error; it is not an app failure.
+    if (/favicon\.ico/.test(url) || /favicon\.ico/.test(message.text())) return;
+    consoleErrors.push(message.text() + (url ? ' [' + url + ']' : ''));
   });
   page.on('pageerror', error => pageErrors.push(error.message));
 
