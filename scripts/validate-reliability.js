@@ -6,6 +6,10 @@ const path = require('path');
 const root = path.resolve(__dirname, '..');
 const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 const errors = [];
+const { spawnSync } = require('child_process');
+const smokeParse = spawnSync('bash', ['-n', path.join(root, 'scripts/verify-browser.sh')], { encoding: 'utf8' });
+if (smokeParse.status !== 0) errors.push('scripts/verify-browser.sh must parse under bash -n: ' + (smokeParse.stderr || '').trim());
+if (/^\s*\/\/.*'[a-z]/m.test(fs.readFileSync(path.join(root, 'scripts/verify-browser.sh'), 'utf8'))) errors.push('scripts/verify-browser.sh comments must not contain apostrophes; bash mis-parses them inside the $(...) heredoc');
 
 function fail(message) {
   errors.push(message);

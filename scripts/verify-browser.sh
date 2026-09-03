@@ -555,7 +555,7 @@ async page => {
   assert(await page.locator('#practice-progress-success').textContent() === '100%', 'generated drill result was not measured');
 
   await page.locator('#btn-coach-practice-exit').click();
-  // A capture exercises insight tagging's material path; the opponent must
+  // A capture exercises the material path in insight tagging; the opponent must
   // still reply afterwards instead of the move handler dying mid-flight.
   await page.locator('#coach-fen').fill('rnbqkbnr/pppp1ppp/8/4p3/3P4/8/PPP1PPPP/RNBQKBNR w KQkq e6 0 2');
   await page.locator('.side-toggle button[data-side="white"]').click();
