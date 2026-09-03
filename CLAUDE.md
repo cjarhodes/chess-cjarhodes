@@ -5,7 +5,7 @@ Static single-page chess training app served at https://chess.cjarhodes.com.
 ## Stack
 - Static `index.html` + `app.js` (no build step or package manager); opening content data (move lists, explanations, key ideas, variations) lives in `openings.js`, loaded before `app.js`
 - Client-side only — chessboard.js, chess.js, jQuery, Supabase JS, and Stockfish are vendored locally
-- Lichess Opening Explorer API for Explore mode (user supplies their own Lichess Personal Access Token, stored in localStorage)
+- Lichess Opening Explorer API for Explore mode (user supplies their own Lichess Personal Access Token, kept in sessionStorage only)
 - Optional Supabase account sync; Coach remains fully usable in local-only mode
 
 ## Hosting

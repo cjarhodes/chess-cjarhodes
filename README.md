@@ -33,13 +33,13 @@ browsers. Leaving `coach-config.js` blank keeps Coach local-only.
 
 ## Stack
 
-- `index.html` + `app.js` — no build tooling, no package manager,
+- `index.html` + `app.js` (runtime) + `openings.js` (opening content data) — no build tooling, no package manager,
   no framework
 - Vendored libraries (see `vendor/` and `stockfish/`):
   - `chess.js` 0.10.3
   - `chessboard.js` 1.0.0
   - `jQuery` 3.6.0
-  - `@supabase/supabase-js` 2.105.1
+  - `@supabase/supabase-js` 2.114.0
   - Stockfish (WASM build: `stockfish.js` + `stockfish.wasm`)
 - Lichess Opening Explorer API for Explore mode
 - Optional Supabase project for account-backed Coach sync
