@@ -3362,18 +3362,28 @@ function strengthTierLabel(elo) {
 // unsupported UCI_Elo option. Every field moves monotonically: higher settings
 // search deeper, use a higher native skill, inspect fewer alternatives, and
 // accept less centipawn loss when selecting a plausible move.
+// Opponent strength model. Each level searches to a fixed depth and inspects
+// several candidate moves; the engine's own best line is played most of the
+// time, with probability errorRate a deliberately weaker candidate is chosen
+// whose engine-measured loss sits near errorSize centipawns, and at beginner
+// levels with probability randomRate a move from the worst third of the list.
+// Every rate and size shrinks as the level rises, and the search deepens. The values below were calibrated by measuring average centipawn
+// loss against a deep reference search (scripts/calibrate-difficulty.js).
+// Note: Stockfish's Skill Level option only randomises its own `bestmove`
+// pick; it does not change the MultiPV lines this model selects from. It is
+// still sent so the bestmove fallback stays consistent with the level.
 const COACH_DIFFICULTY_KEYFRAMES = [
-  { level: 400,  skill: 0,  depth: 2,  multipv: 18, targetLoss: 500, spread: 220 },
-  { level: 600,  skill: 1,  depth: 3,  multipv: 16, targetLoss: 400, spread: 190 },
-  { level: 800,  skill: 2,  depth: 4,  multipv: 14, targetLoss: 300, spread: 155 },
-  { level: 1000, skill: 4,  depth: 5,  multipv: 12, targetLoss: 220, spread: 120 },
-  { level: 1200, skill: 6,  depth: 6,  multipv: 10, targetLoss: 150, spread: 90 },
-  { level: 1400, skill: 9,  depth: 8,  multipv: 8,  targetLoss: 95,  spread: 65 },
-  { level: 1600, skill: 12, depth: 10, multipv: 6,  targetLoss: 55,  spread: 42 },
-  { level: 1800, skill: 15, depth: 12, multipv: 5,  targetLoss: 30,  spread: 28 },
-  { level: 2000, skill: 17, depth: 14, multipv: 4,  targetLoss: 15,  spread: 18 },
-  { level: 2200, skill: 19, depth: 16, multipv: 3,  targetLoss: 5,   spread: 10 },
-  { level: 2400, skill: 20, depth: 18, multipv: 1,  targetLoss: 0,   spread: 0 }
+  { level: 400,  skill: 0,  depth: 8,  multipv: 20, randomRate: 0.40, errorRate: 0.90, errorSize: 480 },
+  { level: 600,  skill: 1,  depth: 8,  multipv: 20, randomRate: 0.20, errorRate: 0.78, errorSize: 440 },
+  { level: 800,  skill: 2,  depth: 8,  multipv: 20, randomRate: 0.12, errorRate: 0.72, errorSize: 420 },
+  { level: 1000, skill: 4,  depth: 8,  multipv: 20, randomRate: 0.04, errorRate: 0.66, errorSize: 380 },
+  { level: 1200, skill: 6,  depth: 8,  multipv: 16, randomRate: 0,    errorRate: 0.64, errorSize: 375 },
+  { level: 1400, skill: 9,  depth: 8,  multipv: 16, randomRate: 0,    errorRate: 0.52, errorSize: 340 },
+  { level: 1600, skill: 12, depth: 10, multipv: 16, randomRate: 0,    errorRate: 0.46, errorSize: 310 },
+  { level: 1800, skill: 15, depth: 12, multipv: 12, randomRate: 0,    errorRate: 0.40, errorSize: 290 },
+  { level: 2000, skill: 17, depth: 13, multipv: 12, randomRate: 0,    errorRate: 0.38, errorSize: 240 },
+  { level: 2200, skill: 19, depth: 14, multipv: 10, randomRate: 0,    errorRate: 0.34, errorSize: 200 },
+  { level: 2400, skill: 20, depth: 15, multipv: 10, randomRate: 0,    errorRate: 0.28, errorSize: 130 }
 ];
 
 function interpolateDifficultyField(a, b, t, field) {
@@ -3392,8 +3402,9 @@ function coachStrengthOpts(elo) {
     skill: Math.round(interpolateDifficultyField(lower, upper, t, 'skill')),
     depth: Math.round(interpolateDifficultyField(lower, upper, t, 'depth')),
     multipv: Math.round(interpolateDifficultyField(lower, upper, t, 'multipv')),
-    targetLoss: Math.round(interpolateDifficultyField(lower, upper, t, 'targetLoss')),
-    spread: Math.round(interpolateDifficultyField(lower, upper, t, 'spread'))
+    randomRate: Math.round(interpolateDifficultyField(lower, upper, t, 'randomRate') * 1000) / 1000,
+    errorRate: Math.round(interpolateDifficultyField(lower, upper, t, 'errorRate') * 1000) / 1000,
+    errorSize: Math.round(interpolateDifficultyField(lower, upper, t, 'errorSize'))
   };
 }
 
@@ -3413,22 +3424,42 @@ function calibratedOpponentCandidates(result) {
 function chooseCalibratedOpponentMove(result, config, random = Math.random) {
   const candidates = calibratedOpponentCandidates(result);
   if (!candidates.length) return result && result.bestmove;
-  if (candidates.length === 1 || !config.targetLoss) return candidates[0].uci;
-  const jitter = (random() + random() - 1) * config.spread;
-  const desiredLoss = Math.max(0, config.targetLoss + jitter);
-  const scale = Math.max(18, config.spread * 0.6);
-  const lossCap = config.targetLoss + Math.max(100, config.spread * 2);
-  const weighted = candidates.map(candidate => ({
-    candidate,
-    weight: Math.exp(-Math.abs(Math.min(candidate.loss, lossCap) - desiredLoss) / scale)
+  const best = candidates[0].uci;
+  if (candidates.length === 1) return best;
+  const roll = random();
+  // Beginner levels: sometimes play a genuinely clueless move from the worst
+  // third of the candidate list. The engine's ranked alternatives rarely
+  // contain 400-level moves in quiet positions, so this is what makes the
+  // lowest settings hang pieces the way new players do.
+  if (config.randomRate && roll < config.randomRate && candidates.length >= 3) {
+    const sorted = candidates.slice().sort((a, b) => a.loss - b.loss);
+    const tail = sorted.slice(Math.floor(sorted.length * 2 / 3));
+    return tail[Math.min(tail.length - 1, Math.floor(random() * tail.length))].uci;
+  }
+  if (!config.errorRate || roll >= (config.randomRate || 0) + config.errorRate) return best;
+  // Error move. The intended size of this particular error is drawn from a
+  // wide distribution around errorSize (many small slips, occasional big
+  // blunders, mean about 0.77 x errorSize), then the alternative whose
+  // engine-measured loss is closest to that size is favoured. Losses far beyond
+  // errorSize are excluded so a club-level opponent makes club-level mistakes
+  // rather than hanging its queen.
+  const cap = config.errorSize * 2 + 60;
+  const pool = candidates.filter(candidate => candidate.loss > 0 && candidate.loss <= cap);
+  if (!pool.length) return best;
+  const u = random();
+  const desired = config.errorSize * (0.3 + 1.4 * u * u);
+  const scale = Math.max(15, desired * 0.5);
+  const weighted = pool.map(candidate => ({
+    uci: candidate.uci,
+    weight: Math.exp(-Math.abs(candidate.loss - desired) / scale)
   }));
   const total = weighted.reduce((sum, item) => sum + item.weight, 0);
   let cursor = random() * total;
   for (const item of weighted) {
     cursor -= item.weight;
-    if (cursor <= 0) return item.candidate.uci;
+    if (cursor <= 0) return item.uci;
   }
-  return weighted[weighted.length - 1].candidate.uci;
+  return weighted[weighted.length - 1].uci;
 }
 
 // Weight per classification tier for accuracy %.

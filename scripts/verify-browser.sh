@@ -171,8 +171,9 @@ async page => {
       item.skill >= levels[index - 1].skill &&
       item.depth >= levels[index - 1].depth &&
       item.multipv <= levels[index - 1].multipv &&
-      item.targetLoss <= levels[index - 1].targetLoss &&
-      item.spread <= levels[index - 1].spread
+      item.randomRate <= levels[index - 1].randomRate &&
+      item.errorRate <= levels[index - 1].errorRate &&
+      item.errorSize <= levels[index - 1].errorSize
     ));
     const candidates = {
       bestmove: 'e2e4',
@@ -203,7 +204,7 @@ async page => {
     };
   });
   assert(ratingCalibration.monotonic, 'opponent difficulty mapping was not monotonic at every slider step');
-  assert(ratingCalibration.lowMove === 'a2a3' && ratingCalibration.highMove === 'e2e4', 'candidate selection did not tighten as difficulty increased');
+  assert(ratingCalibration.lowMove !== 'e2e4' && ratingCalibration.highMove === 'e2e4', 'candidate selection did not tighten as difficulty increased');
   assert(ratingCalibration.winRaisedEstimate && ratingCalibration.lossLoweredEstimate, 'completed results did not move the player estimate in the correct direction');
   assert(ratingCalibration.confidenceNarrowed, 'player estimate uncertainty did not narrow after evidence');
   assert(ratingCalibration.duplicateIgnored, 'the same completed game updated the player estimate twice');

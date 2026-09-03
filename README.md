@@ -85,6 +85,11 @@ viewport desktop notice, and stale-engine handling), run:
 scripts/verify-browser.sh
 ```
 
+To re-measure opponent strength after changing the difficulty model, run
+`node scripts/calibrate-difficulty.js`. It plays every slider level over ~60
+positions with the vendored engine and prints average centipawn loss per level
+against a human reference curve (several minutes).
+
 This drives a real browser via `playwright-cli` (resolved from `$PWCLI`,
 a local Codex Playwright skill, an installed `playwright-cli`, or
 `npx @playwright/cli` as a last resort) against a local `http.server`

@@ -30,5 +30,6 @@ Then open `http://127.0.0.1:4173/`.
 2. Run `node --check app.js` and every `scripts/validate-*.js` validator.
 3. Run `scripts/verify-browser.sh` for the repeatable Library, Coach, practice-loop, desktop-notice, and stale-engine smoke coverage.
 4. For schema changes, add a Supabase migration and run a local reset or linked `supabase db push`.
-5. Commit and push to `main`; Vercel auto-deploys to chess.cjarhodes.com.
-6. Confirm the deployment and smoke-test the custom domain.
+5. If you touch `COACH_DIFFICULTY_KEYFRAMES` or `chooseCalibratedOpponentMove`, run `node scripts/calibrate-difficulty.js` (several minutes; uses the vendored engine) and keep each level's measured ACPL near the human reference column it prints.
+6. Commit and push to `main`; Vercel auto-deploys to chess.cjarhodes.com.
+7. Confirm the deployment and smoke-test the custom domain.
