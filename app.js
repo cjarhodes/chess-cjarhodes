@@ -1902,6 +1902,7 @@ function renderPracticeQueue(entries, counts) {
       return;
     }
     $('#practice-count').text('0 due');
+    updatePracticeTabBadge(0);
     $('#practice-progress-attempts').text(totals.attempts);
     $('#practice-progress-success').text(Math.round(totals.correct / totals.attempts * 100) + '%');
     $('#practice-progress-mastered').text(totals.mastered);
@@ -1915,6 +1916,7 @@ function renderPracticeQueue(entries, counts) {
   const due = queue.filter(item => practiceIsDue(item));
   const successRate = totals.attempts ? Math.round(totals.correct / totals.attempts * 100) : null;
   $('#practice-count').text(`${due.length} due`);
+  updatePracticeTabBadge(due.length);
   $('#practice-progress-attempts').text(totals.attempts);
   $('#practice-progress-success').text(successRate === null ? '—' : successRate + '%');
   $('#practice-progress-mastered').text(totals.mastered);
@@ -4699,29 +4701,54 @@ function updateCoachBoardAccessibility() {
   $('#coachBoard').attr('aria-label', describeChessPosition(coachGame));
 }
 
-function isCompactLayout() {
-  return window.matchMedia && window.matchMedia('(max-width: 1100px)').matches;
+const DESKTOP_NOTICE_KEY = 'ui:desktop-notice-dismissed';
+
+// Narrow screens get a desktop notice instead of a reflowed layout. Dismissal
+// lasts for the browser session so the page is still usable in a pinch.
+const COACH_PANEL_TAB_KEY = 'ui:coach-panel-tab';
+
+// Right-rail tabs: Game (live review), Practice (queue and drills), Progress.
+function showCoachPanel(name, opts) {
+  opts = opts || {};
+  const $tab = $('.panel-tab[data-panel="' + name + '"]');
+  if (!$tab.length) return;
+  $('.panel-tab').removeClass('active').attr({ 'aria-selected': 'false', tabindex: '-1' });
+  $tab.addClass('active').attr({ 'aria-selected': 'true', tabindex: '0' });
+  $('.panel-page').removeClass('active').attr('hidden', true);
+  $('#panel-' + name).addClass('active').removeAttr('hidden');
+  if (opts.focus) $tab.trigger('focus');
+  try { sessionStorage.setItem(COACH_PANEL_TAB_KEY, name); } catch (e) { /* session only */ }
 }
 
-function setMobileLibraryOpen(open) {
-  const expanded = !!open;
-  $('.app').toggleClass('mobile-library-open', expanded);
-  $('#btn-mobile-openings')
-    .attr('aria-expanded', String(expanded))
-    .text(expanded ? 'Hide openings' : 'Change opening');
-}
-
-function scrollLibraryBoardIntoViewOnMobile() {
-  if (!isCompactLayout()) return;
-  window.requestAnimationFrame(() => {
-    document.querySelector('.board-area')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+function initCoachPanelTabs() {
+  let remembered = null;
+  try { remembered = sessionStorage.getItem(COACH_PANEL_TAB_KEY); } catch (e) { /* default */ }
+  if (remembered && $('.panel-tab[data-panel="' + remembered + '"]').length) showCoachPanel(remembered);
+  $('.panel-tab').on('click', function() { showCoachPanel($(this).data('panel')); });
+  $('.panel-tab').on('keydown', function(event) {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const tabs = $('.panel-tab').toArray();
+    const index = tabs.indexOf(this);
+    const next = tabs[(index + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+    showCoachPanel($(next).data('panel'), { focus: true });
   });
 }
 
-function scrollCoachBoardIntoViewOnMobile() {
-  if (!isCompactLayout()) return;
-  window.requestAnimationFrame(() => {
-    document.querySelector('.coach-board-area')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+function updatePracticeTabBadge(dueCount) {
+  const $badge = $('#tab-practice-badge');
+  if (!$badge.length) return;
+  $badge.text(String(dueCount));
+  if (dueCount > 0) $badge.removeAttr('hidden'); else $badge.attr('hidden', true);
+}
+
+function initDesktopNotice() {
+  let dismissed = false;
+  try { dismissed = sessionStorage.getItem(DESKTOP_NOTICE_KEY) === '1'; } catch (e) { /* stays visible */ }
+  if (dismissed) document.documentElement.classList.add('desktop-notice-dismissed');
+  $('#btn-desktop-notice-continue').on('click', function() {
+    try { sessionStorage.setItem(DESKTOP_NOTICE_KEY, '1'); } catch (e) { /* session only */ }
+    document.documentElement.classList.add('desktop-notice-dismissed');
   });
 }
 
@@ -4813,7 +4840,6 @@ function startCoachPractice(item, opts = {}) {
   setCoachStatus('Practice drill — find the best move.');
   updateCoachControlsState();
   renderCoachDailyPlan();
-  scrollCoachBoardIntoViewOnMobile();
 }
 
 function coachPracticeMoveLabel(item) {
@@ -5111,7 +5137,6 @@ function startCoachGame() {
   coachBoardFlipped = (coachUserColor() === 'black');
   createCoachBoard(coachGame.fen(), coachBoardFlipped ? 'black' : 'white');
   $('#coach-view').addClass('game-active');
-  scrollCoachBoardIntoViewOnMobile();
 
   const tier = strengthTierLabel(coachEngineElo);
   const opening = coachIsUserTurn()
@@ -6088,7 +6113,6 @@ function loadOpening(id, lineId) {
   $('#empty-state').hide();
   $('#opening-content').show();
   $('.app').addClass('has-opening');
-  setMobileLibraryOpen(false);
   renderOpeningDetails();
   if (typeof renderRepertoireUI === 'function') renderRepertoireUI();
 
@@ -6101,7 +6125,6 @@ function loadOpening(id, lineId) {
   clearFeedback();
   updateSRPanel();
   updateURL();
-  scrollLibraryBoardIntoViewOnMobile();
 }
 
 // ─────────────────────────────────────────────
@@ -6463,6 +6486,8 @@ function formatNum(n) {
 // ─────────────────────────────────────────────
 $(function () {
   // Board is initialized lazily on first opening selection
+  initDesktopNotice();
+  initCoachPanelTabs();
   coachSync.init();
   let applySearch;
 
@@ -6482,10 +6507,6 @@ $(function () {
   // Library buttons
   $('.opening-btn').on('click', function () {
     loadOpening($(this).data('id'));
-  });
-
-  $('#btn-mobile-openings').on('click', function() {
-    setMobileLibraryOpen($(this).attr('aria-expanded') !== 'true');
   });
 
   // Category tab filtering

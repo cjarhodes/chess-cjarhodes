@@ -45,6 +45,12 @@ async page => {
   const assert = (condition, message) => {
     if (!condition) failures.push(message);
   };
+  const showPanel = async name => {
+    await page.locator('.panel-tab[data-panel="' + name + '"]').click();
+  };
+  const openRailGroup = async id => {
+    await page.locator('#' + id).evaluate(element => { element.open = true; });
+  };
   const consoleErrors = [];
   const pageErrors = [];
   page.on('console', message => {
@@ -203,6 +209,7 @@ async page => {
   assert(ratingCalibration.duplicateIgnored, 'the same completed game updated the player estimate twice');
   assert(ratingCalibration.skillSupported && ratingCalibration.unsupportedEloAbsent, 'engine capability detection did not match the bundled Stockfish options');
 
+  await openRailGroup('group-profile');
   await page.locator('#player-rating').fill('1350');
   await page.locator('#player-minutes').fill('5');
   await page.locator('#player-goal').selectOption('tactics');
@@ -329,6 +336,7 @@ async page => {
   assert(await page.locator('#daily-sprint-progress-label').textContent() === '0 of 8 steps', 'adaptive session did not explain its drill-plus-transfer target');
   assert(await page.locator('#daily-sprint-focus-title').textContent() === 'Focus · Opening principle gaps', 'adaptive session did not name its selected focus');
   assert((await page.locator('#daily-sprint-focus-detail').textContent()).includes('reviewed error'), 'adaptive session did not explain why it selected the focus');
+  await showPanel('practice');
   assert(await page.locator('#practice-section').isVisible(), 'practice queue did not render from a reviewed mistake');
   assert(await page.locator('.practice-load').count() === 2, 'expected two due practice drills');
   await page.locator('#btn-coach-next-action').click();
@@ -364,6 +372,7 @@ async page => {
   assert(await page.locator('#practice-progress-attempts').textContent() === '3', 'session attempt count is wrong');
   assert(await page.locator('#practice-progress-success').textContent() === '67%', 'session success rate is wrong');
   assert(await page.locator('#practice-count').textContent() === '0 due', 'completed drill was not rescheduled');
+  await showPanel('practice');
   assert(await page.locator('#practice-empty').isVisible(), 'caught-up state did not render');
   assert(await page.locator('#practice-progress-week').textContent() === '3', 'seven-day attempts did not update');
   assert(await page.locator('#practice-progress-streak').textContent() === '1d', 'practice streak did not update');
@@ -455,6 +464,7 @@ async page => {
     localStorage.removeItem('coach:daily-sprint:v1:00000000-0000-0000-0000-000000000002');
   });
   await page.reload();
+  await showPanel('practice');
   await page.locator('.practice-load').first().click();
   await page.locator('#btn-coach-practice-answer').click();
   assert((await page.locator('#coach-practice-status').textContent()).includes('Answer: e4'), 'practice answer was not revealed');
@@ -463,14 +473,16 @@ async page => {
   await page.locator('#coach-keyboard-move-form button[type=submit]').click();
   assert((await page.locator('#coach-practice-status').textContent()).includes('Solved after revealing the answer'), 'revealed answer was not completed');
 
+  // Desktop-first: a narrow viewport shows the desktop notice instead of a
+  // reflowed layout, and the board keeps its desktop size behind it.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(250);
-  const resizedCoachBoard = await page.locator('#coachBoard .board-b72b1').boundingBox();
-  const sprintCard = await page.locator('#coach-daily-plan').boundingBox();
-  assert(resizedCoachBoard && resizedCoachBoard.width <= 352, 'existing Coach board did not reflow after desktop-to-mobile resize');
-  assert(sprintCard && sprintCard.width <= 390, 'Daily Sprint card overflowed the mobile viewport');
+  assert(await page.locator('#desktop-notice').isVisible(), 'narrow viewport did not show the desktop notice');
+  const narrowBoard = await page.locator('#coachBoard .board-b72b1').boundingBox();
+  assert(narrowBoard && narrowBoard.width >= 440, 'board shrank below its desktop size on a narrow viewport');
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.waitForTimeout(250);
+  assert(!(await page.locator('#desktop-notice').isVisible()), 'desktop notice stayed visible on a desktop viewport');
 
   await page.locator('#btn-coach-newgame').click();
   await page.locator('#coach-keyboard-move-input').fill('e4');
@@ -501,13 +513,14 @@ async page => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(page.url().split('?')[0] + '?opening=italian&mode=quiz');
   await page.waitForTimeout(400);
-  const boardBox = await page.locator('#myBoard').boundingBox();
-  const libraryTabBox = await page.locator('#nav-library').boundingBox();
-  assert(await page.evaluate(() => document.documentElement.scrollWidth) <= 390, 'mobile layout has horizontal overflow');
-  assert(await page.locator('#btn-mobile-openings').isVisible(), 'mobile opening control is hidden');
-  assert(!(await page.locator('#library').isVisible()), 'opening catalog did not collapse after selection');
-  assert(boardBox && boardBox.width <= 352, 'mobile Library board exceeds the viewport');
-  assert(libraryTabBox && libraryTabBox.width > 120, 'mobile navigation tabs collapsed');
+  assert(await page.locator('#desktop-notice').isVisible(), 'narrow Library visit did not show the desktop notice');
+  await page.locator('#btn-desktop-notice-continue').click();
+  assert(!(await page.locator('#desktop-notice').isVisible()), 'desktop notice did not dismiss');
+  await page.reload();
+  await page.waitForTimeout(400);
+  assert(!(await page.locator('#desktop-notice').isVisible()), 'desktop notice dismissal did not persist for the session');
+  assert(await page.locator('#library').isVisible() && await page.locator('#myBoard').isVisible(), 'dismissed notice left the Library unusable');
+  await page.evaluate(() => sessionStorage.removeItem('ui:desktop-notice-dismissed'));
 
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(page.url().split('?')[0] + '?view=coach');
@@ -517,15 +530,10 @@ async page => {
   assert(await page.locator('#btn-coach-next-action').textContent() === 'Start training', 'clean first visit did not offer a one-click training start');
   assert(await page.locator('#daily-sprint-focus-title').textContent() === 'Focus · Build your baseline', 'clean first visit did not explain how adaptation begins');
   assert(await page.locator('#daily-sprint-progress-label').textContent() === '0 of 10 moves', 'clean first visit did not show the sprint target');
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.waitForTimeout(250);
   const firstVisitSprintBox = await page.locator('#coach-daily-plan').boundingBox();
   const firstVisitAccountBox = await page.locator('#coach-auth-card').boundingBox();
-  const firstVisitBoardBox = await page.locator('#coachBoard').boundingBox();
   assert(firstVisitSprintBox && firstVisitAccountBox && firstVisitSprintBox.y < firstVisitAccountBox.y, 'mobile first visit did not show the Daily Sprint before optional account setup');
-  assert(firstVisitSprintBox && firstVisitBoardBox && firstVisitSprintBox.y < firstVisitBoardBox.y, 'mobile first visit hid the Daily Sprint below the chessboard');
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.waitForTimeout(250);
+  await openRailGroup('group-position');
   await page.locator('#coach-fen').fill('7k/8/5KQ1/8/8/8/8/8 w - - 0 1');
   await page.locator('.side-toggle button[data-side="white"]').click();
   await page.locator('#btn-coach-next-action').click();
@@ -538,6 +546,7 @@ async page => {
   }, null, { timeout: 30000 }).catch(() => {});
   assert((await page.locator('#coach-classification').textContent()).includes('Blunder'), 'missed mate was not classified as a blunder');
   assert((await page.locator('#coach-review-cue').textContent()).startsWith('Next time:'), 'review did not surface an actionable Coach cue');
+  await showPanel('game');
   assert(await page.locator('#btn-coach-review-practice').isVisible(), 'review did not offer one-click practice for the mistake');
   assert(await page.locator('#coach-best-move').textContent() === 'Qg7#', 'real review did not preserve the mating move');
   assert(await page.locator('#daily-sprint-progress-label').textContent() === '1 of 10 moves', 'reviewed move did not advance the Daily Sprint');
@@ -557,6 +566,7 @@ async page => {
   await page.locator('#btn-coach-practice-exit').click();
   // A capture exercises the material path in insight tagging; the opponent must
   // still reply afterwards instead of the move handler dying mid-flight.
+  await openRailGroup('group-position');
   await page.locator('#coach-fen').fill('rnbqkbnr/pppp1ppp/8/4p3/3P4/8/PPP1PPPP/RNBQKBNR w KQkq e6 0 2');
   await page.locator('.side-toggle button[data-side="white"]').click();
   await page.locator('#btn-coach-newgame').click();
@@ -569,6 +579,7 @@ async page => {
     status: document.querySelector('#coach-status')?.textContent || ''
   }));
   assert(afterCapture.plies >= 2 && !afterCapture.status.includes('Engine error'), `opponent did not reply after a capture (${afterCapture.plies} plies, ${afterCapture.status})`);
+  await openRailGroup('group-position');
   await page.locator('#coach-fen').fill('7k/8/5KQ1/8/8/8/8/8 w - - 0 1');
   await page.locator('.side-toggle button[data-side="white"]').click();
   await page.locator('#btn-coach-newgame').click();
@@ -592,6 +603,7 @@ async page => {
   await page.reload();
   assert(await page.locator('#coach-daily-plan-title').textContent() === '✓ Today’s training complete', 'move sprint completion did not persist across reload');
 
+  await showPanel('practice');
   await page.locator('#endgame-track-list .endgame-item button').first().click();
   assert(await page.locator('#coach-practice-banner').isVisible(), 'structured endgame lesson did not open in Coach practice');
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
@@ -601,6 +613,7 @@ async page => {
   assert(await page.locator('#endgame-track-progress').textContent() === '1/4', 'structured endgame progress did not update');
   await page.locator('#btn-coach-practice-exit').click();
 
+  await openRailGroup('group-inbox');
   await page.locator('#game-inbox-pgn').fill('[Event "Smoke import"]\n[Result "*"]\n\n1. e4 *');
   await page.locator('#game-inbox-side').selectOption('white');
   await page.locator('#btn-analyse-pgn').click();
@@ -612,6 +625,7 @@ async page => {
   await page.goto(page.url().split('?')[0] + '?view=coach');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
+  await openRailGroup('group-position');
   await page.locator('#coach-fen').fill('7k/8/5KQ1/8/8/8/8/8 w - - 0 1');
   await page.locator('.side-toggle button[data-side="white"]').click();
   await page.locator('#btn-coach-next-action').click();
@@ -621,7 +635,9 @@ async page => {
   await page.waitForFunction(() => {
     return (document.querySelector('#coach-classification')?.textContent || '').includes('Blunder');
   }, null, { timeout: 30000 }).catch(() => {});
+  await showPanel('game');
   assert(await page.locator('#btn-coach-review-practice').isVisible(), 'review did not offer one-click practice for the mistake');
+  await showPanel('game');
   await page.locator('#btn-coach-review-practice').click();
   assert(await page.locator('#coach-practice-banner').isVisible(), 'review practice action did not open the drill');
   assert((await page.locator('#coach-practice-prompt').textContent()).includes('Find the best move'), 'review practice action did not open the current position');
@@ -633,7 +649,7 @@ async page => {
     practice: 'adaptive focus was selected, rehearsed, transferred, assessed, and persisted',
     coach: 'replacement-game race stayed clean',
     library: 'keyboard quiz advanced',
-    mobile: '390px layout stayed within viewport',
+    mobile: 'narrow viewport showed the desktop notice and stayed usable after dismissal',
     closedLoop: 'missed mate became a post-game drill and delivered mate stayed scorable',
     dailyHabit: 'first-visit baseline and returning adaptive session completed with takeaways, streaks, persistence, and account isolation',
     growth: 'profile, repertoire, adaptive strength, weekly review, endgames, PGN Inbox, and offline shell worked in-browser'

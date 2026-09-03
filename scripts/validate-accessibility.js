@@ -6,6 +6,7 @@ const path = require('path');
 const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
 const errors = [];
 
 function requirePattern(source, pattern, message) {
@@ -26,8 +27,8 @@ function contrast(a, b) {
   return (values[0] + 0.05) / (values[1] + 0.05);
 }
 
-const muted = (html.match(/--muted:\s*(#[0-9a-f]{6})/i) || [])[1];
-const surface2 = (html.match(/--surface2:\s*(#[0-9a-f]{6})/i) || [])[1];
+const muted = (css.match(/--muted:\s*(#[0-9a-f]{6})/i) || [])[1];
+const surface2 = (css.match(/--surface2:\s*(#[0-9a-f]{6})/i) || [])[1];
 if (!muted || !surface2 || contrast(muted, surface2) < 4.5) {
   errors.push('muted text must meet WCAG AA contrast on surface2');
 }
@@ -42,8 +43,12 @@ requirePattern(app, /function resolveAccessibleMove/, 'keyboard moves must resol
 requirePattern(html, /id="coach-status"[^>]+aria-live="polite"/, 'Coach status must announce changes');
 requirePattern(html, /id="feedback-bar"[^>]+aria-live="polite"/, 'quiz feedback must announce changes');
 requirePattern(app, /document\.createElement\('button'\)[\s\S]{0,100}\.type = 'button'/, 'post-game moment rows must be real buttons');
-requirePattern(html, /@media \(max-width:\s*600px\)[\s\S]+?\.top-nav/, 'header navigation must have a narrow-mobile layout');
-requirePattern(html, /id="btn-mobile-openings"[^>]+aria-expanded=/, 'mobile opening picker must expose expansion state');
+requirePattern(html, /id="desktop-notice"[^>]+role="dialog"[^>]+aria-labelledby="desktop-notice-title"/, 'desktop notice must be an accessible dialog');
+requirePattern(html, /id="btn-desktop-notice-continue"/, 'desktop notice must offer a way to continue');
+requirePattern(html, /class="panel-tabs" role="tablist"[\s\S]+?aria-controls="panel-game"[\s\S]+?aria-controls="panel-practice"[\s\S]+?aria-controls="panel-progress"/, 'Coach panel tabs must expose a complete tab relationship');
+requirePattern(app, /\.panel-tab'\)\.on\('keydown'[\s\S]+?ArrowLeft[\s\S]+?ArrowRight/, 'Coach panel tabs must support arrow-key navigation');
+requirePattern(html, /id="coach-play-card"[\s\S]{0,600}id="btn-coach-newgame"/, 'primary game controls must sit at the top of the Coach rail');
+requirePattern(css, /@media \(max-width:\s*1023px\)[\s\S]+?\.desktop-notice \{ display: flex; \}/, 'desktop notice must appear on narrow screens');
 requirePattern(html, /class="top-nav-btn active"[^>]+id="nav-coach"[^>]+aria-selected="true"/, 'Coach must be the default selected application section');
 requirePattern(html, /class="app"[^>]+id="library-view"[^>]+aria-hidden="true"[^>]+style="display:none;"/, 'Library must be hidden in the initial application shell');
 requirePattern(html, /class="coach-view"[^>]+id="coach-view"[^>]+aria-hidden="false"/, 'Coach must be visible in the initial application shell');

@@ -33,7 +33,7 @@ browsers. Leaving `coach-config.js` blank keeps Coach local-only.
 
 ## Stack
 
-- `index.html` + `app.js` (runtime) + `openings.js` (opening content data)
+- `index.html` + `styles.css` + `app.js` (runtime) + `openings.js` (opening content data)
   + `growth.js` (personal training layer: profile, repertoire, imported games,
   endgames, cross-device sync) — no build tooling, no package manager,
   no framework
@@ -45,6 +45,10 @@ browsers. Leaving `coach-config.js` blank keeps Coach local-only.
   - Stockfish (WASM build: `stockfish.js` + `stockfish.wasm`)
 - Lichess Opening Explorer API for Explore mode
 - Optional Supabase project for account-backed Coach sync
+- Desktop-first by design: the board scales with the window height, the
+  rails use the width a laptop or desktop offers, and screens narrower than
+  1024px get a notice recommending a larger screen (with a continue option)
+  instead of a mobile layout.
 - Browser-only by design: there is no web app manifest and nothing registers
   a service worker. `service-worker.js` remains only as a kill switch that
   unregisters and clears caches for browsers that installed an earlier
@@ -74,8 +78,8 @@ The validators cover accessibility, maintainability, the openings data
 (`scripts/validate-openings.js`), performance, the practice/drill loop,
 reliability, and security.
 
-For broader smoke coverage (Library, Coach, the practice loop, a 390px
-mobile viewport, and stale-engine handling), run:
+For broader smoke coverage (Library, Coach, the practice loop, the narrow-
+viewport desktop notice, and stale-engine handling), run:
 
 ```sh
 scripts/verify-browser.sh

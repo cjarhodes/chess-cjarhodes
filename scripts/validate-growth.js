@@ -42,7 +42,7 @@ requirePattern(app, /function updateNetworkStatus[\s\S]+Offline mode/, 'Coach mu
 requirePattern(app, /function coachExplanationContext[\s\S]+opponentThreat[\s\S]+classifyMove/, 'Coach explanations must name a chess concept and the opponent threat');
 requirePattern(app, /function renderCoachReviewEvidence[\s\S]+reviewBoardMarkup/, 'Coach reviews must visualise the before and after positions');
 requirePattern(app, /function recurringMistakeSummaries[\s\S]+function renderRecurringMistakeDashboard/, 'Coach Insights must show recurring mistake trends over time');
-requirePattern(html, /id="player-profile-form"[\s\S]+id="coach-auto-elo"[\s\S]+id="game-inbox-pgn"[\s\S]+id="weekly-review-section"[\s\S]+id="endgame-track-section"/, 'Coach UI must expose profile, adaptive strength, Game Inbox, weekly review, and endgames');
+requirePattern(html, /id="coach-auto-elo"[\s\S]+id="player-profile-form"[\s\S]+id="game-inbox-pgn"[\s\S]+id="endgame-track-section"[\s\S]+id="weekly-review-section"/, 'Coach UI must expose profile, adaptive strength, Game Inbox, weekly review, and endgames');
 requirePattern(html, /id="training-data-card"[\s\S]+id="btn-export-training-data"[\s\S]+id="btn-import-training-data"/, 'Coach UI must expose portable training-data backup controls');
 requirePattern(html, /id="opening-section"[\s\S]+id="btn-coach-opening-study"[\s\S]+Study this opening/, 'Coach opening context must bridge directly into the study library');
 requirePattern(html, /id="personal-repertoire-card"[\s\S]+id="personal-repertoire-summary"[\s\S]+id="personal-repertoire-list"/, 'Coach must show the repertoire discovered from imported games');
