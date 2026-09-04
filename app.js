@@ -1940,6 +1940,7 @@ function renderPracticeQueue(entries, counts) {
     $list.append($row);
   });
   $section.show();
+  markActivePracticeRow();
   renderCoachDailyPlan(queue, due, totals, entries);
 }
 
@@ -3654,7 +3655,10 @@ function invalidateCoachAsyncWork(reason) {
 function resetCoachState(fen, opts = {}) {
   invalidateCoachAsyncWork('A new game replaced the previous analysis.');
   coachPracticeSession = null;
-  if (!opts.preservePracticeRun) coachPracticeRun = null;
+  if (!opts.preservePracticeRun) {
+    coachPracticeRun = null;
+    if (typeof setPracticeFocus === 'function') setPracticeFocus(false);
+  }
   summaryPracticeItems = [];
   CoachController.setPhase('idle');
   coachGame = fen ? new Chess(fen) : new Chess();
@@ -4886,6 +4890,25 @@ function practiceRunPositionText() {
   return `Drill ${coachPracticeRun.index + 1} of ${coachPracticeRun.items.length}`;
 }
 
+// Practice focus: while a drill is active the rails drop everything that is
+// not about the drill (play controls, setup groups, metrics, other tabs) and
+// the right rail shows only the practice queue with the current drill marked.
+function setPracticeFocus(active) {
+  const $view = $('#coach-view');
+  const wasActive = $view.hasClass('practice-active');
+  $view.toggleClass('practice-active', !!active);
+  if (active) showCoachPanel('practice');
+  else if (wasActive) showCoachPanel('game');
+  markActivePracticeRow();
+}
+
+function markActivePracticeRow() {
+  $('.practice-row').removeClass('is-active');
+  const item = coachPracticeSession && coachPracticeSession.item;
+  if (!item) return;
+  $('.practice-load[data-practice-id="' + item.id + '"]').closest('.practice-row').addClass('is-active');
+}
+
 function startCoachPractice(item, opts = {}) {
   if (!item || !item.entry || !isValidFen(item.entry.fenBefore) || !item.entry.bestUci) {
     setCoachStatus('Practice position is no longer valid.');
@@ -4926,6 +4949,7 @@ function startCoachPractice(item, opts = {}) {
   setCoachStatus('Practice drill — find the best move.');
   updateCoachControlsState();
   renderCoachDailyPlan();
+  setPracticeFocus(true);
 }
 
 function coachPracticeMoveLabel(item) {
@@ -5029,6 +5053,7 @@ function exitCoachPractice(message) {
   createCoachBoard('start', 'white');
   $('#coach-view').removeClass('game-active');
   $('#coach-practice-banner').hide();
+  setPracticeFocus(false);
   setCoachStatus(message || 'Practice closed. Start a game or choose another due drill.');
   updateCoachControlsState();
   renderInsights();

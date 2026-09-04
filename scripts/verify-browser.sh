@@ -46,7 +46,17 @@ async page => {
     if (!condition) failures.push(message);
   };
   const showPanel = async name => {
-    await page.locator('.panel-tab[data-panel="' + name + '"]').click();
+    // Dispatch through the DOM: practice focus mode hides the tab strip.
+    await page.evaluate(panel => {
+      const tab = document.querySelector('.panel-tab[data-panel="' + panel + '"]');
+      if (tab) tab.click();
+    }, name);
+  };
+  const leavePractice = async () => {
+    // Practice focus mode hides the play controls until the drill is exited.
+    await page.evaluate(() => {
+      if (document.querySelector('#coach-view.practice-active')) document.querySelector('#btn-coach-practice-exit').click();
+    });
   };
   const openRailGroup = async id => {
     await page.locator('#' + id).evaluate(element => { element.open = true; });
@@ -491,10 +501,12 @@ async page => {
   await page.waitForTimeout(250);
   assert(!(await page.locator('#desktop-notice').isVisible()), 'desktop notice stayed visible on a desktop viewport');
 
+  await leavePractice();
   await page.locator('#btn-coach-newgame').click();
   await page.locator('#coach-keyboard-move-input').fill('e4');
   await page.locator('#coach-keyboard-move-form button[type=submit]').click();
   await page.waitForTimeout(40);
+  await leavePractice();
   await page.locator('#btn-coach-newgame').click();
   await page.waitForTimeout(4500);
   assert(await page.locator('#movelist .ply').count() === 0, 'stale engine result leaked into a replacement game');
@@ -576,6 +588,7 @@ async page => {
   await openRailGroup('group-position');
   await page.locator('#coach-fen').fill('rnbqkbnr/pppp1ppp/8/4p3/3P4/8/PPP1PPPP/RNBQKBNR w KQkq e6 0 2');
   await page.locator('.side-toggle button[data-side="white"]').click();
+  await leavePractice();
   await page.locator('#btn-coach-newgame').click();
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
   await page.locator('#coach-keyboard-move-input').fill('dxe5');
@@ -589,6 +602,7 @@ async page => {
   await openRailGroup('group-position');
   await page.locator('#coach-fen').fill('7k/8/5KQ1/8/8/8/8/8 w - - 0 1');
   await page.locator('.side-toggle button[data-side="white"]').click();
+  await leavePractice();
   await page.locator('#btn-coach-newgame').click();
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
   await page.locator('#coach-keyboard-move-input').fill('Qg7#');

@@ -822,30 +822,33 @@ html[data-board-theme="ivory"] {
   align-self: flex-start;
 }
 .coach-practice-banner {
-  width: 440px;
+  width: var(--board-size);
   max-width: 100%;
   display: none;
   flex-direction: column;
-  gap: 0.45rem;
-  padding: 0.75rem 0.85rem;
-  background: var(--surface2);
-  border: 1px solid var(--highlight);
-  border-left: 3px solid var(--highlight);
-  border-radius: 2px;
+  gap: 0.35rem;
+  padding: 0.95rem 1.15rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
 }
 .coach-practice-banner .title {
   color: var(--text);
-  font-weight: 600;
-  font-size: 0.86rem;
+  font-family: var(--font-reading);
+  font-weight: 500;
+  font-size: 1.15rem;
+  letter-spacing: -0.01em;
 }
 .coach-practice-banner .prompt,
 .coach-practice-banner .status,
 .coach-practice-banner .session-status {
   color: var(--muted);
   font-family: var(--font-reading);
-  font-size: 0.9rem;
-  line-height: 1.4;
+  font-size: 0.98rem;
+  line-height: 1.45;
 }
+.coach-practice-banner .prompt { color: var(--text); opacity: 0.9; }
 .coach-practice-banner .session-status {
   font-family: var(--font-mono);
   font-size: 0.68rem;
@@ -853,7 +856,7 @@ html[data-board-theme="ivory"] {
   text-transform: uppercase;
 }
 .coach-practice-banner .status { color: var(--accent-soft); }
-.coach-practice-actions { display: flex; gap: 0.45rem; flex-wrap: wrap; }
+.coach-practice-actions { display: flex; gap: 0.45rem; flex-wrap: wrap; margin-top: 0.45rem; }
 .coach-classification {
   display: inline-block;
   padding: 0.28rem 0.65rem;
@@ -2336,3 +2339,31 @@ input[type=range].strength-slider::-moz-range-thumb {
 @media (min-width: 1800px) {
   :root { --rail-left: 350px; --rail-right: 500px; }
 }
+
+/* ── PRACTICE FOCUS MODE ── */
+/* While a drill is active, everything that is not the drill steps aside. */
+.coach-view.practice-active .play-card,
+.coach-view.practice-active .rail-group,
+.coach-view.practice-active #coach-status,
+.coach-view.practice-active .captured-bar,
+.coach-view.practice-active .board-nav,
+.coach-view.practice-active .board-controls,
+.coach-view.practice-active .panel-tabs,
+.coach-view.practice-active .panel-page:not(#panel-practice),
+.coach-view.practice-active #panel-practice > .coach-panel-section:not(#practice-section),
+.coach-view.practice-active .practice-progress,
+.coach-view.practice-active .practice-recent,
+.coach-view.practice-active .practice-trend,
+.coach-view.practice-active #btn-practice-session-start,
+.coach-view.practice-active #btn-practice-progress-reset { display: none !important; }
+.coach-view.practice-active #panel-practice { display: flex !important; }
+.coach-view.practice-active .practice-row.is-active .practice-load { display: none; }
+.practice-row.is-active {
+  background: var(--accent-dim);
+  border-left: 2px solid var(--accent);
+  padding: 0.5rem 0.6rem;
+  margin: 0 -0.6rem;
+  border-radius: 2px;
+}
+.practice-row.is-active .practice-title { color: var(--accent-soft); }
+.coach-view.practice-active .coach-daily-plan .plan-detail { display: none; }
