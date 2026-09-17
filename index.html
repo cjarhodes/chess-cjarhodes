@@ -336,7 +336,10 @@
         <div><label for="game-inbox-side">Analyse my moves as</label><select id="game-inbox-side"><option value="white">White</option><option value="black">Black</option></select></div>
         <div><label for="game-inbox-file">Or choose a .pgn file</label><input id="game-inbox-file" type="file" accept=".pgn,text/plain,application/x-chess-pgn"></div>
       </div>
-      <div class="growth-actions"><button class="ctrl-btn primary" id="btn-analyse-pgn" type="button">Analyse game</button></div>
+      <div class="growth-actions">
+        <button class="ctrl-btn primary" id="btn-analyse-pgn" type="button">Analyse games</button>
+        <button class="ctrl-btn" id="btn-cancel-pgn" type="button" style="display:none;">Cancel analysis</button>
+      </div>
       <div class="import-progress" aria-hidden="true"><span id="game-inbox-progress"></span></div>
       <div class="growth-status" id="game-inbox-status" role="status" aria-live="polite">Analysis stays in this browser; signed-in insights and drills sync normally.</div>
       </div>
@@ -398,9 +401,18 @@
       <div class="prompt" id="coach-practice-prompt"></div>
       <div class="status" id="coach-practice-status" role="status" aria-live="polite"></div>
       <div class="coach-practice-actions">
+        <button type="button" class="ctrl-btn" id="btn-coach-practice-hint">Hint</button>
         <button type="button" class="ctrl-btn" id="btn-coach-practice-answer">Show answer</button>
         <button type="button" class="ctrl-btn primary" id="btn-coach-practice-next" style="display:none;">Next drill</button>
         <button type="button" class="ctrl-btn" id="btn-coach-practice-exit">Exit practice</button>
+      </div>
+    </div>
+    <div class="coach-analysis-strip" aria-label="Analysis controls">
+      <div id="coach-review-analysis" role="status" aria-live="polite" style="display:none;"></div>
+      <div class="coach-analysis-actions">
+        <button type="button" class="ctrl-btn" id="btn-coach-review-analysis-prev" style="display:none;">Previous step</button>
+        <button type="button" class="ctrl-btn" id="btn-coach-review-analysis-next" style="display:none;">Next step</button>
+        <button type="button" class="ctrl-btn primary" id="btn-coach-backtogame" style="display:none;">Back to game</button>
       </div>
     </div>
     <div class="captured-bar" id="captured-top">
@@ -479,25 +491,33 @@
 <div id="coach-review" class="coach-review" style="display:none">
       <div class="coach-review-header">
         <span id="coach-classification" class="coach-classification coach-class-best">Best</span>
-        <span id="coach-loss" class="coach-review-loss">0 cp</span>
       </div>
       <div class="coach-review-moves">
         <span class="label">You played</span><span class="value" id="coach-user-move">—</span>
         <span class="label">Best move</span><span class="value" id="coach-best-move">—</span>
       </div>
-      <div id="coach-explanation" style="font-size:0.82rem; color:var(--muted); line-height:1.45;"></div>
-      <div id="coach-review-lesson" class="coach-review-lesson" role="note" style="display:none;"></div>
-      <div id="coach-review-threat" class="coach-review-threat" role="note" style="display:none;"></div>
-      <div id="coach-review-evidence" class="coach-review-evidence" role="figure" aria-label="Before and after position comparison" style="display:none;"></div>
+      <div id="coach-review-summary" class="coach-review-summary"></div>
       <div id="coach-review-cue" class="coach-review-cue" role="note" aria-live="polite"></div>
       <div class="coach-review-actions">
-        <button type="button" class="ctrl-btn primary" id="btn-coach-review-practice" style="display:none;">Practice this move</button>
+        <button type="button" class="ctrl-btn primary" id="btn-coach-showwhy">Show why</button>
+        <button type="button" class="ctrl-btn" id="btn-coach-review-practice" style="display:none;">Practice this move</button>
       </div>
-      <div class="coach-review-pv" id="coach-pv" style="display:none"></div>
-      <div class="coach-review-alts" id="coach-alts" style="display:none">
-        <div class="coach-review-alts-label">Better candidates</div>
-        <div class="coach-review-alts-list" id="coach-alts-list"></div>
-      </div>
+      <details id="coach-review-details" class="coach-review-details">
+        <summary>Engine details</summary>
+        <div class="coach-review-detail-body">
+          <div>Evaluation loss <span id="coach-loss" class="coach-review-loss">0.00</span></div>
+          <div id="coach-review-eval-deep"></div>
+          <div id="coach-review-deep-explanation"></div>
+          <div id="coach-review-lesson" class="coach-review-lesson" role="note" style="display:none;"></div>
+          <div id="coach-review-threat" class="coach-review-threat" role="note" style="display:none;"></div>
+          <div id="coach-review-evidence" class="coach-review-evidence" role="figure" aria-label="Actual and recommended positions" style="display:none;"></div>
+          <div class="coach-review-pv" id="coach-pv" style="display:none"></div>
+          <div class="coach-review-alts" id="coach-alts" style="display:none">
+            <div class="coach-review-alts-label">Candidate moves</div>
+            <div class="coach-review-alts-list" id="coach-alts-list"></div>
+          </div>
+        </div>
+      </details>
     </div>
 <div class="coach-panel-section" id="threats-section" style="display:none;">
       <div class="section-label">Opponent threats</div>

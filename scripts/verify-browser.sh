@@ -58,6 +58,19 @@ async page => {
       if (document.querySelector('#coach-view.practice-active')) document.querySelector('#btn-coach-practice-exit').click();
     });
   };
+  const settlePracticeMove = async () => {
+    await page.waitForFunction(() => !coachPracticeSession || (!coachPracticeSession.grading && !coachPracticeSession.pendingMove), null, { timeout: 45000 });
+    const followup = await page.evaluate(() => {
+      const session = coachPracticeSession;
+      if (!session || session.completed || session.phase !== 'followup') return null;
+      return session.expectedUci;
+    });
+    if (followup) {
+      await page.locator('#coach-keyboard-move-input').fill(followup);
+      await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+      await page.waitForFunction(() => !coachPracticeSession || (!coachPracticeSession.grading && !coachPracticeSession.pendingMove), null, { timeout: 45000 });
+    }
+  };
   const openRailGroup = async id => {
     await page.locator('#' + id).evaluate(element => { element.open = true; });
   };
@@ -368,13 +381,15 @@ async page => {
   assert(await page.locator('#coach-practice-session-status').textContent() === 'Drill 1 of 2', 'restored adaptive drill session did not restart at the due position');
 
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
-  await page.locator('#coach-keyboard-move-input').fill('d4');
+  await page.locator('#coach-keyboard-move-input').fill('f3');
   await page.locator('#coach-keyboard-move-form button[type=submit]').click();
-  assert((await page.locator('#coach-practice-status').textContent()).includes('Not the best move'), 'incorrect drill move was not rejected');
+  await settlePracticeMove();
+  assert((await page.locator('#coach-practice-status').textContent()).includes('Find a sound move'), 'incorrect drill move was not rejected');
   assert(await page.locator('#practice-progress-attempts').textContent() === '1', 'incorrect attempt was not measured');
 
   await page.locator('#coach-keyboard-move-input').fill('e4');
   await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+  await settlePracticeMove();
   assert((await page.locator('#coach-practice-status').textContent()).includes('Correct after 2 attempts'), 'correct drill move was not graded');
   assert(await page.locator('#practice-progress-attempts').textContent() === '2', 'first drill attempt count is wrong');
   assert(await page.locator('#practice-progress-success').textContent() === '50%', 'first drill success rate is wrong');
@@ -385,6 +400,7 @@ async page => {
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
   await page.locator('#coach-keyboard-move-input').fill('Nf3');
   await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+  await settlePracticeMove();
   assert((await page.locator('#coach-practice-status').textContent()).includes('Session complete'), 'multi-drill session did not complete');
   assert(await page.locator('#practice-progress-attempts').textContent() === '3', 'session attempt count is wrong');
   assert(await page.locator('#practice-progress-success').textContent() === '67%', 'session success rate is wrong');
@@ -396,7 +412,7 @@ async page => {
   await page.locator('#btn-coach-practice-next').click();
   assert(await page.locator('#coach-daily-plan-title').textContent() === 'Transfer Opening principle gaps into play', 'focused drills did not advance into transfer play');
   assert(await page.locator('#daily-sprint-progress-label').textContent() === '2 of 8 steps', 'adaptive session did not retain drill progress');
-  assert(await page.locator('#btn-coach-next-action').textContent() === 'Start transfer game', 'adaptive session did not offer the transfer game');
+  assert(['Start transfer game', 'Return to the board'].includes(await page.locator('#btn-coach-next-action').textContent()), 'adaptive session did not offer the transfer game or resume the preserved game');
 
   await page.evaluate(() => {
     coachLocalGameId = 'adaptive-smoke';
@@ -407,7 +423,7 @@ async page => {
   assert(await page.locator('#coach-daily-plan-title').textContent() === '✓ Today’s training complete', 'drill-plus-transfer session did not complete');
   assert(await page.locator('#daily-sprint-progress-label').textContent() === '8 of 8 steps', 'adaptive session completion progress is wrong');
   assert(await page.locator('#daily-sprint-streak').textContent() === '1-day streak', 'adaptive session completion did not start a streak');
-  assert((await page.locator('#daily-sprint-takeaway').textContent()).includes('did not repeat during the transfer moves'), 'adaptive takeaway did not assess live transfer');
+  assert((await page.locator('#daily-sprint-takeaway').textContent()).includes('does not establish improvement'), 'adaptive takeaway did not assess live transfer with appropriate uncertainty');
 
   await page.reload();
   assert(await page.locator('#practice-progress-attempts').textContent() === '3', 'practice progress did not survive reload');
@@ -483,11 +499,13 @@ async page => {
   await page.reload();
   await showPanel('practice');
   await page.locator('.practice-load').first().click();
+  const revealedMove = await page.evaluate(() => coachPracticeSession.expectedUci);
   await page.locator('#btn-coach-practice-answer').click();
-  assert((await page.locator('#coach-practice-status').textContent()).includes('Answer: e4'), 'practice answer was not revealed');
+  assert((await page.locator('#coach-practice-status').textContent()).startsWith('Answer:'), 'practice answer was not revealed');
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
-  await page.locator('#coach-keyboard-move-input').fill('e4');
+  await page.locator('#coach-keyboard-move-input').fill(revealedMove);
   await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+  await settlePracticeMove();
   assert((await page.locator('#coach-practice-status').textContent()).includes('Solved after revealing the answer'), 'revealed answer was not completed');
 
   // Desktop-first: a narrow viewport shows the desktop notice instead of a
@@ -505,6 +523,7 @@ async page => {
   await page.locator('#btn-coach-newgame').click();
   await page.locator('#coach-keyboard-move-input').fill('e4');
   await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+  await settlePracticeMove();
   await page.waitForTimeout(40);
   await leavePractice();
   await page.locator('#btn-coach-newgame').click();
@@ -560,6 +579,7 @@ async page => {
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
   await page.locator('#coach-keyboard-move-input').fill('Qe4');
   await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+  await settlePracticeMove();
   await page.waitForFunction(() => {
     return (document.querySelector('#coach-classification')?.textContent || '').includes('Blunder');
   }, null, { timeout: 30000 }).catch(() => {});
@@ -579,6 +599,7 @@ async page => {
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
   await page.locator('#coach-keyboard-move-input').fill(generatedBest);
   await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+  await settlePracticeMove();
   assert((await page.locator('#coach-practice-status').textContent()).includes('Correct on the first try'), 'generated drill did not accept the reviewed best move');
   assert(await page.locator('#practice-progress-success').textContent() === '100%', 'generated drill result was not measured');
 
@@ -593,6 +614,7 @@ async page => {
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
   await page.locator('#coach-keyboard-move-input').fill('dxe5');
   await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+  await settlePracticeMove();
   await page.waitForFunction(() => document.querySelectorAll('#movelist .ply').length >= 2, null, { timeout: 45000 }).catch(() => {});
   const afterCapture = await page.evaluate(() => ({
     plies: document.querySelectorAll('#movelist .ply').length,
@@ -607,6 +629,7 @@ async page => {
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
   await page.locator('#coach-keyboard-move-input').fill('Qg7#');
   await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+  await settlePracticeMove();
   await page.waitForFunction(() => {
     return (document.querySelector('#coach-classification')?.textContent || '').includes('Best move');
   }, null, { timeout: 30000 }).catch(() => {});
@@ -630,6 +653,7 @@ async page => {
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
   await page.locator('#coach-keyboard-move-input').fill('Qg7#');
   await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+  await settlePracticeMove();
   assert((await page.locator('#coach-practice-status').textContent()).includes('Correct on the first try'), 'structured endgame lesson was not graded');
   assert(await page.locator('#endgame-track-progress').textContent() === '1/4', 'structured endgame progress did not update');
   await page.locator('#btn-coach-practice-exit').click();
@@ -653,6 +677,7 @@ async page => {
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
   await page.locator('#coach-keyboard-move-input').fill('Qe4');
   await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+  await settlePracticeMove();
   await page.waitForFunction(() => {
     return (document.querySelector('#coach-classification')?.textContent || '').includes('Blunder');
   }, null, { timeout: 30000 }).catch(() => {});
@@ -661,7 +686,64 @@ async page => {
   await showPanel('game');
   await page.locator('#btn-coach-review-practice').click();
   assert(await page.locator('#coach-practice-banner').isVisible(), 'review practice action did not open the drill');
-  assert((await page.locator('#coach-practice-prompt').textContent()).includes('Find the best move'), 'review practice action did not open the current position');
+  assert(await page.evaluate(() => coachGame.fen() === coachPracticeSession.item.entry.fenBefore), 'review practice action did not open the current position');
+
+  // Real game -> explanation -> practice -> the same live game.
+  await page.goto(page.url().split('?')[0] + '?view=coach');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.locator('#btn-coach-newgame').click();
+  await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
+  await page.locator('#coach-keyboard-move-input').fill('f3');
+  await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+  await settlePracticeMove();
+  await page.waitForFunction(() => coachGame && coachGame.history().length === 2 && !coachThinking, null, { timeout: 45000 });
+  const preservedGame = await page.evaluate(() => ({ pgn: coachGame.pgn(), id: coachLocalGameId, stats: JSON.stringify(coachStats) }));
+  await showPanel('game');
+  assert(!(await page.locator('#coach-review-details').getAttribute('open')), 'engine details should start collapsed');
+  await page.locator('#btn-coach-showwhy').click();
+  assert(await page.locator('#coach-review-analysis').isVisible(), 'Show why did not label the analysis board');
+  assert(await page.evaluate(() => coachGame.pgn()) === preservedGame.pgn, 'Show why changed the live game');
+  await page.locator('#btn-coach-review-analysis-next').click();
+  await page.locator('#coach-keyboard-move-input').fill('g4');
+  await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+  await settlePracticeMove();
+  assert(await page.evaluate(() => coachGame.pgn()) === preservedGame.pgn, 'keyboard move changed live game during analysis');
+  await page.locator('#btn-coach-backtogame').click();
+  assert(!(await page.locator('#coach-review-analysis').isVisible()), 'Back to game left analysis visible');
+  await page.locator('#btn-coach-review-practice').click();
+  assert(await page.locator('#coach-view').evaluate(el => el.classList.contains('practice-active')), 'practice did not enter focus mode');
+  assert(!(await page.locator('#btn-coach-newgame').isVisible()), 'practice did not hide play controls');
+  assert(await page.locator('.practice-row.is-active').count() === 1, 'practice did not highlight the active drill');
+  await page.locator('#btn-coach-practice-hint').click();
+  assert((await page.locator('#coach-practice-status').textContent()).length > 0, 'practice hint did not give guidance');
+  await page.locator('#btn-coach-practice-exit').click();
+  const returnedGame = await page.evaluate(() => ({ pgn: coachGame.pgn(), id: coachLocalGameId, stats: JSON.stringify(coachStats) }));
+  assert(JSON.stringify(returnedGame) === JSON.stringify(preservedGame), 'practice did not restore the exact live game and statistics');
+  assert(await page.locator('#btn-coach-newgame').isVisible(), 'exiting practice did not restore play controls');
+
+  await page.locator('#btn-coach-review-practice').click();
+  await page.waitForFunction(() => coachPracticeSession && coachPracticeSession.analysisReady, null, { timeout: 45000 });
+  await page.locator('#coach-keyboard-move-input').fill('Nf3');
+  await page.locator('#coach-keyboard-move-form button[type=submit]').click();
+  await settlePracticeMove();
+  assert(await page.evaluate(() => coachPracticeSession.completed && coachPracticeSession.misses === 0), 'sound developing alternative was rejected or counted as a miss');
+  await page.locator('#btn-coach-practice-exit').click();
+
+
+  // Cancellation must discard staged work without replacing the current game.
+  await openRailGroup('group-inbox');
+  const beforeImport = await page.evaluate(() => ({ pgn: coachGame.pgn(), insights: JSON.stringify(loadInsights()) }));
+  const importBatch = Array.from({ length: 31 }, (_, i) => '[Event "Cancel ' + i + '"]\n[Result "*"]\n\n1. e4 e5 *').join('\n\n');
+  await page.locator('#game-inbox-pgn').fill(importBatch);
+  await page.locator('#game-inbox-side').selectOption('white');
+  await page.locator('#btn-analyse-pgn').click();
+  await page.waitForFunction(() => importedGameAnalysisActive && importedAnalysisRun && importedAnalysisRun.completed >= 1, null, { timeout: 45000 });
+  await page.locator('#btn-cancel-pgn').click();
+  await page.waitForFunction(() => !importedGameAnalysisActive, null, { timeout: 10000 });
+  const afterImport = await page.evaluate(() => ({ pgn: coachGame.pgn(), insights: JSON.stringify(loadInsights()) }));
+  assert(JSON.stringify(beforeImport) === JSON.stringify(afterImport), 'cancelled import replaced the live game or saved a partial batch');
+  assert((await page.locator('#game-inbox-status').textContent()).includes('cancelled'), 'cancelled import did not report cancellation');
 
   assert(consoleErrors.length === 0, `console errors: ${consoleErrors.join(' | ')}`);
   assert(pageErrors.length === 0, `page errors: ${pageErrors.join(' | ')}`);

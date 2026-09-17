@@ -31,6 +31,24 @@ fully local-only; optionally signing in with Supabase makes games,
 mistakes, practice attempts, and trends durable across devices and
 browsers. Leaving `coach-config.js` blank keeps Coach local-only.
 
+Move reviews start with a short explanation. **Show why** steps through the
+recommended line on the main board without changing the live game; **Back to
+game** restores the actual position. Engine details remain expandable.
+Practice borrows the board and returns to the same unfinished game when closed.
+Drills evaluate sound alternatives, provide progressive hints, and can ask for
+a follow-up after an opponent reply. Unverified engine results are not counted
+as mistakes.
+
+The weekly transfer comparison reports sample counts and needs at least 30
+reviewed moves before and after practice. This is a practical evidence floor,
+not a statistical significance test or proof of improvement. Daily session
+completion measures activity, separately from longer-term performance.
+
+PGN import reviews all selected-side moves in the valid games in a batch,
+with progress and cancellation. A completed batch contributes to Insights
+and repertoire evidence; the final game's review is shown in Coach. Cancelling
+discards the staged batch rather than saving a partially analysed history.
+
 ## Stack
 
 - `index.html` + `styles.css` + `app.js` (runtime) + `openings.js` (opening content data)

@@ -2367,3 +2367,13 @@ input[type=range].strength-slider::-moz-range-thumb {
 }
 .practice-row.is-active .practice-title { color: var(--accent-soft); }
 .coach-view.practice-active .coach-daily-plan .plan-detail { display: none; }
+
+.coach-review-summary { color: var(--text); font-family: var(--font-reading); font-size: 1rem; line-height: 1.5; }
+.coach-review-details { color: var(--muted); font-size: 0.82rem; line-height: 1.5; }
+.coach-review-details summary { cursor: pointer; padding: 0.45rem 0; }
+.coach-review-detail-body { display: flex; flex-direction: column; gap: 0.6rem; padding-top: 0.45rem; }
+.coach-analysis-strip { width: var(--board-size); max-width: 100%; }
+.coach-analysis-strip:has(#coach-review-analysis:empty) { display: none; }
+#coach-review-analysis { padding: 0.65rem 0.8rem; border-left: 3px solid var(--accent); background: var(--surface2); color: var(--text); font-size: 0.82rem; line-height: 1.5; }
+.coach-analysis-actions { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.45rem; }
+.coach-view.practice-active .coach-analysis-strip { display: none; }

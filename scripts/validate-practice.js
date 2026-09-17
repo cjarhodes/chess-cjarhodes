@@ -22,7 +22,7 @@ requirePattern(app, /const PRACTICE_PROGRESS_KEY = 'coach:practice:v2'[\s\S]{0,1
 requirePattern(app, /function practiceProgressStorageKey[\s\S]{0,220}ownerId[\s\S]{0,2600}function adoptAnonymousPracticeProgress/, 'practice progress must be isolated by account and adopt anonymous work');
 requirePattern(app, /function practiceItemId[\s\S]{0,300}fenBefore[\s\S]{0,100}bestUci/, 'practice ids must be deterministic from position and answer');
 requirePattern(app, /function recordPracticeAttempt[\s\S]{0,1800}attempts \+= 1[\s\S]{0,1000}state\.events\.push\(event\)/, 'practice attempts must update scheduling and append event history');
-requirePattern(app, /function coachHandlePracticeMove[\s\S]{0,2200}actualUci !== session\.item\.entry\.bestUci/, 'practice moves must be graded against the saved best move');
+requirePattern(app, /function evaluatePracticeMove[\s\S]+PRACTICE_SOUND_LOSS_CP[\s\S]+function coachHandlePracticeMove/, 'practice grading must evaluate sound alternatives as well as the saved solution');
 requirePattern(app, /const missedImmediateMate[\s\S]{0,300}Math\.max\(loss, 250\)/, 'missing mate-in-one must create a meaningful training error');
 requirePattern(app, /function currentGameDuePracticeItems[\s\S]{0,700}practiceIsDue/, 'post-game review must identify due drills from the current game');
 requirePattern(app, /function syncRemotePracticeEvent[\s\S]{0,1600}\.rpc\('record_practice_attempt'/, 'signed-in attempts must use the transactional practice RPC');

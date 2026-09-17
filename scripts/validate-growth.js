@@ -24,7 +24,7 @@ requirePattern(growth, /function toggleRepertoireOpening[\s\S]+function renderRe
 requirePattern(growth, /function renderPersonalRepertoire[\s\S]+function recordImportedOpenings/, 'imported games must build a personal repertoire view and repair queue');
 requirePattern(growth, /function repertoireConfidence[\s\S]+function setRepertoireFocus[\s\S]+function openingBridgeItem/, 'repertoire must track confidence, focus, and opening-to-middlegame bridge drills');
 requirePattern(growth, /function recordRepertoirePracticeResult[\s\S]+function renderOpeningBridgeTrack/, 'opening bridge lessons must render and update repertoire confidence from practice');
-requirePattern(growth, /recordImportedOpenings\(parsedGames, side, coachReviewLog\)/, 'PGN analysis must feed the personal repertoire');
+requirePattern(growth, /recordImportedOpenings\(parsedGames, side, allReviews\)/, 'PGN analysis must feed the personal repertoire');
 requirePattern(growth, /function nextPlayerRatingEstimate[\s\S]+ratingGames[\s\S]+ratingDeviation[\s\S]+function recordRatedCoachResult/, 'player strength must update from completed game results with confidence and idempotency');
 requirePattern(growth, /function recommendedCoachElo[\s\S]+ratingEstimate[\s\S]+function applyAdaptiveCoachElo/, 'automatic difficulty must follow the evidence-based player estimate');
 requirePattern(app, /supportedOptions: new Set[\s\S]+option name \(\.\+\?\) type[\s\S]+supportedOptions\.has\('Skill Level'\)/, 'engine wrapper must detect and use only UCI options announced by the bundled engine');
@@ -34,8 +34,8 @@ if (/postMessage\('setoption name UCI_(?:Elo|LimitStrength)/.test(app)) errors.p
 if (/function chooseWeakOpponentMove/.test(app)) errors.push('random weak-move heuristic must not remain in the opponent path');
 requirePattern(growth, /function transferMeasurement[\s\S]+beforeRate[\s\S]+afterRate[\s\S]+function renderWeeklyReview/, 'weekly review must compare problem recurrence before and after practice');
 requirePattern(growth, /const ENDGAME_LESSONS[\s\S]+function renderEndgameTrack[\s\S]+startCoachPractice/, 'structured endgames must reuse the graded Coach practice loop');
-requirePattern(growth, /const IMPORT_REVIEW_LIMIT = 30[\s\S]+function analyseImportedPgn[\s\S]+load_pgn[\s\S]+classifyMove/, 'PGN Inbox must parse and bound engine analysis of imported games');
-requirePattern(growth, /function splitPgnGames[\s\S]+parsedGames[\s\S]+gameIndex/, 'PGN Inbox must support bounded multi-game imports');
+requirePattern(growth, /function analyseImportedPgn[\s\S]+load_pgn[\s\S]+classifyMove[\s\S]+function cancelImportedPgnAnalysis/, 'PGN Inbox must parse complete games and support cancellation');
+requirePattern(growth, /function splitPgnGames[\s\S]+function collectImportedTargets[\s\S]+gameIndex[\s\S]+function analyseImportedPgn/, 'PGN Inbox must retain source identity across complete multi-game imports');
 requirePattern(growth, /const TRAINING_BACKUP_VERSION = 1[\s\S]+function readTrainingBackup[\s\S]+function mergeImportedTrainingData/, 'training data must have a versioned local export and safe merge path');
 requirePattern(app, /function applyAdaptiveGoalBoost[\s\S]+adaptiveFocusProfile/, 'adaptive curriculum must honour the selected training goal');
 requirePattern(app, /function updateNetworkStatus[\s\S]+Offline mode/, 'Coach must communicate offline persistence and reconnect state');

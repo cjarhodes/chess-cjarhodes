@@ -45,12 +45,15 @@ let coachGameGeneration = 0;       // invalidates async work from replaced/rewou
 let coachLocalGameId = null;       // stable id for idempotent local lifetime rollups
 let coachEndedAt = null;           // timestamp of game end, null while playing
 let coachReviewCursor = null;      // null = live; integer = ply index displayed on the board
+let coachReviewAnalysis = null;    // transient recommended line shown on the main board
+let coachReviewAnalysisToken = 0;  // invalidates stale analysis-board updates
 let coachLastEndMsg = null;        // headline from last game-over, used to reopen the review
 let candidateRequestId = 0;        // invalidates stale async candidate searches
 let threatRequestId = 0;           // invalidates stale async threat scans
 let coachPremove = null;           // queued premove while opponent is thinking
 let coachPracticeSession = null;   // active mistake-position drill, separate from normal games
 let coachPracticeRun = null;       // ordered multi-drill session and its aggregate result
+let coachPracticeReturnState = null; // in-progress game restored after the drill
 let renderedPracticeItems = new Map();
 let summaryPracticeItems = [];
 let coachRemoteGameId = null;      // Supabase coach_games.id for current game
@@ -94,6 +97,92 @@ window.COACH_SUPABASE_CONFIG = window.COACH_SUPABASE_CONFIG || {
 // game or dismisses the review summary after a game ends.
 const COACH_STATE_KEY = 'coach:state:v1';
 const COACH_STATE_BACKUP_KEY = 'coach:state:corrupt:v1';
+const COACH_PRACTICE_RETURN_KEY = 'coach:practice-return:v1';
+
+function cloneCoachValue(value, fallback) {
+  try { return value == null ? fallback : JSON.parse(JSON.stringify(value)); }
+  catch (e) { return fallback; }
+}
+
+// Practice temporarily borrows the board. Keep the live game in its own
+// recoverable snapshot so entering a drill cannot erase a user's analysis,
+// review log, or opponent settings. Ended games are deliberately excluded:
+// practice should not make an ended game look live when it closes.
+function captureCoachPracticeReturnState() {
+  if (!coachGame || !coachGameActive || coachGame.game_over()) return null;
+  return {
+    v: 1,
+    pgn: coachGame.pgn(),
+    startFen: coachStartFen,
+    userSide: coachUserSide,
+    engineElo: coachEngineElo,
+    localGameId: coachLocalGameId,
+    remoteGameId: coachRemoteGameId,
+    reviewLog: cloneCoachValue(coachReviewLog, []),
+    stats: cloneCoachValue(coachStats, null),
+    reviewCursor: coachReviewCursor,
+    lastEndMsg: coachLastEndMsg,
+    endedAt: coachEndedAt,
+    boardFlipped: coachBoardFlipped,
+    dailySprint: typeof dailySprintToday === 'function' ? cloneCoachValue(dailySprintToday(), null) : null,
+    ts: Date.now()
+  };
+}
+
+function persistCoachPracticeReturnState(snapshot) {
+  try {
+    if (snapshot) localStorage.setItem(COACH_PRACTICE_RETURN_KEY, JSON.stringify(snapshot));
+    else localStorage.removeItem(COACH_PRACTICE_RETURN_KEY);
+  } catch (e) { /* recovery is best effort */ }
+}
+
+function restoreCoachPracticeReturnState(snapshot) {
+  if (!snapshot || !snapshot.pgn && !snapshot.startFen) return false;
+  try {
+    invalidateCoachAsyncWork('The practice drill ended. Restoring the live game.');
+    const restored = new Chess(snapshot.startFen || undefined);
+    if (snapshot.pgn && restored.load_pgn(snapshot.pgn, { sloppy: true }) === false) return false;
+    if (restored.game_over()) return false;
+    coachGame = restored;
+    coachStartFen = snapshot.startFen || restored.fen();
+    coachGameGeneration++;
+    coachLocalGameId = snapshot.localGameId || createCoachGameId();
+    coachRemoteGameId = snapshot.remoteGameId || null;
+    coachUserSide = snapshot.userSide || 'white';
+    coachEngineElo = typeof snapshot.engineElo === 'number' ? snapshot.engineElo : coachEngineElo;
+    coachReviewLog = Array.isArray(snapshot.reviewLog) ? snapshot.reviewLog : [];
+    coachStats = snapshot.stats || { moves: 0, best: 0, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
+    coachLastReview = coachReviewLog.length ? coachReviewLog[coachReviewLog.length - 1] : null;
+    coachReviewCursor = null;
+    coachLastEndMsg = null;
+    coachEndedAt = null;
+    coachThinking = false;
+    coachGameActive = true;
+    coachLifetimeRolledForThisGame = false;
+    $('#coach-strength').val(coachEngineElo);
+    $('#coach-strength-value').text(coachEngineElo);
+    $('#coach-strength-tier').text(strengthTierLabel(coachEngineElo));
+    $('.side-toggle button').removeClass('active').attr('aria-pressed', 'false');
+    $('.side-toggle button[data-side="' + coachUserSide + '"]').addClass('active').attr('aria-pressed', 'true');
+    coachBoardFlipped = typeof snapshot.boardFlipped === 'boolean'
+      ? snapshot.boardFlipped
+      : coachUserColor() === 'black';
+    createCoachBoard(restored.fen(), coachBoardFlipped ? 'black' : 'white');
+    $('#coach-view').addClass('game-active');
+    updateCapturedDisplay(restored.fen());
+    updateMoveList();
+    updateOpeningLabel();
+    updateCoachSummary();
+    updateCoachControlsState();
+    renderCoachReview(coachLastReview);
+    setCoachStatus(coachIsUserTurn() ? 'Your game is restored. Your move.' : 'Your game is restored. Opponent thinking…');
+    saveCoachState();
+    persistCoachPracticeReturnState(null);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
 
 function createCoachGameId() {
   if (window.crypto && typeof window.crypto.randomUUID === 'function') {
@@ -654,6 +743,7 @@ function insightEntryFromReview(review) {
     bestUci: review.bestUci || null,
     opening: review.opening || currentCoachOpeningName(),
     openingId: review.openingId || null,
+    continuation: Array.isArray(review.continuation) ? review.continuation.slice(0, 1) : null,
     lesson: review.lesson || null,
     opponentThreat: review.opponentThreat || null
   };
@@ -822,6 +912,60 @@ function practiceItemFromReview(review) {
     id: practiceItemId(entry, tag),
     meta: INSIGHT_TAG_META[tag] || INSIGHT_TAG_META.candidate_moves
   };
+}
+
+const PRACTICE_SOUND_LOSS_CP = 80;
+const PRACTICE_INACCURACY_LOSS_CP = 200;
+const PRACTICE_ANALYSIS_DEPTH = 12;
+const PRACTICE_MULTIPV = 8;
+
+function practiceMoveFor(fen, uci) {
+  if (!uci || !fen) return null;
+  return moveFromUci(fen, uci);
+}
+
+function practiceIdeaForMove(fen, uci) {
+  const move = practiceMoveFor(fen, uci);
+  if (!move) return 'Find the move that best improves this position.';
+  if (move.san && move.san.includes('#')) return 'Start with forcing moves: there is a checkmate to find.';
+  if (move.san && move.san.includes('+')) return 'Start with checks: make the opponent answer a concrete threat.';
+  if (move.captured) return 'Start with forcing moves: check whether you can win material safely.';
+  if (move.promotion) return 'Calculate the pawn race: the promotion move is the critical idea.';
+  if (move.flags && (move.flags.includes('k') || move.flags.includes('q'))) return 'King safety is the priority: look for the move that develops and protects your king.';
+  if (move.piece === 'p' && ['c', 'd', 'e', 'f'].includes(move.from[0])) return 'Challenge the centre before choosing a quieter improvement.';
+  if (move.piece === 'p' && ['f', 'g', 'h'].includes(move.from[0])) return 'Treat this pawn move as a king-safety decision and calculate its consequences.';
+  if (['n', 'b'].includes(move.piece)) return 'Look for a developing move that brings a new minor piece into play.';
+  return 'Find the move that best improves this position. Compare forcing moves, development, and king safety.';
+}
+
+function practicePromptForItem(item) {
+  if (!item || !item.entry) return 'Find the move that best improves this position.';
+  // The position and answer define the cue. This avoids displaying a tag's
+  // generic lesson when (for example) a f-pawn review is actually solved by e4.
+  return practiceIdeaForMove(item.entry.fenBefore, item.entry.bestUci);
+}
+
+function practiceUciEqual(a, b) {
+  if (!a || !b) return false;
+  const normalize = value => String(value).toLowerCase().replace(/q$/, 'q');
+  return normalize(a) === normalize(b);
+}
+
+function practiceEngineScore(result) {
+  if (!result) return null;
+  if (result.info && (result.info.pv || result.info.cp != null || result.info.mate != null)) return scoreToCp(result.info);
+  return null;
+}
+
+function practiceHintForSession(session, stage) {
+  const fen = session && session.phase === 'followup' ? coachGame && coachGame.fen() : session && session.item && session.item.entry.fenBefore;
+  const expected = session && session.expectedUci;
+  const move = practiceMoveFor(fen, expected);
+  if (!move) return 'Find the move that best improves this position.';
+  if (stage <= 1) return practiceIdeaForMove(fen, expected);
+  if (stage === 2) return `Look at the ${PIECE_NAME[move.piece]?.toLowerCase() || 'piece'} on ${move.from}.`;
+  if (stage === 3) return `Move it to ${move.to}.`;
+  return `Answer: ${move.san}. Play it on the board to complete the drill.`;
 }
 
 function currentGameDuePracticeItems() {
@@ -1328,10 +1472,10 @@ function dailyMoveSprintTakeaway(day) {
   const scored = (coachReviewLog || []).filter(review => review && review.tier && review.tier !== 'unknown');
   if (day && day.focusTag && INSIGHT_TAG_META[day.focusTag]) {
     const repeats = scored.filter(review => (review.insightTags || review.tags || []).includes(day.focusTag)).length;
-    const result = repeats
-      ? `The pattern resurfaced ${repeats} time${repeats === 1 ? '' : 's'} in transfer play.`
-      : 'The pattern did not repeat during the transfer moves.';
-    return `${day.focus}: ${day.clean || 0}/${day.drillsCompleted || 0} drills first-try. ${result} Keep using this cue: ${day.focusCue}`;
+    const result = scored.length
+      ? `In this game's ${scored.length} reviewed moves, the pattern was flagged ${repeats} time${repeats === 1 ? '' : 's'}.`
+      : 'No reviewed moves from this game are available for a transfer check.';
+    return `${day.focus}: ${day.clean || 0}/${day.drillsCompleted || 0} drills first-try. ${result} This short sample does not establish improvement; the same challenge may not have occurred. Keep using this cue: ${day.focusCue}`;
   }
   const problem = scored.slice().reverse().find(review => isInsightProblem(review.tier));
   const tag = problem && (problem.tags || []).find(value => INSIGHT_TAG_META[value]);
@@ -1339,7 +1483,7 @@ function dailyMoveSprintTakeaway(day) {
   const accuracy = accuracyFromTallies(coachStats || {}, scored.length);
   return accuracy === null
     ? 'You completed the habit. Return tomorrow for the next focused sprint.'
-    : `Clean sprint: ${accuracy}% accuracy across ${scored.length} reviewed moves.`;
+    : `Session activity: ${accuracy}% accuracy across ${scored.length} reviewed moves in this game. Keep practising to build evidence over time.`;
 }
 
 function recordDailySprintMove(review) {
@@ -3272,6 +3416,11 @@ async function classifyMove(fenBefore, userUciMove, fenAfter) {
       pvSan: [],
       evalBefore: null,
       evalAfter: null,
+      reviewSummary: reviewPositionSummary({
+        fenBefore,
+        tier: 'unknown',
+        userSan: uciToSan(fenBefore, userUciMove)
+      }),
       stalled: true
     };
   }
@@ -3332,7 +3481,14 @@ async function classifyMove(fenBefore, userUciMove, fenAfter) {
     lesson: explanation.lesson,
     opponentThreat: explanation.opponentThreat,
     evalBefore: bestLine || null,
-    evalAfter: afterInfo
+    evalAfter: afterInfo,
+    reviewSummary: reviewPositionSummary({
+      fenBefore,
+      tier: cls.tier,
+      userSan: uciToSan(fenBefore, userUciMove),
+      bestSan: bestUci ? uciToSan(fenBefore, bestUci) : null,
+      bestUci
+    })
   };
 }
 
@@ -3533,6 +3689,143 @@ function reviewBoardMarkup(fen) {
   }
 }
 
+// Review copy is deliberately short at first glance. The engine line and
+// position evidence remain available in the expandable review details.
+function reviewPositionSummary(review) {
+  if (!review || !review.fenBefore) return '';
+  try {
+    const position = new Chess(review.fenBefore);
+    const side = position.turn() === 'w' ? 'White' : 'Black';
+    if (review.tier === 'unknown') return `${side} to move here, but the engine could not finish this review.`;
+    if (review.bestSan && review.userSan && review.bestSan === review.userSan) {
+      return `At this ${side}-to-move position, ${review.userSan} matches the engine's first choice.`;
+    }
+    const best = review.bestUci ? moveFromUci(review.fenBefore, review.bestUci) : null;
+    let reason = review.bestSan ? `${review.bestSan} is the stronger choice here` : 'the engine found a stronger continuation';
+    if (best && best.san && best.san.includes('#')) reason = `${best.san} finishes with checkmate`;
+    else if (best && best.san && best.san.includes('+')) reason = `${best.san} gives check, requiring a response`;
+    else if (best && best.captured) reason = `${best.san} captures the ${PIECE_NAME[best.captured]?.toLowerCase() || 'piece'} on ${best.to}`;
+    else if (best && best.flags && (best.flags.includes('k') || best.flags.includes('q'))) reason = `${best.san} improves king safety and activates a rook`;
+    else if (best && ['n', 'b'].includes(best.piece)) {
+      const homeRank = best.color === 'w' ? '1' : '8';
+      const action = best.from[1] === homeRank ? 'develops' : 'repositions';
+      reason = `${best.san} ${action} the ${PIECE_NAME[best.piece].toLowerCase()} from ${best.from} to ${best.to}`;
+    } else if (best && best.piece === 'p' && ['d4', 'e4', 'd5', 'e5'].includes(best.to)) reason = `${best.san} places a pawn in the centre`;
+    return `At this ${side}-to-move position, ${reason}.`;
+  } catch (e) {
+    return review.whyBetter || '';
+  }
+}
+
+function reviewEvalLabel(info) {
+  if (!info) return '';
+  const depth = info.depth ? ` · depth ${info.depth}` : '';
+  return `${formatEval(info)}${depth}`;
+}
+
+function coachAnalysisFen() {
+  return coachReviewAnalysis && coachReviewAnalysis.steps[coachReviewAnalysis.index]
+    ? coachReviewAnalysis.steps[coachReviewAnalysis.index].fen
+    : null;
+}
+
+function updateCoachAnalysisAccessibility(fen, label) {
+  const root = document.getElementById('coachBoard');
+  if (!root || !fen) return;
+  try {
+    root.setAttribute('aria-label', `${label || 'Analysis position'} — ${describeChessPosition(new Chess(fen))}`);
+  } catch (e) {}
+}
+
+function renderCoachReviewAnalysis() {
+  const analysis = coachReviewAnalysis;
+  if (!analysis || !coachBoard) return;
+  const step = analysis.steps[analysis.index];
+  if (!step) return;
+  coachBoard.position(step.fen, false);
+  setBoardLastMove('coachBoard', step.move || null);
+  updateCapturedDisplay(step.fen);
+  updateCoachAnalysisAccessibility(step.fen, step.label);
+  const moveLabel = step.san ? ` · ${step.san}` : '';
+  const lineLabel = `Analysis position · recommended continuation (${analysis.index + 1}/${analysis.steps.length})${moveLabel}`;
+  $('#coach-review-analysis').text(lineLabel).show();
+  $('#btn-coach-review-analysis-prev').prop('disabled', analysis.index <= 0);
+  $('#btn-coach-review-analysis-next').prop('disabled', analysis.index >= analysis.steps.length - 1);
+  $('#btn-coach-backtogame').show().prop('disabled', false);
+  $('#btn-coach-review-analysis-prev, #btn-coach-review-analysis-next').show();
+  setCoachStatus('Analysis position shown — your actual game is unchanged.');
+}
+
+function clearCoachReviewAnalysis(opts = {}) {
+  coachReviewAnalysisToken++;
+  const oldAnalysisFen = coachAnalysisFen();
+  coachReviewAnalysis = null;
+  $('#coach-review-analysis').hide().empty();
+  $('#btn-coach-review-analysis-prev, #btn-coach-review-analysis-next, #btn-coach-backtogame').hide();
+  if (!coachBoard) return;
+  const fen = coachGame
+    ? (coachReviewCursor === null ? coachGame.fen() : coachFenAtPly(coachReviewCursor))
+    : null;
+  // Always use a non-animated draw while leaving analysis. This interrupts
+  // any in-flight board tween on reset, practice entry, or view changes.
+  const targetFen = opts.restore === false ? (oldAnalysisFen || fen) : fen;
+  if (!targetFen) return;
+  coachBoard.position(targetFen, false);
+  if (opts.restore !== false) {
+    coachSyncLastMove();
+    updateCapturedDisplay(targetFen);
+    updateCoachBoardAccessibility();
+  }
+}
+
+// Build a legal, bounded recommendation line without touching the live game.
+// If an engine PV becomes invalid (for example after a truncated/stale result),
+// stop at the last legal position instead of skipping over the bad move.
+function buildCoachReviewAnalysisSteps(review) {
+  if (!review || !review.fenBefore || !review.bestUci) return [];
+  const line = [review.bestUci].concat(
+    review.evalBefore && Array.isArray(review.evalBefore.pv) ? review.evalBefore.pv.slice(1, 6) : []
+  );
+  const position = new Chess(review.fenBefore);
+  const steps = [{ fen: position.fen(), move: null, san: '', label: 'Analysis starting position' }];
+  for (const uci of line) {
+    const move = position.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || undefined });
+    if (!move) break;
+    steps.push({
+      fen: position.fen(),
+      move,
+      san: move.san,
+      label: steps.length === 1 ? 'Analysis · recommended move' : 'Analysis · recommended continuation'
+    });
+  }
+  return steps;
+}
+
+function startCoachReviewAnalysis(review) {
+  if (!review || !review.fenBefore || !review.bestUci || !coachGame || !coachBoard) return;
+  // A recommendation is useful only once the live game is idle on the user's
+  // turn. It never edits coachGame, so returning to live restores the actual
+  // game without undoing or reclassifying anything.
+  if (!coachMode || coachThinking || !coachGame || coachIsReviewing()) return;
+  if (coachGameActive && !coachIsUserTurn()) return;
+  clearCoachReviewAnalysis({ restore: false });
+  const token = coachReviewAnalysisToken;
+  const steps = buildCoachReviewAnalysisSteps(review);
+  if (token !== coachReviewAnalysisToken || !steps.length) return;
+  coachReviewAnalysis = { review, steps, index: Math.min(1, steps.length - 1), token };
+  CoachController.setPhase('reviewing');
+  renderCoachReviewAnalysis();
+  updateCoachControlsState();
+}
+
+function stepCoachReviewAnalysis(delta) {
+  if (!coachReviewAnalysis) return;
+  const next = Math.max(0, Math.min(coachReviewAnalysis.steps.length - 1, coachReviewAnalysis.index + delta));
+  if (next === coachReviewAnalysis.index) return;
+  coachReviewAnalysis.index = next;
+  renderCoachReviewAnalysis();
+}
+
 function renderCoachReviewEvidence(review) {
   if (!review || !review.fenBefore || !review.fenAfter) {
     $('#coach-review-evidence').hide().empty();
@@ -3540,18 +3833,25 @@ function renderCoachReviewEvidence(review) {
   }
   const replyUci = review.evalAfter && review.evalAfter.pv && review.evalAfter.pv[0];
   const reply = replyUci ? moveFromUci(review.fenAfter, replyUci) : null;
-  const replyText = reply ? ` → ${reply.san}` : '';
   let bestFen = review.fenBefore;
   try {
     const bestPosition = new Chess(review.fenBefore);
     if (review.bestUci) bestPosition.move({ from: review.bestUci.slice(0, 2), to: review.bestUci.slice(2, 4), promotion: review.bestUci[4] || undefined });
     bestFen = bestPosition.fen();
   } catch (e) {}
+  let recommendedReply = null;
+  if (review.evalBefore && review.evalBefore.pv && review.evalBefore.pv[1]) {
+    recommendedReply = moveFromUci(bestFen, review.evalBefore.pv[1]);
+  }
+  const actualLabel = reply ? `Actual reply: ${reply.san}` : 'Actual game continues';
+  const recommendedLabel = recommendedReply
+    ? `Recommended continuation: ${recommendedReply.san}`
+    : 'Recommended continuation is shown on the main board';
   $('#coach-review-evidence').html(
-    `<div class="coach-review-evidence-head">Position change <span>${escapeHtml(review.userSan || 'Your move')} → ${escapeHtml(review.bestSan || 'Best move')}${escapeHtml(replyText)}</span></div>` +
+    `<div class="coach-review-evidence-head">Actual game vs analysis <span>${escapeHtml(review.userSan || 'Your move')} → ${escapeHtml(review.bestSan || 'Recommended move')}</span></div>` +
     `<div class="coach-review-evidence-boards">` +
-      `<div><div class="review-board-label">After your move</div><div class="review-board">${reviewBoardMarkup(review.fenAfter)}</div></div>` +
-      `<div><div class="review-board-label">After the best move</div><div class="review-board">${reviewBoardMarkup(bestFen)}</div></div>` +
+      `<div><div class="review-board-label">Actual game · ${escapeHtml(actualLabel)}</div><div class="review-board">${reviewBoardMarkup(review.fenAfter)}</div></div>` +
+      `<div><div class="review-board-label">Analysis · ${escapeHtml(recommendedLabel)}</div><div class="review-board">${reviewBoardMarkup(bestFen)}</div></div>` +
     `</div>`
   ).show();
 }
@@ -3567,6 +3867,9 @@ function renderCoachReview(review) {
   const isBest = review.tier === 'best';
   const isExcellent = review.tier === 'excellent';
   const isUnknown = review.tier === 'unknown';
+  const summary = review.reviewSummary || reviewPositionSummary(review);
+  $('#coach-review-summary, #coach-explanation').first().text(summary);
+  $('#coach-review-details').attr('aria-label', 'Deeper engine review');
   let msg;
   if (isUnknown) {
     msg = 'Engine timed out on this move — skipping classification. The game continues.';
@@ -3578,7 +3881,10 @@ function renderCoachReview(review) {
     msg = `The engine prefers ${review.bestSan}. You lost ${(review.loss / 100).toFixed(2)} pawns of evaluation with ${review.userSan}.`;
     if (review.whyBetter) msg += ' ' + review.whyBetter;
   }
-  $('#coach-explanation').text(msg);
+  // Keep the existing explanation field useful on older markup, while newer
+  // markup gets the concise position-linked summary above.
+  if (!$('#coach-review-summary').length) $('#coach-explanation').text(msg);
+  $('#coach-review-deep-explanation').text(msg);
   $('#coach-review-lesson')
     .text(review.lesson ? 'Lesson · ' + review.lesson : '')
     .toggle(!!review.lesson);
@@ -3586,6 +3892,11 @@ function renderCoachReview(review) {
     .text(review.opponentThreat || '')
     .toggle(!!review.opponentThreat);
   renderCoachReviewEvidence(review);
+  const evalText = [
+    review.evalBefore ? `Position before: ${reviewEvalLabel(review.evalBefore)}` : '',
+    review.evalAfter ? `After your move: ${reviewEvalLabel(review.evalAfter)}` : ''
+  ].filter(Boolean).join(' · ');
+  $('#coach-review-eval, #coach-review-eval-deep').text(evalText).toggle(!!evalText);
   const cue = isUnknown
     ? 'Coach cue: Keep playing — this move was not scored, so there is no lesson to carry forward yet.'
     : isBest
@@ -3604,10 +3915,9 @@ function renderCoachReview(review) {
   } else {
     $('#coach-pv').hide();
   }
-  // Auto-surface the top-3 candidate alternatives for mistake/blunder so the
-  // user doesn't have to click "Candidates" — the data is already classified.
-  const showAlts = (review.tier === 'mistake' || review.tier === 'blunder')
-                   && review.topAlternatives && review.topAlternatives.length > 0;
+  // Keep the stored top alternatives in the deeper review details. They are
+  // useful even for a good move when the user wants to compare plans.
+  const showAlts = !isUnknown && review.topAlternatives && review.topAlternatives.length > 0;
   if (showAlts) {
     const $list = $('#coach-alts-list').empty();
     review.topAlternatives.forEach((alt, i) => {
@@ -3629,7 +3939,10 @@ function renderCoachReview(review) {
     $('#coach-alts').hide();
   }
   $('#coach-review').show().css('display', 'flex');
-  $('#btn-coach-showbest').prop('disabled', isBest || isUnknown || !review.bestUci);
+  const canExplain = !isBest && !isUnknown && !!review.bestUci && coachMode &&
+    !coachThinking && (!coachGameActive || coachIsUserTurn()) && !coachIsReviewing();
+  $('#btn-coach-showbest').prop('disabled', !canExplain);
+  $('#btn-coach-showwhy').prop('disabled', !canExplain);
 }
 
 function setCoachStatus(msg) {
@@ -3647,6 +3960,7 @@ function invalidateCoachAsyncWork(reason) {
   coachGameGeneration++;
   candidateRequestId++;
   threatRequestId++;
+  clearCoachReviewAnalysis({ restore: false });
   engineClient.cancel(reason || 'Coach position changed.');
   clearQueuedRemoteCoachGameUpdate();
   return coachGameGeneration;
@@ -3670,6 +3984,7 @@ function resetCoachState(fen, opts = {}) {
   coachThinking = false;
   coachEndedAt = null;
   coachReviewCursor = null;
+  coachReviewAnalysis = null;
   coachLastEndMsg = null;
   coachRemoteGameId = null;
   coachRemoteGamePromise = null;
@@ -3681,6 +3996,7 @@ function resetCoachState(fen, opts = {}) {
   $('#summary-overlay').hide().attr('aria-hidden', 'true');
   $('#coach-practice-banner').hide();
   $('#coach-review').hide();
+  $('#coach-review-analysis').hide().empty();
   $('#threats-section').hide();
   $('#candidates-section').hide();
   $('#opening-section').hide();
@@ -4910,9 +5226,20 @@ function markActivePracticeRow() {
 }
 
 function startCoachPractice(item, opts = {}) {
+  if (coachThinking && !coachPracticeSession) {
+    setCoachStatus('Wait for the current move to finish before starting practice.');
+    return;
+  }
   if (!item || !item.entry || !isValidFen(item.entry.fenBefore) || !item.entry.bestUci) {
     setCoachStatus('Practice position is no longer valid.');
     return;
+  }
+  if (!coachPracticeReturnState) {
+    coachPracticeReturnState = captureCoachPracticeReturnState();
+    persistCoachPracticeReturnState(coachPracticeReturnState);
+    // Keep the normal game's local snapshot available during a refresh while
+    // the practice board is borrowed.
+    if (coachPracticeReturnState) saveCoachState();
   }
   if (!opts.preserveRun) {
     coachPracticeRun = {
@@ -4929,20 +5256,34 @@ function startCoachPractice(item, opts = {}) {
     item,
     misses: 0,
     revealed: false,
-    completed: false
+    hintUsed: false,
+    completed: false,
+    completionRecorded: false,
+    hintStage: 0,
+    phase: 'initial',
+    expectedUci: item.entry.bestUci,
+    initialExpectedUci: item.entry.bestUci,
+    analysis: null,
+    analysisReady: false,
+    analysisPromise: null,
+    pendingMove: null,
+    positionFen: coachGame.fen(),
+    analysisToken: 0,
+    requestId: coachGameGeneration
   };
   coachUserSide = fenSideToUserSide(item.entry.fenBefore);
   coachGameActive = true;
   CoachController.setPhase('practice');
-  clearCoachState();
   coachBoardFlipped = coachUserColor() === 'black';
   createCoachBoard(coachGame.fen(), coachBoardFlipped ? 'black' : 'white');
   $('#coach-view').addClass('game-active');
   $('#coach-practice-title').text(item.meta.title);
-  $('#coach-practice-prompt').text(item.meta.practice + ' Find the best move in this position.');
+  $('#coach-practice-prompt').text(practicePromptForItem(item));
   $('#coach-practice-session-status').text(practiceRunPositionText());
   $('#coach-practice-status').text('Attempt the move without engine help.');
   $('#btn-coach-practice-answer').prop('disabled', false);
+  $('#btn-coach-practice-answer').text('Show answer');
+  $('#btn-coach-practice-hint').text('Hint').prop('disabled', false).show();
   $('#btn-coach-practice-next').hide().prop('disabled', true);
   $('#coach-practice-banner').show().css('display', 'flex');
   $('#coach-keyboard-move-status').text('');
@@ -4950,6 +5291,7 @@ function startCoachPractice(item, opts = {}) {
   updateCoachControlsState();
   renderCoachDailyPlan();
   setPracticeFocus(true);
+  preparePracticeAnalysis(coachPracticeSession);
 }
 
 function coachPracticeMoveLabel(item) {
@@ -4959,6 +5301,208 @@ function coachPracticeMoveLabel(item) {
   return move ? move.san : item.entry.bestUci;
 }
 
+function practicePositionIsCurrent(session) {
+  return !!(session && coachPracticeSession === session && coachGame && coachGameActive &&
+    session.requestId === coachGameGeneration && (!session.positionFen || session.positionFen === coachGame.fen()) && !session.completed);
+}
+
+function practiceAfterMoveScore(fen, result) {
+  const after = new Chess(fen);
+  if (after.in_checkmate()) return 10000;
+  if (after.in_draw()) return 0;
+  const score = practiceEngineScore(result);
+  return score == null ? null : -score;
+}
+
+function practiceMoveIsMate(fen, uci) {
+  if (!fen || !uci) return false;
+  const position = new Chess(fen);
+  const move = position.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || 'q' });
+  return !!(move && position.in_checkmate());
+}
+
+function preparePracticeAnalysis(session) {
+  if (!session || session.analysisPromise) return session && session.analysisPromise;
+  const fen = coachGame && coachGame.fen();
+  const token = (session.analysisToken || 0) + 1;
+  session.analysisToken = token;
+  session.analysisPromise = engineClient.evaluate(fen, PRACTICE_ANALYSIS_DEPTH, { multipv: PRACTICE_MULTIPV })
+    .then(result => {
+      if (!practicePositionIsCurrent(session) || session.analysisToken !== token || session.positionFen !== fen) return null;
+      const lines = (result && result.lines) || [];
+      const bestLine = lines[0] || null;
+      const bestUci = (bestLine && bestLine.pv && bestLine.pv[0]) || (result && result.bestmove) || null;
+      const bestCp = bestLine ? scoreToCp(bestLine) : null;
+      const known = {};
+      lines.forEach(line => {
+        const uci = line && line.pv && line.pv[0];
+        if (uci) known[uci] = scoreToCp(line);
+      });
+      session.analysis = {
+        fen,
+        bestUci,
+        bestCp,
+        bestMate: bestLine && bestLine.mate != null ? bestLine.mate : null,
+        known,
+        pv: bestLine && bestLine.pv ? bestLine.pv.slice() : []
+      };
+      session.analysisReady = true;
+      return session.analysis;
+    })
+    .catch(err => {
+      if (!practicePositionIsCurrent(session) || session.analysisToken !== token || session.positionFen !== fen) return null;
+      // A timed-out engine must not turn every legal move into a false error.
+      // The saved solution remains playable; alternatives require a reliable
+      // score and therefore remain ungraded until a later retry.
+      session.analysis = { fen, bestUci: null, bestCp: null, known: {}, pv: [], error: err };
+      session.analysisReady = true;
+      return session.analysis;
+    });
+  return session.analysisPromise;
+}
+
+async function evaluatePracticeMove(session, actualUci) {
+  if (!practicePositionIsCurrent(session)) return { stale: true };
+  const expected = session.expectedUci;
+  const currentFen = coachGame.fen();
+  // Mate is a board fact, so equivalent mating moves need no engine score.
+  if (practiceMoveIsMate(currentFen, actualUci)) {
+    return { sound: true, exact: practiceUciEqual(actualUci, expected), loss: 0 };
+  }
+  if (practiceMoveIsMate(currentFen, expected)) {
+    return { sound: false, inaccurate: false, loss: 250 };
+  }
+  if (practiceUciEqual(actualUci, expected)) return { sound: true, exact: true, loss: 0 };
+  const analysis = session.analysis || {};
+  let candidateCp = analysis.known && analysis.known[actualUci];
+  if (candidateCp == null && analysis.bestCp != null) {
+    const temp = new Chess(coachGame.fen());
+    const mv = temp.move({ from: actualUci.slice(0, 2), to: actualUci.slice(2, 4), promotion: actualUci[4] || 'q' });
+    if (!mv) return { legal: false };
+    const afterFen = temp.fen();
+    const afterResult = await engineClient.evaluate(afterFen, PRACTICE_ANALYSIS_DEPTH, {});
+    if (!practicePositionIsCurrent(session)) return { stale: true };
+    candidateCp = practiceAfterMoveScore(afterFen, afterResult);
+  }
+  if (analysis.bestCp == null || candidateCp == null) return { unknown: true };
+  const loss = Math.max(0, Math.round(analysis.bestCp - candidateCp));
+  const candidatePosition = new Chess(coachGame.fen());
+  const candidateMove = candidatePosition.move({
+    from: actualUci.slice(0, 2),
+    to: actualUci.slice(2, 4),
+    promotion: actualUci[4] || 'q'
+  });
+  const candidateIsMate = !!(candidateMove && candidatePosition.in_checkmate());
+  const expectedIsMate = practiceMoveIsMate(analysis.fen || coachGame.fen(), expected);
+  const forcedMateMiss = (analysis.bestMate === 1 || expectedIsMate) && !candidateIsMate;
+  return {
+    sound: !forcedMateMiss && loss <= PRACTICE_SOUND_LOSS_CP,
+    inaccurate: !forcedMateMiss && loss > PRACTICE_SOUND_LOSS_CP && loss <= PRACTICE_INACCURACY_LOSS_CP,
+    loss: forcedMateMiss ? Math.max(loss, 250) : loss
+  };
+}
+
+function practiceContinuationFor(session, playedUci) {
+  if (!practiceUciEqual(playedUci, session.initialExpectedUci)) return null;
+  const authored = session.item && session.item.entry && session.item.entry.continuation;
+  const authoredStep = Array.isArray(authored) ? authored[0] : null;
+  if (authoredStep && authoredStep.opponentUci && authoredStep.followupUci) {
+    const authoredPosition = new Chess(coachGame.fen());
+    const opponent = authoredPosition.move({
+      from: authoredStep.opponentUci.slice(0, 2),
+      to: authoredStep.opponentUci.slice(2, 4),
+      promotion: authoredStep.opponentUci[4] || undefined
+    });
+    const follow = opponent && authoredPosition.move({
+      from: authoredStep.followupUci.slice(0, 2),
+      to: authoredStep.followupUci.slice(2, 4),
+      promotion: authoredStep.followupUci[4] || undefined
+    });
+    if (follow) return { opponentUci: authoredStep.opponentUci, followupUci: authoredStep.followupUci };
+  }
+  const pv = session.analysis && session.analysis.pv;
+  if (!pv || pv.length < 3 || !practiceUciEqual(playedUci, pv[0])) return null;
+  const opponentUci = pv[1];
+  const followupUci = pv[2];
+  const temp = new Chess(coachGame.fen());
+  const opponent = temp.move({ from: opponentUci.slice(0, 2), to: opponentUci.slice(2, 4), promotion: opponentUci[4] || 'q' });
+  if (!opponent) return null;
+  const follow = temp.move({ from: followupUci.slice(0, 2), to: followupUci.slice(2, 4), promotion: followupUci[4] || 'q' });
+  return follow ? { opponentUci, followupUci } : null;
+}
+
+function finishCoachPracticeMove(session, played, quality, revealed) {
+  if (session.completionRecorded) return;
+  session.completed = true;
+  session.completionRecorded = true;
+  const assisted = !!(revealed || session.hintUsed);
+  const record = recordPracticeAttempt(session.item, true, assisted);
+  if (typeof recordRepertoirePracticeResult === 'function') {
+    recordRepertoirePracticeResult(session.item, !assisted && session.misses === 0, assisted);
+  }
+  const sprint = recordDailySprintDrill(session.item, assisted, !assisted && session.misses === 0);
+  const due = formatPracticeDue(record);
+  $('#coach-practice-status').text(`${quality}: ${played.san}. ${due}.`);
+  setCoachStatus(`${quality}. Practice progress saved.`);
+  $('#btn-coach-practice-answer').prop('disabled', true);
+  $('#btn-coach-practice-hint').prop('disabled', true);
+  if (coachPracticeRun) {
+    coachPracticeRun.completed += 1;
+    if (assisted) coachPracticeRun.assisted += 1;
+    else if (session.misses === 0) coachPracticeRun.clean += 1;
+    const hasNext = coachPracticeRun.index + 1 < coachPracticeRun.items.length;
+    $('#btn-coach-practice-next')
+      .text(hasNext ? 'Next drill' : 'Finish session')
+      .show()
+      .prop('disabled', false);
+    if (!hasNext) $('#coach-practice-status').text(`${quality}: ${played.san}. Session complete — ${coachPracticeRun.clean}/${coachPracticeRun.completed} first-try.`);
+  }
+  updateCoachControlsState();
+  renderInsights();
+  if (sprint && sprint.completedAt) renderCoachDailyPlan();
+}
+
+function applyCoachPracticeMove(session, source, target, promotion, evaluation, opts) {
+  if (!practicePositionIsCurrent(session)) return 'stale';
+  const played = coachGame.move({ from: source, to: target, promotion: promotion || 'q' });
+  if (!played) return 'snapback';
+  const actualUci = uciFromMove(played);
+  session.hintStage = 0;
+  const continuation = !evaluation.revealed && practiceContinuationFor(session, actualUci);
+  if (continuation && session.phase === 'initial') {
+    const opponent = coachGame.move({
+      from: continuation.opponentUci.slice(0, 2),
+      to: continuation.opponentUci.slice(2, 4),
+      promotion: continuation.opponentUci[4] || undefined
+    });
+    if (opponent) {
+      session.phase = 'followup';
+      session.expectedUci = continuation.followupUci;
+      session.analysis = null;
+      session.analysisReady = false;
+      session.analysisPromise = null;
+      session.analysisToken += 1;
+      session.positionFen = coachGame.fen();
+      session.requestId = coachGameGeneration;
+      preparePracticeAnalysis(session);
+      $('#coach-practice-prompt').text('Good first move. Now find the follow-up that keeps the advantage.');
+      $('#coach-practice-status').text(`The opponent replies ${opponent.san}. Find your next move.`);
+      $('#btn-coach-practice-answer').prop('disabled', false).text('Show answer');
+      $('#btn-coach-practice-hint').prop('disabled', false).text('Hint').show();
+    }
+  } else {
+    session.phase = 'complete';
+    finishCoachPracticeMove(session, played, evaluation.sound && !evaluation.exact ? 'Sound alternative' : (session.revealed ? 'Solved after revealing the answer' : (session.hintUsed ? 'Solved with hints' : (session.misses ? `Correct after ${session.misses + 1} attempts` : 'Correct on the first try'))), !!evaluation.revealed);
+  }
+  if (opts && opts.updateBoard !== false && coachBoard) coachBoard.position(coachGame.fen());
+  coachSyncLastMove();
+  updateCapturedDisplay(coachGame.fen());
+  updateCoachBoardAccessibility();
+  updateMoveList();
+  playSound(soundForMove(played, coachGame));
+  return 'correct';
+}
+
 function coachHandlePracticeMove(source, target, promotion, opts) {
   const session = coachPracticeSession;
   if (!session || session.completed || !coachGameActive || !coachGame) return 'snapback';
@@ -4966,71 +5510,89 @@ function coachHandlePracticeMove(source, target, promotion, opts) {
   const move = temp.move({ from: source, to: target, promotion: promotion || 'q' });
   if (!move) return 'snapback';
   const actualUci = uciFromMove(move);
-  if (actualUci !== session.item.entry.bestUci) {
-    session.misses += 1;
-    recordPracticeAttempt(session.item, false, false);
-    const hint = session.misses >= 2
-      ? ` Hint: the best move starts on ${session.item.entry.bestUci.slice(0, 2)}.`
-      : '';
-    $('#coach-practice-status').text(`Not the best move yet.${hint}`);
-    setCoachStatus('Practice: try another candidate.');
-    renderInsights();
+  if (session.pendingMove) {
+    const pendingUci = session.pendingMove.source + session.pendingMove.target + (session.pendingMove.promotion || '');
+    if (pendingUci === actualUci) return 'pending';
     return 'snapback';
   }
-
-  const played = coachGame.move({ from: source, to: target, promotion: promotion || 'q' });
-  if (!played) return 'snapback';
-  session.completed = true;
-  const record = recordPracticeAttempt(session.item, true, session.revealed);
-  if (typeof recordRepertoirePracticeResult === 'function') {
-    recordRepertoirePracticeResult(session.item, !session.revealed && session.misses === 0, session.revealed);
-  }
-  const sprint = recordDailySprintDrill(session.item, session.revealed, !session.revealed && session.misses === 0);
-  if (opts && opts.updateBoard !== false && coachBoard) coachBoard.position(coachGame.fen());
-  coachSyncLastMove();
-  updateCapturedDisplay(coachGame.fen());
-  updateCoachBoardAccessibility();
-  playSound(soundForMove(played, coachGame));
-  const due = formatPracticeDue(record);
-  const quality = session.revealed
-    ? 'Solved after revealing the answer'
-    : (session.misses > 0 ? `Correct after ${session.misses + 1} attempts` : 'Correct on the first try');
-  $('#coach-practice-status').text(`${quality}: ${played.san}. ${due}.`);
-  setCoachStatus(`${quality}. Practice progress saved.`);
-  $('#btn-coach-practice-answer').prop('disabled', true);
-  if (coachPracticeRun) {
-    coachPracticeRun.completed += 1;
-    if (session.revealed) coachPracticeRun.assisted += 1;
-    else if (session.misses === 0) coachPracticeRun.clean += 1;
-    const hasNext = coachPracticeRun.index + 1 < coachPracticeRun.items.length;
-    $('#btn-coach-practice-next')
-      .text(hasNext ? 'Next drill' : 'Finish session')
-      .show()
-      .prop('disabled', false);
-    if (!hasNext) {
-      $('#coach-practice-status').text(
-        `${quality}: ${played.san}. Session complete — ${coachPracticeRun.clean}/${coachPracticeRun.completed} first-try.`
-      );
+  const evaluate = () => evaluatePracticeMove(session, actualUci).catch(() => ({ unknown: true })).then(result => {
+    if (!practicePositionIsCurrent(session)) return 'stale';
+    if (result.unknown) {
+      $('#coach-practice-status').text('Engine could not verify that candidate. Try again when analysis is ready.');
+      setCoachStatus('Practice move was not scored.');
+      return 'ungraded';
     }
+    if (result.sound) {
+      return applyCoachPracticeMove(session, source, target, promotion, Object.assign({}, result, { revealed: session.revealed }), opts || {});
+    }
+    session.misses += 1;
+    recordPracticeAttempt(session.item, false, false);
+    const label = result.inaccurate ? 'Inaccuracy' : result.unknown ? 'Engine could not verify that move' : 'Bad move';
+    const detail = result.loss == null ? '' : ` (${(result.loss / 100).toFixed(2)} pawns below the best line)`;
+    $('#coach-practice-status').text(`${label}${detail}. Find a sound move for this position.`);
+    setCoachStatus('Practice: compare another candidate.');
+    renderInsights();
+    return 'snapback';
+  });
+  if (!session.analysisReady && session.analysisPromise) {
+    if (session.grading) return 'pending';
+    session.grading = true;
+    session.pendingMove = { source, target, promotion, opts: opts || {} };
+    $('#coach-practice-status').text('Checking the position…');
+    return session.analysisPromise.then(() => {
+      if (!practicePositionIsCurrent(session)) return 'stale';
+      session.pendingMove = null;
+      session.grading = false;
+      return coachHandlePracticeMove(source, target, promotion, opts || {});
+    }).finally(() => {
+      session.grading = false;
+    });
   }
-  updateCoachControlsState();
-  renderInsights();
-  if (sprint && sprint.completedAt) renderCoachDailyPlan();
-  return 'correct';
+  if (session.grading) return 'pending';
+  session.grading = true;
+  return evaluate().finally(() => {
+    session.grading = false;
+  });
 }
 
 function revealCoachPracticeAnswer() {
   const session = coachPracticeSession;
   if (!session || session.completed) return;
+  session.hintStage = 4;
+  const text = practiceHintForSession(session, 4);
   if (!session.revealed) {
     session.revealed = true;
+    // Record the reveal once. Completion is recorded separately, once, when
+    // the requested move is finally played.
     recordPracticeAttempt(session.item, false, true);
     renderInsights();
   }
-  const label = coachPracticeMoveLabel(session.item);
-  $('#coach-practice-status').text(`Answer: ${label}. Play it on the board to complete the drill.`);
+  $('#coach-practice-status').text(text);
   $('#btn-coach-practice-answer').prop('disabled', true);
+  $('#btn-coach-practice-hint').prop('disabled', true);
   setCoachStatus('Practice answer revealed — now play the move.');
+}
+
+function showCoachPracticeHint() {
+  const session = coachPracticeSession;
+  if (!session || session.completed) return;
+  session.hintUsed = true;
+  session.hintStage = Math.min(4, (session.hintStage || 0) + 1);
+  const text = practiceHintForSession(session, session.hintStage);
+  $('#coach-practice-status').text(text);
+  if (session.hintStage >= 4) {
+    if (!session.revealed) {
+      session.revealed = true;
+      recordPracticeAttempt(session.item, false, true);
+      renderInsights();
+    }
+    $('#btn-coach-practice-hint').prop('disabled', true);
+    $('#btn-coach-practice-answer').prop('disabled', true);
+    setCoachStatus('Practice answer revealed — now play the move.');
+  } else {
+    $('#btn-coach-practice-answer').text('Show answer');
+    setCoachStatus('Practice hint shown.');
+  }
 }
 
 function advanceCoachPractice() {
@@ -5047,14 +5609,29 @@ function advanceCoachPractice() {
 
 function exitCoachPractice(message) {
   if (!coachPracticeSession) return;
-  resetCoachState();
-  coachGameActive = false;
-  CoachController.setPhase('idle');
-  createCoachBoard('start', 'white');
-  $('#coach-view').removeClass('game-active');
+  const returnState = coachPracticeReturnState;
+  coachPracticeSession = null;
+  coachPracticeReturnState = null;
+  coachPracticeRun = null;
+  const restoredLive = !!(returnState && restoreCoachPracticeReturnState(returnState));
+  if (restoredLive) {
+    // The underlying game remains live and its PGN, review log, stats, side,
+    // and local/remote identity are back in place.
+    persistCoachPracticeReturnState(null);
+    CoachController.setPhase(coachIsUserTurn() ? 'userTurn' : 'opponentThinking');
+    setCoachStatus(message || (coachIsUserTurn() ? 'Your game is restored. Your move.' : 'Your game is restored. Opponent thinking…'));
+    if (!coachIsUserTurn() && !coachGame.game_over()) coachOpponentRespond();
+  } else {
+    resetCoachState();
+    coachGameActive = false;
+    CoachController.setPhase('idle');
+    createCoachBoard('start', 'white');
+    $('#coach-view').removeClass('game-active');
+    persistCoachPracticeReturnState(null);
+  }
   $('#coach-practice-banner').hide();
   setPracticeFocus(false);
-  setCoachStatus(message || 'Practice closed. Start a game or choose another due drill.');
+  if (!restoredLive) setCoachStatus(message || 'Practice closed. Start a game or choose another due drill.');
   updateCoachControlsState();
   renderInsights();
 }
@@ -5111,7 +5688,8 @@ function createCoachBoard(position, orientation) {
         const move = tempGame.move({ from: source, to: target, promotion: 'q' });
         if (!move) return 'snapback';
         if (coachPracticeSession) {
-          return coachHandlePracticeMove(source, target, 'q', { updateBoard: false });
+          const result = coachHandlePracticeMove(source, target, 'q', { updateBoard: false });
+          return result && typeof result.then === 'function' ? 'snapback' : result;
         }
         // Legal move — dispatch async classification + opponent reply
         coachHandleUserMove(source, target, 'q', { updateBoard: false });
@@ -5129,7 +5707,17 @@ function createCoachBoard(position, orientation) {
       return 'snapback';
     },
     onSnapEnd: function() {
-      if (coachGame) { coachBoard.position(coachGame.fen()); coachSyncLastMove(); }
+      if (!coachGame || !coachBoard) return;
+      // chessboard.js calls this after both user drags and programmatic
+      // position changes. Keep analysis/review positions on the board instead
+      // of snapping them back to the live game.
+      const fen = coachAnalysisFen() || (coachReviewCursor !== null ? coachFenAtPly(coachReviewCursor) : coachGame.fen());
+      coachBoard.position(fen, false);
+      if (coachReviewAnalysis) {
+        const step = coachReviewAnalysis.steps[coachReviewAnalysis.index];
+        setBoardLastMove('coachBoard', step && step.move ? step.move : null);
+        updateCoachAnalysisAccessibility(fen, step && step.label);
+      } else coachSyncLastMove();
     }
   });
   observeBoardLastMove('coachBoard');
@@ -5144,6 +5732,12 @@ function createCoachBoard(position, orientation) {
 // COACH VIEW SWITCHING
 // ─────────────────────────────────────────────
 function switchView(view) {
+  const wasCoachMode = coachMode;
+  if (wasCoachMode && view !== 'coach') {
+    // Leaving Coach must stop any pending engine reply and clear a transient
+    // analysis line before the library view takes over.
+    invalidateCoachAsyncWork('Coach view changed.');
+  }
   appView = view;
   coachMode = (view === 'coach');
   const $app = $('.app');
@@ -5178,7 +5772,7 @@ function switchView(view) {
       // Returning to an existing game — resize the board and re-kick the
       // opponent if the previous respond was aborted by the view switch.
       if (coachBoard) setTimeout(() => coachBoard.resize(), 0);
-      if (coachGameActive && !coachIsUserTurn() && !coachGame.game_over()) {
+      if (coachGameActive && !coachPracticeSession && !coachIsUserTurn() && !coachGame.game_over()) {
         coachOpponentRespond();
       }
     }
@@ -5220,6 +5814,14 @@ function isValidFen(fen) {
 }
 
 function startCoachGame() {
+  // Starting a new game is the explicit discard/reset action for an active
+  // drill. Do not restore the borrowed game after this click.
+  if (coachPracticeSession || coachPracticeReturnState) {
+    coachPracticeSession = null;
+    coachPracticeRun = null;
+    coachPracticeReturnState = null;
+    persistCoachPracticeReturnState(null);
+  }
   if (typeof applyAdaptiveCoachElo === 'function') applyAdaptiveCoachElo();
   const fenRaw = ($('#coach-fen').val() || '').trim();
   let startFen = null;
@@ -5288,6 +5890,7 @@ function showEngineLoadError(err) {
   $('#btn-coach-resign').prop('disabled', true);
   $('#btn-coach-takeback').prop('disabled', true);
   $('#btn-coach-showbest').prop('disabled', true);
+  $('#btn-coach-showwhy').prop('disabled', true);
   $('#btn-coach-candidates').prop('disabled', true);
 }
 
@@ -5298,14 +5901,18 @@ function updateCoachControlsState() {
   const active = coachGameActive;
   const practicing = !!coachPracticeSession;
   const reviewing = coachIsReviewing();
+  $('#btn-coach-review-practice').prop('disabled', coachThinking && !practicing);
   const hasReview = !!coachLastReview;
+  const canExplain = !!coachLastReview && !!coachLastReview.bestUci && coachLastReview.tier !== 'best' &&
+    coachLastReview.tier !== 'unknown' && (!active || coachIsUserTurn()) && !reviewing && !coachThinking && !practicing;
   const total = coachGame ? coachGame.history().length : 0;
   const cur = coachReviewCursor === null ? total : coachReviewCursor;
   $('#btn-coach-resign').prop('disabled', !active || reviewing || practicing);
   // "Open review" only appears once the game has ended and we have a summary to reopen.
   $('#btn-coach-openreview').toggle(!practicing && !active && !!coachLastEndMsg);
   $('#btn-coach-takeback').prop('disabled', practicing || !hasReview || reviewing || coachThinking);
-  $('#btn-coach-showbest').prop('disabled', practicing || !hasReview || (coachLastReview && coachLastReview.tier === 'best') || reviewing || coachThinking);
+  $('#btn-coach-showbest').prop('disabled', !canExplain);
+  $('#btn-coach-showwhy').prop('disabled', !canExplain);
   $('#btn-coach-candidates').prop('disabled', practicing || !active || !coachGame || !coachIsUserTurn() || reviewing || coachThinking);
   $('#btn-coach-prev').prop('disabled', practicing || !coachGame || total === 0 || cur === 0);
   $('#btn-coach-next').prop('disabled', practicing || !coachGame || total === 0 || cur === total);
@@ -5320,6 +5927,7 @@ function updateCoachControlsState() {
 // HISTORY NAVIGATION / REVIEW MODE
 // ─────────────────────────────────────────────
 function coachIsReviewing() {
+  if (coachReviewAnalysis) return true;
   if (!coachGame || coachReviewCursor === null) return false;
   return coachReviewCursor !== coachGame.history().length;
 }
@@ -5349,11 +5957,12 @@ function coachFenAtPly(n) {
 
 function coachGotoPly(n) {
   if (!coachGame) return;
+  clearCoachReviewAnalysis({ restore: false });
   const total = coachGame.history().length;
   n = Math.max(0, Math.min(n, total));
   coachReviewCursor = n === total ? null : n;
   const fen = coachFenAtPly(n);
-  if (coachBoard && fen) coachBoard.position(fen);
+  if (coachBoard && fen) coachBoard.position(fen, false);
   coachSyncLastMove();
   if (coachIsReviewing()) {
     CoachController.setPhase('reviewing');
@@ -5379,8 +5988,9 @@ function coachGotoPly(n) {
 
 function coachGotoLive() {
   if (!coachGame) return;
+  clearCoachReviewAnalysis({ restore: false });
   coachReviewCursor = null;
-  if (coachBoard) coachBoard.position(coachGame.fen());
+  if (coachBoard) coachBoard.position(coachGame.fen(), false);
   coachSyncLastMove();
   if (coachLastReview) renderCoachReview(coachLastReview);
   CoachController.setPhase(coachGameActive
@@ -6809,6 +7419,7 @@ $(function () {
     startCoachGame();
   });
   $('#btn-coach-practice-answer').on('click', revealCoachPracticeAnswer);
+  $('#btn-coach-practice-hint').on('click', showCoachPracticeHint);
   $('#btn-coach-practice-next').on('click', advanceCoachPractice);
   $('#btn-coach-practice-exit').on('click', function() { exitCoachPractice(); });
   $('#btn-coach-review-practice').on('click', function() {
@@ -6865,7 +7476,7 @@ $(function () {
       return;
     }
     const result = coachPracticeSession
-      ? coachHandlePracticeMove(move.from, move.to, move.promotion || 'q', { updateBoard: true })
+      ? await coachHandlePracticeMove(move.from, move.to, move.promotion || 'q', { updateBoard: true })
       : await coachHandleUserMove(move.from, move.to, move.promotion || 'q', { updateBoard: true });
     if (result === 'snapback') {
       $status.text(coachPracticeSession ? 'Not the best move yet. Try again.' : 'That move could not be played.');
@@ -6873,6 +7484,10 @@ $(function () {
     }
     if (result === 'stale') {
       $status.text('The position changed before analysis finished.');
+      return;
+    }
+    if (result === 'ungraded' || result === 'pending') {
+      $status.text(result === 'ungraded' ? 'Engine did not score that move.' : 'Checking the position…');
       return;
     }
     $('#coach-keyboard-move-input').val('');
@@ -6966,63 +7581,19 @@ $(function () {
     coachSync.deleteMove(removedReview).catch(handleCoachDbError);
   });
 
-  // Coach: show best — replay the best move instead of the user's
+  // Coach: show why — display the recommended continuation on the main board.
+  // The actual game object and review log remain untouched.
   $('#btn-coach-showbest').on('click', function() {
-    if (!coachMode || !coachGame || !coachLastReview || !coachLastReview.bestUci) return;
-    invalidateCoachAsyncWork('The best-move replay replaced the prior position.');
-    const prev = coachLastReview;
-    // Undo opponent reply (if played) + user move
-    if (coachGame.fen() !== prev.fenAfter) coachGame.undo();
-    coachGame.undo();
-    // Play best move
-    const bu = prev.bestUci;
-    coachGame.move({ from: bu.slice(0, 2), to: bu.slice(2, 4), promotion: bu[4] || undefined });
-    const newFenAfter = coachGame.fen();
-    // Adjust stats: convert prior classification to 'best'
-    if (coachStats) {
-      coachStats[prev.tier] = Math.max(0, (coachStats[prev.tier] || 0) - 1);
-      coachStats.best = (coachStats.best || 0) + 1;
-    }
-    if (coachBoard) coachBoard.position(newFenAfter);
-    updateCapturedDisplay(newFenAfter);
-    renderCoachReview({
-      tier: 'best', label: 'Best move', emoji: '★',
-      loss: 0,
-      bestSan: prev.bestSan,
-      userSan: prev.bestSan,
-      pvSan: prev.pvSan
-    });
-    // Keep a review pointer so take-back can roll back cleanly
-    coachLastReview = {
-      tier: 'best',
-      fenBefore: prev.fenBefore,
-      fenAfter: newFenAfter,
-      userUci: prev.bestUci,
-      bestUci: prev.bestUci,
-      bestSan: prev.bestSan
-    };
-    // Also fix the rolling review log so tier coloring reflects the swap.
-    if (coachReviewLog && coachReviewLog.length > 0) {
-      const last = coachReviewLog[coachReviewLog.length - 1];
-      last.tier = 'best';
-      last.userSan = prev.bestSan;
-      last.userUci = prev.bestUci;
-      last.fenAfter = newFenAfter;
-      last.loss = 0;
-      last.insightTags = [];
-      last.gameGeneration = coachGameGeneration;
-      last.localGameId = coachLocalGameId;
-      coachSync.saveMove(last).catch(handleCoachDbError);
-    }
-    updateCoachSummary();
-    updateMoveList();
-    updateOpeningLabel();
-    CoachController.setPhase('opponentThinking');
-    setCoachStatus('Opponent thinking…');
-    updateCoachControlsState();
-    saveCoachState();
-    if (coachGame.game_over()) { coachHandleGameOver(); return; }
-    coachOpponentRespond();
+    startCoachReviewAnalysis(coachLastReview);
+  });
+  $('#btn-coach-showwhy').on('click', function() {
+    startCoachReviewAnalysis(coachLastReview);
+  });
+  $('#btn-coach-review-analysis-prev').on('click', function() { stepCoachReviewAnalysis(-1); });
+  $('#btn-coach-review-analysis-next').on('click', function() { stepCoachReviewAnalysis(1); });
+  $('#btn-coach-backtogame').on('click', function() {
+    clearCoachReviewAnalysis();
+    coachGotoLive();
   });
 
   // Coach: show top-3 candidate moves
@@ -7444,7 +8015,7 @@ $(function () {
 
   // Coach board: tap-to-move (scoped to #coachBoard)
   $(document).on('click', '#coachBoard .square-55d63', function() {
-    if (!coachMode || !coachGameActive || !coachGame) return;
+    if (!coachMode || !coachGameActive || !coachGame || coachIsReviewing()) return;
     const sq = $(this).data('square');
     if (!sq) return;
     if (tapSelected && tapSelected !== sq) {

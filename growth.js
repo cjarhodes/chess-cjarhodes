@@ -3,38 +3,62 @@
 
 const PLAYER_GROWTH_KEY = 'coach:growth:v1';
 const PLAYER_GROWTH_VERSION = 1;
-const IMPORT_REVIEW_LIMIT = 30;
 const TRAINING_BACKUP_VERSION = 1;
 const REPERTOIRE_OBSERVED_LIMIT = 30;
 const REPERTOIRE_REPAIR_LIMIT = 24;
 const REPERTOIRE_COMPARISON_LIMIT = 8;
+// This is a practical evidence floor for a descriptive comparison, not a
+// statistical significance claim. Short sessions should remain inconclusive.
+const TRANSFER_MIN_SAMPLES = 30;
+const IMPORT_CANCEL_BUTTON_ID = 'btn-cancel-pgn';
 const growthRemoteSync = { timer: null, chain: Promise.resolve() };
 let importedGameAnalysisActive = false;
+let importedAnalysisRun = null;
+let importedAnalysisRunId = 0;
 
 const ENDGAME_LESSONS = [
   {
     id: 'endgame-queen-mate', title: 'Queen mate',
     detail: 'Coordinate king and queen to finish a boxed-in king.',
     fen: '7k/8/5KQ1/8/8/8/8/8 w - - 0 1', bestUci: 'g6g7', bestSan: 'Qg7#',
-    prompt: 'Find the immediate checkmate.', tag: 'endgame_conversion'
+    prompt: 'Find the immediate checkmate.', tag: 'endgame_conversion',
+    scenarios: [
+      { fen: '7k/5Q2/6K1/8/8/8/8/8 w - - 0 1', bestUci: 'f7f8', bestSan: 'Qf8#',
+        prompt: 'Find the mating net from this new king position.' }
+    ]
   },
   {
     id: 'endgame-rook-mate', title: 'Rook mate',
     detail: 'Use the king to cover the escape squares before checking.',
     fen: '7k/8/6K1/8/8/8/8/R7 w - - 0 1', bestUci: 'a1a8', bestSan: 'Ra8#',
-    prompt: 'Deliver mate with the rook.', tag: 'endgame_conversion'
+    prompt: 'Deliver mate with the rook.', tag: 'endgame_conversion',
+    scenarios: [
+      { fen: '7k/8/5K2/8/8/8/8/R7 w - - 0 1', bestUci: 'f6g6', bestSan: 'Kg6',
+        prompt: 'Improve the king, then finish with the rook.',
+        continuation: [{ opponentUci: 'h8g8', followupUci: 'a1a8' }] }
+    ]
   },
   {
     id: 'endgame-promote', title: 'Clean promotion',
     detail: 'Convert the passed pawn without adding an unnecessary move.',
     fen: '8/4P3/8/8/8/8/4K3/7k w - - 0 1', bestUci: 'e7e8q', bestSan: 'e8=Q',
-    prompt: 'Promote the pawn now.', tag: 'passed_pawns'
+    prompt: 'Promote the pawn now.', tag: 'passed_pawns',
+    scenarios: [
+      { fen: '8/8/4P3/8/8/8/4K3/7k w - - 0 1', bestUci: 'e6e7', bestSan: 'e7',
+        prompt: 'Advance the passer, then finish the promotion.',
+        continuation: [{ opponentUci: 'h1g1', followupUci: 'e7e8q' }] }
+    ]
   },
   {
     id: 'endgame-stop-pawn', title: 'Stop the passer',
     detail: 'Block the promotion square and give the king time to arrive.',
-    fen: '8/8/8/8/8/8/5K1p/R7 w - - 0 1', bestUci: 'a1h1', bestSan: 'Rh1',
-    prompt: 'Stop the h-pawn from promoting.', tag: 'passed_pawns'
+    fen: '1k6/8/8/8/8/8/5K1p/R7 w - - 0 1', bestUci: 'a1h1', bestSan: 'Rh1',
+    prompt: 'Stop the h-pawn from promoting.', tag: 'passed_pawns',
+    scenarios: [
+      { fen: '1k6/8/8/8/8/7p/5K2/R7 w - - 0 1', bestUci: 'a1h1', bestSan: 'Rh1',
+        prompt: 'Block the passer, then capture it on the promotion square.',
+        continuation: [{ opponentUci: 'h3h2', followupUci: 'h1h2' }] }
+    ]
   }
 ];
 
@@ -895,16 +919,40 @@ function transferMeasurement(entries, tag) {
   if (!events.length) return null;
   const anchor = events[events.length - 1].at;
   const windowMs = 7 * DAY_MS;
-  const before = entries.filter(entry => entry.ts >= anchor - windowMs && entry.ts < anchor);
-  const after = entries.filter(entry => entry.ts >= anchor && entry.ts <= anchor + windowMs);
-  if (!before.length || !after.length) return null;
+  const reviewed = entries.filter(entry => entry && entry.tier && entry.tier !== 'unknown' && Number.isFinite(entry.ts));
+  const before = reviewed.filter(entry => entry.ts >= anchor - windowMs && entry.ts < anchor);
+  const after = reviewed.filter(entry => entry.ts >= anchor && entry.ts <= anchor + windowMs);
   const errors = list => list.filter(entry => isInsightProblem(entry.tier) && (entry.tags || []).includes(tag)).length;
-  const beforeRate = errors(before) / before.length;
-  const afterRate = errors(after) / after.length;
+  const beforeErrors = errors(before);
+  const afterErrors = errors(after);
+  const beforeRate = before.length ? beforeErrors / before.length : null;
+  const afterRate = after.length ? afterErrors / after.length : null;
+  const enoughEvidence = before.length >= TRANSFER_MIN_SAMPLES && after.length >= TRANSFER_MIN_SAMPLES;
+  if (!enoughEvidence) {
+    return {
+      beforeRate, afterRate,
+      beforeSamples: before.length,
+      afterSamples: after.length,
+      beforeErrors,
+      afterErrors,
+      change: null,
+      direction: 'insufficient',
+      improved: false,
+      enoughEvidence: false
+    };
+  }
+  const change = afterRate - beforeRate;
+  const direction = change < 0 ? 'improved' : (change > 0 ? 'worsened' : 'unchanged');
   return {
     beforeRate, afterRate,
-    change: Math.round((afterRate - beforeRate) * 100),
-    improved: afterRate < beforeRate
+    beforeSamples: before.length,
+    afterSamples: after.length,
+    beforeErrors,
+    afterErrors,
+    change: Math.round(change * 100),
+    direction,
+    improved: direction === 'improved',
+    enoughEvidence: true
   };
 }
 
@@ -937,27 +985,48 @@ function renderWeeklyReview(entriesOverride) {
   $list.append($('<div class="weekly-item"></div>').append(
     $('<strong></strong>').text('Transfer check'),
     $('<span></span>').text(measurement
-      ? (measurement.improved
-        ? `Promising: the trained pattern appeared ${Math.abs(measurement.change)} percentage points less often after practice.`
-        : `Not transferred yet: the pattern appeared ${measurement.change} percentage points more often after practice.`)
+      ? (!measurement.enoughEvidence
+        ? `Insufficient evidence: ${measurement.beforeSamples}/${TRANSFER_MIN_SAMPLES} before and ${measurement.afterSamples}/${TRANSFER_MIN_SAMPLES} after samples. No conclusion yet.`
+        : measurement.direction === 'improved'
+          ? `Observed ${Math.abs(measurement.change)} percentage-point fewer tagged problems after practice (${measurement.beforeSamples} before, ${measurement.afterSamples} after). This is an observation, not proof that practice caused the change.`
+          : measurement.direction === 'worsened'
+            ? `Observed ${measurement.change} percentage-point more tagged problems after practice (${measurement.beforeSamples} before, ${measurement.afterSamples} after). This is an observation, not proof that practice caused the change.`
+            : `Observed no change in tagged-problem rate (${measurement.beforeSamples} before, ${measurement.afterSamples} after). This is an observation, not proof that practice caused the result.`)
       : 'Practice and then play or import more moves; Coach will compare the pattern before and after training.')
   ));
 }
 
+function endgameScenarioFor(lesson) {
+  const scenarios = Array.isArray(lesson && lesson.scenarios) ? lesson.scenarios : [];
+  const record = typeof practiceRecordFor === 'function' ? practiceRecordFor({ id: lesson.id }) : null;
+  // Keep the original canonical position for a player's first attempt. This
+  // preserves existing saved progress and the Qg7# smoke path.
+  if (!scenarios.length || !record || !(record.attempts > 0)) return lesson;
+  const index = Math.min(scenarios.length - 1, Math.floor((record && record.attempts || 0) / 2));
+  return Object.assign({}, lesson, scenarios[index]);
+}
+
 function endgamePracticeItem(lesson) {
+  const scenario = endgameScenarioFor(lesson);
   return {
     id: lesson.id,
-    tag: lesson.tag,
+    tag: scenario.tag,
     entry: {
-      id: lesson.id,
-      fenBefore: lesson.fen,
-      bestUci: lesson.bestUci,
-      bestSan: lesson.bestSan,
+      id: scenario.id,
+      fenBefore: scenario.fen,
+      bestUci: scenario.bestUci,
+      bestSan: scenario.bestSan,
       pairNum: 26,
       ply: 51,
-      phase: 'endgame'
+      phase: 'endgame',
+      continuation: Array.isArray(scenario.continuation)
+        ? scenario.continuation.map(step => ({
+          opponentUci: step.opponentUci,
+          followupUci: step.followupUci
+        }))
+        : []
     },
-    meta: { title: lesson.title, practice: lesson.prompt, theory: lesson.detail }
+    meta: { title: lesson.title, practice: scenario.prompt, theory: scenario.detail || lesson.detail }
   };
 }
 
@@ -1023,20 +1092,72 @@ function splitPgnGames(pgn) {
   return markers.map((start, index) => source.slice(start, markers[index + 1] || source.length).trim()).filter(Boolean);
 }
 
+// Build the analysis queue without imposing a batch-wide move cap. Keeping
+// this pure and separate from engine work makes source-game identity explicit
+// and prevents later games from inheriting the first game's move mapping.
+function collectImportedTargets(parsedEntries, side, gameMetadata) {
+  const targets = [];
+  (parsedEntries || []).forEach((parsedEntry, gameIndex) => {
+    const parsed = parsedEntry && parsedEntry.game ? parsedEntry.game : parsedEntry;
+    if (!parsed) return;
+    const sourceIndex = parsedEntry && Number.isInteger(parsedEntry.sourceIndex)
+      ? parsedEntry.sourceIndex
+      : gameIndex;
+    const metadata = (gameMetadata || [])[gameIndex] || {};
+    const allMoves = parsed.history({ verbose: true });
+    const replay = new Chess(pgnStartFen(parsed));
+    allMoves.forEach((move, index) => {
+      const fenBefore = replay.fen();
+      const mover = replay.turn() === 'b' ? 'black' : 'white';
+      const played = replay.move(move.san);
+      if (!played || mover !== side) return;
+      targets.push({
+        fenBefore,
+        fenAfter: replay.fen(),
+        userUci: uciFromMove(played),
+        userSan: played.san,
+        ply: index + 1,
+        pairNum: Math.ceil((index + 1) / 2),
+        gameIndex: gameIndex + 1,
+        gameKey: `import-${sourceIndex + 1}`,
+        openingId: metadata.openingId || null,
+        opening: metadata.opening || null
+      });
+    });
+  });
+  return targets;
+}
+
+function importRunOwnsBoard(run) {
+  if (!run || run.generation !== coachGameGeneration || coachGame !== run.originalCoachGame || coachLocalGameId !== run.originalCoachGameId) return false;
+  const currentPgn = coachGame && typeof coachGame.pgn === 'function' ? coachGame.pgn() : '';
+  return currentPgn === run.originalCoachPgn;
+}
+
 async function analyseImportedPgn() {
   if (importedGameAnalysisActive) return;
   const pgn = ($('#game-inbox-pgn').val() || '').trim();
   const side = $('#game-inbox-side').val() === 'black' ? 'black' : 'white';
-  const parsedGames = splitPgnGames(pgn).map(gamePgn => {
+  const sourceGames = splitPgnGames(pgn);
+  const parseResults = sourceGames.map((gamePgn, sourceIndex) => {
     const game = new Chess();
     try {
-      return gamePgn && game.load_pgn(gamePgn, { sloppy: true }) && game.history().length ? game : null;
+      const loaded = gamePgn && game.load_pgn(gamePgn, { sloppy: true });
+      return {
+        sourceIndex,
+        game: loaded && game.history().length ? game : null
+      };
     } catch (e) {
-      return null;
+      return { sourceIndex, game: null };
     }
-  }).filter(Boolean);
-  if (!parsedGames.length) {
-    $('#game-inbox-status').addClass('error').removeClass('success').text('Those PGNs could not be read. Paste one or more complete games and try again.');
+  });
+  const parsedEntries = parseResults.filter(result => result.game);
+  const parsedGames = parsedEntries.map(result => result.game);
+  const skippedGames = parseResults.length - parsedEntries.length;
+  if (!parsedEntries.length) {
+    $('#game-inbox-status').addClass('error').removeClass('success').text(
+      `No complete games could be read${skippedGames ? `; ${skippedGames} skipped as invalid` : ''}. Paste one or more complete games and try again.`
+    );
     return;
   }
   const gameMetadata = parsedGames.map(parsed => {
@@ -1047,73 +1168,97 @@ async function analyseImportedPgn() {
       exact: !!definition.info.exact
     };
   });
-  const targets = [];
-  parsedGames.forEach((parsed, gameIndex) => {
-    const allMoves = parsed.history({ verbose: true });
-    const replay = new Chess(pgnStartFen(parsed));
-    allMoves.forEach((move, index) => {
-      const fenBefore = replay.fen();
-      const mover = replay.turn() === 'b' ? 'black' : 'white';
-      const played = replay.move(move.san);
-      if (!played || targets.length >= IMPORT_REVIEW_LIMIT) return;
-      if (mover === side) {
-        targets.push({
-          fenBefore,
-          fenAfter: replay.fen(),
-          userUci: uciFromMove(played),
-          userSan: played.san,
-          ply: index + 1,
-          pairNum: Math.ceil((index + 1) / 2),
-          gameIndex: gameIndex + 1,
-          openingId: gameMetadata[gameIndex].openingId,
-          opening: gameMetadata[gameIndex].opening
-        });
-      }
-    });
-  });
+  const targets = collectImportedTargets(parsedEntries, side, gameMetadata);
   if (!targets.length) {
     $('#game-inbox-status').addClass('error').text('No moves were found for the selected side.');
     return;
   }
 
   importedGameAnalysisActive = true;
+  const run = {
+    id: ++importedAnalysisRunId,
+    cancelled: false,
+    completed: 0,
+    total: targets.length,
+    skippedGames,
+    generation: coachGameGeneration,
+    originalCoachGame: coachGame,
+    originalCoachGameId: coachLocalGameId,
+    originalCoachPgn: coachGame && typeof coachGame.pgn === 'function' ? coachGame.pgn() : ''
+  };
+  importedAnalysisRun = run;
   $('#btn-analyse-pgn').prop('disabled', true);
-  $('#game-inbox-status').removeClass('error success').text(`Preparing Stockfish to review ${targets.length} moves from ${parsedGames.length} game${parsedGames.length === 1 ? '' : 's'}…`);
+  const $cancel = $('#' + IMPORT_CANCEL_BUTTON_ID);
+  $cancel.show().prop('disabled', false);
+  const gameSummary = `${parsedGames.length} valid game${parsedGames.length === 1 ? '' : 's'}${skippedGames ? `; ${skippedGames} invalid game${skippedGames === 1 ? '' : 's'} skipped` : ''}`;
+  $('#game-inbox-status').removeClass('error success').text(`Preparing Stockfish to review ${targets.length} moves from ${gameSummary}…`);
   $('#game-inbox-progress').css('width', '2%');
+  // Stage the complete batch before touching the visible Coach game. This
+  // preserves an existing game when the user cancels or starts another one.
+  const generation = run.generation;
+  const displayGame = parsedGames[parsedGames.length - 1];
+  const displayGameKey = `import-${parsedEntries[parsedEntries.length - 1].sourceIndex + 1}`;
   try {
     await engineClient.init();
-    const displayGame = parsedGames[parsedGames.length - 1];
+    if (run.cancelled || importedAnalysisRun !== run || generation !== coachGameGeneration || !importRunOwnsBoard(run)) throw createAbortError('Import review cancelled.');
+    const allReviews = [];
+    const stagedInsightEntries = [];
+    for (let i = 0; i < targets.length; i++) {
+      if (run.cancelled || importedAnalysisRun !== run || generation !== coachGameGeneration || !importRunOwnsBoard(run)) {
+        throw createAbortError('Import review cancelled.');
+      }
+      const target = targets[i];
+      $('#game-inbox-status').text(`Reviewing move ${i + 1} of ${targets.length} (${gameSummary})…`);
+      $('#game-inbox-progress').css('width', `${Math.round(i / targets.length * 100)}%`);
+      const result = await classifyMove(target.fenBefore, target.userUci, target.fenAfter);
+      if (run.cancelled || importedAnalysisRun !== run || generation !== coachGameGeneration || !importRunOwnsBoard(run)) {
+        throw createAbortError('Import review cancelled.');
+      }
+      const review = Object.assign({}, result, target, {
+        gameGeneration: generation,
+        localGameId: target.gameKey,
+        source: 'import'
+      });
+      review.insightTags = insightTagsForReview(review);
+      allReviews.push(review);
+      if (review.tier !== 'unknown') {
+        stagedInsightEntries.push(insightEntryFromReview(review));
+      }
+      run.completed = i + 1;
+      $('#game-inbox-progress').css('width', `${Math.round(run.completed / targets.length * 100)}%`);
+      // Yield between engine jobs so the cancel control can be handled even on
+      // a large import. Only one classifyMove is in flight at a time.
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    if (run.cancelled || importedAnalysisRun !== run || generation !== coachGameGeneration || !importRunOwnsBoard(run)) {
+      throw createAbortError('Import review cancelled.');
+    }
+    // Commit the final parsed game to Coach while aggregating all games into
+    // Insights and repertoire evidence. Each staged review retains its source
+    // game key so later games cannot collapse onto the first game's moves.
+    const displayReviews = allReviews.filter(review => review.gameKey === displayGameKey);
     resetCoachState(pgnStartFen(displayGame));
-    const generation = coachGameGeneration;
+    const committedGeneration = coachGameGeneration;
     coachUserSide = side;
     coachGame = displayGame;
     coachStartFen = pgnStartFen(displayGame);
     coachLocalGameId = createCoachGameId();
-    coachReviewLog = [];
-    coachStats = { moves: 0, best: 0, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
-    const insightState = loadInsights();
-    for (let i = 0; i < targets.length; i++) {
-      const target = targets[i];
-      $('#game-inbox-status').text(`Reviewing move ${i + 1} of ${targets.length} (${parsedGames.length} game${parsedGames.length === 1 ? '' : 's'})…`);
-      $('#game-inbox-progress').css('width', `${Math.round((i + 1) / targets.length * 100)}%`);
-      const result = await classifyMove(target.fenBefore, target.userUci, target.fenAfter);
-      if (generation !== coachGameGeneration) throw new Error('Import review was replaced by another game.');
-      const review = Object.assign({}, result, target, {
-        gameGeneration: generation,
-        localGameId: coachLocalGameId,
-        source: 'import'
-      });
-      review.insightTags = insightTagsForReview(review);
-      coachReviewLog.push(review);
+    coachReviewLog = displayReviews.map(review => Object.assign({}, review, {
+      gameGeneration: committedGeneration,
+      localGameId: coachLocalGameId
+    }));
+    coachStats = coachReviewLog.reduce((stats, review) => {
       if (review.tier !== 'unknown') {
-        coachStats.moves += 1;
-        coachStats[review.tier] = (coachStats[review.tier] || 0) + 1;
-        insightState.entries.push(insightEntryFromReview(review));
+        stats.moves += 1;
+        stats[review.tier] = (stats[review.tier] || 0) + 1;
       }
-      coachSync.saveMove(review).catch(handleCoachDbError);
-    }
+      return stats;
+    }, { moves: 0, best: 0, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 });
+    const insightState = loadInsights();
+    insightState.entries.push(...stagedInsightEntries);
     saveInsights(insightState);
-    recordImportedOpenings(parsedGames, side, coachReviewLog);
+    recordImportedOpenings(parsedGames, side, allReviews);
+    coachReviewLog.forEach(review => coachSync.saveMove(review).catch(handleCoachDbError));
     coachLastReview = coachReviewLog[coachReviewLog.length - 1] || null;
     coachGameActive = false;
     coachEndedAt = Date.now();
@@ -1131,13 +1276,35 @@ async function analyseImportedPgn() {
     rollGameIntoLifetime();
     coachSync.saveGame('Imported game reviewed').catch(handleCoachDbError);
     showPostGameSummary('Imported game reviewed');
-    $('#game-inbox-status').addClass('success').text(`${targets.length} move${targets.length === 1 ? '' : 's'} reviewed from ${parsedGames.length} game${parsedGames.length === 1 ? '' : 's'}. Mistakes are now in Coach Insights and the practice queue.`);
+    $('#game-inbox-status').addClass('success').text(`${targets.length} move${targets.length === 1 ? '' : 's'} reviewed from ${gameSummary}. Showing the last game in Coach; all valid games contributed to Insights and the practice queue.`);
   } catch (error) {
-    $('#game-inbox-status').addClass('error').removeClass('success').text((error && error.message) || 'The imported game could not be analysed.');
+    if (run.cancelled) {
+      $('#game-inbox-progress').css('width', `${Math.round(run.completed / Math.max(1, run.total) * 100)}%`);
+      $('#game-inbox-status').addClass('error').removeClass('success').text(`Import cancelled after ${run.completed} of ${run.total} moves. No complete batch was saved.`);
+    } else if (generation === coachGameGeneration && importedAnalysisRun === run) {
+      $('#game-inbox-status').addClass('error').removeClass('success').text((error && error.message) || 'The imported games could not be analysed.');
+    } else {
+      // A new game reset the generation while this batch was waiting. Leave
+      // the new game's status untouched and discard the stale staged batch.
+    }
   } finally {
+    if (importedAnalysisRun === run) importedAnalysisRun = null;
     importedGameAnalysisActive = false;
     $('#btn-analyse-pgn').prop('disabled', false);
+    $cancel.prop('disabled', true).hide();
   }
+}
+
+function cancelImportedPgnAnalysis() {
+  const run = importedAnalysisRun;
+  if (!run || !importedGameAnalysisActive) return false;
+  run.cancelled = true;
+  // The normal Coach game may have replaced this batch already. In that case
+  // leave its newer engine request alone and let the generation fence discard
+  // this stale import.
+  if (run.generation === coachGameGeneration) engineClient.cancel('Imported game analysis cancelled by the user.');
+  $('#game-inbox-status').removeClass('success').text(`Cancelling after ${run.completed} of ${run.total} moves…`);
+  return true;
 }
 
 function initGrowthFeatures() {
@@ -1188,6 +1355,7 @@ function initGrowthFeatures() {
     $('#game-inbox-status').removeClass('error').text(`${file.name} loaded. Choose your side, then analyse.`);
   });
   $('#btn-analyse-pgn').on('click', () => analyseImportedPgn());
+  $('#' + IMPORT_CANCEL_BUTTON_ID).on('click', () => cancelImportedPgnAnalysis());
   $('#btn-export-training-data').on('click', () => {
     try {
       const count = downloadTrainingBackup();
