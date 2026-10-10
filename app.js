@@ -65,6 +65,8 @@ let coachDbInitStarted = false;
 let coachDbInitPromise = null;
 let coachRemoteInsightEntries = null;
 let coachDbStatus = 'local';
+let coachRemoteInsightsLoaded = false;
+let coachAuthPhase = 'local'; // local | sending | callback | signed-in | signed-out | error
 let remoteGameUpdateTimer = null;
 let pendingRemoteGameEndReason = null;
 let pendingRemoteGameGeneration = null;
@@ -72,6 +74,45 @@ let dailySprintSyncTimer = null;
 let dailySprintSyncChain = Promise.resolve();
 const REMOTE_GAME_SYNC_DEBOUNCE_MS = 2500;
 const DAILY_SPRINT_SYNC_DEBOUNCE_MS = 800;
+
+// All durable Coach memory is scoped to either the signed-in account or this
+// browser's anonymous workspace. This prevents a second account on the same
+// browser from inheriting the first account's insights, games, or statistics.
+const COACH_DEVICE_KEY = 'coach:device-id:v1';
+function coachDeviceId() {
+  try {
+    const existing = localStorage.getItem(COACH_DEVICE_KEY);
+    if (existing) return existing;
+    const id = createCoachGameId();
+    localStorage.setItem(COACH_DEVICE_KEY, id);
+    return id;
+  } catch (e) {
+    return 'volatile';
+  }
+}
+function coachMemoryOwnerId() {
+  return coachAuthUser && coachAuthUser.id ? `user:${coachAuthUser.id}` : `anon:${coachDeviceId()}`;
+}
+function coachMemoryKey(baseKey) {
+  return `${baseKey}:${coachMemoryOwnerId()}`;
+}
+function migrateLegacyCoachMemory() {
+  const legacyKeys = [
+    'coach:insights:v1',
+    'coach:lifetime:v1',
+    'coach:state:v1',
+    'coach:state:corrupt:v1'
+  ];
+  const anonOwner = coachMemoryOwnerId();
+  try {
+    legacyKeys.forEach(baseKey => {
+      const scopedKey = `${baseKey}:${anonOwner}`;
+      if (localStorage.getItem(scopedKey) || !localStorage.getItem(baseKey)) return;
+      localStorage.setItem(scopedKey, localStorage.getItem(baseKey));
+      localStorage.removeItem(baseKey);
+    });
+  } catch (e) { /* local progress remains best-effort if storage is blocked */ }
+}
 
 const CoachController = {
   phase: 'idle',
@@ -200,7 +241,7 @@ function saveCoachState() {
     const total = coachGame.history().length;
     // Skip persisting empty initial state — nothing to recover.
     if (total === 0 && !coachLastEndMsg && !coachRemoteGameId) {
-      localStorage.removeItem(COACH_STATE_KEY);
+      localStorage.removeItem(coachMemoryKey(COACH_STATE_KEY));
       return;
     }
     const snapshot = {
@@ -217,7 +258,7 @@ function saveCoachState() {
       lastEndMsg: coachLastEndMsg,
       ts: Date.now()
     };
-    localStorage.setItem(COACH_STATE_KEY, JSON.stringify(snapshot));
+    localStorage.setItem(coachMemoryKey(COACH_STATE_KEY), JSON.stringify(snapshot));
   } catch (e) {
     // Quota exceeded or storage blocked — fail silently; not critical.
   }
@@ -225,7 +266,7 @@ function saveCoachState() {
 function loadCoachState() {
   let raw = null;
   try {
-    raw = localStorage.getItem(COACH_STATE_KEY);
+    raw = localStorage.getItem(coachMemoryKey(COACH_STATE_KEY));
     if (!raw) return { ok: false, missing: true };
     const s = JSON.parse(raw);
     if (!s || s.v !== 1) {
@@ -237,12 +278,12 @@ function loadCoachState() {
   }
 }
 function clearCoachState() {
-  try { localStorage.removeItem(COACH_STATE_KEY); } catch (e) {}
+  try { localStorage.removeItem(coachMemoryKey(COACH_STATE_KEY)); } catch (e) {}
 }
 function backupCorruptCoachState(raw, reason) {
   if (!raw) return;
   try {
-    localStorage.setItem(COACH_STATE_BACKUP_KEY, JSON.stringify({
+    localStorage.setItem(coachMemoryKey(COACH_STATE_BACKUP_KEY), JSON.stringify({
       raw,
       reason: reason || 'Unknown restore failure',
       ts: Date.now()
@@ -347,7 +388,7 @@ function emptyLifetime() {
 }
 function loadLifetime() {
   try {
-    const raw = localStorage.getItem(LIFETIME_KEY);
+    const raw = localStorage.getItem(coachMemoryKey(LIFETIME_KEY));
     if (!raw) return emptyLifetime();
     const v = JSON.parse(raw);
     const merged = Object.assign(emptyLifetime(), v || {});
@@ -358,7 +399,7 @@ function loadLifetime() {
   } catch (e) { return emptyLifetime(); }
 }
 function saveLifetime(s) {
-  try { localStorage.setItem(LIFETIME_KEY, JSON.stringify(s)); } catch (e) {}
+  try { localStorage.setItem(coachMemoryKey(LIFETIME_KEY), JSON.stringify(s)); } catch (e) {}
 }
 // Roll the just-finished game into lifetime totals. Idempotent guard via a
 // per-game flag so a refresh on the summary screen doesn't double-count.
@@ -563,7 +604,7 @@ function emptyInsights() {
 
 function loadInsights() {
   try {
-    const raw = localStorage.getItem(INSIGHTS_KEY);
+    const raw = localStorage.getItem(coachMemoryKey(INSIGHTS_KEY));
     if (!raw) return emptyInsights();
     const parsed = JSON.parse(raw);
     if (!parsed || parsed.v !== 1 || !Array.isArray(parsed.entries)) return emptyInsights();
@@ -576,12 +617,12 @@ function loadInsights() {
 function saveInsights(state) {
   try {
     const safe = { v: 1, entries: (state.entries || []).slice(-INSIGHTS_MAX_ENTRIES) };
-    localStorage.setItem(INSIGHTS_KEY, JSON.stringify(safe));
+    localStorage.setItem(coachMemoryKey(INSIGHTS_KEY), JSON.stringify(safe));
   } catch (e) {}
 }
 
 function clearInsights() {
-  try { localStorage.removeItem(INSIGHTS_KEY); } catch (e) {}
+  try { localStorage.removeItem(coachMemoryKey(INSIGHTS_KEY)); } catch (e) {}
 }
 
 function isInsightProblem(tier) {
@@ -2115,8 +2156,8 @@ function renderInsights() {
   const remoteEntries = Array.isArray(coachRemoteInsightEntries)
     ? coachRemoteInsightEntries.filter(e => e && e.tier && e.tier !== 'unknown')
     : [];
-  const entries = remoteEntries.length ? remoteEntries : localEntries;
-  const usingRemote = remoteEntries.length > 0;
+  const usingRemote = !!coachAuthUser && coachRemoteInsightsLoaded;
+  const entries = usingRemote ? remoteEntries : localEntries;
   if (typeof renderWeeklyReview === 'function') renderWeeklyReview(entries);
   renderRecurringMistakeDashboard(entries);
   const $section = $('#insights-section');
@@ -2307,23 +2348,42 @@ function setCoachDbStatus(msg) {
   if (coachAuthUser) setCoachAuthStatus(msg || 'Account sync on.');
 }
 
+function authCallbackDetected() {
+  const params = new URLSearchParams(location.search);
+  return params.has('code') || params.has('token_hash') || params.has('error') ||
+    /(?:^|&)access_token=/.test((location.hash || '').slice(1));
+}
+
+function cleanAuthCallbackUrl() {
+  if (!authCallbackDetected() || !window.history || !history.replaceState) return;
+  history.replaceState({}, document.title, `${location.pathname}?view=coach`);
+}
+
 function renderCoachAuth() {
   const configured = isSupabaseConfigured();
   $('#coach-auth-local').toggle(!configured);
   $('#coach-auth-form').toggle(configured && !coachAuthUser);
   $('#coach-auth-session').toggle(configured && !!coachAuthUser);
   if (!configured) {
+    coachAuthPhase = 'local';
     setCoachAuthStatus('Add Supabase config to enable account history.');
+    $('#coach-memory-status').text('Progress is saved on this browser. Account sync is not configured.');
     return;
   }
   if (coachAuthUser) {
+    coachAuthPhase = 'signed-in';
     $('#coach-auth-user').text(coachAuthUser.email || coachAuthUser.id);
     setCoachAuthStatus(coachDbStatus || 'Account sync on.');
+    $('#coach-memory-status').text(coachRemoteInsightsLoaded
+      ? 'Your training memory is connected and synced.'
+      : 'Your local progress is safe. Loading account memory...');
   } else {
     const pendingEmail = pendingCoachAuthEmail();
     $('#coach-auth-code-form').toggle(coachEmailCodeEnabled() && !!pendingEmail);
     if (pendingEmail && !$('#coach-auth-email').val()) $('#coach-auth-email').val(pendingEmail);
+    if (coachAuthPhase !== 'sending' && coachAuthPhase !== 'callback') coachAuthPhase = 'signed-out';
     setCoachAuthStatus(coachDbStatus === 'loading' ? 'Connecting...' : (coachDbStatus || 'Sign in to sync games.'));
+    $('#coach-memory-status').text('Progress is saved on this browser. Sign in to sync it across browsers.');
   }
 }
 
@@ -2347,6 +2407,7 @@ async function initCoachDb() {
   coachDbInitPromise = (async () => {
     renderCoachAuth();
     if (!isSupabaseConfigured()) return;
+    if (authCallbackDetected()) coachAuthPhase = 'callback';
     coachDbStatus = 'loading';
     renderCoachAuth();
     try {
@@ -2368,6 +2429,7 @@ async function initCoachDb() {
       if (authUrlState.present) clearCoachAuthUrlState();
       if (coachAuthUser) {
         setPendingCoachAuthEmail('');
+        adoptAnonymousCoachMemory(coachAuthUser.id);
         adoptAnonymousPracticeProgress(coachAuthUser.id);
         adoptAnonymousDailySprint(coachAuthUser.id);
         if (typeof adoptAnonymousGrowthState === 'function') adoptAnonymousGrowthState(coachAuthUser.id);
@@ -2389,13 +2451,16 @@ async function initCoachDb() {
         // would blank a link-error status and reload insights a second time.
         if (event === 'INITIAL_SESSION') return;
         coachAuthUser = session ? session.user : null;
+        if (session) cleanAuthCallbackUrl();
         if (coachAuthUser) {
           setPendingCoachAuthEmail('');
+          adoptAnonymousCoachMemory(coachAuthUser.id);
           adoptAnonymousPracticeProgress(coachAuthUser.id);
           adoptAnonymousDailySprint(coachAuthUser.id);
           if (typeof adoptAnonymousGrowthState === 'function') adoptAnonymousGrowthState(coachAuthUser.id);
         }
         coachRemoteInsightEntries = null;
+        coachRemoteInsightsLoaded = false;
         coachDbStatus = coachAccountSyncStatus();
         renderCoachAuth();
         renderInsights();
@@ -2405,6 +2470,7 @@ async function initCoachDb() {
         }
       });
     } catch (err) {
+      coachAuthPhase = 'error';
       coachDbStatus = 'Account sync unavailable.';
       setCoachAuthStatus((err && err.message) || coachDbStatus);
     }
@@ -2433,12 +2499,14 @@ async function sendCoachLoginLink() {
   }
   coachDbStatus = '';
   setCoachAuthStatus('Sending link...');
+  coachAuthPhase = 'sending';
   const redirectTo = location.origin + location.pathname + '?view=coach';
   const { error } = await coachDbClient.auth.signInWithOtp({
     email,
     options: { emailRedirectTo: redirectTo }
   });
   if (error) {
+    coachAuthPhase = 'error';
     setCoachAuthStatus(error.message);
     return;
   }
@@ -2501,6 +2569,7 @@ async function signOutCoach() {
   setPendingCoachAuthEmail('');
   coachAuthUser = null;
   coachRemoteInsightEntries = null;
+  coachRemoteInsightsLoaded = false;
   coachRemoteGameId = null;
   coachRemoteGamePromise = null;
   coachRemoteGamePromiseGeneration = null;
@@ -2859,7 +2928,9 @@ async function refreshRemoteInsights(opts = {}) {
   mergeRemotePracticeRecords(drillsResult.data || [], ownerId);
   mergeRemotePracticeEvents((attemptsResult.data || []).slice().reverse(), ownerId);
   coachRemoteInsightEntries = (movesResult.data || []).slice().reverse().map(remoteMoveToInsightEntry);
+  coachRemoteInsightsLoaded = true;
   if (!opts.silent) setCoachDbStatus('Account insights loaded.');
+  renderCoachAuth();
   renderInsights();
 }
 
@@ -7226,6 +7297,7 @@ $(function () {
   initDesktopNotice();
   initBoardTheme();
   initCoachPanelTabs();
+  migrateLegacyCoachMemory();
   coachSync.init();
   let applySearch;
 

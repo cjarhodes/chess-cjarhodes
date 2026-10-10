@@ -487,6 +487,27 @@ async page => {
   assert(accountIsolation.otherDailyMissing, 'daily sprint progress leaked between browser accounts');
   assert(accountIsolation.restoredDailyCompleted, 'daily sprint completion did not survive an account switch');
 
+  const memoryIsolation = await page.evaluate(() => {
+    const accountA = '00000000-0000-0000-0000-000000000001';
+    const accountB = '00000000-0000-0000-0000-000000000002';
+    coachAuthUser = { id: accountA };
+    saveInsights({ v: 1, entries: [{ id: 'account-a-insight', tier: 'mistake' }] });
+    saveLifetime({ v: 1, games: 7, moves: 70, blunders: 2, rollups: {} });
+    coachAuthUser = { id: accountB };
+    const accountBInsights = loadInsights();
+    const accountBLifetime = loadLifetime();
+    coachAuthUser = { id: accountA };
+    const accountAInsights = loadInsights();
+    const accountALifetime = loadLifetime();
+    coachAuthUser = null;
+    return {
+      accountBEmpty: accountBInsights.entries.length === 0 && accountBLifetime.games === 0,
+      accountARestored: accountAInsights.entries.some(entry => entry.id === 'account-a-insight') && accountALifetime.games === 7
+    };
+  });
+  assert(memoryIsolation.accountBEmpty, 'account-scoped insights or lifetime memory leaked to another account');
+  assert(memoryIsolation.accountARestored, 'account-scoped insights or lifetime memory did not restore');
+
   await page.evaluate(() => {
     localStorage.removeItem('coach:practice:v1');
     localStorage.removeItem('coach:practice:v2');

@@ -43,6 +43,8 @@ requirePattern(/function updateURL\(\)[\s\S]{0,1200}readCoachAuthUrlState\(\)\.p
 requirePattern(/checkCoachAuthStorage\(\)/, 'Supabase auth storage must be capability-checked');
 requirePattern(/localStorage\.setItem\(key, '1'\)[\s\S]{0,900}storageKey\.startsWith\('sb-'\)/, 'Supabase auth must persist across email-link tabs and migrate legacy sessions');
 requirePattern(/Account sync cannot persist in this browser session/, 'Supabase storage fallback must be visible to users');
+requirePattern(/function coachMemoryOwnerId[\s\S]{0,180}function coachMemoryKey/, 'Coach memory must be scoped to an account or anonymous browser workspace');
+requirePattern(/function migrateLegacyCoachMemory[\s\S]+coach:state:corrupt:v1/, 'legacy global Coach memory must migrate into the scoped workspace');
 requirePattern(/Promise\.allSettled/, 'manual sync must aggregate partial failures');
 requirePattern(/Game saved, insights failed|Insights loaded, game save failed/, 'manual sync must report partial sync failures');
 requirePattern(/Paste a Lichess token first/, 'empty Lichess token submit must show feedback');

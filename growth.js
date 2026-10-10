@@ -198,8 +198,8 @@ function trainingBackupKeys(ownerId = growthOwnerId()) {
     ...(ownerId ? [] : ['chess_sr_v1']),
     practiceProgressStorageKey(ownerId),
     dailySprintStorageKey(ownerId),
-    INSIGHTS_KEY,
-    LIFETIME_KEY
+    coachMemoryKey(INSIGHTS_KEY),
+    coachMemoryKey(LIFETIME_KEY)
   ];
 }
 
@@ -388,6 +388,32 @@ function adoptAnonymousGrowthState(ownerId) {
     localStorage.removeItem(PLAYER_GROWTH_KEY);
     localStorage.removeItem('chess_sr_v1');
   } catch (e) {}
+}
+
+function adoptAnonymousCoachMemory(ownerId) {
+  if (!ownerId || typeof coachMemoryKey !== 'function') return;
+  const previousUser = coachAuthUser;
+  coachAuthUser = null;
+  const anonymousInsights = loadInsights();
+  const anonymousLifetime = loadLifetime();
+  coachAuthUser = { id: ownerId };
+  const accountInsights = loadInsights();
+  const accountLifetime = loadLifetime();
+  const insightIds = new Set(accountInsights.entries.map(entry => entry && (entry.id || `${entry.ts}|${entry.fenBefore}|${entry.userUci}`)));
+  anonymousInsights.entries.forEach(entry => {
+    const id = entry && (entry.id || `${entry.ts}|${entry.fenBefore}|${entry.userUci}`);
+    if (entry && !insightIds.has(id)) { accountInsights.entries.push(entry); insightIds.add(id); }
+  });
+  saveInsights(accountInsights);
+  const richer = (anonymousLifetime.games || 0) > (accountLifetime.games || 0) ||
+    ((anonymousLifetime.games || 0) === (accountLifetime.games || 0) && (anonymousLifetime.moves || 0) > (accountLifetime.moves || 0));
+  if (richer) saveLifetime(anonymousLifetime);
+  coachAuthUser = previousUser;
+  try {
+    // The anonymous workspace is consumed only after the account copy exists.
+    const anon = `anon:${coachDeviceId()}`;
+    [INSIGHTS_KEY, LIFETIME_KEY].forEach(baseKey => localStorage.removeItem(`${baseKey}:${anon}`));
+  } catch (e) { /* best effort; retrying the merge is idempotent */ }
 }
 
 function queueGrowthRemoteSync() {
