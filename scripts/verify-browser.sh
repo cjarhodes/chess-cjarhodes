@@ -487,6 +487,59 @@ async page => {
   assert(accountIsolation.otherDailyMissing, 'daily sprint progress leaked between browser accounts');
   assert(accountIsolation.restoredDailyCompleted, 'daily sprint completion did not survive an account switch');
 
+  const memoryAdoption = await page.evaluate(() => {
+    const account = '00000000-0000-0000-0000-000000000003';
+    coachAuthUser = null;
+    const anon = `anon:${coachDeviceId()}`;
+    const anonymousInsightKey = `${INSIGHTS_KEY}:${anon}`;
+    const anonymousLifetimeKey = `${LIFETIME_KEY}:${anon}`;
+    const accountInsightKey = `${INSIGHTS_KEY}:user:${account}`;
+    const accountLifetimeKey = `${LIFETIME_KEY}:user:${account}`;
+    const previousAnonymousInsights = localStorage.getItem(anonymousInsightKey);
+    const previousAnonymousLifetime = localStorage.getItem(anonymousLifetimeKey);
+    saveInsights({ v: 1, entries: [{ id: 'anonymous-insight', tier: 'mistake' }] });
+    saveLifetime(Object.assign(emptyLifetime(), { games: 3, moves: 30 }));
+    const originalSetItem = Storage.prototype.setItem;
+    let failed;
+    try {
+      Storage.prototype.setItem = function(key, value) {
+        if (key === accountInsightKey || key === accountLifetimeKey) {
+          throw new DOMException('Storage full', 'QuotaExceededError');
+        }
+        return originalSetItem.call(this, key, value);
+      };
+      failed = adoptAnonymousCoachMemory(account);
+    } finally {
+      Storage.prototype.setItem = originalSetItem;
+    }
+    const preservedAfterFailure =
+      localStorage.getItem(anonymousInsightKey) !== null &&
+      localStorage.getItem(anonymousLifetimeKey) !== null;
+    const succeeded = adoptAnonymousCoachMemory(account);
+    coachAuthUser = { id: account };
+    const accountInsights = loadInsights();
+    const accountLifetime = loadLifetime();
+    coachAuthUser = null;
+    const result = {
+      failedReported: !failed.insightsCopied && !failed.lifetimeCopied,
+      preservedAfterFailure,
+      copiedAfterRetry: succeeded.insightsCopied && succeeded.lifetimeCopied &&
+        accountInsights.entries.some(entry => entry.id === 'anonymous-insight') && accountLifetime.games === 3,
+      removedAfterRetry: localStorage.getItem(anonymousInsightKey) === null && localStorage.getItem(anonymousLifetimeKey) === null
+    };
+    if (previousAnonymousInsights === null) localStorage.removeItem(anonymousInsightKey);
+    else localStorage.setItem(anonymousInsightKey, previousAnonymousInsights);
+    if (previousAnonymousLifetime === null) localStorage.removeItem(anonymousLifetimeKey);
+    else localStorage.setItem(anonymousLifetimeKey, previousAnonymousLifetime);
+    localStorage.removeItem(accountInsightKey);
+    localStorage.removeItem(accountLifetimeKey);
+    return result;
+  });
+  assert(memoryAdoption.failedReported, 'failed Coach memory adoption did not report both account writes');
+  assert(memoryAdoption.preservedAfterFailure, 'failed Coach memory adoption deleted anonymous data');
+  assert(memoryAdoption.copiedAfterRetry, 'Coach memory adoption did not recover on retry');
+  assert(memoryAdoption.removedAfterRetry, 'successful Coach memory adoption left duplicate anonymous data');
+
   const memoryIsolation = await page.evaluate(() => {
     const accountA = '00000000-0000-0000-0000-000000000001';
     const accountB = '00000000-0000-0000-0000-000000000002';

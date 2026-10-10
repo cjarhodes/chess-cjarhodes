@@ -393,27 +393,34 @@ function adoptAnonymousGrowthState(ownerId) {
 function adoptAnonymousCoachMemory(ownerId) {
   if (!ownerId || typeof coachMemoryKey !== 'function') return;
   const previousUser = coachAuthUser;
-  coachAuthUser = null;
-  const anonymousInsights = loadInsights();
-  const anonymousLifetime = loadLifetime();
-  coachAuthUser = { id: ownerId };
-  const accountInsights = loadInsights();
-  const accountLifetime = loadLifetime();
-  const insightIds = new Set(accountInsights.entries.map(entry => entry && (entry.id || `${entry.ts}|${entry.fenBefore}|${entry.userUci}`)));
-  anonymousInsights.entries.forEach(entry => {
-    const id = entry && (entry.id || `${entry.ts}|${entry.fenBefore}|${entry.userUci}`);
-    if (entry && !insightIds.has(id)) { accountInsights.entries.push(entry); insightIds.add(id); }
-  });
-  saveInsights(accountInsights);
-  const richer = (anonymousLifetime.games || 0) > (accountLifetime.games || 0) ||
-    ((anonymousLifetime.games || 0) === (accountLifetime.games || 0) && (anonymousLifetime.moves || 0) > (accountLifetime.moves || 0));
-  if (richer) saveLifetime(anonymousLifetime);
-  coachAuthUser = previousUser;
+  const anon = `anon:${coachDeviceId()}`;
+  let insightsCopied = false;
+  let lifetimeCopied = false;
   try {
-    // The anonymous workspace is consumed only after the account copy exists.
-    const anon = `anon:${coachDeviceId()}`;
-    [INSIGHTS_KEY, LIFETIME_KEY].forEach(baseKey => localStorage.removeItem(`${baseKey}:${anon}`));
+    coachAuthUser = null;
+    const anonymousInsights = loadInsights();
+    const anonymousLifetime = loadLifetime();
+    coachAuthUser = { id: ownerId };
+    const accountInsights = loadInsights();
+    const accountLifetime = loadLifetime();
+    const insightIds = new Set(accountInsights.entries.map(entry => entry && (entry.id || `${entry.ts}|${entry.fenBefore}|${entry.userUci}`)));
+    anonymousInsights.entries.forEach(entry => {
+      const id = entry && (entry.id || `${entry.ts}|${entry.fenBefore}|${entry.userUci}`);
+      if (entry && !insightIds.has(id)) { accountInsights.entries.push(entry); insightIds.add(id); }
+    });
+    insightsCopied = saveInsights(accountInsights);
+    const anonymousRicher = (anonymousLifetime.games || 0) > (accountLifetime.games || 0) ||
+      ((anonymousLifetime.games || 0) === (accountLifetime.games || 0) && (anonymousLifetime.moves || 0) > (accountLifetime.moves || 0));
+    lifetimeCopied = anonymousRicher ? saveLifetime(anonymousLifetime) : true;
+  } finally {
+    coachAuthUser = previousUser;
+  }
+  try {
+    // Consume each anonymous data set only after its account write succeeds.
+    if (insightsCopied) localStorage.removeItem(`${INSIGHTS_KEY}:${anon}`);
+    if (lifetimeCopied) localStorage.removeItem(`${LIFETIME_KEY}:${anon}`);
   } catch (e) { /* best effort; retrying the merge is idempotent */ }
+  return { insightsCopied, lifetimeCopied };
 }
 
 function queueGrowthRemoteSync() {

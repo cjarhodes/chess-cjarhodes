@@ -5,6 +5,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+const growth = fs.readFileSync(path.join(root, 'growth.js'), 'utf8');
 const errors = [];
 const { spawnSync } = require('child_process');
 const smokeParse = spawnSync('bash', ['-n', path.join(root, 'scripts/verify-browser.sh')], { encoding: 'utf8' });
@@ -45,6 +46,9 @@ requirePattern(/localStorage\.setItem\(key, '1'\)[\s\S]{0,900}storageKey\.starts
 requirePattern(/Account sync cannot persist in this browser session/, 'Supabase storage fallback must be visible to users');
 requirePattern(/function coachMemoryOwnerId[\s\S]{0,180}function coachMemoryKey/, 'Coach memory must be scoped to an account or anonymous browser workspace');
 requirePattern(/function migrateLegacyCoachMemory[\s\S]+coach:state:corrupt:v1/, 'legacy global Coach memory must migrate into the scoped workspace');
+if (!/function adoptAnonymousCoachMemory[\s\S]+if \(insightsCopied\)[\s\S]+if \(lifetimeCopied\)/.test(growth)) {
+  fail('anonymous Coach memory must only be removed after each account-scoped write succeeds');
+}
 requirePattern(/Promise\.allSettled/, 'manual sync must aggregate partial failures');
 requirePattern(/Game saved, insights failed|Insights loaded, game save failed/, 'manual sync must report partial sync failures');
 requirePattern(/Paste a Lichess token first/, 'empty Lichess token submit must show feedback');

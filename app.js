@@ -399,7 +399,12 @@ function loadLifetime() {
   } catch (e) { return emptyLifetime(); }
 }
 function saveLifetime(s) {
-  try { localStorage.setItem(coachMemoryKey(LIFETIME_KEY), JSON.stringify(s)); } catch (e) {}
+  try {
+    localStorage.setItem(coachMemoryKey(LIFETIME_KEY), JSON.stringify(s));
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 // Roll the just-finished game into lifetime totals. Idempotent guard via a
 // per-game flag so a refresh on the summary screen doesn't double-count.
@@ -618,7 +623,10 @@ function saveInsights(state) {
   try {
     const safe = { v: 1, entries: (state.entries || []).slice(-INSIGHTS_MAX_ENTRIES) };
     localStorage.setItem(coachMemoryKey(INSIGHTS_KEY), JSON.stringify(safe));
-  } catch (e) {}
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 function clearInsights() {
