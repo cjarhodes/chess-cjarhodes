@@ -27,6 +27,7 @@ requirePattern(growth, /function recordRepertoirePracticeResult[\s\S]+function r
 requirePattern(growth, /recordImportedOpenings\(parsedGames, side, allReviews\)/, 'PGN analysis must feed the personal repertoire');
 requirePattern(growth, /function nextPlayerRatingEstimate[\s\S]+ratingGames[\s\S]+ratingDeviation[\s\S]+function recordRatedCoachResult/, 'player strength must update from completed game results with confidence and idempotency');
 requirePattern(growth, /function recommendedCoachElo[\s\S]+ratingEstimate[\s\S]+function applyAdaptiveCoachElo/, 'automatic difficulty must follow the evidence-based player estimate');
+requirePattern(growth, /CHALLENGE_MIN_ACCURACY = 65[\s\S]+CHALLENGE_MAX_ACCURACY = 85[\s\S]+function recentChallengeSnapshot[\s\S]+CHALLENGE_MIN_MOVES/, 'automatic difficulty must use an evidence-gated 65–85% reviewed-move challenge band');
 requirePattern(app, /supportedOptions: new Set[\s\S]+option name \(\.\+\?\) type[\s\S]+supportedOptions\.has\('Skill Level'\)/, 'engine wrapper must detect and use only UCI options announced by the bundled engine');
 requirePattern(app, /const COACH_DIFFICULTY_KEYFRAMES[\s\S]+function coachStrengthOpts[\s\S]+function chooseCalibratedOpponentMove/, 'opponent strength must use a continuous calibrated candidate-selection model');
 requirePattern(app, /function coachHandleGameOver[\s\S]+recordRatedCoachResult\(msg\)[\s\S]+#btn-coach-resign[\s\S]+recordRatedCoachResult\(msg\)/, 'completed games and resignations must feed the player estimate');

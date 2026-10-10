@@ -216,9 +216,17 @@ async page => {
     const lowMove = chooseCalibratedOpponentMove(candidates, coachStrengthOpts(400), () => 0.5);
     const highMove = chooseCalibratedOpponentMove(candidates, coachStrengthOpts(2400), () => 0.5);
     const base = emptyGrowthState().profile;
-    const win = nextPlayerRatingEstimate(base, 1200, 1, 'rating-win', 1000);
+    const win = nextPlayerRatingEstimate(base, 1200, 1, 'rating-win', 1000, { accuracy: 74, moves: 12 });
     const duplicate = nextPlayerRatingEstimate(win.profile, 1200, 1, 'rating-win', 2000);
     const loss = nextPlayerRatingEstimate(win.profile, 1200, 0, 'rating-loss', 3000);
+    const challengeProfile = accuracy => Object.assign({}, base, {
+      ratingEstimate: 1200,
+      ratingHistory: [{ at: 1000, accuracy, moves: 12 }]
+    });
+    const sparseProfile = Object.assign({}, base, {
+      ratingEstimate: 1200,
+      ratingHistory: [{ at: 1000, accuracy: 40, moves: 6 }]
+    });
     await engineClient.init();
     return {
       monotonic,
@@ -228,6 +236,11 @@ async page => {
       confidenceNarrowed: win.deviation < base.ratingDeviation,
       duplicateIgnored: duplicate.duplicate && duplicate.profile.ratingGames === 1,
       lossLoweredEstimate: loss.after < win.after,
+      sessionEvidenceRecorded: win.profile.ratingHistory[0].accuracy === 74 && win.profile.ratingHistory[0].moves === 12,
+      lowAccuracyEased: recommendedCoachElo(challengeProfile(60)) === 1150,
+      learningBandHeld: recommendedCoachElo(challengeProfile(75)) === 1200,
+      highAccuracyRaised: recommendedCoachElo(challengeProfile(90)) === 1250,
+      sparseEvidenceIgnored: recommendedCoachElo(sparseProfile) === 1200,
       skillSupported: engineClient.supportedOptions.has('Skill Level'),
       unsupportedEloAbsent: !engineClient.supportedOptions.has('UCI_Elo') && !engineClient.supportedOptions.has('UCI_LimitStrength')
     };
@@ -237,6 +250,8 @@ async page => {
   assert(ratingCalibration.winRaisedEstimate && ratingCalibration.lossLoweredEstimate, 'completed results did not move the player estimate in the correct direction');
   assert(ratingCalibration.confidenceNarrowed, 'player estimate uncertainty did not narrow after evidence');
   assert(ratingCalibration.duplicateIgnored, 'the same completed game updated the player estimate twice');
+  assert(ratingCalibration.sessionEvidenceRecorded, 'completed game did not retain reviewed-move accuracy evidence');
+  assert(ratingCalibration.lowAccuracyEased && ratingCalibration.learningBandHeld && ratingCalibration.highAccuracyRaised && ratingCalibration.sparseEvidenceIgnored, 'challenge-band adjustment did not ease, hold, raise, and ignore sparse evidence correctly');
   assert(ratingCalibration.skillSupported && ratingCalibration.unsupportedEloAbsent, 'engine capability detection did not match the bundled Stockfish options');
 
   await openRailGroup('group-profile');

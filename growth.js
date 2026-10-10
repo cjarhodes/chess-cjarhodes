@@ -812,9 +812,30 @@ function recordImportedOpenings(parsedGames, side, reviews) {
   renderOpeningBridgeTrack();
 }
 
-function recommendedCoachElo() {
-  const profile = playerProfile();
-  return Math.max(400, Math.min(2400, Math.round(profile.ratingEstimate / 50) * 50));
+const CHALLENGE_MIN_ACCURACY = 65;
+const CHALLENGE_MAX_ACCURACY = 85;
+const CHALLENGE_MIN_MOVES = 12;
+
+function recentChallengeSnapshot(profile = playerProfile()) {
+  const sessions = (profile.ratingHistory || [])
+    .filter(item => Number.isFinite(item.accuracy) && Number.isFinite(item.moves) && item.moves > 0)
+    .slice(-5);
+  const moves = sessions.reduce((total, item) => total + item.moves, 0);
+  if (moves < CHALLENGE_MIN_MOVES) return { ready: false, moves, accuracy: null, adjustment: 0 };
+  const weighted = sessions.reduce((total, item) => total + item.accuracy * item.moves, 0);
+  const accuracy = Math.round(weighted / moves);
+  const adjustment = accuracy < 55 ? -100
+    : accuracy < CHALLENGE_MIN_ACCURACY ? -50
+      : accuracy > 95 ? 100
+        : accuracy > CHALLENGE_MAX_ACCURACY ? 50
+          : 0;
+  return { ready: true, moves, accuracy, adjustment };
+}
+
+function recommendedCoachElo(profile = playerProfile()) {
+  const base = Math.round(profile.ratingEstimate / 50) * 50;
+  const challenge = recentChallengeSnapshot(profile);
+  return Math.max(400, Math.min(2400, base + challenge.adjustment));
 }
 
 function playerRatingConfidence(profile = playerProfile()) {
@@ -840,7 +861,7 @@ function ratedCoachEligibility(endReason) {
   return { eligible: true, result, score: userScoreFromGameResult(result) };
 }
 
-function nextPlayerRatingEstimate(profileValue, opponent, score, gameId, at = Date.now()) {
+function nextPlayerRatingEstimate(profileValue, opponent, score, gameId, at = Date.now(), session = {}) {
   const profile = Object.assign({}, profileValue, {
     ratedGameIds: (profileValue.ratedGameIds || []).slice(),
     ratingHistory: (profileValue.ratingHistory || []).slice()
@@ -859,7 +880,9 @@ function nextPlayerRatingEstimate(profileValue, opponent, score, gameId, at = Da
   profile.ratingGames = games;
   profile.ratedGameIds = profile.ratedGameIds.concat(gameId).slice(-50);
   profile.ratingHistory = profile.ratingHistory.concat({
-    gameId, at, opponent, score, before, after
+    gameId, at, opponent, score, before, after,
+    accuracy: Number.isFinite(session.accuracy) ? Math.max(0, Math.min(100, Math.round(session.accuracy))) : null,
+    moves: Number.isFinite(session.moves) ? Math.max(0, Math.round(session.moves)) : 0
   }).slice(-30);
   profile.updatedAt = at;
   return { profile, rated: true, before, after, games, deviation };
@@ -870,7 +893,10 @@ function recordRatedCoachResult(endReason) {
   if (!eligibility.eligible || eligibility.score === null) return eligibility;
   const state = loadGrowthState();
   const update = nextPlayerRatingEstimate(
-    state.profile, coachEngineElo, eligibility.score, coachLocalGameId
+    state.profile, coachEngineElo, eligibility.score, coachLocalGameId, Date.now(), {
+      accuracy: accuracyFromTallies(coachStats, coachStats.moves),
+      moves: coachStats.moves
+    }
   );
   if (!update.rated) return Object.assign({ eligible: true }, update);
   state.profile = update.profile;
@@ -891,14 +917,22 @@ function renderPlayerProfileStatus(profile = playerProfile()) {
 }
 
 function renderAutoDifficultyNote(profile = playerProfile()) {
-  const recommended = recommendedCoachElo();
+  const recommended = recommendedCoachElo(profile);
   const confidence = playerRatingConfidence(profile);
   const uncertainty = `Player estimate ${Math.round(profile.ratingEstimate)} ±${Math.round(profile.ratingDeviation)} · ${confidence}`;
+  const challenge = recentChallengeSnapshot(profile);
   const evidence = profile.ratingGames
     ? `${profile.ratingGames} completed rated game${profile.ratingGames === 1 ? '' : 's'}`
     : 'your starting estimate';
+  const challengeNote = !challenge.ready
+    ? ` Complete ${Math.max(0, CHALLENGE_MIN_MOVES - challenge.moves)} more reviewed move${CHALLENGE_MIN_MOVES - challenge.moves === 1 ? '' : 's'} to tune the challenge band.`
+    : challenge.adjustment < 0
+      ? ` Recent accuracy is ${challenge.accuracy}%, below the ${CHALLENGE_MIN_ACCURACY}–${CHALLENGE_MAX_ACCURACY}% learning band, so the next opponent is eased by ${Math.abs(challenge.adjustment)} points.`
+      : challenge.adjustment > 0
+        ? ` Recent accuracy is ${challenge.accuracy}%, above the ${CHALLENGE_MIN_ACCURACY}–${CHALLENGE_MAX_ACCURACY}% learning band, so the next opponent rises by ${challenge.adjustment} points.`
+        : ` Recent accuracy is ${challenge.accuracy}%, inside the ${CHALLENGE_MIN_ACCURACY}–${CHALLENGE_MAX_ACCURACY}% learning band.`;
   $('#coach-auto-elo-note').text(profile.autoElo
-    ? `${uncertainty}. Next opponent target: ${recommended}, based on ${evidence}. Difficulty updates only after completed standard games.`
+    ? `${uncertainty}. Next opponent target: ${recommended}, based on ${evidence}.${challengeNote}`
     : `${uncertainty}. Automatic adjustment is off; current evidence-based target: ${recommended}.`);
 }
 
