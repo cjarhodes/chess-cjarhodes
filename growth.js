@@ -958,6 +958,9 @@ function personalizeAdaptivePlan(plan) {
     adjusted.moveTarget = Math.max(6, adjusted.moveTarget);
     adjusted.kind = adjusted.kind === 'focus-transfer' ? 'transfer' : adjusted.kind;
   }
+  // Preferences can change the mix, but cannot invent positions to rehearse.
+  adjusted.drillTarget = Math.min(adjusted.drillTarget, (adjusted.orderedDue || []).length);
+  if (!adjusted.drillTarget && adjusted.kind === 'focus-transfer') adjusted.kind = 'transfer';
   const focus = typeof repertoireFocusOpening === 'function' ? repertoireFocusOpening() : null;
   if (profile.goal === 'repertoire' && focus) {
     adjusted.repertoireFocus = focus.name;
@@ -1397,6 +1400,7 @@ function initGrowthFeatures() {
       `Profile saved. Player estimate ${Math.round(profile.ratingEstimate)} ±${Math.round(profile.ratingDeviation)} · ${playerRatingConfidence(profile)}.`
     );
     applyAdaptiveCoachElo();
+    renderInsights();
     renderWeeklyReview();
   });
   $('#coach-auto-elo').on('change', function() {

@@ -27,7 +27,7 @@ const context = {
 };
 vm.createContext(context);
 vm.runInContext(`${chessSource}\nthis.Chess = Chess;`, context);
-vm.runInContext(`${growthSource}\nthis.__growthChecks = { transferMeasurement, collectImportedTargets, endgameLessons: ENDGAME_LESSONS, endgamePracticeItem };`, context);
+vm.runInContext(`${growthSource}\nthis.__growthChecks = { personalizeAdaptivePlan, transferMeasurement, collectImportedTargets, endgameLessons: ENDGAME_LESSONS, endgamePracticeItem };`, context);
 
 const checks = context.__growthChecks;
 const failures = [];
@@ -103,6 +103,28 @@ assert(canonicalQueen.entry.bestUci === 'g6g7' && canonicalQueen.entry.bestSan =
 context.practiceRecordFor = () => ({ attempts: 1 });
 const replayRook = checks.endgamePracticeItem(checks.endgameLessons[1]);
 assert(replayRook.entry.bestUci === 'f6g6' && replayRook.entry.continuation.length === 1, 'replayed rook lesson did not expose its authored multi-move continuation');
+
+// Every preference combination must produce a session with reachable targets.
+let testProfile;
+context.playerProfile = () => testProfile;
+context.repertoireFocusOpening = () => null;
+for (const sessionStyle of ['balanced', 'drills', 'play']) {
+  for (const minutes of [5, 15, 20, 60]) {
+    for (const goal of ['balanced', 'tactics']) {
+      for (const available of [0, 1, 2, 3]) {
+        testProfile = { sessionStyle, minutes, goal };
+        const plan = checks.personalizeAdaptivePlan({
+          kind: available ? 'focus-transfer' : 'baseline',
+          drillTarget: Math.min(2, available), moveTarget: 10,
+          orderedDue: Array.from({ length: available }, (_, id) => ({ id }))
+        });
+        assert(plan.drillTarget <= available, `${sessionStyle}/${minutes}/${goal} requires unavailable drills`);
+        assert(plan.moveTarget > 0, 'session lost its live-play step');
+        if (sessionStyle === 'play') assert(plan.drillTarget === 0, 'play-first plan requires drills');
+      }
+    }
+  }
+}
 
 if (failures.length) {
   console.error(failures.join('\n'));

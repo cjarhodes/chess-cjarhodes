@@ -255,6 +255,10 @@ async page => {
   assert(ratingCalibration.skillSupported && ratingCalibration.unsupportedEloAbsent, 'engine capability detection did not match the bundled Stockfish options');
 
   await openRailGroup('group-profile');
+  await page.locator('#player-style').selectOption('play');
+  await page.locator('#player-profile-form button[type=submit]').click();
+  assert(await page.locator('#btn-coach-next-action').getAttribute('data-action') === 'game', 'play-first preference still routed to due drills');
+  assert(await page.evaluate(() => renderedAdaptivePlan.drillTarget) === 0, 'profile save did not immediately refresh the plan');
   await page.locator('#player-rating').fill('1350');
   await page.locator('#player-minutes').fill('5');
   await page.locator('#player-goal').selectOption('tactics');
@@ -416,7 +420,7 @@ async page => {
   await page.locator('#coach-keyboard-move-input').fill('Nf3');
   await page.locator('#coach-keyboard-move-form button[type=submit]').click();
   await settlePracticeMove();
-  assert((await page.locator('#coach-practice-status').textContent()).includes('Session complete'), 'multi-drill session did not complete');
+  assert((await page.locator('#coach-practice-status').textContent()).includes('Practice complete'), 'multi-drill session did not complete');
   assert(await page.locator('#practice-progress-attempts').textContent() === '3', 'session attempt count is wrong');
   assert(await page.locator('#practice-progress-success').textContent() === '67%', 'session success rate is wrong');
   assert(await page.locator('#practice-count').textContent() === '0 due', 'completed drill was not rescheduled');
@@ -424,7 +428,9 @@ async page => {
   assert(await page.locator('#practice-empty').isVisible(), 'caught-up state did not render');
   assert(await page.locator('#practice-progress-week').textContent() === '3', 'seven-day attempts did not update');
   assert(await page.locator('#practice-progress-streak').textContent() === '1d', 'practice streak did not update');
+  assert(await page.locator('#btn-coach-practice-next').textContent() === 'Continue to live play', 'final drill did not explain the live-play handoff');
   await page.locator('#btn-coach-practice-next').click();
+  assert(await page.evaluate(() => coachGameActive && !coachPracticeSession), 'practice handoff did not start or restore live play');
   assert(await page.locator('#coach-daily-plan-title').textContent() === 'Transfer Opening principle gaps into play', 'focused drills did not advance into transfer play');
   assert(await page.locator('#daily-sprint-progress-label').textContent() === '2 of 8 steps', 'adaptive session did not retain drill progress');
   assert(['Start transfer game', 'Return to the board'].includes(await page.locator('#btn-coach-next-action').textContent()), 'adaptive session did not offer the transfer game or resume the preserved game');
@@ -440,6 +446,9 @@ async page => {
   assert(await page.locator('#daily-sprint-streak').textContent() === '1-day streak', 'adaptive session completion did not start a streak');
   assert((await page.locator('#daily-sprint-takeaway').textContent()).includes('does not establish improvement'), 'adaptive takeaway did not assess live transfer with appropriate uncertainty');
 
+  assert((await page.locator('#coach-daily-plan-detail').textContent()).includes('2 drills and 6 reviewed moves saved'), 'completion did not describe actual session activity');
+  await page.locator('#btn-coach-next-action').click();
+  assert(await page.locator('#panel-progress').isVisible(), 'completion action did not open progress');
   await page.reload();
   assert(await page.locator('#practice-progress-attempts').textContent() === '3', 'practice progress did not survive reload');
   assert(await page.locator('#practice-count').textContent() === '0 due', 'practice schedule did not survive reload');
@@ -653,6 +662,16 @@ async page => {
   await page.goto(page.url().split('?')[0] + '?view=coach');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
+  await openRailGroup('group-profile');
+  await page.locator('#player-minutes').fill('5');
+  await page.locator('#player-style').selectOption('drills');
+  await page.locator('#player-profile-form button[type=submit]').click();
+  assert((await page.locator('#coach-daily-plan-detail').textContent()).includes('4 reviewed moves'), 'fresh profile did not update the displayed target');
+  await page.locator('#btn-coach-next-action').click();
+  const freshDay = await page.evaluate(() => dailySprintToday());
+  assert(freshDay.phase === 'moves' && freshDay.drillTarget === 0 && freshDay.target === 4, 'drills-first new player was assigned unavailable drills');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
   assert(await page.locator('#coach-daily-plan-title').textContent() === 'Start your first coached session', 'clean first visit did not explain the bounded baseline');
   assert(await page.locator('#btn-coach-next-action').textContent() === 'Start training', 'clean first visit did not offer a one-click training start');
   assert(await page.locator('#daily-sprint-focus-title').textContent() === 'Focus · Build your baseline', 'clean first visit did not explain how adaptation begins');
@@ -732,6 +751,8 @@ async page => {
   });
   assert(await page.locator('#coach-daily-plan-title').textContent() === '✓ Today’s training complete', 'ten reviewed moves did not complete the Daily Sprint');
   assert(await page.locator('#daily-sprint-progress-label').textContent() === '10 of 10 moves', 'move sprint completion total is wrong');
+  assert(!(await page.locator('#coach-daily-plan-detail').textContent()).includes('rehearsed'), 'baseline completion claimed drills that never happened');
+  assert((await page.locator('#coach-daily-plan-detail').textContent()).includes('You can stop here'), 'completion did not offer a clear stopping point');
   assert((await page.locator('#daily-sprint-takeaway').textContent()).length > 20, 'move sprint completion did not provide a learning takeaway');
   await page.reload();
   assert(await page.locator('#coach-daily-plan-title').textContent() === '✓ Today’s training complete', 'move sprint completion did not persist across reload');
@@ -817,7 +838,9 @@ async page => {
   await page.locator('#coach-keyboard-move-form button[type=submit]').click();
   await settlePracticeMove();
   assert(await page.evaluate(() => coachPracticeSession.completed && coachPracticeSession.misses === 0), 'sound developing alternative was rejected or counted as a miss');
-  await page.locator('#btn-coach-practice-exit').click();
+  await page.locator('#btn-coach-practice-next').click();
+  const handoffGame = await page.evaluate(() => ({ pgn: coachGame.pgn(), id: coachLocalGameId, stats: JSON.stringify(coachStats) }));
+  assert(JSON.stringify(handoffGame) === JSON.stringify(preservedGame), 'final-drill handoff replaced the preserved live game');
 
 
   // Cancellation must discard staged work without replacing the current game.

@@ -1997,12 +1997,14 @@ function renderCoachDailyPlan(queue, due, totals, entries) {
   if (sprint && sprint.completedAt) {
     setDailySprintProgress(sprint.target, sprint.target, dailySprintProgressUnit(sprint));
     $('#coach-daily-plan-title').text('✓ Today’s training complete');
+    const drills = sprint.drillsCompleted || 0;
+    const moves = sprint.movesCompleted || 0;
     $('#coach-daily-plan-detail').text(sprint.mode === 'adaptive'
-      ? 'You rehearsed a priority, tested it in live play, and saved the result. Come back tomorrow for an updated focus.'
-      : 'You finished today’s sprint. Come back tomorrow for a newly adaptive session.');
+      ? `${drills ? `${drills} drill${drills === 1 ? '' : 's'} and ` : ''}${moves} reviewed moves saved. You can stop here. Review your progress, then return tomorrow for your next focus. Session completion measures activity, not proven improvement.`
+      : 'You finished today’s sprint. You can stop here and review your progress. Come back tomorrow for a newly adaptive session.');
     $action
-      .text(coachGameActive && !coachPracticeSession ? 'Keep playing' : 'Play an extra game')
-      .attr('data-action', coachGameActive && !coachPracticeSession ? 'continue' : 'extra-game');
+      .text('Review today’s progress')
+      .attr('data-action', 'progress');
     return;
   }
 
@@ -2059,7 +2061,7 @@ function renderCoachDailyPlan(queue, due, totals, entries) {
     return;
   }
 
-  if (dueItems.length) {
+  if (dueItems.length && renderedAdaptivePlan.drillTarget > 0) {
     const plan = renderedAdaptivePlan;
     const target = plan.drillTarget + plan.moveTarget;
     setDailySprintProgress(0, target, 'step');
@@ -2077,7 +2079,7 @@ function renderCoachDailyPlan(queue, due, totals, entries) {
   $('#coach-daily-plan-title').text(returning && plan.focusTag ? `Transfer ${plan.focus}` : 'Start your first coached session');
   $('#coach-daily-plan-detail').text(returning && plan.focusTag
     ? `${plan.moveTarget} reviewed moves using one personalised cue. Coach will check whether the pattern returns.`
-    : 'Play ten reviewed moves and Coach will choose your first training focus.');
+    : `Play ${plan.moveTarget} reviewed moves and Coach will choose your first training focus.`);
   $action.text(returning ? 'Start focused game' : 'Start training').attr('data-action', 'game');
 }
 
@@ -5530,11 +5532,12 @@ function finishCoachPracticeMove(session, played, quality, revealed) {
     if (assisted) coachPracticeRun.assisted += 1;
     else if (session.misses === 0) coachPracticeRun.clean += 1;
     const hasNext = coachPracticeRun.index + 1 < coachPracticeRun.items.length;
+    const transferNext = !hasNext && sprint && !sprint.completedAt && sprint.mode === 'adaptive' && sprint.phase === 'moves';
     $('#btn-coach-practice-next')
-      .text(hasNext ? 'Next drill' : 'Finish session')
+      .text(hasNext ? 'Next drill' : (transferNext ? 'Continue to live play' : 'Finish practice'))
       .show()
       .prop('disabled', false);
-    if (!hasNext) $('#coach-practice-status').text(`${quality}: ${played.san}. Session complete — ${coachPracticeRun.clean}/${coachPracticeRun.completed} first-try.`);
+    if (!hasNext) $('#coach-practice-status').text(`${quality}: ${played.san}. Practice complete — ${coachPracticeRun.clean}/${coachPracticeRun.completed} first-try.${transferNext ? ' Next: use the same focus in live play.' : ''}`);
   }
   updateCoachControlsState();
   renderInsights();
@@ -5679,7 +5682,14 @@ function advanceCoachPractice() {
   if (coachPracticeRun.index + 1 >= coachPracticeRun.items.length) {
     const completed = coachPracticeRun.completed;
     const clean = coachPracticeRun.clean;
+    const sprint = dailySprintToday();
+    const transferNext = sprint && !sprint.completedAt && sprint.mode === 'adaptive' && sprint.phase === 'moves';
     exitCoachPractice(`Practice session complete — ${clean}/${completed} solved on the first try.`);
+    if (transferNext) {
+      if (!coachGameActive) startCoachGame();
+      else setCoachStatus(`Your game is restored. Use this focus: ${sprint.focusCue || sprint.focus}`);
+      document.getElementById('coachBoard')?.focus({ preventScroll: true });
+    }
     return;
   }
   coachPracticeRun.index += 1;
@@ -7486,6 +7496,12 @@ $(function () {
   });
   $('#btn-coach-next-action').on('click', function() {
     const action = $(this).attr('data-action');
+    if (action === 'progress') {
+      if (coachPracticeSession) exitCoachPractice();
+      document.querySelector('.panel-tab[data-panel="progress"]')?.click();
+      document.getElementById('tab-progress')?.focus();
+      return;
+    }
     if (action === 'practice') {
       const due = Array.from(renderedPracticeItems.values()).filter(item => practiceIsDue(item));
       startCoachPracticeSession(due, due[0]);
