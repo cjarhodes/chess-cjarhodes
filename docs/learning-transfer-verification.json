@@ -1,0 +1,512 @@
+{
+  "environment": "local HTTP preview in isolated test profiles and contexts",
+  "recordedAt": "2026-10-21T12:00:31.935748+00:00",
+  "baseCommit": "03d688a4838d74229c25a8520879abfa374cf9e3",
+  "sourceSha256": {
+    "app.js": "7aabb2e9060f5e7feec650801d2e0cd2cea233ed7c5f7b879e1e0a018cc1fe15",
+    "growth.js": "df790eb954ae05e1ec2831c2c2d38b7126b0b0dc51aa14a1a2ed9997701df170",
+    "index.html": "e84a23d2274977fb6b396f4a946d0025f27fcf040788528f24a2783541b8065c",
+    "styles.css": "8ee39e9983e902c35c4d14cebda2b4f424f588b203a4da418fd1552e708ca4db",
+    "opening-transfer.js": "48db4acf6830cfad72c1873cf2dba30da9f9c831273abb927d1ba1a46a496f99",
+    "learning-transfer.js": "bdcb89faa245c78fb3596faa6971fea9a9d640d4903f0c8bdb0aef792370a747"
+  },
+  "syntaxChecks": [
+    "node --check app.js",
+    "node --check growth.js",
+    "node --check opening-transfer.js",
+    "node --check learning-transfer.js"
+  ],
+  "validators": [
+    "validate-accessibility.js",
+    "validate-difficulty.js",
+    "validate-growth-upgrades.js",
+    "validate-growth.js",
+    "validate-learning-transfer.js",
+    "validate-maintainability.js",
+    "validate-opening-transfer.js",
+    "validate-openings.js",
+    "validate-performance.js",
+    "validate-practice-logic.js",
+    "validate-practice-upgrades.js",
+    "validate-practice.js",
+    "validate-recovery.js",
+    "validate-reliability.js",
+    "validate-review-teaching.js",
+    "validate-security.js",
+    "validate-useful-progress.js"
+  ],
+  "learningTransferBehavioralChecks": 50,
+  "browserCommand": "scripts/verify-browser.sh",
+  "browserPassMarkers": [
+    "Browser smoke validation passed.",
+    "Teaching journey validation passed.",
+    "Interruption recovery validation passed.",
+    "Opponent journey validation passed.",
+    "Coaching UI journey validation passed.",
+    "Useful Progress journey validation passed.",
+    "Opening transfer journey validation passed.",
+    "Learning transfer journey validation passed."
+  ],
+  "learningTransferJourney": {
+    "scenarios": [
+      "Rehearsal -> different position -> ungraded engine result -> reload -> independent first decision -> exact game return -> real follow-up and backup",
+      "First miss survives retry, hint, reload and explicit rehearsal; next check changes a defender, accepts equivalent mate, and exhausted pool routes to play",
+      "Hinted source and hinted check remain distinct; hint survives reload; owner-scoped Progress hides another owner\u2019s evidence",
+      "Saved game -> opening session -> rehearsal -> different-position check -> opening game and real review -> original saved game",
+      "Black-side transfer check accepts a strong non-authored move; all five authored anchors verified against the real engine"
+    ],
+    "checks": [
+      {
+        "name": "offer",
+        "width": 1280,
+        "height": 800,
+        "documentWidth": 1280,
+        "boardSize": 520,
+        "boardBottom": 664,
+        "boardX": 341.59375,
+        "boardRight": 861.59375,
+        "actionTop": 528.65625,
+        "actionBottom": 560.03125,
+        "primary": [
+          "btn-coach-practice-next"
+        ]
+      },
+      {
+        "name": "offer",
+        "width": 1440,
+        "height": 900,
+        "documentWidth": 1440,
+        "boardSize": 616,
+        "boardBottom": 760,
+        "boardX": 368.796875,
+        "boardRight": 984.796875,
+        "actionTop": 528.65625,
+        "actionBottom": 560.03125,
+        "primary": [
+          "btn-coach-practice-next"
+        ]
+      },
+      {
+        "name": "offer",
+        "width": 1920,
+        "height": 1080,
+        "documentWidth": 1920,
+        "boardSize": 752,
+        "boardBottom": 896,
+        "boardX": 524,
+        "boardRight": 1276,
+        "actionTop": 421.890625,
+        "actionBottom": 453.265625,
+        "primary": [
+          "btn-coach-practice-next"
+        ]
+      },
+      {
+        "name": "new-position",
+        "width": 1280,
+        "height": 800,
+        "documentWidth": 1280,
+        "boardSize": 536,
+        "boardBottom": 680,
+        "boardX": 333.59375,
+        "boardRight": 869.59375,
+        "actionTop": 338.484375,
+        "actionBottom": 369.859375,
+        "primary": [
+          "keyboard-submit"
+        ]
+      },
+      {
+        "name": "new-position",
+        "width": 1440,
+        "height": 900,
+        "documentWidth": 1440,
+        "boardSize": 632,
+        "boardBottom": 776,
+        "boardX": 360.796875,
+        "boardRight": 992.796875,
+        "actionTop": 315.75,
+        "actionBottom": 347.125,
+        "primary": [
+          "keyboard-submit"
+        ]
+      },
+      {
+        "name": "new-position",
+        "width": 1920,
+        "height": 1080,
+        "documentWidth": 1920,
+        "boardSize": 752,
+        "boardBottom": 896,
+        "boardX": 524,
+        "boardRight": 1276,
+        "actionTop": 254.453125,
+        "actionBottom": 285.828125,
+        "primary": [
+          "keyboard-submit"
+        ]
+      },
+      {
+        "name": "resumed",
+        "width": 1280,
+        "height": 800,
+        "documentWidth": 1280,
+        "boardSize": 536,
+        "boardBottom": 680,
+        "boardX": 333.59375,
+        "boardRight": 869.59375,
+        "actionTop": 338.484375,
+        "actionBottom": 369.859375,
+        "primary": [
+          "keyboard-submit"
+        ]
+      },
+      {
+        "name": "resumed",
+        "width": 1440,
+        "height": 900,
+        "documentWidth": 1440,
+        "boardSize": 632,
+        "boardBottom": 776,
+        "boardX": 360.796875,
+        "boardRight": 992.796875,
+        "actionTop": 315.75,
+        "actionBottom": 347.125,
+        "primary": [
+          "keyboard-submit"
+        ]
+      },
+      {
+        "name": "resumed",
+        "width": 1920,
+        "height": 1080,
+        "documentWidth": 1920,
+        "boardSize": 752,
+        "boardBottom": 896,
+        "boardX": 524,
+        "boardRight": 1276,
+        "actionTop": 254.453125,
+        "actionBottom": 285.828125,
+        "primary": [
+          "keyboard-submit"
+        ]
+      },
+      {
+        "name": "completed",
+        "width": 1280,
+        "height": 800,
+        "documentWidth": 1280,
+        "boardSize": 520,
+        "boardBottom": 664,
+        "boardX": 341.59375,
+        "boardRight": 861.59375,
+        "actionTop": 435.015625,
+        "actionBottom": 466.390625,
+        "primary": [
+          "btn-coach-practice-next"
+        ]
+      },
+      {
+        "name": "completed",
+        "width": 1440,
+        "height": 900,
+        "documentWidth": 1440,
+        "boardSize": 616,
+        "boardBottom": 760,
+        "boardX": 368.796875,
+        "boardRight": 984.796875,
+        "actionTop": 389.546875,
+        "actionBottom": 420.921875,
+        "primary": [
+          "btn-coach-practice-next"
+        ]
+      },
+      {
+        "name": "completed",
+        "width": 1920,
+        "height": 1080,
+        "documentWidth": 1920,
+        "boardSize": 752,
+        "boardBottom": 896,
+        "boardX": 524,
+        "boardRight": 1276,
+        "actionTop": 389.546875,
+        "actionBottom": 420.921875,
+        "primary": [
+          "btn-coach-practice-next"
+        ]
+      },
+      {
+        "name": "progress",
+        "width": 1280,
+        "height": 800,
+        "documentWidth": 1280,
+        "boardSize": 384,
+        "boardBottom": 558,
+        "boardX": 409.59375,
+        "boardRight": 793.59375,
+        "actionTop": 399.125,
+        "actionBottom": 432.96875,
+        "primary": [
+          "btn-progress-next"
+        ]
+      },
+      {
+        "name": "progress",
+        "width": 1440,
+        "height": 900,
+        "documentWidth": 1440,
+        "boardSize": 488,
+        "boardBottom": 662,
+        "boardX": 432.796875,
+        "boardRight": 920.796875,
+        "actionTop": 357.140625,
+        "actionBottom": 390.984375,
+        "primary": [
+          "btn-progress-next"
+        ]
+      },
+      {
+        "name": "progress",
+        "width": 1920,
+        "height": 1080,
+        "documentWidth": 1920,
+        "boardSize": 664,
+        "boardBottom": 838,
+        "boardX": 568,
+        "boardRight": 1232,
+        "actionTop": 357.140625,
+        "actionBottom": 390.984375,
+        "primary": [
+          "btn-progress-next"
+        ]
+      },
+      {
+        "name": "first-miss",
+        "width": 1280,
+        "height": 800,
+        "documentWidth": 1280,
+        "boardSize": 520,
+        "boardBottom": 664,
+        "boardX": 341.59375,
+        "boardRight": 861.59375,
+        "actionTop": 361.21875,
+        "actionBottom": 392.59375,
+        "primary": [
+          "keyboard-submit"
+        ]
+      },
+      {
+        "name": "first-miss",
+        "width": 1440,
+        "height": 900,
+        "documentWidth": 1440,
+        "boardSize": 616,
+        "boardBottom": 760,
+        "boardX": 368.796875,
+        "boardRight": 984.796875,
+        "actionTop": 338.484375,
+        "actionBottom": 369.859375,
+        "primary": [
+          "keyboard-submit"
+        ]
+      },
+      {
+        "name": "first-miss",
+        "width": 1920,
+        "height": 1080,
+        "documentWidth": 1920,
+        "boardSize": 752,
+        "boardBottom": 896,
+        "boardX": 524,
+        "boardRight": 1276,
+        "actionTop": 277.1875,
+        "actionBottom": 308.5625,
+        "primary": [
+          "keyboard-submit"
+        ]
+      },
+      {
+        "name": "assisted",
+        "width": 1280,
+        "height": 800,
+        "documentWidth": 1280,
+        "boardSize": 520,
+        "boardBottom": 664,
+        "boardX": 341.59375,
+        "boardRight": 861.59375,
+        "actionTop": 435.015625,
+        "actionBottom": 466.390625,
+        "primary": [
+          "btn-coach-practice-next"
+        ]
+      },
+      {
+        "name": "assisted",
+        "width": 1440,
+        "height": 900,
+        "documentWidth": 1440,
+        "boardSize": 616,
+        "boardBottom": 760,
+        "boardX": 368.796875,
+        "boardRight": 984.796875,
+        "actionTop": 389.546875,
+        "actionBottom": 420.921875,
+        "primary": [
+          "btn-coach-practice-next"
+        ]
+      },
+      {
+        "name": "assisted",
+        "width": 1920,
+        "height": 1080,
+        "documentWidth": 1920,
+        "boardSize": 752,
+        "boardBottom": 896,
+        "boardX": 524,
+        "boardRight": 1276,
+        "actionTop": 389.546875,
+        "actionBottom": 420.921875,
+        "primary": [
+          "btn-coach-practice-next"
+        ]
+      },
+      {
+        "name": "black-side",
+        "width": 1280,
+        "height": 800,
+        "documentWidth": 1280,
+        "boardSize": 536,
+        "boardBottom": 680,
+        "boardX": 333.59375,
+        "boardRight": 869.59375,
+        "actionTop": 338.484375,
+        "actionBottom": 369.859375,
+        "primary": [
+          "keyboard-submit"
+        ]
+      },
+      {
+        "name": "black-side",
+        "width": 1440,
+        "height": 900,
+        "documentWidth": 1440,
+        "boardSize": 632,
+        "boardBottom": 776,
+        "boardX": 360.796875,
+        "boardRight": 992.796875,
+        "actionTop": 315.75,
+        "actionBottom": 347.125,
+        "primary": [
+          "keyboard-submit"
+        ]
+      },
+      {
+        "name": "black-side",
+        "width": 1920,
+        "height": 1080,
+        "documentWidth": 1920,
+        "boardSize": 752,
+        "boardBottom": 896,
+        "boardX": 524,
+        "boardRight": 1276,
+        "actionTop": 254.453125,
+        "actionBottom": 285.828125,
+        "primary": [
+          "keyboard-submit"
+        ]
+      },
+      {
+        "name": "opening-return",
+        "width": 1280,
+        "height": 800,
+        "documentWidth": 1280,
+        "boardSize": 320,
+        "boardBottom": 539.875,
+        "boardX": 441.59375,
+        "boardRight": 761.59375,
+        "actionTop": 398.234375,
+        "actionBottom": 419.609375,
+        "primary": [
+          "keyboard-submit"
+        ]
+      },
+      {
+        "name": "opening-return",
+        "width": 1440,
+        "height": 900,
+        "documentWidth": 1440,
+        "boardSize": 480,
+        "boardBottom": 655.09375,
+        "boardX": 436.796875,
+        "boardRight": 916.796875,
+        "actionTop": 341.28125,
+        "actionBottom": 372.65625,
+        "primary": [
+          "keyboard-submit"
+        ]
+      },
+      {
+        "name": "opening-return",
+        "width": 1920,
+        "height": 1080,
+        "documentWidth": 1920,
+        "boardSize": 680,
+        "boardBottom": 855.09375,
+        "boardX": 560,
+        "boardRight": 1240,
+        "actionTop": 341.28125,
+        "actionBottom": 372.65625,
+        "primary": [
+          "keyboard-submit"
+        ]
+      }
+    ],
+    "keyboardFocus": true,
+    "anchors": [
+      {
+        "id": "back-rank",
+        "best": "e1e8",
+        "limit": 80,
+        "expected": true,
+        "loss": 0,
+        "mate": true
+      },
+      {
+        "id": "defended-square",
+        "best": "g6h5",
+        "limit": 80,
+        "expected": true,
+        "loss": 0,
+        "mate": true
+      },
+      {
+        "id": "queen-safety",
+        "best": "e4g6",
+        "limit": 80,
+        "expected": true,
+        "loss": 0,
+        "mate": false
+      },
+      {
+        "id": "black-passer",
+        "best": "e5f6",
+        "limit": 80,
+        "expected": true,
+        "loss": 2,
+        "mate": false
+      },
+      {
+        "id": "new-development",
+        "best": "g1f3",
+        "limit": 80,
+        "expected": true,
+        "loss": 5,
+        "mate": false
+      }
+    ],
+    "pageErrors": 0,
+    "consoleErrors": 0
+  },
+  "interpretation": "Controlled functional evidence with real engine grading. Five authored contexts and one first decision do not establish learning or retention. Follow-up reviews do not identify every opportunity. Client owner isolation, merge, adoption and backup were tested; a fresh human cross-device login was not measured."
+}

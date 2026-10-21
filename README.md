@@ -48,6 +48,13 @@ An unfinished Coach game is protected, including when a drill temporarily
 borrows the opening game or the browser reloads. See the
 [opening transfer audit](docs/opening-transfer-loop.md).
 
+**Learning transfer** adds an optional different-position check after rehearsal.
+The first graded decision stays separate from hints, retries, and later rehearsal.
+Progress keeps the result and cue, offers rehearsal or play, and shows up to six
+actual follow-up reviews without treating absent flags as proof of learning.
+Saved games and opening sessions return intact. See the
+[learning transfer audit](docs/learning-transfer-loop.md).
+
 **Progress** leads with one next focus, its evidence, a cue, and a direct action to
 practice or play. It resumes an unfinished session before suggesting a new one.
 Activity, unassisted attempts, assisted completions, and observed mistake rates
@@ -71,6 +78,7 @@ discards the staged batch rather than saving a partially analysed history.
 
 - `index.html` + `styles.css` + `app.js` (runtime) + `openings.js` (opening content data)
   + `opening-transfer.js` (Library-to-game exercises and reviews)
+  + `learning-transfer.js` (different-position checks and follow-up observations)
   + `growth.js` (personal training layer: profile, repertoire, imported games,
   endgames, cross-device sync) — no build tooling, no package manager,
   no framework

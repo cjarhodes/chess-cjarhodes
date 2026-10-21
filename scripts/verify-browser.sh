@@ -37,7 +37,8 @@ for _ in {1..30}; do
 done
 curl -fsS "$BASE_URL/health.html" >/dev/null
 
-"${CLI[@]}" -s="$SESSION" open "$BASE_URL/" >/dev/null
+TEST_PROFILE=$(mktemp -d "${TMPDIR:-/tmp}/chess-smoke-profile-XXXXXX")
+"${CLI[@]}" -s="$SESSION" open "$BASE_URL/" --profile "$TEST_PROFILE" >/dev/null
 
 SMOKE_CODE=$(cat <<'EOF'
 async page => {
@@ -1005,3 +1006,15 @@ if [[ "$OPENING_TRANSFER_EXIT" -ne 0 || "$OPENING_TRANSFER_OUTPUT" == *"### Erro
   exit 1
 fi
 echo "Opening transfer journey validation passed."
+
+LEARNING_TRANSFER_CODE=$(cat "$ROOT/scripts/verify-learning-transfer-journeys.js")
+set +e
+LEARNING_TRANSFER_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$LEARNING_TRANSFER_CODE")
+LEARNING_TRANSFER_EXIT=$?
+set -e
+echo "$LEARNING_TRANSFER_OUTPUT"
+if [[ "$LEARNING_TRANSFER_EXIT" -ne 0 || "$LEARNING_TRANSFER_OUTPUT" == *"### Error"* ]]; then
+  echo "Learning transfer journey validation failed." >&2
+  exit 1
+fi
+echo "Learning transfer journey validation passed."

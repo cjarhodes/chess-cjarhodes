@@ -1980,6 +1980,7 @@ function nextPracticeInterval(record, clean) {
 }
 
 function recordPracticeAttempt(item, correct, revealed) {
+  if (item && item.learningTransfer && typeof recordLearningTransferHelp === 'function') return recordLearningTransferHelp(item, revealed);
   const state = loadPracticeProgress();
   const now = Date.now();
   const event = practiceEventFromAttempt(item, correct, revealed, now);
@@ -4387,6 +4388,7 @@ function renderCoachPresentation() {
   $('#coachBoard-wrap').attr('data-primary-target', !action && canEnterMove ? 'true' : 'false');
   $('#btn-coach-practice-exit').text(state === 'practice-complete' ? (coachPracticeReturnState ? 'Return to game' : 'Finish practice') : 'Exit practice');
   if (typeof renderOpeningTransfer === 'function') renderOpeningTransfer();
+  if (typeof renderLearningTransfer === 'function') renderLearningTransfer();
   scheduleCoachBoardFit();
 }
 
@@ -4569,6 +4571,7 @@ async function coachHandleUserMove(source, target, promotion, opts) {
     coachLastReview = logged;
     coachReviewLog.push(logged);
     recordCoachInsight(logged);
+    if (typeof recordLearningTransferLiveMove === 'function') recordLearningTransferLiveMove(logged);
     coachSync.saveMove(logged).catch(handleCoachDbError);
     // Don't count engine-timeout ("unknown") reviews in stats or accuracy.
     if (review.tier !== 'unknown') {
@@ -5895,6 +5898,7 @@ async function evaluatePracticeMove(session, actualUci) {
 }
 
 function practiceContinuationFor(session, playedUci) {
+  if (session.item && session.item.learningTransfer) return null;
   if (!practiceUciEqual(playedUci, session.initialExpectedUci)) return null;
   const authored = session.item && session.item.entry && session.item.entry.continuation;
   const authoredStep = Array.isArray(authored) ? authored[0] : null;
@@ -5924,6 +5928,7 @@ function practiceContinuationFor(session, playedUci) {
 }
 
 function finishCoachPracticeMove(session, played, quality, revealed) {
+  if (session.item.learningTransfer && typeof finishLearningTransferCheck === 'function') return finishLearningTransferCheck(session, played);
   if (session.completionRecorded) return;
   session.completed = true;
   session.completionRecorded = true;
@@ -6019,6 +6024,7 @@ function coachHandlePracticeMove(source, target, promotion, opts) {
       setCoachStatus('Practice move was not scored.');
       return 'ungraded';
     }
+    if (typeof recordLearningTransferDecision === 'function' && !recordLearningTransferDecision(session, actualUci, result)) return 'ungraded';
     if (result.sound) {
       return applyCoachPracticeMove(session, source, target, promotion, Object.assign({}, result, { revealed: session.revealed }), opts || {});
     }
@@ -6101,6 +6107,12 @@ function showCoachPracticeHint() {
 
 function advanceCoachPractice() {
   if (!coachPracticeRun || !coachPracticeSession || !coachPracticeSession.completed) return;
+  if (coachPracticeSession.item.learningTransfer && typeof continueLearningTransferPlay === 'function') {
+    const id = coachPracticeSession.item.learningTransfer.recordId;
+    exitCoachPractice('Different-position check saved.');
+    continueLearningTransferPlay(id);
+    return;
+  }
   if (coachPracticeRun.index + 1 >= coachPracticeRun.items.length) {
     const completed = coachPracticeRun.completed;
     const clean = coachPracticeRun.clean;

@@ -491,6 +491,9 @@
         <button type="button" class="ctrl-btn primary" id="btn-coach-practice-next" style="display:none;">Next drill</button>
         <button type="button" class="ctrl-btn" id="btn-coach-practice-exit">Exit practice</button>
       </div>
+      <p id="learning-transfer-note" class="prompt" style="display:none;"></p>
+        <button type="button" class="ctrl-btn" id="btn-learning-transfer-test" style="display:none;">Try a different position</button>
+
     </div>
     <div class="coach-analysis-strip" aria-label="Analysis controls">
       <div id="coach-review-analysis" role="status" aria-live="polite" style="display:none;"></div>
@@ -651,6 +654,10 @@
       <p class="progress-next-cue" id="progress-next-cue"></p>
       <button type="button" class="ctrl-btn" id="btn-progress-next">Start training</button>
     </div>
+<section class="coach-panel-section" id="learning-transfer-progress" style="display:none;" aria-labelledby="learning-transfer-heading">
+      <div class="section-label" id="learning-transfer-heading">Applying the idea</div>
+      <div id="learning-transfer-progress-list"></div>
+    </section>
 <div class="coach-panel-section" id="weekly-review-section">
       <div class="section-label">Training evidence</div>
       <div class="weekly-list" id="weekly-review-list"></div>
@@ -660,6 +667,7 @@
         <p>After practice compares 30 reviewed moves before an unassisted completion with the first 30 after it. Rehearsing again keeps that checkpoint while its baseline is retained. A lower flag rate does not prove practice caused a change.</p>
       </details>
     </div>
+
 <section class="coach-panel-section" id="opening-transfer-history" style="display:none;">
       <div class="section-label">Opening sessions · recent 6</div>
       <div id="opening-transfer-history-list"></div>
@@ -805,5 +813,6 @@
 <script src="app.js"></script>
 <script src="growth.js"></script>
 <script src="opening-transfer.js"></script>
+<script src="learning-transfer.js"></script>
 </body>
 </html>

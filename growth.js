@@ -90,6 +90,7 @@ function emptyGrowthState() {
     },
     repertoire: { ids: [], updatedAt: 0, focusKey: null, focusUpdatedAt: 0, observed: [], repairs: [], comparisons: [] },
     openingTransfers: [],
+    learningTransfers: [],
     library: { records: {} }
   };
 }
@@ -159,6 +160,7 @@ function normalizeGrowthState(value) {
       comparisons
     },
     openingTransfers: normalizeOpeningTransferRecords(value.openingTransfers),
+    learningTransfers: normalizeLearningTransferRecords(value.learningTransfers),
     library: {
       records: value.library && value.library.records && typeof value.library.records === 'object'
         ? value.library.records
@@ -191,6 +193,37 @@ function normalizeOpeningTransferRecords(value) {
     });
   });
   return Array.from(records.values()).sort((a, b) => b.at - a.at).slice(0, 6);
+}
+
+function normalizeLearningTransferRecords(value) {
+  const records = new Map();
+  const text = (value, limit = 500) => typeof value === 'string' ? value.slice(0, limit) : '';
+  const time = value => Number.isFinite(value) && value > 0 ? value : 0;
+  const tiers = ['best', 'excellent', 'good', 'book', 'inaccuracy', 'mistake', 'blunder'];
+  (Array.isArray(value) ? value : []).forEach(item => {
+    if (!item || !text(item.id) || !time(item.at) || !text(item.challengeId) || !text(item.challengeFen)) return;
+    const row = {
+      id: text(item.id, 100), at: item.at, updatedAt: time(item.updatedAt) || item.at,
+      sourceId: text(item.sourceId, 100), sourceFen: text(item.sourceFen, 120), tag: text(item.tag, 80),
+      title: text(item.title, 120), cue: text(item.cue), challengeId: text(item.challengeId, 100), challengeFen: text(item.challengeFen, 120),
+      firstResult: ['sound', 'needs-work', 'assisted'].includes(item.firstResult) && time(item.firstAt) ? item.firstResult : 'pending',
+      firstAt: time(item.firstAt), firstUci: text(item.firstUci, 5), firstSan: text(item.firstSan, 20),
+      completed: !!item.completed, helpUsed: !!item.helpUsed, playGameId: text(item.playGameId, 100), observations: []
+    };
+    const previous = records.get(row.id);
+    const merged = previous && previous.updatedAt > row.updatedAt ? Object.assign({}, previous) : row;
+    const decisions = [previous, row].filter(r => r && r.firstResult !== 'pending').sort((a, b) => a.firstAt - b.firstAt);
+    if (decisions.length) ['firstResult', 'firstAt', 'firstUci', 'firstSan'].forEach(key => { merged[key] = decisions[0][key]; });
+    merged.completed = !!((row.completed || previous && previous.completed) && merged.firstResult !== 'pending');
+    merged.helpUsed = !!(row.helpUsed || previous && previous.helpUsed);
+    const seen = new Set();
+    merged.observations = [...(previous ? previous.observations : []), ...(Array.isArray(item.observations) ? item.observations : [])]
+      .filter(observation => observation && text(observation.key) && time(observation.at) && tiers.includes(observation.tier))
+      .sort((a, b) => a.at - b.at).filter(observation => { if (seen.has(observation.key)) return false; seen.add(observation.key); return true; })
+      .slice(0, 6).map(observation => ({ key: text(observation.key, 120), at: observation.at, tier: observation.tier, flagged: !!observation.flagged }));
+    records.set(row.id, merged);
+  });
+  return Array.from(records.values()).sort((a, b) => b.at - a.at).slice(0, 24);
 }
 
 function loadGrowthState(ownerId = growthOwnerId()) {
@@ -401,6 +434,7 @@ function mergeGrowthStates(localValue, remoteValue) {
     }
   });
   merged.openingTransfers = normalizeOpeningTransferRecords([...local.openingTransfers, ...remote.openingTransfers]);
+  merged.learningTransfers = normalizeLearningTransferRecords([...local.learningTransfers, ...remote.learningTransfers]);
   merged.updatedAt = Math.max(local.updatedAt, remote.updatedAt);
   return normalizeGrowthState(merged);
 }
@@ -408,7 +442,7 @@ function mergeGrowthStates(localValue, remoteValue) {
 function adoptAnonymousGrowthState(ownerId) {
   if (!ownerId) return;
   const anonymous = loadGrowthState(null);
-  const hasData = anonymous.openingTransfers.length || anonymous.profile.onboarded || anonymous.repertoire.ids.length || anonymous.repertoire.observed.length || anonymous.repertoire.repairs.length || Object.keys(anonymous.library.records).length;
+  const hasData = anonymous.learningTransfers.length || anonymous.openingTransfers.length || anonymous.profile.onboarded || anonymous.repertoire.ids.length || anonymous.repertoire.observed.length || anonymous.repertoire.repairs.length || Object.keys(anonymous.library.records).length;
   if (!hasData) return;
   const merged = mergeGrowthStates(loadGrowthState(ownerId), anonymous);
   const saved = saveGrowthState(merged, ownerId, { skipSync: true, preserveTimestamp: true });
@@ -1169,6 +1203,7 @@ function renderWeeklyReview(entriesOverride) {
     $('<span></span>').text(comparison)
   ));
   if (typeof renderOpeningTransferHistory === 'function') renderOpeningTransferHistory();
+  if (typeof renderLearningTransferProgress === 'function') renderLearningTransferProgress();
   renderCoachPresentation();
 }
 
