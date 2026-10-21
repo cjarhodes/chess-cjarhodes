@@ -328,7 +328,7 @@ async page => {
   assert(roadmapFeatures.bridge && roadmapFeatures.recurring >= 1 && roadmapFeatures.evidence, 'repertoire bridge, recurring trends, or visual evidence did not initialise');
   assert(roadmapFeatures.focused === 'italian', 'repertoire focus did not persist');
   assert(roadmapFeatures.authMigrated, 'legacy tab-scoped auth session did not migrate to persistent storage');
-  assert((roadmapFeatures.lesson || '').includes('King safety'), 'Coach explanation did not name the chess concept');
+  assert((roadmapFeatures.lesson || '').includes('Central play'), 'Coach explanation did not name the position-specific chess concept');
   assert((roadmapFeatures.threat || '').includes('Opponent’s best reply'), 'Coach explanation did not surface the opponent threat');
   const browserOnly = await page.evaluate(async () => {
     const registrations = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistrations() : [];
@@ -883,3 +883,15 @@ if [[ "$SMOKE_EXIT" -ne 0 || "$SMOKE_OUTPUT" == *"### Error"* ]]; then
   exit 1
 fi
 echo "Browser smoke validation passed."
+
+TEACHING_CODE=$(cat "$ROOT/scripts/verify-teaching-journeys.js")
+set +e
+TEACHING_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$TEACHING_CODE")
+TEACHING_EXIT=$?
+set -e
+echo "$TEACHING_OUTPUT"
+if [[ "$TEACHING_EXIT" -ne 0 || "$TEACHING_OUTPUT" == *"### Error"* ]]; then
+  echo "Teaching journey validation failed." >&2
+  exit 1
+fi
+echo "Teaching journey validation passed."

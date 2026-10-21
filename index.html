@@ -401,6 +401,7 @@
       <div class="title" id="coach-practice-title">Practice drill</div>
       <div class="prompt" id="coach-practice-prompt"></div>
       <div class="status" id="coach-practice-status" role="status" aria-live="polite"></div>
+      <div id="coach-practice-takeaway" class="prompt" role="note" style="display:none;"></div>
       <div class="coach-practice-actions">
         <button type="button" class="ctrl-btn" id="btn-coach-practice-hint">Hint</button>
         <button type="button" class="ctrl-btn" id="btn-coach-practice-answer">Show answer</button>
@@ -497,10 +498,12 @@
         <span class="label">You played</span><span class="value" id="coach-user-move">—</span>
         <span class="label">Best move</span><span class="value" id="coach-best-move">—</span>
       </div>
+      <div id="coach-review-consequence" class="coach-review-summary" role="note" style="display:none;"></div>
       <div id="coach-review-summary" class="coach-review-summary"></div>
       <div id="coach-review-cue" class="coach-review-cue" role="note" aria-live="polite"></div>
       <div class="coach-review-actions">
         <button type="button" class="ctrl-btn primary" id="btn-coach-showwhy">Show why</button>
+        <button type="button" class="ctrl-btn" id="btn-coach-consequence" style="display:none;">Show consequence</button>
         <button type="button" class="ctrl-btn" id="btn-coach-review-practice" style="display:none;">Practice this move</button>
       </div>
       <details id="coach-review-details" class="coach-review-details">

@@ -57,9 +57,9 @@ function extractFunction(name) {
   return app.slice(start, findMatchingBrace(app, openBrace) + 1);
 }
 
-const builderCode = extractFunction('buildCoachReviewAnalysisSteps');
+const builderCode = ['buildCoachReviewAnalysisSteps', 'buildCoachConsequenceSteps', 'coachExplanationContext', 'moveFromUci', 'materialValue'].map(extractFunction).join('\n');
 new vm.Script(builderCode, { filename: 'app.js#review-teaching-slice' });
-const context = { Chess };
+const context = { Chess, PIECE_NAME: {p:'Pawn',n:'Knight',b:'Bishop',r:'Rook',q:'Queen',k:'King'} };
 vm.createContext(context);
 vm.runInContext(`${builderCode}\nthis.buildCoachReviewAnalysisSteps = buildCoachReviewAnalysisSteps;`, context);
 
@@ -114,6 +114,42 @@ assert(/function invalidateCoachAsyncWork[\s\S]{0,220}clearCoachReviewAnalysis\(
 assert(/function coachGotoPly\(n\)[\s\S]{0,120}clearCoachReviewAnalysis\(\{ restore: false \}\)/.test(app), 'history navigation must leave analysis mode safely');
 assert(/function coachGotoLive\(\)[\s\S]{0,120}clearCoachReviewAnalysis\(\{ restore: false \}\)/.test(app), 'Back to live must clear analysis mode');
 assert(/coachReviewAnalysis = null/.test(app), 'reset state must clear the analysis reference');
+
+// Consequence copy and replays must agree with legal board outcomes, and
+// avoid treating every capture as a win or every queen move as opening play.
+function positionAfter(fen, uci) {
+  const game = new Chess(fen);
+  assert(!!game.move({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]}), 'fixture move must be legal');
+  return game.fen();
+}
+const hangingFen = 'r1bqkbnr/pppp1ppp/2n5/4p2Q/4P3/8/PPPP1PPP/RNB1KBNR w KQkq - 2 3';
+const hanging = context.coachExplanationContext(hangingFen, 'h5e5', 'f1c4', positionAfter(hangingFen, 'h5e5'), {pv:['c6e5']});
+assert(hanging.consequence.includes('queen on e5'), 'queen loss must be visible in the consequence');
+assert(hanging.lesson.includes('Piece safety') && hanging.cue.includes('destination'), 'queen loss must teach piece safety ahead of development');
+assert(!hanging.opponentThreat.includes('wins'), 'a capture alone must not be described as a material win');
+const mateFen = '7k/8/5KQ1/8/8/8/8/8 w - - 0 1';
+const missed = context.coachExplanationContext(mateFen, 'g6e4', 'g6g7', positionAfter(mateFen, 'g6e4'), {pv:['h8g8']});
+assert(missed.consequence.includes('immediate checkmate') && missed.cue.includes('checks'), 'missed mate must connect the immediate opportunity to a future checking scan');
+const staleFen = '7k/5K2/6Q1/8/8/8/8/8 w - - 0 1';
+const stale = context.coachExplanationContext(staleFen, 'g6f5', 'g6h5', positionAfter(staleFen, 'g6f5'), {pv:[]});
+assert(stale.consequence.includes('stalemate, a draw'), 'terminal stalemate must be explained even without a PV');
+assert(stale.cue.includes('legal reply'), 'endgame cue must prevent repeating stalemate');
+const quietEndgame = context.coachExplanationContext('7k/8/8/8/8/2N5/4K3/8 w - - 0 32', 'e2e3', 'c3e4', '7k/8/8/8/8/2N1K3/8/8 b - - 1 32', null);
+assert(!quietEndgame.lesson.includes('Development'), 'an endgame knight reposition must not be described as new development');
+const playedBest = context.coachExplanationContext(mateFen, 'g6g7', 'g6g7', positionAfter(mateFen,'g6g7'), null);
+assert(playedBest.consequence === '', 'a played checkmate must not be described as a missed mate');
+const consequenceReview = { fenBefore: hangingFen, userUci: 'h5e5', evalAfter:{pv:['c6e5','d2d4','a1a1','g1f3']} };
+const consequenceSteps = context.buildCoachConsequenceSteps(consequenceReview);
+assert(consequenceSteps.length === 4, 'consequence line must stop before the first illegal move');
+assert(consequenceSteps[2].san === 'Nxe5', 'consequence replay must show the capture explained in the lesson');
+let consequenceGame = new Chess(hangingFen);
+for (const step of consequenceSteps.slice(1)) {
+  assert(!!consequenceGame.move(step.move), 'every consequence step must be legal');
+  assert(consequenceGame.fen() === step.fen, 'consequence FEN must match the replay');
+}
+const terminalSteps = context.buildCoachConsequenceSteps({fenBefore:staleFen,userUci:'g6f5',evalAfter:{pv:['h8h7']}});
+assert(terminalSteps.length === 2 && new Chess(terminalSteps[1].fen).in_stalemate(), 'stalemate replay must stop at the terminal board');
+assert(context.buildCoachConsequenceSteps({fenBefore:startFen}).length === 0, 'legacy review without a user move must not invent a consequence');
 
 if (errors.length) {
   console.error(errors.join('\n'));

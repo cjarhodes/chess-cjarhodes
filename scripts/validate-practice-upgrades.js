@@ -56,7 +56,7 @@ function extractConst(name) {
 const code = [
   extractConst('PRACTICE_SOUND_LOSS_CP'),
   extractConst('PRACTICE_INACCURACY_LOSS_CP'),
-  extract('practiceMoveFor'), extract('practiceIdeaForMove'), extract('practicePromptForItem'), extract('practiceHintForSession'),
+  extract('fenSideToUserSide'), extract('practiceMoveFor'), extract('practiceIdeaForMove'), extract('practicePromptForItem'), extract('practiceHintForSession'),
   extract('practiceUciEqual'), extract('practiceEngineScore'),
   extract('practiceAfterMoveScore'), extract('practiceMoveIsMate'),
   extract('evaluatePracticeMove')
@@ -88,7 +88,9 @@ function makeSession(known, bestCp, extra = {}) {
 
 (async () => {
   const hintSession = makeSession({}, 0);
-  assert(context.practicePromptForItem(hintSession.item).includes('centre'), 'e4 prompt must teach central play');
+  assert(context.practicePromptForItem(hintSession.item).includes('opponent threatening'), 'practice must ask for a candidate scan before hinting');
+  assert(!context.practicePromptForItem(hintSession.item).includes('e4'), 'initial prompt must not give away the move');
+  assert(context.practiceHintForSession(hintSession, 1).includes('centre'), 'first hint must introduce the central-play idea');
   assert(context.practiceHintForSession(hintSession, 2).includes('e2'), 'piece hint must locate the pawn');
   assert(context.practiceHintForSession(hintSession, 3).includes('e4'), 'destination hint must name e4');
   assert(context.practiceHintForSession(hintSession, 4).startsWith('Answer: e4.'), 'answer must reveal legal SAN');

@@ -794,7 +794,8 @@ function insightEntryFromReview(review) {
     openingId: review.openingId || null,
     continuation: Array.isArray(review.continuation) ? review.continuation.slice(0, 1) : null,
     lesson: review.lesson || null,
-    opponentThreat: review.opponentThreat || null
+    opponentThreat: review.opponentThreat || null,
+    decisionCue: review.decisionCue || null
   };
 }
 
@@ -982,16 +983,29 @@ function practiceIdeaForMove(fen, uci) {
   if (move.promotion) return 'Calculate the pawn race: the promotion move is the critical idea.';
   if (move.flags && (move.flags.includes('k') || move.flags.includes('q'))) return 'King safety is the priority: look for the move that develops and protects your king.';
   if (move.piece === 'p' && ['c', 'd', 'e', 'f'].includes(move.from[0])) return 'Challenge the centre before choosing a quieter improvement.';
-  if (move.piece === 'p' && ['f', 'g', 'h'].includes(move.from[0])) return 'Treat this pawn move as a king-safety decision and calculate its consequences.';
-  if (['n', 'b'].includes(move.piece)) return 'Look for a developing move that brings a new minor piece into play.';
+  if (move.piece === 'p' && ['f', 'g', 'h'].includes(move.from[0])) return 'Calculate what this pawn advance changes: captures, promotion chances, and squares around both kings.';
+  if (['n', 'b'].includes(move.piece)) return move.from[1] === (move.color === 'w' ? '1' : '8')
+    ? 'Compare bringing a minor piece off its home rank with the opponent’s forcing replies.'
+    : 'Find a more active square for a minor piece, then calculate the opponent’s reply.';
   return 'Find the move that best improves this position. Compare forcing moves, development, and king safety.';
 }
 
 function practicePromptForItem(item) {
-  if (!item || !item.entry) return 'Find the move that best improves this position.';
-  // The position and answer define the cue. This avoids displaying a tag's
-  // generic lesson when (for example) a f-pawn review is actually solved by e4.
-  return practiceIdeaForMove(item.entry.fenBefore, item.entry.bestUci);
+  if (!item || !item.entry) return 'Find a sound move for this position.';
+  const side = fenSideToUserSide(item.entry.fenBefore) === 'black' ? 'Black' : 'White';
+  return `${side} to move. What is the opponent threatening? Compare your candidates and find a sound move. Hints are available if you need them.`;
+}
+
+function practiceCarryForwardCue(item) {
+  if (!item || !item.entry) return 'Compare candidates and calculate the opponent’s strongest reply.';
+  const entry = item.entry;
+  if (entry.decisionCue) return entry.decisionCue;
+  // Older records may predate the saved cue. Rebuild the position to recover
+  // board facts such as stalemate, without inventing an unsaved engine reply.
+  const position = new Chess(entry.fenBefore);
+  const user = moveFromUci(entry.fenBefore, entry.userUci);
+  if (user) position.move(user);
+  return coachExplanationContext(entry.fenBefore, entry.userUci, entry.bestUci, position.fen(), null).cue;
 }
 
 function practiceUciEqual(a, b) {
@@ -3417,7 +3431,7 @@ function movePurposeText(fenBefore, bestUci, userUciMove, bestLine, afterInfo) {
   const reasons = [];
   if (best.san.includes('#')) reasons.push(`${best.san} delivers checkmate`);
   else if (best.san.includes('+')) reasons.push(`${best.san} gives check and forces a response`);
-  if (best.captured) reasons.push(`${best.san} wins the ${PIECE_NAME[best.captured] ? PIECE_NAME[best.captured].toLowerCase() : 'piece'} on ${best.to}`);
+  if (best.captured) reasons.push(`${best.san} captures the ${PIECE_NAME[best.captured] ? PIECE_NAME[best.captured].toLowerCase() : 'piece'} on ${best.to}`);
   if (best.promotion) reasons.push(`${best.san} promotes immediately`);
   if (best.flags && (best.flags.includes('k') || best.flags.includes('q'))) reasons.push(`${best.san} castles and improves king safety`);
 
@@ -3439,30 +3453,79 @@ function movePurposeText(fenBefore, bestUci, userUciMove, bestLine, afterInfo) {
 }
 
 function coachExplanationContext(fenBefore, userUci, bestUci, fenAfter, afterInfo) {
+  const before = new Chess(fenBefore);
+  const after = new Chess(fenAfter);
   const user = moveFromUci(fenBefore, userUci);
   const best = moveFromUci(fenBefore, bestUci);
   const reply = afterInfo && afterInfo.pv && afterInfo.pv[0]
     ? moveFromUci(fenAfter, afterInfo.pv[0])
     : null;
-  let lesson = 'Candidate selection: compare checks, captures, threats, and at least one improving move before committing.';
-  if (best && best.san && best.san.includes('#')) lesson = 'Forcing move: the position contains an immediate checkmate, so calculation should start with checks.';
-  else if (best && best.captured) lesson = `Tactical awareness: ${best.san} wins a ${PIECE_NAME[best.captured]?.toLowerCase() || 'piece'} before a quiet plan matters.`;
-  else if (best && best.san && best.san.includes('+')) lesson = 'Forcing checks: a check narrows the opponent’s replies and should be examined before quiet moves.';
-  else if (best && best.promotion) lesson = 'Pawn-race calculation: the passed pawn can promote now, so count the queening move before manoeuvring.';
-  else if (best && best.flags && (best.flags.includes('k') || best.flags.includes('q'))) lesson = 'King safety: castling solves king safety and activates a rook in one tempo.';
-  else if (user && user.piece === 'q' && !user.captured) lesson = 'Development: an early queen move can lose time to attacks; develop a minor piece unless there is a concrete tactic.';
-  else if (user && user.piece === 'p' && ['f', 'g', 'h'].includes(user.from[0]) && !user.captured) lesson = 'King safety: pawn moves near your king are permanent commitments and need a concrete reason.';
-  else if (best && ['n', 'b'].includes(best.piece) && user && !['n', 'b'].includes(user.piece)) lesson = 'Development: bring a new minor piece into the game before making another low-impact move.';
-  else if (best && best.piece === 'p' && ['c', 'd', 'e', 'f'].includes(best.from[0])) lesson = 'Central break: challenge the centre while the opponent is still organising their pieces.';
+  const pieceName = piece => PIECE_NAME[piece]?.toLowerCase() || 'piece';
+  const pieces = before.board().flat().filter(Boolean);
+  const opening = Number(fenBefore.split(/\s+/)[5]) <= 12 && pieces.filter(piece => !['k', 'p'].includes(piece.type)).length >= 8;
+  const develops = best && ['n', 'b'].includes(best.piece) && best.from[1] === (best.color === 'w' ? '1' : '8') && opening;
+  let lesson = 'Candidate selection: compare forcing moves and at least one quiet improvement.';
+  let cue = 'Before moving, compare two candidates and calculate the opponent’s strongest reply to each.';
+  let consequence = reply && user ? `After ${user.san}, the engine suggests ${reply.san} for the opponent.` : '';
+  let opponentThreat = reply ? `Opponent’s best reply is ${reply.san}.` : '';
 
-  let opponentThreat = '';
+  // Describe legal board facts before naming a general principle. A capture is
+  // not automatically a material win, and an engine reply is not a played move.
   if (reply) {
-    if (reply.san && reply.san.includes('#')) opponentThreat = `Opponent’s threat: ${reply.san} is checkmate after your move.`;
-    else if (reply.san && reply.san.includes('+')) opponentThreat = `Opponent’s threat: ${reply.san} gives check and takes the initiative.`;
-    else if (reply.captured) opponentThreat = `Opponent’s threat: ${reply.san} wins your ${PIECE_NAME[reply.captured]?.toLowerCase() || 'piece'} on ${reply.to}.`;
-    else opponentThreat = `Opponent’s best reply is ${reply.san}; check whether your move allows that plan before committing.`;
+    if (reply.san.includes('#')) {
+      consequence = `${user ? user.san : 'Your move'} allows ${reply.san}: checkmate.`;
+      opponentThreat = `Opponent’s threat: ${reply.san} is checkmate after your move.`;
+    } else if (reply.captured) {
+      consequence = `After ${user ? user.san : 'your move'}, ${reply.san} can capture your ${pieceName(reply.captured)} on ${reply.to}.`;
+      opponentThreat = `Opponent’s threat: ${reply.san} captures your ${pieceName(reply.captured)} on ${reply.to}.`;
+    } else if (reply.san.includes('+')) {
+      consequence = `After ${user ? user.san : 'your move'}, ${reply.san} gives check.`;
+      opponentThreat = `Opponent’s threat: ${reply.san} gives check.`;
+    }
   }
-  return { lesson, opponentThreat };
+  if (after.in_stalemate()) {
+    consequence = `${user ? user.san : 'Your move'} leaves the opponent with no legal move and no check: stalemate, a draw.`;
+    lesson = 'Endgame conversion: restricting the king is useful only while a legal reply remains, unless the move is checkmate.';
+    cue = 'Before a finishing move, check whether the opponent has a legal reply. No reply without check means stalemate.';
+  } else if (reply && reply.san.includes('#')) {
+    lesson = 'King safety: calculate the opponent’s forcing checks before committing to your plan.';
+    cue = user && user.piece === 'p' && ['f', 'g', 'h'].includes(user.from[0])
+      ? 'Before moving a king-side pawn, scan the opponent’s checks and the diagonals leading to your king.'
+      : 'Before committing to your plan, scan the opponent’s checks and the lines leading to your king.';
+  } else if (reply && reply.captured && reply.to === (user && user.to) && materialValue(user.piece) > materialValue(reply.piece)) {
+    lesson = `Piece safety: the ${pieceName(user.piece)} can be taken on its new square.`;
+    cue = 'Before moving a piece, scan every enemy capture on its destination and calculate the recapture.';
+  } else if (best && best.san.includes('#')) {
+    consequence = `${user ? user.san : 'Your move'} misses an immediate checkmate; ${best.san} ends the game.`;
+    lesson = 'Forcing moves: check all legal checks for an immediate mate before choosing a longer plan.';
+    cue = 'Scan checks first. For each checking move, count the opponent’s legal escapes, captures, and blocks.';
+  } else if (best && best.promotion) {
+    lesson = 'Pawn-race calculation: a promotion changes the available checks, captures, and escape squares.';
+    cue = 'Count the moves to promotion for both sides, then check the position after queening for checks or stalemate.';
+  } else if (best && best.captured) {
+    lesson = `Tactical awareness: ${best.san} captures the ${pieceName(best.captured)} on ${best.to}; calculate the reply before judging the exchange.`;
+    cue = 'Scan captures before quiet moves, and calculate the opponent’s recapture before counting a material gain.';
+  } else if (best && best.flags && (best.flags.includes('k') || best.flags.includes('q'))) {
+    lesson = 'King safety: castling moves the king and brings the rook into play.';
+    cue = 'Before starting an attack, check whether you can castle safely and connect your rooks.';
+  } else if (develops) {
+    lesson = `Development: ${best.san} brings the ${pieceName(best.piece)} from ${best.from} into play.`;
+    cue = 'In the opening, look for an undeveloped knight or bishop before another side-pawn or queen move, then check for tactics.';
+  } else if (opening && user && user.piece === 'q' && !user.captured) {
+    lesson = 'Development: queen moves need a concrete purpose while other pieces remain at home.';
+    cue = 'Before another queen move, check whether a knight or bishop can develop with a threat.';
+  } else if (best && best.san.includes('+')) {
+    lesson = 'Forcing checks: a check restricts the reply, but its continuation still needs calculation.';
+    cue = 'For every candidate check, calculate the opponent’s strongest legal reply before choosing it.';
+  } else if (best && ['n', 'b'].includes(best.piece)) {
+    lesson = `Piece activity: ${best.san} repositions the ${pieceName(best.piece)} from ${best.from} to ${best.to}.`;
+    cue = 'Find your least active piece and compare an improving square with the opponent’s strongest reply.';
+  } else if (best && best.piece === 'p' && ['c', 'd', 'e', 'f'].includes(best.from[0])) {
+    lesson = 'Central play: compare a central pawn advance with the opponent’s possible captures and breaks.';
+    cue = 'Before a side-pawn move, compare a central advance and calculate the opponent’s captures.';
+  }
+  if (userUci === bestUci || after.in_checkmate()) consequence = '';
+  return { lesson, opponentThreat, cue, consequence };
 }
 
 // Side-to-move perspective: score is always in the mover's favor.
@@ -3559,6 +3622,7 @@ async function classifyMove(fenBefore, userUciMove, fenAfter) {
     pvSan: bestLine ? pvToSan(fenBefore, bestLine.pv || [], 5) : [],
     topAlternatives,
     whyBetter,
+    decisionCue: explanation.cue,
     lesson: explanation.lesson,
     opponentThreat: explanation.opponentThreat,
     evalBefore: bestLine || null,
@@ -3828,7 +3892,7 @@ function renderCoachReviewAnalysis() {
   updateCapturedDisplay(step.fen);
   updateCoachAnalysisAccessibility(step.fen, step.label);
   const moveLabel = step.san ? ` · ${step.san}` : '';
-  const lineLabel = `Analysis position · recommended continuation (${analysis.index + 1}/${analysis.steps.length})${moveLabel}`;
+  const lineLabel = `Analysis position · ${analysis.kind === 'consequence' ? 'possible consequence of your move' : 'recommended continuation'} (${analysis.index + 1}/${analysis.steps.length})${moveLabel}`;
   $('#coach-review-analysis').text(lineLabel).show();
   $('#btn-coach-review-analysis-prev').prop('disabled', analysis.index <= 0);
   $('#btn-coach-review-analysis-next').prop('disabled', analysis.index >= analysis.steps.length - 1);
@@ -3882,6 +3946,36 @@ function buildCoachReviewAnalysisSteps(review) {
   return steps;
 }
 
+// Replay a hypothetical engine response to the player's move. These are
+// possible consequences, never a claim that the reply occurred in the game.
+function buildCoachConsequenceSteps(review) {
+  if (!review || !review.fenBefore || !review.userUci) return [];
+  const position = new Chess(review.fenBefore);
+  const line = [review.userUci].concat(
+    review.evalAfter && Array.isArray(review.evalAfter.pv) ? review.evalAfter.pv.slice(0, 4) : []
+  );
+  const steps = [{ fen: position.fen(), move: null, san: '', label: 'Analysis before your move' }];
+  for (const uci of line) {
+    const move = moveFromUci(position.fen(), uci);
+    if (!move) break;
+    position.move(move);
+    steps.push({ fen: position.fen(), move, san: move.san, label: steps.length === 1 ? 'Analysis · your move' : 'Analysis · possible consequence' });
+  }
+  return steps;
+}
+
+function startCoachConsequenceAnalysis(review) {
+  const steps = buildCoachConsequenceSteps(review);
+  if (steps.length < 2) return;
+  startCoachReviewAnalysis(review);
+  if (!coachReviewAnalysis || coachReviewAnalysis.review !== review) return;
+  coachReviewAnalysis.steps = steps;
+  coachReviewAnalysis.kind = 'consequence';
+  coachReviewAnalysis.index = Math.min(2, steps.length - 1);
+  renderCoachReviewAnalysis();
+  updateCoachControlsState();
+}
+
 function startCoachReviewAnalysis(review) {
   if (!review || !review.fenBefore || !review.bestUci || !coachGame || !coachBoard) return;
   // A recommendation is useful only once the live game is idle on the user's
@@ -3924,14 +4018,14 @@ function renderCoachReviewEvidence(review) {
   if (review.evalBefore && review.evalBefore.pv && review.evalBefore.pv[1]) {
     recommendedReply = moveFromUci(bestFen, review.evalBefore.pv[1]);
   }
-  const actualLabel = reply ? `Actual reply: ${reply.san}` : 'Actual game continues';
+  const actualLabel = reply ? `Possible reply: ${reply.san}` : 'Position after your move';
   const recommendedLabel = recommendedReply
     ? `Recommended continuation: ${recommendedReply.san}`
     : 'Recommended continuation is shown on the main board';
   $('#coach-review-evidence').html(
-    `<div class="coach-review-evidence-head">Actual game vs analysis <span>${escapeHtml(review.userSan || 'Your move')} → ${escapeHtml(review.bestSan || 'Recommended move')}</span></div>` +
+    `<div class="coach-review-evidence-head">Your move vs recommendation <span>${escapeHtml(review.userSan || 'Your move')} → ${escapeHtml(review.bestSan || 'Recommended move')}</span></div>` +
     `<div class="coach-review-evidence-boards">` +
-      `<div><div class="review-board-label">Actual game · ${escapeHtml(actualLabel)}</div><div class="review-board">${reviewBoardMarkup(review.fenAfter)}</div></div>` +
+      `<div><div class="review-board-label">After your move · ${escapeHtml(actualLabel)}</div><div class="review-board">${reviewBoardMarkup(review.fenAfter)}</div></div>` +
       `<div><div class="review-board-label">Analysis · ${escapeHtml(recommendedLabel)}</div><div class="review-board">${reviewBoardMarkup(bestFen)}</div></div>` +
     `</div>`
   ).show();
@@ -3948,6 +4042,10 @@ function renderCoachReview(review) {
   const isBest = review.tier === 'best';
   const isExcellent = review.tier === 'excellent';
   const isUnknown = review.tier === 'unknown';
+  const teaching = !isUnknown && review.fenBefore && review.fenAfter && review.bestUci
+    ? coachExplanationContext(review.fenBefore, review.userUci, review.bestUci, review.fenAfter, review.evalAfter)
+    : null;
+  $('#coach-review-consequence').text(teaching ? teaching.consequence : '').toggle(!!(teaching && teaching.consequence));
   const summary = review.reviewSummary || reviewPositionSummary(review);
   $('#coach-review-summary, #coach-explanation').first().text(summary);
   $('#coach-review-details').attr('aria-label', 'Deeper engine review');
@@ -3973,6 +4071,7 @@ function renderCoachReview(review) {
     .text(review.opponentThreat || '')
     .toggle(!!review.opponentThreat);
   renderCoachReviewEvidence(review);
+  $('#btn-coach-consequence').toggle(!isUnknown && !isBest && !!review.userUci);
   const evalText = [
     review.evalBefore ? `Position before: ${reviewEvalLabel(review.evalBefore)}` : '',
     review.evalAfter ? `After your move: ${reviewEvalLabel(review.evalAfter)}` : ''
@@ -3984,7 +4083,7 @@ function renderCoachReview(review) {
       ? 'Keep this habit: you found the engine’s first choice.'
       : isExcellent
         ? 'Keep this habit: your move was in the engine’s top three.'
-        : `Next time: pause and look for ${review.bestSan || 'the preferred move'} before committing.`;
+        : `Next time: ${teaching ? teaching.cue : 'compare checks, captures, and the opponent’s strongest reply before committing.'}`;
   $('#coach-review-cue').text(cue);
   const practiceItem = practiceItemFromReview(review);
   $('#btn-coach-review-practice')
@@ -4024,6 +4123,7 @@ function renderCoachReview(review) {
     !coachThinking && (!coachGameActive || coachIsUserTurn()) && !coachIsReviewing();
   $('#btn-coach-showbest').prop('disabled', !canExplain);
   $('#btn-coach-showwhy').prop('disabled', !canExplain);
+  $('#btn-coach-consequence').prop('disabled', !canExplain);
 }
 
 function setCoachStatus(msg) {
@@ -5362,6 +5462,7 @@ function startCoachPractice(item, opts = {}) {
   $('#coach-practice-prompt').text(practicePromptForItem(item));
   $('#coach-practice-session-status').text(practiceRunPositionText());
   $('#coach-practice-status').text('Attempt the move without engine help.');
+  $('#coach-practice-takeaway').hide().empty();
   $('#btn-coach-practice-answer').prop('disabled', false);
   $('#btn-coach-practice-answer').text('Show answer');
   $('#btn-coach-practice-hint').text('Hint').prop('disabled', false).show();
@@ -5525,6 +5626,7 @@ function finishCoachPracticeMove(session, played, quality, revealed) {
   const due = formatPracticeDue(record);
   $('#coach-practice-status').text(`${quality}: ${played.san}. ${due}.`);
   setCoachStatus(`${quality}. Practice progress saved.`);
+  $('#coach-practice-takeaway').text(`Carry into your next game: ${practiceCarryForwardCue(session.item)}`).show();
   $('#btn-coach-practice-answer').prop('disabled', true);
   $('#btn-coach-practice-hint').prop('disabled', true);
   if (coachPracticeRun) {
@@ -6002,6 +6104,7 @@ function updateCoachControlsState() {
   $('#btn-coach-takeback').prop('disabled', practicing || !hasReview || reviewing || coachThinking);
   $('#btn-coach-showbest').prop('disabled', !canExplain);
   $('#btn-coach-showwhy').prop('disabled', !canExplain);
+  $('#btn-coach-consequence').prop('disabled', !canExplain);
   $('#btn-coach-candidates').prop('disabled', practicing || !active || !coachGame || !coachIsUserTurn() || reviewing || coachThinking);
   $('#btn-coach-prev').prop('disabled', practicing || !coachGame || total === 0 || cur === 0);
   $('#btn-coach-next').prop('disabled', practicing || !coachGame || total === 0 || cur === total);
@@ -7685,6 +7788,7 @@ $(function () {
   $('#btn-coach-showwhy').on('click', function() {
     startCoachReviewAnalysis(coachLastReview);
   });
+  $('#btn-coach-consequence').on('click', function() { startCoachConsequenceAnalysis(coachLastReview); });
   $('#btn-coach-review-analysis-prev').on('click', function() { stepCoachReviewAnalysis(-1); });
   $('#btn-coach-review-analysis-next').on('click', function() { stepCoachReviewAnalysis(1); });
   $('#btn-coach-backtogame').on('click', function() {
