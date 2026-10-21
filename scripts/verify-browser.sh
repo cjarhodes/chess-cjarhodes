@@ -414,8 +414,10 @@ async page => {
   await page.evaluate(() => sessionStorage.removeItem('coach:auth-pending-email'));
   // A fragment-only change is a same-document navigation, so leave the page
   // first to guarantee a full load with the fragment present at startup.
-  await page.goto(page.url().split('?')[0] + 'health.html');
-  await page.goto(page.url().replace(/health\.html$/, '') + '?view=coach#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired');
+  const appUrl = page.url().split('?')[0];
+  await page.goto(appUrl + 'health.html');
+  // Hosting may canonicalize health.html to /health; return to the saved app URL.
+  await page.goto(appUrl + '?view=coach#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired');
   await page.waitForFunction(() => {
     return (document.querySelector('#coach-auth-status')?.textContent || '').includes('expired');
   }, null, { timeout: 15000 }).catch(() => {});

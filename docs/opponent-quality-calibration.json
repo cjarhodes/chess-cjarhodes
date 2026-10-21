@@ -558,5 +558,6 @@
       "illegal": 0,
       "distinctMoves": 10
     }
-  ]
+  ],
+  "candidateCommit": "e956a9531075e3797522dfbcaf0c3e2e407d0d29"
 }

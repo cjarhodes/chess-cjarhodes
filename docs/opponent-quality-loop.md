@@ -55,3 +55,9 @@ scripts/verify-browser.sh
 ```
 
 The browser suite includes mate conversion, direct mate defense, free-queen capture, quiet variety, full endings, opening sessions, and result recovery. Browser checks use isolated test storage and the real vendored engine; no account or backend changes were required.
+
+The live run exposed a smoke-harness navigation bug: Vercel canonicalizes `/health.html` to `/health`, so deriving the app URL from the redirected path left the test on the health page. The harness now stores the app root before navigating away. This change affects test navigation only.
+
+## Release verification
+
+Opponent code commit `e956a95` deployed to `https://chess.cjarhodes.com` in READY production deployment `dpl_4AhNsoAmqzLeYCVzakgbLdpey8yy`. The live `app.js` and HTML matched the release files byte for byte. Live tactical checks, complete opponent endings, six-turn opening games, result recovery, adaptive planning, drills, practice-to-play transfer, progress persistence, and Library smoke checks passed with zero page errors. All local validators and the combined browser, teaching, recovery, and opponent suites passed.
