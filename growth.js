@@ -982,88 +982,155 @@ function applyAdaptiveCoachElo() {
   return recommended;
 }
 
-function transferMeasurement(entries, tag) {
+// Retained review records are a descriptive sample, not learning outcomes.
+function reviewedProgressEntries(entries, now = Date.now()) {
+  const tiers = new Set(['best', 'excellent', 'good', 'book', 'inaccuracy', 'mistake', 'blunder']);
+  const seen = new Set();
+  return (Array.isArray(entries) ? entries : []).filter(entry => {
+    if (!entry || !tiers.has(entry.tier) || !Number.isFinite(entry.ts) || entry.ts <= 0 || entry.ts > now) return false;
+    if (entry.id) {
+      if (seen.has(entry.id)) return false;
+      seen.add(entry.id);
+    }
+    return true;
+  }).slice().sort((a, b) => a.ts - b.ts);
+}
+
+function transferMeasurement(entries, tag, now = Date.now()) {
+  const reviewed = reviewedProgressEntries(entries, now);
   const events = loadPracticeProgress().events
-    .filter(event => event && event.tag === tag && event.correct && Number.isFinite(event.at))
-    .sort((a, b) => a.at - b.at);
+    .filter(event => event && event.tag === tag && event.correct && !event.revealed &&
+      Number.isFinite(event.at) && event.at > 0 && event.at <= now)
+    .slice().sort((a, b) => a.at - b.at);
   if (!events.length) return null;
-  const anchor = events[events.length - 1].at;
-  const windowMs = 7 * DAY_MS;
-  const reviewed = entries.filter(entry => entry && entry.tier && entry.tier !== 'unknown' && Number.isFinite(entry.ts));
-  const before = reviewed.filter(entry => entry.ts >= anchor - windowMs && entry.ts < anchor);
-  const after = reviewed.filter(entry => entry.ts >= anchor && entry.ts <= anchor + windowMs);
+  // Keep the earliest rehearsal with a retained baseline. Rehearsing again
+  // must not erase follow-up evidence. Equal move windows avoid volume bias.
+  const checkpoint = events.find(event => reviewed.filter(entry => entry.ts < event.at).length >= TRANSFER_MIN_SAMPLES)
+    || events[events.length - 1];
+  const before = reviewed.filter(entry => entry.ts < checkpoint.at).slice(-TRANSFER_MIN_SAMPLES);
+  const after = reviewed.filter(entry => entry.ts >= checkpoint.at).slice(0, TRANSFER_MIN_SAMPLES);
   const errors = list => list.filter(entry => isInsightProblem(entry.tier) && (entry.tags || []).includes(tag)).length;
   const beforeErrors = errors(before);
   const afterErrors = errors(after);
   const beforeRate = before.length ? beforeErrors / before.length : null;
   const afterRate = after.length ? afterErrors / after.length : null;
-  const enoughEvidence = before.length >= TRANSFER_MIN_SAMPLES && after.length >= TRANSFER_MIN_SAMPLES;
-  if (!enoughEvidence) {
-    return {
-      beforeRate, afterRate,
-      beforeSamples: before.length,
-      afterSamples: after.length,
-      beforeErrors,
-      afterErrors,
-      change: null,
-      direction: 'insufficient',
-      improved: false,
-      enoughEvidence: false
-    };
-  }
-  const change = afterRate - beforeRate;
-  const direction = change < 0 ? 'improved' : (change > 0 ? 'worsened' : 'unchanged');
+  const baselineReady = before.length >= TRANSFER_MIN_SAMPLES;
+  const enoughEvidence = baselineReady && after.length >= TRANSFER_MIN_SAMPLES;
+  const change = enoughEvidence ? afterRate - beforeRate : null;
+  const direction = !enoughEvidence ? 'insufficient' : change < 0 ? 'improved' : change > 0 ? 'worsened' : 'unchanged';
   return {
-    beforeRate, afterRate,
-    beforeSamples: before.length,
-    afterSamples: after.length,
-    beforeErrors,
-    afterErrors,
-    change: Math.round(change * 100),
-    direction,
-    improved: direction === 'improved',
-    enoughEvidence: true
+    anchor: checkpoint.at, baselineReady, beforeRate, afterRate,
+    beforeSamples: before.length, afterSamples: after.length,
+    beforeErrors, afterErrors,
+    change: enoughEvidence ? Math.round(change * 1000) / 10 : null,
+    direction, improved: direction === 'improved', enoughEvidence
   };
 }
 
+function progressRecommendation(entries, now = Date.now()) {
+  const reviewed = reviewedProgressEntries(entries, now);
+  const counts = insightTagCounts(reviewed.filter(entry => isInsightProblem(entry.tier)));
+  const queue = practiceItemsForEntries(reviewed, counts);
+  const due = queue.filter(item => practiceIsDue(item, now));
+  const plan = adaptiveDailyPlan(reviewed, queue, due, practiceProgressTotals());
+  const day = dailySprintToday();
+  const continuing = !!(day && !day.completedAt);
+  const focusTag = continuing ? day.focusTag : plan.focusTag;
+  const flagged = reviewed.filter(entry => isInsightProblem(entry.tier) && (entry.tags || []).includes(focusTag)).length;
+  let reason = !reviewed.length ? 'No reviewed moves yet. A short playing session will give Coach evidence for your next focus.'
+    : !focusTag ? `${reviewed.length} retained reviewed moves. ${continuing ? 'Finish building this session’s baseline; Coach will then choose a focus.' : 'No flagged pattern stands out yet; keep building your baseline.'}`
+    : flagged ? `${flagged} of ${reviewed.length} retained reviewed moves flagged this pattern. ${flagged === 1 ? 'This is an early signal from one review.' : 'Severity, recency and recent practice guide this focus.'}`
+    : 'Recent practice suggests revisiting this cue; no matching flagged reviews are retained.';
+  if (continuing) reason = 'Finish the session already in progress. ' + reason;
+  let action, label;
+  if (coachPracticeSession || continuing) {
+    action = 'daily'; label = 'Continue current session';
+  } else if (coachGameActive) {
+    action = 'continue'; label = focusTag ? 'Use this cue in your game' : 'Continue your game';
+  } else if (plan.drillTarget > 0) {
+    action = 'practice'; label = `Practice ${plan.drillTarget} position${plan.drillTarget === 1 ? '' : 's'}`;
+  } else {
+    action = 'game'; label = focusTag ? 'Play with this cue' : 'Start training';
+  }
+  return {
+    plan, focusTag, title: continuing ? (day.focus || 'Build your baseline') : plan.focus,
+    cue: continuing ? (day.focusCue || plan.cue) : plan.cue,
+    reason, action, label, optional: !!(day && day.completedAt),
+    measurement: focusTag ? transferMeasurement(reviewed, focusTag, now) : null
+  };
+}
+
+function renderProgressRecommendation(recommendation) {
+  $('#progress-next-label').text(recommendation.optional ? 'Optional next focus' : 'Work on next');
+  $('#progress-next-title').text(recommendation.title);
+  $('#progress-next-reason').text(recommendation.reason);
+  $('#progress-next-cue').text(recommendation.cue);
+  $('#btn-progress-next').text(recommendation.label);
+}
+
+function runProgressRecommendation() {
+  // Re-read the active owner's data and queue at click time, including a sync
+  // or a due-date change since this panel was first opened.
+  renderInsights();
+  const next = progressRecommendation(currentInsightEntries());
+  if (coachThinking || importedGameAnalysisActive) return;
+  if (next.action === 'daily') {
+    $('#btn-coach-next-action').trigger('click');
+  } else if (next.action === 'continue') {
+    if (coachIsReviewing()) coachGotoLive();
+    showCoachPanel('game');
+    document.getElementById('coachBoard')?.focus({ preventScroll: true });
+  } else {
+    renderedAdaptivePlan = next.plan;
+    if (next.action === 'practice') startCoachPracticeSession(next.plan.orderedDue, next.plan.orderedDue[0]);
+    else startCoachGame();
+  }
+}
+
 function renderWeeklyReview(entriesOverride) {
-  const entries = Array.isArray(entriesOverride)
-    ? entriesOverride
-    : loadInsights().entries.filter(entry => entry && entry.tier && entry.tier !== 'unknown');
   const now = Date.now();
-  const recent = entries.filter(entry => now - (entry.ts || 0) <= 7 * DAY_MS);
-  const attempts = loadPracticeProgress().events.filter(event => now - (event.at || 0) <= 7 * DAY_MS);
-  const completed = Object.values(loadDailySprintHistory().days).filter(day => day.completedAt && now - day.completedAt <= 7 * DAY_MS);
-  const counts = insightTagCounts(recent.filter(entry => isInsightProblem(entry.tier)));
-  const focus = counts[0] && INSIGHT_TAG_META[counts[0].tag];
-  const measurement = counts[0] ? transferMeasurement(entries, counts[0].tag) : null;
-  const profile = playerProfile();
+  const entries = reviewedProgressEntries(Array.isArray(entriesOverride) ? entriesOverride : currentInsightEntries(), now);
+  const recent = entries.filter(entry => entry.ts >= now - 7 * DAY_MS);
+  const attempts = loadPracticeProgress().events.filter(event => event && Number.isFinite(event.at) && event.at > 0 && event.at <= now && event.at >= now - 7 * DAY_MS);
+  const completed = Object.values(loadDailySprintHistory().days).filter(day => day.completedAt && day.completedAt <= now && day.completedAt >= now - 7 * DAY_MS);
+  const recommendation = progressRecommendation(entries, now);
+  renderProgressRecommendation(recommendation);
+  const unassisted = attempts.filter(event => event.correct && !event.revealed).length;
+  const assisted = attempts.filter(event => event.correct && event.revealed).length;
+  const misses = attempts.filter(event => !event.correct).length;
+  const measurement = recommendation.measurement;
   const $list = $('#weekly-review-list').empty();
-  const activity = completed.length || attempts.length || recent.length;
   $list.append($('<div class="weekly-item"></div>').append(
-    $('<strong></strong>').text(activity ? `${completed.length} session${completed.length === 1 ? '' : 's'} completed` : 'Your first review is waiting'),
-    $('<span></span>').text(activity
-      ? `${recent.length} reviewed moves and ${attempts.length} practice attempts in the last seven days.`
-      : `Complete a ${profile.minutes}-minute session or import a game to establish the baseline.`)
+    $('<strong></strong>').text('Activity · last 7 days'),
+    $('<span></span>').text(`${completed.length} completed session${completed.length === 1 ? '' : 's'}, ${recent.length} reviewed move${recent.length === 1 ? '' : 's'}, ${attempts.length} practice attempt${attempts.length === 1 ? '' : 's'}.`)
   ));
   $list.append($('<div class="weekly-item"></div>').append(
-    $('<strong></strong>').text(focus ? `Priority · ${focus.title}` : 'Priority · Build evidence'),
-    $('<span></span>').text(focus
-      ? `${counts[0].count} recent occurrence${counts[0].count === 1 ? '' : 's'}. ${focus.practice}`
-      : 'Coach needs reviewed moves before it can identify a reliable recurring pattern.')
+    $('<strong></strong>').text('Practice · last 7 days'),
+    $('<span></span>').text(attempts.length
+      ? `${unassisted} unassisted correct, ${assisted} completed with a hint or answer, ${misses} missed attempts. Retries count as separate attempts.`
+      : 'No attempts yet. Rehearse a saved position, then use the same cue in play.')
   ));
+  let comparison = recommendation.focusTag
+    ? 'Complete an unassisted practice attempt after at least 30 reviewed moves to start a comparison.'
+    : 'Build a reviewed-move baseline. Once Coach identifies a focus, rehearse it and look for the same pattern in later reviews.';
+  if (measurement) {
+    const before = measurement.beforeSamples ? `${measurement.beforeErrors}/${measurement.beforeSamples} reviewed moves flagged before practice.` : 'No baseline reviews retained.';
+    const after = measurement.afterSamples ? `${measurement.afterErrors}/${measurement.afterSamples} flagged after practice.` : 'No follow-up reviews yet.';
+    const samples = `${before} ${after}`;
+    if (!measurement.baselineReady) comparison = `${samples} Baseline incomplete (need ${TRANSFER_MIN_SAMPLES} moves). Collect more reviewed moves, then rehearse again to start a comparison.`;
+    else if (!measurement.enoughEvidence) comparison = `${samples} Follow-up: ${measurement.afterSamples}/${TRANSFER_MIN_SAMPLES} reviewed moves. Play or review more moves with this cue; no conclusion yet.`;
+    else {
+      const trend = measurement.direction === 'unchanged' ? 'No observed change in flag rate.'
+        : `Observed flag rate is ${Math.abs(measurement.change).toFixed(1)} percentage points ${measurement.direction === 'improved' ? 'lower' : 'higher'}.`;
+      comparison = `${samples} ${trend} These are observed coaching flags, not proof of learning.`;
+    }
+    comparison += ` Checkpoint: ${new Date(measurement.anchor).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}.`;
+  }
   $list.append($('<div class="weekly-item"></div>').append(
-    $('<strong></strong>').text('Transfer check'),
-    $('<span></span>').text(measurement
-      ? (!measurement.enoughEvidence
-        ? `Insufficient evidence: ${measurement.beforeSamples}/${TRANSFER_MIN_SAMPLES} before and ${measurement.afterSamples}/${TRANSFER_MIN_SAMPLES} after samples. No conclusion yet.`
-        : measurement.direction === 'improved'
-          ? `Observed ${Math.abs(measurement.change)} percentage-point fewer tagged problems after practice (${measurement.beforeSamples} before, ${measurement.afterSamples} after). This is an observation, not proof that practice caused the change.`
-          : measurement.direction === 'worsened'
-            ? `Observed ${measurement.change} percentage-point more tagged problems after practice (${measurement.beforeSamples} before, ${measurement.afterSamples} after). This is an observation, not proof that practice caused the change.`
-            : `Observed no change in tagged-problem rate (${measurement.beforeSamples} before, ${measurement.afterSamples} after). This is an observation, not proof that practice caused the result.`)
-      : 'Practice and then play or import more moves; Coach will compare the pattern before and after training.')
+    $('<strong></strong>').text(recommendation.focusTag ? `After practice · ${recommendation.title}` : 'After practice · build evidence'),
+    $('<span></span>').text(comparison)
   ));
+  renderCoachPresentation();
 }
 
 function endgameScenarioFor(lesson) {
@@ -1245,6 +1312,7 @@ async function analyseImportedPgn() {
   }
 
   importedGameAnalysisActive = true;
+  renderCoachPresentation();
   const run = {
     id: ++importedAnalysisRunId,
     cancelled: false,
@@ -1360,6 +1428,7 @@ async function analyseImportedPgn() {
   } finally {
     if (importedAnalysisRun === run) importedAnalysisRun = null;
     importedGameAnalysisActive = false;
+    renderCoachPresentation();
     $('#btn-analyse-pgn').prop('disabled', false);
     $cancel.prop('disabled', true).hide();
   }
@@ -1379,6 +1448,7 @@ function cancelImportedPgnAnalysis() {
 
 function initGrowthFeatures() {
   hydrateGrowthUI();
+  $('#btn-progress-next').on('click', runProgressRecommendation);
   $('#btn-repertoire-toggle').on('click', () => {
     if (currentOpening) toggleRepertoireOpening(currentOpening.id);
   });

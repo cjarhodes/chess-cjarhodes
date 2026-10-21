@@ -993,26 +993,24 @@ function insightTagCounts(entries) {
 function recurringMistakeSummaries(entries, now = Date.now()) {
   const currentStart = now - 30 * DAY_MS;
   const previousStart = currentStart - 30 * DAY_MS;
-  const summaries = {};
-  (entries || []).filter(entry => isInsightProblem(entry.tier)).forEach(entry => {
-    const tags = entry.tags || [];
-    tags.forEach(tag => {
-      if (!INSIGHT_TAG_META[tag]) return;
-      if (!summaries[tag]) summaries[tag] = { tag, current: 0, previous: 0, latestAt: 0, loss: 0 };
-      const summary = summaries[tag];
-      const at = Number(entry.ts) || 0;
-      if (at >= currentStart) {
-        summary.current += 1;
-        summary.loss += Math.min(entry.loss || 0, ACPL_CAP);
-        summary.latestAt = Math.max(summary.latestAt, at);
-      } else if (at >= previousStart) {
-        summary.previous += 1;
-      }
-    });
-  });
-  return Object.values(summaries)
-    .filter(summary => summary.current || summary.previous)
-    .sort((a, b) => b.current - a.current || (b.current - b.previous) - (a.current - a.previous) || b.latestAt - a.latestAt);
+  const reviewed = reviewedProgressEntries(entries, now);
+  const current = reviewed.filter(entry => entry.ts >= currentStart);
+  const previous = reviewed.filter(entry => entry.ts >= previousStart && entry.ts < currentStart);
+  const tags = new Set(reviewed.filter(entry => entry.ts >= previousStart && isInsightProblem(entry.tier))
+    .flatMap(entry => Array.isArray(entry.tags) ? entry.tags : []).filter(tag => INSIGHT_TAG_META[tag]));
+  const flagged = (list, tag) => list.filter(entry => isInsightProblem(entry.tier) && Array.isArray(entry.tags) && entry.tags.includes(tag));
+  return Array.from(tags).map(tag => {
+    const recent = flagged(current, tag), earlier = flagged(previous, tag);
+    const currentRate = current.length ? recent.length / current.length : null;
+    const previousRate = previous.length ? earlier.length / previous.length : null;
+    const comparable = current.length >= 30 && previous.length >= 30;
+    return { tag, current: recent.length, previous: earlier.length,
+      currentSamples: current.length, previousSamples: previous.length,
+      currentRate, previousRate, comparable,
+      change: comparable ? currentRate - previousRate : null,
+      latestAt: recent.length ? recent[recent.length - 1].ts : 0,
+      loss: recent.reduce((sum, entry) => sum + Math.min(entry.loss || 0, ACPL_CAP), 0) };
+  }).sort((a, b) => b.current - a.current || b.latestAt - a.latestAt);
 }
 
 function renderRecurringMistakeDashboard(entries) {
@@ -1020,16 +1018,20 @@ function renderRecurringMistakeDashboard(entries) {
   if (!$list.length) return;
   const summaries = recurringMistakeSummaries(entries);
   if (!summaries.length) {
-    $list.append($('<div class="insight-empty"></div>').text('No recurring pattern across the last 60 days yet.'));
+    $list.append($('<div class="insight-empty"></div>').text('No flagged pattern in the retained reviews from the last 60 days.'));
     return;
   }
   summaries.slice(0, 4).forEach(summary => {
     const meta = INSIGHT_TAG_META[summary.tag];
-    const delta = summary.current - summary.previous;
-    const direction = delta > 0 ? `↑ ${delta} vs prior month` : delta < 0 ? `↓ ${Math.abs(delta)} vs prior month` : 'Flat vs prior month';
+    const current = `${summary.current}/${summary.currentSamples} reviewed moves flagged in the last 30 days`;
+    const previous = `${summary.previous}/${summary.previousSamples} in the prior 30 days`;
+    const direction = !summary.comparable
+      ? 'Too few retained reviews to compare rates; need 30 in each period.'
+      : Math.abs(summary.change * 100) < 0.05 ? 'Observed flag rate is unchanged.'
+        : `Observed flag rate is ${Math.abs(summary.change * 100).toFixed(1)} percentage points ${summary.change < 0 ? 'lower' : 'higher'}.`;
     const $row = $('<div class="insight-recurring-row"></div>');
     $row.append($('<strong></strong>').text(meta.title));
-    $row.append($('<span></span>').text(`${summary.current} recent · ${direction}`));
+    $row.append($('<span></span>').text(`${current}; ${previous}. ${direction}`));
     $list.append($row);
   });
 }
@@ -1076,10 +1078,10 @@ const PRACTICE_QUEUE_LIMIT = 10;
 
 function buildPracticeQueue(entries, counts) {
   const used = new Set();
-  const keyForEntry = entry => (entry.id || entry.ts || entry.ply || '') + ':' + entry.fenBefore;
+  const keyForEntry = (entry, tag) => `${entry.fenBefore}|${entry.bestUci}|${tag}`;
   const rankedTags = (counts || []).map(c => c.tag);
   const sorted = (entries || [])
-    .filter(e => e && isInsightProblem(e.tier) && e.fenBefore && e.bestUci)
+    .filter(e => e && isInsightProblem(e.tier) && e.fenBefore && e.bestUci && practiceMoveFor(e.fenBefore, e.bestUci))
     .slice()
     .sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const queue = [];
@@ -1087,7 +1089,7 @@ function buildPracticeQueue(entries, counts) {
   for (const tag of rankedTags) {
     const entry = sorted.find(e => (e.tags || []).includes(tag) && !used.has(tag));
     if (!entry) continue;
-    const key = keyForEntry(entry);
+    const key = keyForEntry(entry, tag);
     if (used.has(key)) continue;
     used.add(tag);
     used.add(key);
@@ -1098,7 +1100,7 @@ function buildPracticeQueue(entries, counts) {
   for (const entry of sorted) {
     if (queue.length >= PRACTICE_QUEUE_LIMIT) break;
     const tag = insightTagForEntry(entry);
-    const key = keyForEntry(entry);
+    const key = keyForEntry(entry, tag);
     if (used.has(key)) continue;
     used.add(key);
     queue.push({ entry, tag });
@@ -1561,7 +1563,7 @@ function adaptiveFocusReason(profile) {
   const mistakes = `${profile.occurrences} reviewed error${profile.occurrences === 1 ? '' : 's'}`;
   if (!profile.attempts) return `${mistakes}; this pattern has not been rehearsed yet.`;
   const rate = Math.round(profile.correct / profile.attempts * 100);
-  return `${mistakes} and ${rate}% first-try practice success across ${profile.attempts} attempt${profile.attempts === 1 ? '' : 's'}.`;
+  return `${mistakes} and ${rate}% unassisted correct attempts across ${profile.attempts} practice attempt${profile.attempts === 1 ? '' : 's'}.`;
 }
 
 function prioritizeAdaptivePractice(items, profiles) {
@@ -1911,8 +1913,8 @@ function renderPracticeTrends() {
   const comparison = trend.rate === null
     ? 'No attempts in the last 7 days.'
     : trend.previousRate === null
-      ? `${trend.rate}% success this week — your first trend baseline.`
-      : `${trend.rate}% success this week, ${trend.rate - trend.previousRate >= 0 ? '+' : ''}${trend.rate - trend.previousRate} points vs the prior week.`;
+      ? `${trend.rate}% completed attempts this week — your first trend baseline.`
+      : `${trend.rate}% completed attempts this week, ${trend.rate - trend.previousRate >= 0 ? '+' : ''}${trend.rate - trend.previousRate} points vs the prior week.`;
   const focus = trend.focus && INSIGHT_TAG_META[trend.focus.tag]
     ? ` Focus next: ${INSIGHT_TAG_META[trend.focus.tag].title}.`
     : '';
@@ -1924,7 +1926,7 @@ function renderPracticeTrends() {
     const height = day.attempts ? Math.max(12, Math.round(day.attempts / maxAttempts * 100)) : 4;
     const success = day.attempts ? Math.round(day.correct / day.attempts * 100) : 0;
     const $day = $('<div class="practice-trend-day"></div>')
-      .attr('aria-label', `${day.label}: ${day.attempts} attempt${day.attempts === 1 ? '' : 's'}, ${success}% success`);
+      .attr('aria-label', `${day.label}: ${day.attempts} attempt${day.attempts === 1 ? '' : 's'}, ${success}% completed attempts`);
     $day.append(
       $('<span class="practice-trend-bar"></span>')
         .css('--bar-height', height + '%')
@@ -2279,11 +2281,11 @@ function renderCoachDailyPlan(queue, due, totals, entries) {
     return;
   }
 
-  const returning = progress.attempts > 0 || items.length > 0;
+  const returning = progress.attempts > 0 || items.length > 0 || (entries || []).length > 0;
   const plan = renderedAdaptivePlan;
   setDailySprintProgress(0, plan.moveTarget, 'move');
-  $('#coach-daily-plan-title').text(returning && plan.focusTag ? `Transfer ${plan.focus}` : 'Start your first coached session');
-  $('#coach-daily-plan-detail').text(returning && plan.focusTag
+  $('#coach-daily-plan-title').text(plan.focusTag ? `Transfer ${plan.focus}` : 'Start your first coached session');
+  $('#coach-daily-plan-detail').text(plan.focusTag
     ? `${plan.moveTarget} reviewed moves using one personalised cue. Coach will check whether the pattern returns.`
     : `Play ${plan.moveTarget} reviewed moves and Coach will choose your first training focus.`);
   $action.text(returning ? 'Start focused game' : 'Start training').attr('data-action', 'game');
@@ -2367,19 +2369,20 @@ function renderTheoryCards(entries, counts) {
   $section.toggle($list.children().length > 0);
 }
 
+function currentInsightEntries() {
+  const source = coachAuthUser && coachRemoteInsightsLoaded ? coachRemoteInsightEntries : loadInsights().entries;
+  return reviewedProgressEntries(source);
+}
+
 function renderInsights() {
-  const localEntries = loadInsights().entries.filter(e => e && e.tier && e.tier !== 'unknown');
-  const remoteEntries = Array.isArray(coachRemoteInsightEntries)
-    ? coachRemoteInsightEntries.filter(e => e && e.tier && e.tier !== 'unknown')
-    : [];
   const usingRemote = !!coachAuthUser && coachRemoteInsightsLoaded;
-  const entries = usingRemote ? remoteEntries : localEntries;
-  if (typeof renderWeeklyReview === 'function') renderWeeklyReview(entries);
+  const entries = currentInsightEntries();
   renderRecurringMistakeDashboard(entries);
   const $section = $('#insights-section');
   if (!entries.length) {
     $section.hide();
     renderPracticeQueue([], []);
+    if (typeof renderWeeklyReview === 'function') renderWeeklyReview(entries);
     $('#theory-section').hide();
     return;
   }
@@ -2403,13 +2406,14 @@ function renderInsights() {
     $list.append($('<div class="insight-empty"></div>').text('Current sample is clean. Keep playing enough moves to build a useful baseline.'));
     renderPracticeQueue(problemEntries, counts);
     renderTheoryCards(problemEntries, counts);
+    if (typeof renderWeeklyReview === 'function') renderWeeklyReview(entries);
     return;
   }
 
   const top = counts[0];
   const topMeta = INSIGHT_TAG_META[top.tag];
   $('#insights-primary-title').text(topMeta.title);
-  $('#insights-primary-detail').text(`${top.count} recent occurrence${top.count === 1 ? '' : 's'}. Practice next: ${topMeta.practice}`);
+  $('#insights-primary-detail').text(`${top.count} saved occurrence${top.count === 1 ? '' : 's'}. Practice next: ${topMeta.practice}`);
 
   counts.slice(0, 3).forEach(item => {
     const meta = INSIGHT_TAG_META[item.tag];
@@ -2429,6 +2433,7 @@ function renderInsights() {
   });
   renderPracticeQueue(problemEntries, counts);
   renderTheoryCards(problemEntries, counts);
+  if (typeof renderWeeklyReview === 'function') renderWeeklyReview(entries);
 }
 
 // ─────────────────────────────────────────────
@@ -4336,10 +4341,13 @@ function renderCoachPresentation() {
 
   $('#coach-phase-label').text(labels[state]);
   $('#coach-game-options-label').text((coachUserSide === 'random' ? 'Random' : coachUserColor() === 'white' ? 'White' : 'Black') + ' · ' + coachEngineElo);
-  const managed = '#btn-coach-next-action, #btn-coach-showwhy, #btn-coach-backtogame, #btn-coach-live, #btn-coach-practice-next, #btn-coach-practice-exit, #coach-keyboard-move-form button';
+  const managed = '#btn-progress-next, #btn-coach-next-action, #btn-coach-showwhy, #btn-coach-backtogame, #btn-coach-live, #btn-coach-practice-next, #btn-coach-practice-exit, #coach-keyboard-move-form button';
   $(managed).removeClass('primary').removeAttr('data-primary-action');
+  const progressActive = document.getElementById('panel-progress').classList.contains('active');
+  $('#btn-progress-next').prop('disabled', ['analyzing', 'opponent-turn', 'practice-checking'].includes(state) || (typeof importedGameAnalysisActive !== 'undefined' && importedGameAnalysisActive));
   let action = null;
-  if (state === 'ready' || state === 'complete' || state === 'ended') action = '#btn-coach-next-action';
+  if (progressActive && !$('#btn-progress-next').prop('disabled') && !['analyzing', 'opponent-turn', 'practice-checking', 'practice', 'practice-complete', 'review'].includes(state)) action = '#btn-progress-next';
+  else if (state === 'ready' || state === 'complete' || state === 'ended') action = '#btn-coach-next-action';
   else if (state === 'review') action = coachReviewAnalysis ? '#btn-coach-backtogame' : '#btn-coach-live';
   else if (state === 'practice-complete') action = $('#btn-coach-practice-next').is(':visible') && !$('#btn-coach-practice-next').prop('disabled') ? '#btn-coach-practice-next' : '#btn-coach-practice-exit';
   else if (state === 'user-turn' && $('#coach-review').is(':visible') && !$('#btn-coach-showwhy').prop('disabled')) action = '#btn-coach-showwhy';
@@ -6077,6 +6085,7 @@ function advanceCoachPractice() {
 
 function exitCoachPractice(message) {
   if (!coachPracticeSession) return;
+  $('#coach-keyboard-move-status').text('');
   clearCoachPracticeState(coachPracticeSession.owner || coachMemoryOwnerId());
   const returnState = coachPracticeReturnState;
   coachPracticeSession = null;

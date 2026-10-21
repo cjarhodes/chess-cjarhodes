@@ -981,3 +981,15 @@ if [[ "$UI_EXIT" -ne 0 || "$UI_OUTPUT" == *"### Error"* ]]; then
   exit 1
 fi
 echo "Coaching UI journey validation passed."
+
+PROGRESS_CODE=$(cat "$ROOT/scripts/verify-progress-journeys.js")
+set +e
+PROGRESS_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$PROGRESS_CODE")
+PROGRESS_EXIT=$?
+set -e
+echo "$PROGRESS_OUTPUT"
+if [[ "$PROGRESS_EXIT" -ne 0 || "$PROGRESS_OUTPUT" == *"### Error"* ]]; then
+  echo "Useful Progress journey validation failed." >&2
+  exit 1
+fi
+echo "Useful Progress journey validation passed."

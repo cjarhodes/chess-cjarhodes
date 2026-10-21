@@ -1,0 +1,251 @@
+{
+  "environment": "local HTTP preview",
+  "recordedAt": "2026-10-21T04:24:49.652219+00:00",
+  "baseCommit": "6f41f526839790c3650e3c28f60f3177be087c29",
+  "sourceSha256": {
+    "app.js": "f59bd9e6c06d7f3a117b4ba495a087858d373196bc762b01e5538af105aa1c6e",
+    "growth.js": "7d471effe520bfd71c784348b37d54ca90dc3193756b6012c01cd473e1a05b17",
+    "index.html": "a0104b4a317f4bbb92cc4d43afaf940b2cc56624d44d3dd99fa6871110410ecc",
+    "styles.css": "ea8e119d73ab0c3c50c165f0c93c6d68ef3519569262052c1a34b1a1dd805ee4"
+  },
+  "syntaxChecks": [
+    "node --check app.js",
+    "node --check growth.js"
+  ],
+  "validators": [
+    "validate-accessibility.js",
+    "validate-difficulty.js",
+    "validate-growth-upgrades.js",
+    "validate-growth.js",
+    "validate-maintainability.js",
+    "validate-openings.js",
+    "validate-performance.js",
+    "validate-practice-logic.js",
+    "validate-practice-upgrades.js",
+    "validate-practice.js",
+    "validate-recovery.js",
+    "validate-reliability.js",
+    "validate-review-teaching.js",
+    "validate-security.js",
+    "validate-useful-progress.js"
+  ],
+  "usefulProgressBehavioralAssertions": 32,
+  "browserCommand": "scripts/verify-browser.sh",
+  "browserPassMarkers": [
+    "Browser smoke validation passed.",
+    "Teaching journey validation passed.",
+    "Interruption recovery validation passed.",
+    "Opponent journey validation passed.",
+    "Coaching UI journey validation passed.",
+    "Useful Progress journey validation passed."
+  ],
+  "progressJourney": {
+    "scenarios": [
+      "empty Progress starts a real reviewed game; reload and one-action resume preserve game and daily progress",
+      "normalized monthly rates, one unique due position, real unassisted solve, live handoff, and first follow-up review",
+      "real hinted completion stays assisted and does not claim transfer evidence",
+      "30 before / 30 after observed rates survive later rehearsal and reload; absent drills lead to real focused play",
+      "click-time owner refresh and standalone weekly rendering use the account source without guest review or practice leakage"
+    ],
+    "checks": [
+      {
+        "name": "empty",
+        "width": 1280,
+        "height": 800,
+        "boardSize": 456,
+        "boardBottom": 630,
+        "nextBottom": 394.59375,
+        "overflow": 0,
+        "primary": "btn-progress-next"
+      },
+      {
+        "name": "empty",
+        "width": 1440,
+        "height": 900,
+        "boardSize": 560,
+        "boardBottom": 734,
+        "nextBottom": 371.796875,
+        "overflow": 0,
+        "primary": "btn-progress-next"
+      },
+      {
+        "name": "empty",
+        "width": 1920,
+        "height": 1080,
+        "boardSize": 736,
+        "boardBottom": 910,
+        "nextBottom": 352.609375,
+        "overflow": 0,
+        "primary": "btn-progress-next"
+      },
+      {
+        "name": "focus",
+        "width": 1280,
+        "height": 800,
+        "boardSize": 456,
+        "boardBottom": 630,
+        "nextBottom": 392.328125,
+        "overflow": 0,
+        "primary": "btn-progress-next"
+      },
+      {
+        "name": "focus",
+        "width": 1440,
+        "height": 900,
+        "boardSize": 560,
+        "boardBottom": 734,
+        "nextBottom": 373.140625,
+        "overflow": 0,
+        "primary": "btn-progress-next"
+      },
+      {
+        "name": "focus",
+        "width": 1920,
+        "height": 1080,
+        "boardSize": 736,
+        "boardBottom": 910,
+        "nextBottom": 350.34375,
+        "overflow": 0,
+        "primary": "btn-progress-next"
+      },
+      {
+        "name": "after-practice",
+        "width": 1280,
+        "height": 800,
+        "boardSize": 400,
+        "boardBottom": 575.09375,
+        "nextBottom": 410.171875,
+        "overflow": 0,
+        "primary": "btn-progress-next"
+      },
+      {
+        "name": "after-practice",
+        "width": 1440,
+        "height": 900,
+        "boardSize": 504,
+        "boardBottom": 678,
+        "nextBottom": 390.984375,
+        "overflow": 0,
+        "primary": "btn-progress-next"
+      },
+      {
+        "name": "after-practice",
+        "width": 1920,
+        "height": 1080,
+        "boardSize": 680,
+        "boardBottom": 854,
+        "nextBottom": 368.1875,
+        "overflow": 0,
+        "primary": "btn-progress-next"
+      },
+      {
+        "name": "assisted",
+        "width": 1280,
+        "height": 800,
+        "boardSize": 400,
+        "boardBottom": 575.09375,
+        "nextBottom": 410.171875,
+        "overflow": 0,
+        "primary": "btn-progress-next"
+      },
+      {
+        "name": "assisted",
+        "width": 1440,
+        "height": 900,
+        "boardSize": 504,
+        "boardBottom": 678,
+        "nextBottom": 390.984375,
+        "overflow": 0,
+        "primary": "btn-progress-next"
+      },
+      {
+        "name": "assisted",
+        "width": 1920,
+        "height": 1080,
+        "boardSize": 680,
+        "boardBottom": 854,
+        "nextBottom": 368.1875,
+        "overflow": 0,
+        "primary": "btn-progress-next"
+      },
+      {
+        "name": "comparison",
+        "width": 1280,
+        "height": 800,
+        "boardSize": 456,
+        "boardBottom": 630,
+        "nextBottom": 390.984375,
+        "overflow": 0,
+        "primary": "btn-progress-next"
+      },
+      {
+        "name": "comparison",
+        "width": 1440,
+        "height": 900,
+        "boardSize": 560,
+        "boardBottom": 734,
+        "nextBottom": 371.796875,
+        "overflow": 0,
+        "primary": "btn-progress-next"
+      },
+      {
+        "name": "comparison",
+        "width": 1920,
+        "height": 1080,
+        "boardSize": 736,
+        "boardBottom": 910,
+        "nextBottom": 349,
+        "overflow": 0,
+        "primary": "btn-progress-next"
+      },
+      {
+        "name": "owner-isolation",
+        "width": 1280,
+        "height": 800,
+        "boardSize": 456,
+        "boardBottom": 630,
+        "nextBottom": 395.9375,
+        "overflow": 0,
+        "primary": "btn-progress-next"
+      },
+      {
+        "name": "owner-isolation",
+        "width": 1440,
+        "height": 900,
+        "boardSize": 560,
+        "boardBottom": 734,
+        "nextBottom": 373.140625,
+        "overflow": 0,
+        "primary": "btn-progress-next"
+      },
+      {
+        "name": "owner-isolation",
+        "width": 1920,
+        "height": 1080,
+        "boardSize": 736,
+        "boardBottom": 910,
+        "nextBottom": 353.953125,
+        "overflow": 0,
+        "primary": "btn-progress-next"
+      }
+    ],
+    "keyboardFocus": true,
+    "pageErrors": 0,
+    "consoleErrors": 0
+  },
+  "unequalVolumeFixture": {
+    "priorFlags": 10,
+    "priorReviewed": 100,
+    "currentFlags": 15,
+    "currentReviewed": 200,
+    "observedRateChangePercentagePoints": -2.5
+  },
+  "practiceComparisonFixture": {
+    "beforeFlags": 10,
+    "beforeReviewed": 30,
+    "afterFlags": 2,
+    "afterReviewed": 30,
+    "observedRateChangePercentagePoints": -26.7
+  },
+  "interpretation": "Controlled regression evidence, not measured human learning or a causal training effect."
+}

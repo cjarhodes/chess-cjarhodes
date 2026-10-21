@@ -39,10 +39,19 @@ Drills evaluate sound alternatives, provide progressive hints, and can ask for
 a follow-up after an opponent reply. Unverified engine results are not counted
 as mistakes.
 
-The weekly transfer comparison reports sample counts and needs at least 30
-reviewed moves before and after practice. This is a practical evidence floor,
-not a statistical significance test or proof of improvement. Daily session
-completion measures activity, separately from longer-term performance.
+**Progress** leads with one next focus, its evidence, a cue, and a direct action to
+practice or play. It resumes an unfinished session before suggesting a new one.
+Activity, unassisted attempts, assisted completions, and observed mistake rates
+are shown separately. Repeated instances of one position count as one due drill.
+
+The practice comparison uses the nearest 30 reviewed moves before an unassisted
+completion and the first 30 after it. Further rehearsals keep an eligible
+checkpoint while its baseline remains in the retained history. Thirty moves is
+a practical descriptive floor, not a statistical significance test or proof of
+learning. Monthly trends use flags per reviewed move rather than raw counts.
+History keeps up to 300 reviews, and imported games use their review dates.
+See [the useful progress audit](docs/useful-progress-loop.md) for workflows,
+measurements, and remaining evidence limits.
 
 PGN import reviews all selected-side moves in the valid games in a batch,
 with progress and cancellation. A completed batch contributes to Insights
