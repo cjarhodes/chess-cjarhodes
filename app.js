@@ -3848,32 +3848,24 @@ function strengthTierLabel(elo) {
   return 'Master';
 }
 
-// The numeric slider is an estimated difficulty, not a claim about Stockfish's
-// unsupported UCI_Elo option. Every field moves monotonically: higher settings
-// search deeper, use a higher native skill, inspect fewer alternatives, and
-// accept less centipawn loss when selecting a plausible move.
-// Opponent strength model. Each level searches to a fixed depth and inspects
-// several candidate moves; the engine's own best line is played most of the
-// time, with probability errorRate a deliberately weaker candidate is chosen
-// whose engine-measured loss sits near errorSize centipawns, and at beginner
-// levels with probability randomRate a move from the worst third of the list.
-// Every rate and size shrinks as the level rises, and the search deepens. The values below were calibrated by measuring average centipawn
-// loss against a deep reference search (scripts/calibrate-difficulty.js).
-// Note: Stockfish's Skill Level option only randomises its own `bestmove`
-// pick; it does not change the MultiPV lines this model selects from. It is
-// still sent so the bestmove fallback stays consistent with the level.
+// These are estimated difficulty settings, not measured human Elo ratings.
+// Search at full native skill so only this selector weakens play, including
+// the bestmove fallback. Lower levels make more frequent, larger mistakes,
+// but never deliberately sample the worst moves or require a minimum loss.
+// errorSize is the sampling temperature in centipawns, not a target to lose.
+// Calibration measures move quality and tactical failures, not human Elo.
 const COACH_DIFFICULTY_KEYFRAMES = [
-  { level: 400,  skill: 0,  depth: 8,  multipv: 20, randomRate: 0.40, errorRate: 0.90, errorSize: 480 },
-  { level: 600,  skill: 1,  depth: 8,  multipv: 20, randomRate: 0.20, errorRate: 0.78, errorSize: 440 },
-  { level: 800,  skill: 2,  depth: 8,  multipv: 20, randomRate: 0.12, errorRate: 0.72, errorSize: 420 },
-  { level: 1000, skill: 4,  depth: 8,  multipv: 20, randomRate: 0.04, errorRate: 0.66, errorSize: 380 },
-  { level: 1200, skill: 6,  depth: 8,  multipv: 16, randomRate: 0,    errorRate: 0.64, errorSize: 375 },
-  { level: 1400, skill: 9,  depth: 8,  multipv: 16, randomRate: 0,    errorRate: 0.52, errorSize: 340 },
-  { level: 1600, skill: 12, depth: 10, multipv: 16, randomRate: 0,    errorRate: 0.46, errorSize: 310 },
-  { level: 1800, skill: 15, depth: 12, multipv: 12, randomRate: 0,    errorRate: 0.40, errorSize: 290 },
-  { level: 2000, skill: 17, depth: 13, multipv: 12, randomRate: 0,    errorRate: 0.38, errorSize: 240 },
-  { level: 2200, skill: 19, depth: 14, multipv: 10, randomRate: 0,    errorRate: 0.34, errorSize: 200 },
-  { level: 2400, skill: 20, depth: 15, multipv: 10, randomRate: 0,    errorRate: 0.28, errorSize: 130 }
+  { level: 400,  skill: 20, depth: 10, multipv: 20, errorRate: 0.85, errorSize: 360 },
+  { level: 600,  skill: 20, depth: 10, multipv: 20, errorRate: 0.80, errorSize: 320 },
+  { level: 800,  skill: 20, depth: 10, multipv: 20, errorRate: 0.75, errorSize: 290 },
+  { level: 1000, skill: 20, depth: 10, multipv: 20, errorRate: 0.70, errorSize: 260 },
+  { level: 1200, skill: 20, depth: 10, multipv: 16, errorRate: 0.64, errorSize: 230 },
+  { level: 1400, skill: 20, depth: 10, multipv: 16, errorRate: 0.52, errorSize: 210 },
+  { level: 1600, skill: 20, depth: 11, multipv: 16, errorRate: 0.46, errorSize: 190 },
+  { level: 1800, skill: 20, depth: 12, multipv: 12, errorRate: 0.40, errorSize: 170 },
+  { level: 2000, skill: 20, depth: 13, multipv: 12, errorRate: 0.38, errorSize: 150 },
+  { level: 2200, skill: 20, depth: 14, multipv: 10, errorRate: 0.34, errorSize: 140 },
+  { level: 2400, skill: 20, depth: 15, multipv: 10, errorRate: 0.28, errorSize: 130 }
 ];
 
 function interpolateDifficultyField(a, b, t, field) {
@@ -3892,7 +3884,6 @@ function coachStrengthOpts(elo) {
     skill: Math.round(interpolateDifficultyField(lower, upper, t, 'skill')),
     depth: Math.round(interpolateDifficultyField(lower, upper, t, 'depth')),
     multipv: Math.round(interpolateDifficultyField(lower, upper, t, 'multipv')),
-    randomRate: Math.round(interpolateDifficultyField(lower, upper, t, 'randomRate') * 1000) / 1000,
     errorRate: Math.round(interpolateDifficultyField(lower, upper, t, 'errorRate') * 1000) / 1000,
     errorSize: Math.round(interpolateDifficultyField(lower, upper, t, 'errorSize'))
   };
@@ -3901,14 +3892,14 @@ function coachStrengthOpts(elo) {
 function calibratedOpponentCandidates(result) {
   const lines = (result && result.lines) || [];
   if (!lines.length) return [];
-  const bestScore = scoreToCp(lines[0]);
   const seen = new Set();
-  return lines.map(line => {
+  const candidates = lines.map(line => {
     const uci = line && line.pv && line.pv[0];
-    if (!uci || seen.has(uci)) return null;
+    if (!uci || seen.has(uci) || (!Number.isFinite(line.cp) && !Number.isFinite(line.mate))) return null;
     seen.add(uci);
-    return { uci, loss: Math.max(0, bestScore - scoreToCp(line)) };
-  }).filter(Boolean);
+    return { uci, score: scoreToCp(line), mate: line.mate };
+  }).filter(Boolean).sort((a, b) => b.score - a.score);
+  return candidates.map(candidate => Object.assign(candidate, { loss: candidates[0].score - candidate.score }));
 }
 
 function chooseCalibratedOpponentMove(result, config, random = Math.random) {
@@ -3916,32 +3907,20 @@ function chooseCalibratedOpponentMove(result, config, random = Math.random) {
   if (!candidates.length) return result && result.bestmove;
   const best = candidates[0].uci;
   if (candidates.length === 1) return best;
-  const roll = random();
-  // Beginner levels: sometimes play a genuinely clueless move from the worst
-  // third of the candidate list. The engine's ranked alternatives rarely
-  // contain 400-level moves in quiet positions, so this is what makes the
-  // lowest settings hang pieces the way new players do.
-  if (config.randomRate && roll < config.randomRate && candidates.length >= 3) {
-    const sorted = candidates.slice().sort((a, b) => a.loss - b.loss);
-    const tail = sorted.slice(Math.floor(sorted.length * 2 / 3));
-    return tail[Math.min(tail.length - 1, Math.floor(random() * tail.length))].uci;
-  }
-  if (!config.errorRate || roll >= (config.randomRate || 0) + config.errorRate) return best;
-  // Error move. The intended size of this particular error is drawn from a
-  // wide distribution around errorSize (many small slips, occasional big
-  // blunders, mean about 0.77 x errorSize), then the alternative whose
-  // engine-measured loss is closest to that size is favoured. Losses far beyond
-  // errorSize are excluded so a club-level opponent makes club-level mistakes
-  // rather than hanging its queen.
-  const cap = config.errorSize * 2 + 60;
-  const pool = candidates.filter(candidate => candidate.loss > 0 && candidate.loss <= cap);
+  // Convert known mates and resist as long as possible when all lines lose.
+  // Mate scores are not ordinary centipawns to spend as an error budget.
+  if (Number.isFinite(candidates[0].mate)) return best;
+  if (!config.errorRate || random() >= config.errorRate) return best;
+  // A lapse widens the choice, rather than instructing the bot to throw away
+  // a particular amount of material. Sound alternatives remain in the pool.
+  // Every branch shares this cap; no uncapped random tail exists.
+  const cap = Math.min(500, config.errorSize * 2 + 60);
+  const pool = candidates.filter(candidate => !Number.isFinite(candidate.mate) && candidate.loss <= cap);
   if (!pool.length) return best;
-  const u = random();
-  const desired = config.errorSize * (0.3 + 1.4 * u * u);
-  const scale = Math.max(15, desired * 0.5);
+  const scale = Math.max(1, config.errorSize);
   const weighted = pool.map(candidate => ({
     uci: candidate.uci,
-    weight: Math.exp(-Math.abs(candidate.loss - desired) / scale)
+    weight: Math.exp(-candidate.loss / scale)
   }));
   const total = weighted.reduce((sum, item) => sum + item.weight, 0);
   let cursor = random() * total;
@@ -4389,8 +4368,8 @@ async function coachOpponentRespond() {
   const fen = coachGame.fen();
   try {
     // Evaluate several plausible candidates and select one from a calibrated
-    // loss distribution. This produces realistic inaccuracies without random
-    // legal moves or unsupported Elo commands.
+    // loss distribution. Lower settings favor modest slips while preserving
+    // detected mates, without unsupported Elo commands.
     const opts = coachStrengthOpts(coachEngineElo);
     const result = await engineClient.evaluate(fen, opts.depth, {
       skill: opts.skill,

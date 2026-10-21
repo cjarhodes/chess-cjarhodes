@@ -104,9 +104,22 @@ scripts/verify-browser.sh
 ```
 
 To re-measure opponent strength after changing the difficulty model, run
-`node scripts/calibrate-difficulty.js`. It plays every slider level over ~60
-positions with the vendored engine and prints average centipawn loss per level
-against a human reference curve (several minutes).
+`node scripts/calibrate-difficulty.js`. It samples every slider level over ~60
+positions with the vendored engine and prints average centipawn loss, severe
+blunder rates, and mate-in-one concessions (several minutes). Samples use a
+repeatable seed; override `SAMPLES`, `SEED`, or `LEVELS` as needed. To compare
+an older selector on the same suite, set `APP_FILE=/path/to/old-app.js`.
+
+Difficulty numbers are approximate, not measured Chess.com, Lichess, or FIDE
+ratings. Move-quality statistics alone cannot establish a human Elo rating.
+The opponent searches at full native skill, then samples bounded alternatives
+more often at lower settings. It favors smaller mistakes, retains sound moves,
+converts known mates, and avoids engine-detected forced losses when a non-mating
+line exists. This is a weakened engine, not a model trained on human moves.
+
+The browser suite also finishes mating endings and six-turn opening sessions at
+400, 1200, and 2400, checking legal replies, reviews, results, and reloads. See
+[the opponent-quality audit](docs/opponent-quality-loop.md) for measurements and limits.
 
 This drives a real browser via `playwright-cli` (resolved from `$PWCLI`,
 a local Codex Playwright skill, an installed `playwright-cli`, or

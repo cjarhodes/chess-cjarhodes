@@ -200,7 +200,6 @@ async page => {
       item.skill >= levels[index - 1].skill &&
       item.depth >= levels[index - 1].depth &&
       item.multipv <= levels[index - 1].multipv &&
-      item.randomRate <= levels[index - 1].randomRate &&
       item.errorRate <= levels[index - 1].errorRate &&
       item.errorSize <= levels[index - 1].errorSize
     ));
@@ -228,7 +227,49 @@ async page => {
       ratingHistory: [{ at: 1000, accuracy: 40, moves: 6 }]
     });
     await engineClient.init();
+    const beginner = coachStrengthOpts(400);
+    const mateFen = '7k/8/5KQ1/8/8/8/8/8 w - - 0 1';
+    const mateSearch = await engineClient.evaluate(mateFen, beginner.depth, { skill: beginner.skill, multipv: beginner.multipv });
+    const mateMove = chooseCalibratedOpponentMove(mateSearch, beginner, () => 0.99);
+    const mateGame = new Chess(mateFen);
+    mateGame.move({ from: mateMove.slice(0, 2), to: mateMove.slice(2, 4) });
+    const defenseFen = 'r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3';
+    const defenseSearch = await engineClient.evaluate(defenseFen, beginner.depth, { skill: beginner.skill, multipv: beginner.multipv });
+    let defensesSafe = true;
+    for (let sample = 0; sample < 64; sample++) {
+      let draw = 0;
+      const move = chooseCalibratedOpponentMove(defenseSearch, beginner, () => draw++ === 0 ? 0 : sample / 64);
+      const game = new Chess(defenseFen);
+      if (!game.move({ from: move.slice(0, 2), to: move.slice(2, 4), promotion: move[4] })) { defensesSafe = false; break; }
+      const allowsMate = game.moves().some(reply => {
+        game.move(reply);
+        const mated = game.in_checkmate();
+        game.undo();
+        return mated;
+      });
+      if (allowsMate) { defensesSafe = false; break; }
+    }
+    const queenFen = '4k3/8/8/8/4q3/8/4R3/4K3 w - - 0 1';
+    const queenSearch = await engineClient.evaluate(queenFen, beginner.depth, beginner);
+    const quietFen = 'r1bq1rk1/pp2bppp/2n1pn2/2pp4/3P4/2P1PN2/PP1NBPPP/R2QK2R w KQ - 0 8';
+    const quietSearch = await engineClient.evaluate(quietFen, beginner.depth, beginner);
+    const quietMoves = new Set();
+    let takesFreeQueen = true;
+    for (let sample = 0; sample < 64; sample++) {
+      let draw = 0;
+      const random = () => draw++ === 0 ? 0 : sample / 64;
+      const move = chooseCalibratedOpponentMove(queenSearch, beginner, random);
+      const game = new Chess(queenFen);
+      const capture = game.move({ from: move.slice(0, 2), to: move.slice(2, 4), promotion: move[4] });
+      if (!capture || capture.captured !== 'q') takesFreeQueen = false;
+      draw = 0;
+      quietMoves.add(chooseCalibratedOpponentMove(quietSearch, beginner, random));
+    }
     return {
+      convertsMate: mateGame.in_checkmate(),
+      defensesSafe,
+      takesFreeQueen,
+      quietVariety: quietMoves.size,
       monotonic,
       lowMove,
       highMove,
@@ -246,6 +287,10 @@ async page => {
     };
   });
   assert(ratingCalibration.monotonic, 'opponent difficulty mapping was not monotonic at every slider step');
+  assert(ratingCalibration.convertsMate, 'beginner opponent threw away an engine-detected mate in one');
+  assert(ratingCalibration.defensesSafe, 'beginner opponent allowed immediate mate despite an available defense');
+  assert(ratingCalibration.takesFreeQueen, 'beginner opponent ignored a free queen');
+  assert(ratingCalibration.quietVariety >= 3, 'beginner opponent lost quiet-position variety');
   assert(ratingCalibration.lowMove !== 'e2e4' && ratingCalibration.highMove === 'e2e4', 'candidate selection did not tighten as difficulty increased');
   assert(ratingCalibration.winRaisedEstimate && ratingCalibration.lossLoweredEstimate, 'completed results did not move the player estimate in the correct direction');
   assert(ratingCalibration.confidenceNarrowed, 'player estimate uncertainty did not narrow after evidence');
@@ -908,3 +953,15 @@ if [[ "$RECOVERY_EXIT" -ne 0 || "$RECOVERY_OUTPUT" == *"### Error"* ]]; then
   exit 1
 fi
 echo "Interruption recovery validation passed."
+
+OPPONENT_CODE=$(cat "$ROOT/scripts/verify-opponent-journeys.js")
+set +e
+OPPONENT_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$OPPONENT_CODE")
+OPPONENT_EXIT=$?
+set -e
+echo "$OPPONENT_OUTPUT"
+if [[ "$OPPONENT_EXIT" -ne 0 || "$OPPONENT_OUTPUT" == *"### Error"* ]]; then
+  echo "Opponent journey validation failed." >&2
+  exit 1
+fi
+echo "Opponent journey validation passed."

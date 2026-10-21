@@ -1,0 +1,562 @@
+{
+  "date": "2026-10-20",
+  "baselineCommit": "6cf89c4f2a45451a84b057b4c5699e7403bb23f5",
+  "engine": "vendored Stockfish.js 10",
+  "referenceDepth": 12,
+  "seed": 20260921,
+  "samplesPerPosition": 16,
+  "positions": 62,
+  "lossClipCentipawns": 1500,
+  "humanEloMeasured": false,
+  "baseline": {
+    "400": {
+      "opts": {
+        "level": 400,
+        "skill": 0,
+        "depth": 8,
+        "multipv": 20,
+        "randomRate": 0.4,
+        "errorRate": 0.9,
+        "errorSize": 480
+      },
+      "n": 992,
+      "acpl": 196,
+      "median": 106,
+      "p100": 0.5161290322580645,
+      "p200": 0.2540322580645161,
+      "p300": 0.1814516129032258,
+      "p500": 0.09475806451612903,
+      "mateInOne": 0,
+      "illegal": 0,
+      "ownAcpl": 460,
+      "msMean": 38,
+      "msMax": 69,
+      "meanLoss": 195.87600806451613
+    },
+    "1200": {
+      "opts": {
+        "level": 1200,
+        "skill": 6,
+        "depth": 8,
+        "multipv": 16,
+        "randomRate": 0,
+        "errorRate": 0.64,
+        "errorSize": 375
+      },
+      "n": 992,
+      "acpl": 85,
+      "median": 32,
+      "p100": 0.25705645161290325,
+      "p200": 0.10887096774193548,
+      "p300": 0.07560483870967742,
+      "p500": 0.025201612903225805,
+      "mateInOne": 0,
+      "illegal": 0,
+      "ownAcpl": 91,
+      "msMean": 34,
+      "msMax": 57,
+      "meanLoss": 84.80846774193549
+    },
+    "2400": {
+      "opts": {
+        "level": 2400,
+        "skill": 20,
+        "depth": 15,
+        "multipv": 10,
+        "randomRate": 0,
+        "errorRate": 0.28,
+        "errorSize": 130
+      },
+      "n": 992,
+      "acpl": 20,
+      "median": 0,
+      "p100": 0.04233870967741935,
+      "p200": 0.012096774193548387,
+      "p300": 0.005040322580645161,
+      "p500": 0,
+      "mateInOne": 0,
+      "illegal": 0,
+      "ownAcpl": 13,
+      "msMean": 3194,
+      "msMax": 43786,
+      "meanLoss": 20.27923387096774
+    }
+  },
+  "candidate": {
+    "400": {
+      "opts": {
+        "level": 400,
+        "skill": 20,
+        "depth": 10,
+        "multipv": 20,
+        "errorRate": 0.85,
+        "errorSize": 360
+      },
+      "n": 992,
+      "acpl": 81,
+      "median": 37,
+      "p100": 0.2762096774193548,
+      "p200": 0.11391129032258064,
+      "p300": 0.06854838709677419,
+      "p500": 0.007056451612903226,
+      "mateInOne": 0,
+      "illegal": 0,
+      "ownAcpl": 87,
+      "msMean": 211,
+      "msMax": 1388,
+      "meanLoss": 80.60685483870968
+    },
+    "600": {
+      "opts": {
+        "level": 600,
+        "skill": 20,
+        "depth": 10,
+        "multipv": 20,
+        "errorRate": 0.8,
+        "errorSize": 320
+      },
+      "n": 992,
+      "acpl": 74,
+      "median": 29,
+      "p100": 0.2610887096774194,
+      "p200": 0.10080645161290322,
+      "p300": 0.06048387096774194,
+      "p500": 0.005040322580645161,
+      "mateInOne": 0,
+      "illegal": 0,
+      "ownAcpl": 80,
+      "msMean": 647,
+      "msMax": 6345,
+      "meanLoss": 74.19959677419355
+    },
+    "800": {
+      "opts": {
+        "level": 800,
+        "skill": 20,
+        "depth": 10,
+        "multipv": 20,
+        "errorRate": 0.75,
+        "errorSize": 290
+      },
+      "n": 992,
+      "acpl": 70,
+      "median": 26,
+      "p100": 0.25,
+      "p200": 0.09375,
+      "p300": 0.05846774193548387,
+      "p500": 0.004032258064516129,
+      "mateInOne": 0,
+      "illegal": 0,
+      "ownAcpl": 75,
+      "msMean": 140,
+      "msMax": 325,
+      "meanLoss": 70.16834677419355
+    },
+    "1000": {
+      "opts": {
+        "level": 1000,
+        "skill": 20,
+        "depth": 10,
+        "multipv": 20,
+        "errorRate": 0.7,
+        "errorSize": 260
+      },
+      "n": 992,
+      "acpl": 62,
+      "median": 20,
+      "p100": 0.22681451612903225,
+      "p200": 0.0846774193548387,
+      "p300": 0.04536290322580645,
+      "p500": 0.0020161290322580645,
+      "mateInOne": 0,
+      "illegal": 0,
+      "ownAcpl": 66,
+      "msMean": 133,
+      "msMax": 226,
+      "meanLoss": 62.03528225806452
+    },
+    "1200": {
+      "opts": {
+        "level": 1200,
+        "skill": 20,
+        "depth": 10,
+        "multipv": 16,
+        "errorRate": 0.64,
+        "errorSize": 230
+      },
+      "n": 992,
+      "acpl": 52,
+      "median": 18,
+      "p100": 0.15625,
+      "p200": 0.06149193548387097,
+      "p300": 0.036290322580645164,
+      "p500": 0.0020161290322580645,
+      "mateInOne": 0,
+      "illegal": 0,
+      "ownAcpl": 50,
+      "msMean": 148,
+      "msMax": 507,
+      "meanLoss": 52.038306451612904
+    },
+    "1400": {
+      "opts": {
+        "level": 1400,
+        "skill": 20,
+        "depth": 10,
+        "multipv": 16,
+        "errorRate": 0.52,
+        "errorSize": 210
+      },
+      "n": 992,
+      "acpl": 41,
+      "median": 6,
+      "p100": 0.11693548387096774,
+      "p200": 0.04939516129032258,
+      "p300": 0.03024193548387097,
+      "p500": 0,
+      "mateInOne": 0,
+      "illegal": 0,
+      "ownAcpl": 38,
+      "msMean": 123,
+      "msMax": 224,
+      "meanLoss": 41.47883064516129
+    },
+    "1600": {
+      "opts": {
+        "level": 1600,
+        "skill": 20,
+        "depth": 11,
+        "multipv": 16,
+        "errorRate": 0.46,
+        "errorSize": 190
+      },
+      "n": 992,
+      "acpl": 38,
+      "median": 0,
+      "p100": 0.1159274193548387,
+      "p200": 0.04233870967741935,
+      "p300": 0.034274193548387094,
+      "p500": 0,
+      "mateInOne": 0,
+      "illegal": 0,
+      "ownAcpl": 32,
+      "msMean": 214,
+      "msMax": 378,
+      "meanLoss": 37.56653225806452
+    },
+    "1800": {
+      "opts": {
+        "level": 1800,
+        "skill": 20,
+        "depth": 12,
+        "multipv": 12,
+        "errorRate": 0.4,
+        "errorSize": 170
+      },
+      "n": 992,
+      "acpl": 24,
+      "median": 0,
+      "p100": 0.06350806451612903,
+      "p200": 0.017137096774193547,
+      "p300": 0.014112903225806451,
+      "p500": 0,
+      "mateInOne": 0,
+      "illegal": 0,
+      "ownAcpl": 19,
+      "msMean": 329,
+      "msMax": 639,
+      "meanLoss": 24.241935483870968
+    },
+    "2000": {
+      "opts": {
+        "level": 2000,
+        "skill": 20,
+        "depth": 13,
+        "multipv": 12,
+        "errorRate": 0.38,
+        "errorSize": 150
+      },
+      "n": 992,
+      "acpl": 19,
+      "median": 0,
+      "p100": 0.057459677419354836,
+      "p200": 0.015120967741935484,
+      "p300": 0.007056451612903226,
+      "p500": 0,
+      "mateInOne": 0,
+      "illegal": 0,
+      "ownAcpl": 16,
+      "msMean": 583,
+      "msMax": 1025,
+      "meanLoss": 19.282258064516128
+    },
+    "2200": {
+      "opts": {
+        "level": 2200,
+        "skill": 20,
+        "depth": 14,
+        "multipv": 10,
+        "errorRate": 0.34,
+        "errorSize": 140
+      },
+      "n": 992,
+      "acpl": 17,
+      "median": 0,
+      "p100": 0.04032258064516129,
+      "p200": 0.006048387096774193,
+      "p300": 0.0030241935483870967,
+      "p500": 0,
+      "mateInOne": 0,
+      "illegal": 0,
+      "ownAcpl": 11,
+      "msMean": 841,
+      "msMax": 1604,
+      "meanLoss": 16.958669354838708
+    },
+    "2400": {
+      "opts": {
+        "level": 2400,
+        "skill": 20,
+        "depth": 15,
+        "multipv": 10,
+        "errorRate": 0.28,
+        "errorSize": 130
+      },
+      "n": 992,
+      "acpl": 17,
+      "median": 0,
+      "p100": 0.038306451612903226,
+      "p200": 0.004032258064516129,
+      "p300": 0.0010080645161290322,
+      "p500": 0,
+      "mateInOne": 0,
+      "illegal": 0,
+      "ownAcpl": 10,
+      "msMean": 2931,
+      "msMax": 13963,
+      "meanLoss": 16.829637096774192
+    }
+  },
+  "browserAuditSeed": 20261020,
+  "browserDrawsPerPosition": 128,
+  "browserBaseline": [
+    {
+      "level": 400,
+      "name": "mate",
+      "mates": 0,
+      "concessions": 0,
+      "queens": 0,
+      "illegal": 0,
+      "distinctMoves": 19
+    },
+    {
+      "level": 400,
+      "name": "free-queen",
+      "mates": 0,
+      "concessions": 0,
+      "queens": 85,
+      "illegal": 0,
+      "distinctMoves": 3
+    },
+    {
+      "level": 400,
+      "name": "scholars-defense",
+      "mates": 0,
+      "concessions": 49,
+      "queens": 0,
+      "illegal": 0,
+      "distinctMoves": 12
+    },
+    {
+      "level": 400,
+      "name": "quiet",
+      "mates": 0,
+      "concessions": 0,
+      "queens": 0,
+      "illegal": 0,
+      "distinctMoves": 19
+    },
+    {
+      "level": 1200,
+      "name": "mate",
+      "mates": 45,
+      "concessions": 0,
+      "queens": 0,
+      "illegal": 0,
+      "distinctMoves": 14
+    },
+    {
+      "level": 1200,
+      "name": "free-queen",
+      "mates": 0,
+      "concessions": 0,
+      "queens": 128,
+      "illegal": 0,
+      "distinctMoves": 1
+    },
+    {
+      "level": 1200,
+      "name": "scholars-defense",
+      "mates": 0,
+      "concessions": 0,
+      "queens": 0,
+      "illegal": 0,
+      "distinctMoves": 5
+    },
+    {
+      "level": 1200,
+      "name": "quiet",
+      "mates": 0,
+      "concessions": 0,
+      "queens": 0,
+      "illegal": 0,
+      "distinctMoves": 16
+    },
+    {
+      "level": 2400,
+      "name": "mate",
+      "mates": 99,
+      "concessions": 0,
+      "queens": 0,
+      "illegal": 0,
+      "distinctMoves": 9
+    },
+    {
+      "level": 2400,
+      "name": "free-queen",
+      "mates": 0,
+      "concessions": 0,
+      "queens": 128,
+      "illegal": 0,
+      "distinctMoves": 1
+    },
+    {
+      "level": 2400,
+      "name": "scholars-defense",
+      "mates": 0,
+      "concessions": 0,
+      "queens": 0,
+      "illegal": 0,
+      "distinctMoves": 5
+    },
+    {
+      "level": 2400,
+      "name": "quiet",
+      "mates": 0,
+      "concessions": 0,
+      "queens": 0,
+      "illegal": 0,
+      "distinctMoves": 9
+    }
+  ],
+  "browserCandidate": [
+    {
+      "level": 400,
+      "name": "mate",
+      "mates": 128,
+      "concessions": 0,
+      "queens": 0,
+      "illegal": 0,
+      "distinctMoves": 1
+    },
+    {
+      "level": 400,
+      "name": "free-queen",
+      "mates": 0,
+      "concessions": 0,
+      "queens": 128,
+      "illegal": 0,
+      "distinctMoves": 1
+    },
+    {
+      "level": 400,
+      "name": "scholars-defense",
+      "mates": 0,
+      "concessions": 0,
+      "queens": 0,
+      "illegal": 0,
+      "distinctMoves": 5
+    },
+    {
+      "level": 400,
+      "name": "quiet",
+      "mates": 0,
+      "concessions": 0,
+      "queens": 0,
+      "illegal": 0,
+      "distinctMoves": 18
+    },
+    {
+      "level": 1200,
+      "name": "mate",
+      "mates": 128,
+      "concessions": 0,
+      "queens": 0,
+      "illegal": 0,
+      "distinctMoves": 1
+    },
+    {
+      "level": 1200,
+      "name": "free-queen",
+      "mates": 0,
+      "concessions": 0,
+      "queens": 128,
+      "illegal": 0,
+      "distinctMoves": 1
+    },
+    {
+      "level": 1200,
+      "name": "scholars-defense",
+      "mates": 0,
+      "concessions": 0,
+      "queens": 0,
+      "illegal": 0,
+      "distinctMoves": 5
+    },
+    {
+      "level": 1200,
+      "name": "quiet",
+      "mates": 0,
+      "concessions": 0,
+      "queens": 0,
+      "illegal": 0,
+      "distinctMoves": 16
+    },
+    {
+      "level": 2400,
+      "name": "mate",
+      "mates": 128,
+      "concessions": 0,
+      "queens": 0,
+      "illegal": 0,
+      "distinctMoves": 1
+    },
+    {
+      "level": 2400,
+      "name": "free-queen",
+      "mates": 0,
+      "concessions": 0,
+      "queens": 128,
+      "illegal": 0,
+      "distinctMoves": 1
+    },
+    {
+      "level": 2400,
+      "name": "scholars-defense",
+      "mates": 0,
+      "concessions": 0,
+      "queens": 0,
+      "illegal": 0,
+      "distinctMoves": 5
+    },
+    {
+      "level": 2400,
+      "name": "quiet",
+      "mates": 0,
+      "concessions": 0,
+      "queens": 0,
+      "illegal": 0,
+      "distinctMoves": 10
+    }
+  ]
+}

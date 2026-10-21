@@ -2,12 +2,13 @@
 // Difficulty calibration: reproduces the Coach opponent's move selection with
 // the vendored Stockfish.js 10 build and scores every chosen move against a
 // deep reference search. Prints average centipawn loss (ACPL), loss quantiles,
-// and blunder rates per slider level next to a human reference curve.
+// and blunder rates per slider level. ACPL is a regression proxy, not Elo.
 //
 //   node scripts/calibrate-difficulty.js                # all levels
 //   LEVELS=800,1600 node scripts/calibrate-difficulty.js
 //   KEYFRAMES=alt.json node scripts/calibrate-difficulty.js   # try other keyframes
-//   REF_DEPTH=12 SAMPLES=1 OUT=calibration.json          # defaults
+//   REF_DEPTH=12 SAMPLES=16 SEED=20260921 OUT=calibration.json
+//   APP_FILE=/path/to/old-app.js                       # compare prior selector
 //
 // Not part of the validator loop: a full run takes several minutes.
 const fs = require('fs');
@@ -15,12 +16,14 @@ const path = require('path');
 const vm = require('vm');
 const REPO = path.resolve(__dirname, '..');
 const { Chess } = require(path.join(REPO, 'vendor/chess.js/chess-0.10.3.min.js'));
-const app = fs.readFileSync(path.join(REPO, 'app.js'), 'utf8');
+const app = fs.readFileSync(process.env.APP_FILE || path.join(REPO, 'app.js'), 'utf8');
 const openingsSrc = fs.readFileSync(path.join(REPO, 'openings.js'), 'utf8');
 
 const REF_DEPTH = parseInt(process.env.REF_DEPTH || '12', 10);
 const LEVELS = (process.env.LEVELS || '400,600,800,1000,1200,1400,1600,1800,2000,2200,2400').split(',').map(Number);
-const SAMPLES = parseInt(process.env.SAMPLES || '1', 10);
+const SAMPLES = parseInt(process.env.SAMPLES || '16', 10);
+const SEED = parseInt(process.env.SEED || '20260921', 10);
+if (!Number.isInteger(SAMPLES) || SAMPLES < 1 || !Number.isFinite(SEED)) throw new Error('Invalid SAMPLES or SEED');
 const OUT = process.env.OUT || path.join(REPO, '.calibration.json');
 const KEYFRAMES_OVERRIDE = process.env.KEYFRAMES ? JSON.parse(fs.readFileSync(process.env.KEYFRAMES, 'utf8')) : null;
 
@@ -62,6 +65,14 @@ const code = [
 ].join('\n');
 vm.runInContext(code, ctx, { filename: 'app-slice.js' });
 const api = ctx.api;
+
+function seededRandom(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
 
 // ---- engine ----
 const engine = require(path.join(REPO, 'stockfish/stockfish.js'))();
@@ -133,6 +144,25 @@ positions.push({ id: 'endgame-pawn', fen: '8/5k2/8/3P4/3K4/8/8/8 w - - 0 1' });
 positions.push({ id: 'middlegame-1', fen: 'r1bq1rk1/pp2bppp/2n1pn2/2pp4/3P4/2P1PN2/PP1NBPPP/R2QK2R w KQ - 0 8' });
 positions.push({ id: 'middlegame-2', fen: 'r2q1rk1/1b1nbppp/p2ppn2/1p6/3NPP2/2N1B3/PPPQB1PP/2KR3R b - - 0 11' });
 positions.push({ id: 'tactic-hang', fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR b KQkq - 0 4' });
+positions.push({ id: 'tactic-free-queen', fen: '4k3/8/8/8/4q3/8/4R3/4K3 w - - 0 1' });
+positions.push({ id: 'tactic-back-rank-defense', fen: '6k1/5ppp/8/8/8/8/5PPP/4rRK1 w - - 0 1' });
+positions.push({ id: 'tactic-mate-in-one', fen: '6k1/5ppp/8/8/8/8/5PPP/3R2K1 w - - 0 1' });
+
+const mateReplyCache = new Map();
+function allowsMateInOne(fen, move) {
+  const key = fen + ' ' + move;
+  if (mateReplyCache.has(key)) return mateReplyCache.get(key);
+  const g = new Chess(fen);
+  g.move({ from: move.slice(0, 2), to: move.slice(2, 4), promotion: move[4] || 'q' });
+  const allows = !g.game_over() && g.moves().some(reply => {
+    g.move(reply);
+    const mate = g.in_checkmate();
+    g.undo();
+    return mate;
+  });
+  mateReplyCache.set(key, allows);
+  return allows;
+}
 
 (async () => {
   await initEngine();
@@ -141,13 +171,15 @@ positions.push({ id: 'tactic-hang', fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5Q2/
   for (const level of LEVELS) {
     const opts = api.coachStrengthOpts(level);
     const rows = [];
-    for (const pos of positions) {
+    for (const [positionIndex, pos] of positions.entries()) {
+      // Reset per position/level so both versions see reproducible samples.
+      const random = seededRandom(SEED + positionIndex);
       const g = new Chess(pos.fen); if (g.game_over()) continue;
       const search = await analyse(pos.fen, opts);
       const ref = await refSearch(pos.fen);
       const bestChild = ref.best ? await childScore(pos.fen, ref.best) : null;
       for (let s = 0; s < SAMPLES; s++) {
-        const move = api.chooseCalibratedOpponentMove(search, opts);
+        const move = api.chooseCalibratedOpponentMove(search, opts, random);
         if (!move) continue;
         const chosenChild = await childScore(pos.fen, move);
         if (chosenChild === null || bestChild === null) { rows.push({ pos: pos.id, move, loss: null, illegal: chosenChild === null }); continue; }
@@ -155,7 +187,7 @@ positions.push({ id: 'tactic-hang', fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5Q2/
         const ownBest = search.lines.length ? api.scoreToCp(search.lines[0]) : null;
         const ownLine = search.lines.find(l => l.pv && l.pv[0] === move);
         const ownLoss = ownBest !== null && ownLine ? Math.max(0, ownBest - api.scoreToCp(ownLine)) : null;
-        rows.push({ pos: pos.id, move, loss, ownLoss, ms: search.ms });
+        rows.push({ pos: pos.id, move, loss, ownLoss, mateInOne: allowsMateInOne(pos.fen, move), ms: search.ms });
       }
     }
     const losses = rows.filter(r => r.loss !== null).map(r => r.loss).sort((a, b) => a - b);
@@ -163,19 +195,20 @@ positions.push({ id: 'tactic-hang', fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5Q2/
     const median = losses[Math.floor(losses.length / 2)];
     const rate = th => losses.filter(l => l >= th).length / losses.length;
     const ms = rows.map(r => r.ms).filter(Boolean);
-    results[level] = { opts, n: losses.length, acpl: Math.round(mean), median, p100: rate(100), p200: rate(200), p300: rate(300),
+    results[level] = { opts, n: losses.length, acpl: Math.round(mean), median, p100: rate(100), p200: rate(200), p300: rate(300), p500: rate(500),
+      mateInOne: rows.filter(r => r.mateInOne).length, illegal: rows.filter(r => r.illegal).length,
       ownAcpl: Math.round(rows.filter(r => r.ownLoss !== null).reduce((a, r) => a + r.ownLoss, 0) / Math.max(1, rows.filter(r => r.ownLoss !== null).length)),
       msMean: Math.round(ms.reduce((a, b) => a + b, 0) / Math.max(1, ms.length)), msMax: Math.max(0, ...ms), rows };
     const r = results[level];
     console.log(`level ${level}: depth ${opts.depth} mpv ${opts.multipv} err ${Math.round((opts.errorRate || 0) * 100)}% size ${opts.errorSize || 0} | n=${r.n} ACPL ${r.acpl} median ${r.median} p>=100 ${(r.p100*100).toFixed(0)}% p>=300 ${(r.p300*100).toFixed(0)}% | own ${r.ownAcpl} | ${r.msMean}ms avg ${r.msMax}ms max | elapsed ${Math.round((Date.now()-t0)/1000)}s`);
   }
-  fs.writeFileSync(OUT, JSON.stringify({ REF_DEPTH, positions: positions.length, results }, null, 1));
-  const HUMAN = { 400: 200, 600: 160, 800: 130, 1000: 105, 1200: 85, 1400: 70, 1600: 55, 1800: 45, 2000: 35, 2200: 27, 2400: 20 };
+  fs.writeFileSync(OUT, JSON.stringify({ REF_DEPTH, SAMPLES, SEED, positions: positions.length, results }, null, 1));
   const q = (arr, p) => { const s = arr.slice().sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; };
-  console.log('\nlevel  depth mpv rnd% err%  size | ACPL human | p25 med p75 p90 | >=100 >=300 | ms avg/max');
+  console.log('\nDifficulty labels are approximate; these positions do not establish human Elo.');
+  console.log('level  depth mpv err%  size | ACPL | p25 med p75 p90 | >=100 >=300 >=500 | mate-in-1 illegal | ms avg/max');
   for (const level of Object.keys(results).map(Number).sort((a, b) => a - b)) {
     const r = results[level]; const L = r.rows.filter(x => x.loss !== null).map(x => x.loss); const o = r.opts;
-    console.log(`${String(level).padStart(5)}  ${String(o.depth).padStart(5)} ${String(o.multipv).padStart(3)} ${String(Math.round((o.randomRate || 0) * 100)).padStart(4)} ${String(Math.round((o.errorRate || 0) * 100)).padStart(4)} ${String(o.errorSize || 0).padStart(5)} | ${String(r.acpl).padStart(4)} ${String(HUMAN[level] || '?').padStart(5)} | ${String(q(L, .25)).padStart(3)} ${String(q(L, .5)).padStart(3)} ${String(q(L, .75)).padStart(3)} ${String(q(L, .9)).padStart(3)} | ${(r.p100 * 100).toFixed(0).padStart(4)}% ${(r.p300 * 100).toFixed(0).padStart(4)}% | ${r.msMean}/${r.msMax}`);
+    console.log(`${String(level).padStart(5)}  ${String(o.depth).padStart(5)} ${String(o.multipv).padStart(3)} ${String(Math.round((o.errorRate || 0) * 100)).padStart(4)} ${String(o.errorSize || 0).padStart(5)} | ${String(r.acpl).padStart(4)} | ${String(q(L, .25)).padStart(3)} ${String(q(L, .5)).padStart(3)} ${String(q(L, .75)).padStart(3)} ${String(q(L, .9)).padStart(3)} | ${(r.p100 * 100).toFixed(0).padStart(4)}% ${(r.p300 * 100).toFixed(0).padStart(4)}% ${(r.p500 * 100).toFixed(0).padStart(4)}% | ${r.mateInOne} ${r.illegal} | ${r.msMean}/${r.msMax}`);
   }
   console.log('wrote ' + OUT);
   process.exit(0);
