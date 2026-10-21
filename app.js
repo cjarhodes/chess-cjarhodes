@@ -136,9 +136,11 @@ window.COACH_SUPABASE_CONFIG = window.COACH_SUPABASE_CONFIG || {
 // Snapshot enough state to restore an in-progress (or freshly ended) game on
 // next page load. Saved on every move; cleared when the user starts a new
 // game or dismisses the review summary after a game ends.
+let coachPendingReview = null;
 const COACH_STATE_KEY = 'coach:state:v1';
 const COACH_STATE_BACKUP_KEY = 'coach:state:corrupt:v1';
 const COACH_PRACTICE_RETURN_KEY = 'coach:practice-return:v1';
+const COACH_PRACTICE_STATE_KEY = 'coach:practice-state:v1';
 
 function cloneCoachValue(value, fallback) {
   try { return value == null ? fallback : JSON.parse(JSON.stringify(value)); }
@@ -153,6 +155,7 @@ function captureCoachPracticeReturnState() {
   if (!coachGame || !coachGameActive || coachGame.game_over()) return null;
   return {
     v: 1,
+    owner: coachMemoryOwnerId(),
     pgn: coachGame.pgn(),
     startFen: coachStartFen,
     userSide: coachUserSide,
@@ -172,17 +175,162 @@ function captureCoachPracticeReturnState() {
 
 function persistCoachPracticeReturnState(snapshot) {
   try {
-    if (snapshot) localStorage.setItem(COACH_PRACTICE_RETURN_KEY, JSON.stringify(snapshot));
-    else localStorage.removeItem(COACH_PRACTICE_RETURN_KEY);
+    if (snapshot) localStorage.setItem(coachMemoryKey(COACH_PRACTICE_RETURN_KEY), JSON.stringify(snapshot));
+    else localStorage.removeItem(coachMemoryKey(COACH_PRACTICE_RETURN_KEY));
   } catch (e) { /* recovery is best effort */ }
+}
+
+// Keep drill recovery separate from the rated-game snapshot. Only stable
+// state is saved: workers, pending promises, and speculative moves are rebuilt.
+function clearCoachPracticeState(owner = coachMemoryOwnerId()) {
+  try { localStorage.removeItem(`${COACH_PRACTICE_STATE_KEY}:${owner}`); } catch (e) {}
+}
+
+function loadCoachPracticeState() {
+  try {
+    const raw = localStorage.getItem(coachMemoryKey(COACH_PRACTICE_STATE_KEY));
+    if (!raw) return null;
+    const saved = JSON.parse(raw);
+    if (!saved || saved.v !== 1 || saved.owner !== coachMemoryOwnerId()) throw new Error('Invalid practice owner');
+    return saved;
+  } catch (e) {
+    return { invalid: true };
+  }
+}
+
+function saveCoachPracticeState() {
+  const session = coachPracticeSession;
+  if (!session || !coachGame || session.owner !== coachMemoryOwnerId()) return;
+  const stable = {};
+  ['item', 'misses', 'revealed', 'hintUsed', 'completed', 'completionRecorded', 'hintStage',
+    'phase', 'expectedUci', 'initialExpectedUci'].forEach(key => { stable[key] = session[key]; });
+  try {
+    localStorage.setItem(coachMemoryKey(COACH_PRACTICE_STATE_KEY), JSON.stringify({
+      v: 1, owner: session.owner, session: stable, run: coachPracticeRun,
+      pgn: coachGame.pgn(), fen: coachGame.fen(), returnState: coachPracticeReturnState,
+      boardFlipped: coachBoardFlipped,
+      prompt: $('#coach-practice-prompt').text(), status: $('#coach-practice-status').text(), ts: Date.now()
+    }));
+  } catch (e) {
+    setCoachStatus('Practice is available, but this browser could not save its resume point.');
+  }
+}
+
+// Auth restoration is asynchronous. Checkpoint the outgoing local owner
+// before selecting the incoming owner's resume points. Token refreshes for
+// the same user leave the board untouched.
+function applyCoachRecoveryUser(user) {
+  const previousOwner = coachMemoryOwnerId();
+  const nextOwner = user && user.id ? `user:${user.id}` : `anon:${coachDeviceId()}`;
+  if (previousOwner === nextOwner) { coachAuthUser = user || null; return; }
+  saveCoachState();
+  saveCoachPracticeState();
+  coachAuthUser = user || null;
+  coachRemoteInsightEntries = null;
+  coachRemoteInsightsLoaded = false;
+  if (previousOwner.startsWith('anon:') && nextOwner.startsWith('user:')) {
+    // Adopt guest recovery only if this account has no corresponding resume
+    // point. Never move recovery between two signed-in users.
+    [COACH_STATE_KEY, COACH_PRACTICE_STATE_KEY, COACH_PRACTICE_RETURN_KEY].forEach(base => {
+      try {
+        const oldKey = `${base}:${previousOwner}`;
+        const newKey = `${base}:${nextOwner}`;
+        const raw = localStorage.getItem(oldKey);
+        if (!raw || localStorage.getItem(newKey)) return;
+        const saved = JSON.parse(raw);
+        if (saved.owner) saved.owner = nextOwner;
+        if (saved.returnState) saved.returnState.owner = nextOwner;
+        localStorage.setItem(newKey, JSON.stringify(saved));
+        localStorage.removeItem(oldKey);
+      } catch (e) { /* retain the outgoing copy when adoption cannot finish */ }
+    });
+  }
+  resetCoachState();
+  coachPracticeReturnState = null;
+  coachPracticeRun = null;
+  coachGame = null;
+  coachGameActive = false;
+  if (coachMode) switchView('coach');
+}
+
+function renderCoachPracticeNextAction() {
+  if (!coachPracticeSession || !coachPracticeSession.completed || !coachPracticeRun) return;
+  const sprint = dailySprintToday();
+  const hasNext = coachPracticeRun.index + 1 < coachPracticeRun.items.length;
+  const transfer = !hasNext && sprint && !sprint.completedAt && sprint.mode === 'adaptive' && sprint.phase === 'moves';
+  $('#btn-coach-practice-next').text(hasNext ? 'Next drill' : (transfer ? 'Continue to live play' : 'Finish practice')).show().prop('disabled', false);
+}
+
+function tryRestoreCoachPractice() {
+  const saved = loadCoachPracticeState();
+  if (!saved) return { restored: false };
+  try {
+    const stable = saved.session;
+    const item = stable && stable.item;
+    if (!item || !item.entry || !isValidFen(item.entry.fenBefore) || !item.entry.bestUci) throw new Error('Invalid drill');
+    const position = loadCoachSavedPosition({startFen: item.entry.fenBefore, pgn: saved.pgn, fen: saved.fen});
+    if (!stable.completed && !moveFromUci(saved.fen, stable.expectedUci)) throw new Error('Invalid practice answer');
+    if (!saved.run || !Array.isArray(saved.run.items) || !Number.isInteger(saved.run.index) || saved.run.index < 0 ||
+        saved.run.index >= saved.run.items.length || saved.run.items[saved.run.index].id !== item.id) throw new Error('Invalid drill run');
+    if (!['initial', 'followup', 'complete'].includes(stable.phase) || !Number.isFinite(stable.misses) || stable.misses < 0 ||
+        !Number.isFinite(stable.hintStage) || stable.hintStage < 0 || stable.hintStage > 4 ||
+        (!!stable.completed !== !!stable.completionRecorded)) throw new Error('Invalid drill progress');
+    resetCoachState(item.entry.fenBefore, { preservePracticeRun: true });
+    coachGame = position;
+    coachPracticeReturnState = saved.returnState || null;
+    coachPracticeRun = saved.run;
+    coachPracticeSession = Object.assign({}, stable, {
+      owner: saved.owner, positionFen: position.fen(), requestId: coachGameGeneration,
+      analysis: null, analysisReady: false, analysisPromise: null, analysisToken: 0,
+      pendingMove: null, grading: false
+    });
+    coachUserSide = fenSideToUserSide(item.entry.fenBefore);
+    coachGameActive = true;
+    coachBoardFlipped = !!saved.boardFlipped;
+    createCoachBoard(position.fen(), coachBoardFlipped ? 'black' : 'white');
+    $('#coach-view').addClass('game-active');
+    CoachController.setPhase('practice');
+    $('#coach-practice-title').text(item.meta.title);
+    $('#coach-practice-session-status').text(practiceRunPositionText());
+    $('#coach-practice-prompt').text(saved.prompt || practicePromptForItem(item));
+    $('#coach-practice-status').text(saved.status || 'Continue from this position.');
+    $('#btn-coach-practice-answer').text('Show answer').prop('disabled', stable.completed || stable.revealed);
+    $('#btn-coach-practice-hint').text('Hint').show().prop('disabled', stable.completed || stable.revealed);
+    $('#btn-coach-practice-next').hide().prop('disabled', true);
+    $('#coach-practice-takeaway').text(stable.completed ? `Carry into your next game: ${practiceCarryForwardCue(item)}` : '').toggle(!!stable.completed);
+    $('#coach-practice-banner').show().css('display', 'flex');
+    setPracticeFocus(true);
+    renderCoachPracticeNextAction();
+    updateCapturedDisplay(position.fen());
+    updateMoveList();
+    updateCoachControlsState();
+    renderCoachDailyPlan();
+    setCoachStatus(stable.completed ? 'Practice restored — your result is already saved. Continue when ready.' : 'Practice restored — continue from your saved position.');
+    if (!stable.completed) preparePracticeAnalysis(coachPracticeSession);
+    return { restored: true };
+  } catch (e) {
+    clearCoachPracticeState();
+    return { restored: false, warning: 'The interrupted drill could not be restored. Coach will use any saved game and practice results it can read.' };
+  }
+}
+
+function loadCoachSavedPosition(snapshot) {
+  if (snapshot.startFen && !isValidFen(snapshot.startFen)) throw new Error('Invalid starting position');
+  const position = new Chess(snapshot.startFen || undefined);
+  // chess.js 0.10 rejects header-only PGN and resets to the standard board.
+  // An explicitly started custom game/drill with zero moves uses its start FEN.
+  const moveText = String(snapshot.pgn || '').replace(/\[[^\]]*\]/g, '').trim();
+  if (moveText && moveText !== '*' && position.load_pgn(snapshot.pgn, { sloppy: true }) === false) throw new Error('Invalid saved moves');
+  if (snapshot.fen && position.fen() !== snapshot.fen) throw new Error('Saved position mismatch');
+  return position;
 }
 
 function restoreCoachPracticeReturnState(snapshot) {
   if (!snapshot || !snapshot.pgn && !snapshot.startFen) return false;
+  if (snapshot.owner && snapshot.owner !== coachMemoryOwnerId()) return false;
   try {
     invalidateCoachAsyncWork('The practice drill ended. Restoring the live game.');
-    const restored = new Chess(snapshot.startFen || undefined);
-    if (snapshot.pgn && restored.load_pgn(snapshot.pgn, { sloppy: true }) === false) return false;
+    const restored = loadCoachSavedPosition(snapshot);
     if (restored.game_over()) return false;
     coachGame = restored;
     coachStartFen = snapshot.startFen || restored.fen();
@@ -240,19 +388,22 @@ function saveCoachState() {
     if (coachPracticeSession) return;
     const total = coachGame.history().length;
     // Skip persisting empty initial state — nothing to recover.
-    if (total === 0 && !coachLastEndMsg && !coachRemoteGameId) {
+    if (total === 0 && !coachGameActive && !coachLastEndMsg && !coachRemoteGameId) {
       localStorage.removeItem(coachMemoryKey(COACH_STATE_KEY));
       return;
     }
     const snapshot = {
       v: 1,
       pgn: coachGame.pgn(),
+      fen: coachGame.fen(),
       startFen: coachStartFen,
       userSide: coachUserSide,
       engineElo: coachEngineElo,
       localGameId: coachLocalGameId,
       remoteGameId: coachRemoteGameId,
       reviewLog: coachReviewLog,
+      pendingReview: coachPendingReview,
+      boardFlipped: coachBoardFlipped,
       stats: coachStats,
       ended: !coachGameActive,
       lastEndMsg: coachLastEndMsg,
@@ -304,8 +455,14 @@ function tryRestoreCoachGame() {
   }
   const s = loaded.state;
   try {
-    const g = new Chess(s.startFen || undefined);
-    if (s.pgn) g.load_pgn(s.pgn, { sloppy: true });
+    const g = loadCoachSavedPosition(s);
+    let pending = s.pendingReview || null;
+    if (pending && !(s.reviewLog || []).some(review => review.ply === pending.ply && review.userUci === pending.userUci)) {
+      if (g.fen() !== pending.fenAfter || g.history().length !== pending.ply) throw new Error('Interrupted move mismatch');
+      const undone = g.undo();
+      if (!undone || uciFromMove(undone) !== pending.userUci || g.fen() !== pending.fenBefore) throw new Error('Interrupted move was invalid');
+    } else pending = null;
+    coachPendingReview = null;
     coachGame = g;
     coachStartFen = s.startFen || g.fen();
     coachGameGeneration++;
@@ -334,7 +491,7 @@ function tryRestoreCoachGame() {
     $('.side-toggle button').attr('aria-pressed', 'false');
     $('.side-toggle button[data-side="' + coachUserSide + '"]').addClass('active').attr('aria-pressed', 'true');
     // Build the board oriented for the user.
-    coachBoardFlipped = (coachUserColor() === 'black');
+    coachBoardFlipped = typeof s.boardFlipped === 'boolean' ? s.boardFlipped : (coachUserColor() === 'black');
     createCoachBoard(g.fen(), coachBoardFlipped ? 'black' : 'white');
     $('#coach-view').addClass('game-active');
     // Repopulate panels.
@@ -351,6 +508,12 @@ function tryRestoreCoachGame() {
         : `Resumed — Opponent ${coachEngineElo} (${tier}). Opponent thinking…`);
       // Re-render last review card if we have one.
       if (coachLastReview) renderCoachReview(coachLastReview);
+      if (pending) {
+        // Replay only the interrupted user move through normal classification.
+        // It was not counted in the saved stats/log, so it is credited once.
+        coachHandleUserMove(pending.userUci.slice(0, 2), pending.userUci.slice(2, 4), pending.userUci[4] || 'q');
+        return { restored: true };
+      }
       // Pre-warm the engine and hand off to the opponent if it's their turn.
       const timed = Promise.race([
         engineClient.init(),
@@ -1624,7 +1787,7 @@ function renderDailySprintChrome(day) {
     ? ` Repertoire focus: ${renderedAdaptivePlan.repertoireFocus}.`
     : '';
   $('#daily-sprint-focus-title').text(focus ? `Focus · ${focus.title}` : '');
-  $('#daily-sprint-focus-detail').text(focus ? `${focus.cue} ${focus.reason} ${style}${repertoire}` : '');
+  $('#daily-sprint-focus-detail').text(focus ? `${focus.cue} ${focus.reason} ${style}${repertoire}${day && day.recoveryNote ? ' ' + day.recoveryNote : ''}` : '');
   $('#daily-sprint-focus').toggle(!!focus);
   $('#daily-sprint-takeaway')
     .text(day && day.takeaway ? day.takeaway : '')
@@ -1999,12 +2162,37 @@ function formatPracticeDue(record) {
   return `Due in ${days}d`;
 }
 
+// Older saved plans may require more positions than still exist in the due
+// queue. Keep earned work, remove only unavailable rehearsal slots, and retain
+// the live-play target so recovery never invents a completed session.
+function recoverDailySprintPlan(day, availableDrills) {
+  if (!day || day.completedAt || day.mode !== 'adaptive' || day.phase !== 'drills') return day;
+  const completed = Math.max(0, Number(day.drillsCompleted) || 0);
+  const target = Math.max(completed, Number(day.drillTarget) || 0);
+  const reachable = completed + Math.min(target - completed, Math.max(0, availableDrills));
+  if (reachable === target) return day;
+  const moveTarget = Math.max(Number(day.movesCompleted) || 0, Number(day.moveTarget) || DAILY_TRANSFER_TARGET);
+  return Object.assign({}, day, {
+    drillTarget: reachable, moveTarget, target: reachable + moveTarget,
+    completedUnits: completed + (Number(day.movesCompleted) || 0),
+    phase: completed >= reachable ? 'moves' : 'drills',
+    recoveryNote: 'Saved session adjusted: unavailable drills were removed. Your completed work is kept; live play remains.'
+  });
+}
+
 function renderCoachDailyPlan(queue, due, totals, entries) {
   const items = Array.isArray(queue) ? queue : Array.from(renderedPracticeItems.values());
   const dueItems = Array.isArray(due) ? due : items.filter(item => practiceIsDue(item));
   const progress = totals || practiceProgressTotals();
   const $action = $('#btn-coach-next-action');
-  const sprint = dailySprintToday();
+  let sprint = dailySprintToday();
+  if (sprint && !sprint.completedAt && !coachPracticeSession && !loadCoachPracticeState()) {
+    if (sprint.mode === 'drills' && !dueItems.length) {
+      sprint = updateDailySprint(day => upgradeLegacyDailySprint(day, renderedAdaptivePlan));
+    }
+    const recovered = recoverDailySprintPlan(sprint, dueItems.length);
+    if (recovered !== sprint) sprint = updateDailySprint(() => recovered);
+  }
   if (!sprint) renderedAdaptivePlan = adaptiveDailyPlan(entries || [], items, dueItems, progress);
   renderDailySprintChrome(sprint);
 
@@ -2449,7 +2637,7 @@ async function initCoachDb() {
         }
       });
       const { data } = await coachDbClient.auth.getSession();
-      coachAuthUser = data && data.session ? data.session.user : null;
+      applyCoachRecoveryUser(data && data.session ? data.session.user : null);
       if (authUrlState.present) clearCoachAuthUrlState();
       if (coachAuthUser) {
         setPendingCoachAuthEmail('');
@@ -2474,7 +2662,7 @@ async function initCoachDb() {
         // The initial session was already applied above; replaying it here
         // would blank a link-error status and reload insights a second time.
         if (event === 'INITIAL_SESSION') return;
-        coachAuthUser = session ? session.user : null;
+        applyCoachRecoveryUser(session ? session.user : null);
         if (session) cleanAuthCallbackUrl();
         if (coachAuthUser) {
           setPendingCoachAuthEmail('');
@@ -2591,7 +2779,7 @@ async function signOutCoach() {
   }
   await coachDbClient.auth.signOut();
   setPendingCoachAuthEmail('');
-  coachAuthUser = null;
+  applyCoachRecoveryUser(null);
   coachRemoteInsightEntries = null;
   coachRemoteInsightsLoaded = false;
   coachRemoteGameId = null;
@@ -4148,6 +4336,7 @@ function invalidateCoachAsyncWork(reason) {
 }
 
 function resetCoachState(fen, opts = {}) {
+  coachPendingReview = null;
   invalidateCoachAsyncWork('A new game replaced the previous analysis.');
   coachPracticeSession = null;
   if (!opts.preservePracticeRun) {
@@ -4270,6 +4459,8 @@ async function coachHandleUserMove(source, target, promotion, opts) {
   candidateRequestId++;
   const fenAfter = coachGame.fen();
   const userUci = source + target + (move.promotion || '');
+  coachPendingReview = { fenBefore, fenAfter, userUci, ply: coachGame.history().length };
+  saveCoachState();
   if (opts.updateBoard !== false && coachBoard && !coachIsReviewing()) coachBoard.position(fenAfter);
   if (!coachIsReviewing()) setBoardLastMove('coachBoard', userMv);
   updateCapturedDisplay(fenAfter);
@@ -4300,6 +4491,7 @@ async function coachHandleUserMove(source, target, promotion, opts) {
       gameGeneration: generation,
       localGameId: coachLocalGameId
     });
+    coachPendingReview = null;
     coachLastReview = logged;
     coachReviewLog.push(logged);
     recordCoachInsight(logged);
@@ -5434,6 +5626,7 @@ function startCoachPractice(item, opts = {}) {
   }
   resetCoachState(item.entry.fenBefore, { preservePracticeRun: true });
   coachPracticeSession = {
+    owner: coachMemoryOwnerId(),
     item,
     misses: 0,
     revealed: false,
@@ -5474,6 +5667,7 @@ function startCoachPractice(item, opts = {}) {
   renderCoachDailyPlan();
   setPracticeFocus(true);
   preparePracticeAnalysis(coachPracticeSession);
+  saveCoachPracticeState();
 }
 
 function coachPracticeMoveLabel(item) {
@@ -5484,7 +5678,7 @@ function coachPracticeMoveLabel(item) {
 }
 
 function practicePositionIsCurrent(session) {
-  return !!(session && coachPracticeSession === session && coachGame && coachGameActive &&
+  return !!(session && (!session.owner || session.owner === coachMemoryOwnerId()) && coachPracticeSession === session && coachGame && coachGameActive &&
     session.requestId === coachGameGeneration && (!session.positionFen || session.positionFen === coachGame.fen()) && !session.completed);
 }
 
@@ -5644,6 +5838,7 @@ function finishCoachPracticeMove(session, played, quality, revealed) {
   updateCoachControlsState();
   renderInsights();
   if (sprint && sprint.completedAt) renderCoachDailyPlan();
+  saveCoachPracticeState();
 }
 
 function applyCoachPracticeMove(session, source, target, promotion, evaluation, opts) {
@@ -5684,6 +5879,7 @@ function applyCoachPracticeMove(session, source, target, promotion, evaluation, 
   updateCoachBoardAccessibility();
   updateMoveList();
   playSound(soundForMove(played, coachGame));
+  saveCoachPracticeState();
   return 'correct';
 }
 
@@ -5715,6 +5911,7 @@ function coachHandlePracticeMove(source, target, promotion, opts) {
     const detail = result.loss == null ? '' : ` (${(result.loss / 100).toFixed(2)} pawns below the best line)`;
     $('#coach-practice-status').text(`${label}${detail}. Find a sound move for this position.`);
     setCoachStatus('Practice: compare another candidate.');
+    saveCoachPracticeState();
     renderInsights();
     return 'snapback';
   });
@@ -5755,6 +5952,7 @@ function revealCoachPracticeAnswer() {
   $('#btn-coach-practice-answer').prop('disabled', true);
   $('#btn-coach-practice-hint').prop('disabled', true);
   setCoachStatus('Practice answer revealed — now play the move.');
+  saveCoachPracticeState();
 }
 
 function showCoachPracticeHint() {
@@ -5777,6 +5975,7 @@ function showCoachPracticeHint() {
     $('#btn-coach-practice-answer').text('Show answer');
     setCoachStatus('Practice hint shown.');
   }
+  saveCoachPracticeState();
 }
 
 function advanceCoachPractice() {
@@ -5800,6 +5999,7 @@ function advanceCoachPractice() {
 
 function exitCoachPractice(message) {
   if (!coachPracticeSession) return;
+  clearCoachPracticeState(coachPracticeSession.owner || coachMemoryOwnerId());
   const returnState = coachPracticeReturnState;
   coachPracticeSession = null;
   coachPracticeReturnState = null;
@@ -5949,9 +6149,12 @@ function switchView(view) {
     // Show lifetime stats if any are recorded.
     renderLifetime();
     renderInsights();
-    if (!coachGame) {
+    if (!coachGame || coachPendingReview) {
       // Try to restore an in-progress (or just-ended) game from localStorage.
-      const restore = tryRestoreCoachGame();
+      const practice = tryRestoreCoachPractice();
+      const restore = practice.restored ? practice : tryRestoreCoachGame();
+      if (!restore.restored && practice.warning) restore.warning = practice.warning;
+      if (restore.restored && practice.warning) setCoachStatus(practice.warning + ' Your saved game is restored.');
       if (!restore.restored) {
         $('#coach-view').removeClass('game-active');
         // Show an idle board so the user has visual context
@@ -6005,6 +6208,7 @@ function isValidFen(fen) {
 }
 
 function startCoachGame() {
+  clearCoachPracticeState();
   // Starting a new game is the explicit discard/reset action for an active
   // drill. Do not restore the borrowed game after this click.
   if (coachPracticeSession || coachPracticeReturnState) {
@@ -6054,6 +6258,7 @@ function startCoachGame() {
 
   updateCoachControlsState();
   renderCoachDailyPlan();
+  saveCoachState();
   ensureRemoteCoachGame(generation).catch(err => {
     if (!isAbortError(err)) handleCoachDbError(err);
   });
@@ -7730,6 +7935,7 @@ $(function () {
     if (!coachBoard) return;
     coachBoardFlipped = !coachBoardFlipped;
     coachBoard.flip();
+    if (coachPracticeSession) saveCoachPracticeState(); else saveCoachState();
   });
 
   // Coach: take back (undo user move + opponent reply if present)

@@ -393,8 +393,8 @@ async page => {
   assert(await page.locator('#coach-practice-session-status').textContent() === 'Drill 1 of 2', 'multi-drill session did not start');
   assert(await page.locator('#btn-coach-resign').isDisabled(), 'normal game controls stayed enabled during practice');
   await page.reload();
-  assert(await page.locator('#coach-daily-plan-title').textContent() === 'Continue rehearsing Opening principle gaps', 'reload skipped an unfinished adaptive drill phase');
-  assert(await page.locator('#btn-coach-next-action').textContent() === 'Continue focused drills', 'reload did not restore the adaptive drill action');
+  assert(await page.locator('#coach-daily-plan-title').textContent() === 'Rehearse Opening principle gaps', 'reload skipped an unfinished adaptive drill phase');
+  assert(await page.locator('#btn-coach-next-action').textContent() === 'Return to the drill', 'reload did not restore the adaptive drill action');
   assert(await page.locator('#daily-sprint-progress-label').textContent() === '0 of 8 steps', 'reload did not preserve adaptive session progress');
   await page.locator('#btn-coach-next-action').click();
   assert(await page.locator('#coach-practice-session-status').textContent() === 'Drill 1 of 2', 'restored adaptive drill session did not restart at the due position');
@@ -711,6 +711,7 @@ async page => {
   assert((await page.locator('#coach-practice-status').textContent()).includes('Correct on the first try'), 'generated drill did not accept the reviewed best move');
   assert(await page.locator('#practice-progress-success').textContent() === '100%', 'generated drill result was not measured');
 
+  if (!(await page.locator('#btn-coach-practice-exit').isVisible())) throw new Error('Practice exit missing at checkpoint 1: ' + JSON.stringify(await page.evaluate(() => ({practice:!!coachPracticeSession,owner:coachMemoryOwnerId(),sessionOwner:coachPracticeSession?.owner,status:document.querySelector('#coach-status').textContent,mode:coachMode}))));
   await page.locator('#btn-coach-practice-exit').click();
   // A capture exercises the material path in insight tagging; the opponent must
   // still reply afterwards instead of the move handler dying mid-flight.
@@ -738,9 +739,7 @@ async page => {
   await page.locator('#coach-keyboard-move-input').fill('Qg7#');
   await page.locator('#coach-keyboard-move-form button[type=submit]').click();
   await settlePracticeMove();
-  await page.waitForFunction(() => {
-    return (document.querySelector('#coach-classification')?.textContent || '').includes('Best move');
-  }, null, { timeout: 30000 }).catch(() => {});
+  await page.waitForFunction(() => coachLastReview && coachLastReview.userUci === 'g6g7' && !coachThinking && !coachGameActive, null, { timeout: 45000 });
   assert((await page.locator('#coach-classification').textContent()).includes('Best move'), 'mating move was not classified as best');
 
   await page.evaluate(() => {
@@ -766,6 +765,7 @@ async page => {
   await settlePracticeMove();
   assert((await page.locator('#coach-practice-status').textContent()).includes('Correct on the first try'), 'structured endgame lesson was not graded');
   assert(await page.locator('#endgame-track-progress').textContent() === '1/4', 'structured endgame progress did not update');
+  if (!(await page.locator('#btn-coach-practice-exit').isVisible())) throw new Error('Practice exit missing at checkpoint 2: ' + JSON.stringify(await page.evaluate(() => ({practice:!!coachPracticeSession,owner:coachMemoryOwnerId(),sessionOwner:coachPracticeSession?.owner,status:document.querySelector('#coach-status').textContent,mode:coachMode}))));
   await page.locator('#btn-coach-practice-exit').click();
 
   await openRailGroup('group-inbox');
@@ -827,6 +827,7 @@ async page => {
   assert(await page.locator('.practice-row.is-active').count() === 1, 'practice did not highlight the active drill');
   await page.locator('#btn-coach-practice-hint').click();
   assert((await page.locator('#coach-practice-status').textContent()).length > 0, 'practice hint did not give guidance');
+  if (!(await page.locator('#btn-coach-practice-exit').isVisible())) throw new Error('Practice exit missing at checkpoint 3: ' + JSON.stringify(await page.evaluate(() => ({practice:!!coachPracticeSession,owner:coachMemoryOwnerId(),sessionOwner:coachPracticeSession?.owner,status:document.querySelector('#coach-status').textContent,mode:coachMode}))));
   await page.locator('#btn-coach-practice-exit').click();
   const returnedGame = await page.evaluate(() => ({ pgn: coachGame.pgn(), id: coachLocalGameId, stats: JSON.stringify(coachStats) }));
   assert(JSON.stringify(returnedGame) === JSON.stringify(preservedGame), 'practice did not restore the exact live game and statistics');
@@ -895,3 +896,15 @@ if [[ "$TEACHING_EXIT" -ne 0 || "$TEACHING_OUTPUT" == *"### Error"* ]]; then
   exit 1
 fi
 echo "Teaching journey validation passed."
+
+RECOVERY_CODE=$(cat "$ROOT/scripts/verify-recovery-journeys.js")
+set +e
+RECOVERY_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$RECOVERY_CODE")
+RECOVERY_EXIT=$?
+set -e
+echo "$RECOVERY_OUTPUT"
+if [[ "$RECOVERY_EXIT" -ne 0 || "$RECOVERY_OUTPUT" == *"### Error"* ]]; then
+  echo "Interruption recovery validation failed." >&2
+  exit 1
+fi
+echo "Interruption recovery validation passed."
