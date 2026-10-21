@@ -37,6 +37,7 @@ let coachLastReview = null;        // most recent review (for take back / show b
 let coachThinking = false;
 let coachUserSide = 'white';       // 'white' | 'black'
 let coachEngineElo = 1200;         // displayed opponent level
+let coachOpeningTransfer = null;   // optional Library-to-play context, owned with the saved game
 let coachOpeningId = null;         // deepest identified opening in the current game
 let coachBoard = null;             // separate Chessboard.js instance
 let coachBoardFlipped = false;
@@ -159,6 +160,7 @@ function captureCoachPracticeReturnState() {
     owner: coachMemoryOwnerId(),
     pgn: coachGame.pgn(),
     startFen: coachStartFen,
+    openingTransfer: cloneCoachValue(coachOpeningTransfer, null),
     userSide: coachUserSide,
     engineElo: coachEngineElo,
     localGameId: coachLocalGameId,
@@ -241,6 +243,11 @@ function applyCoachRecoveryUser(user) {
         const saved = JSON.parse(raw);
         if (saved.owner) saved.owner = nextOwner;
         if (saved.returnState) saved.returnState.owner = nextOwner;
+        [saved.openingTransfer, saved.returnState && saved.returnState.openingTransfer].forEach(transfer => {
+          if (!transfer || transfer.owner !== previousOwner) return;
+          transfer.owner = nextOwner;
+          if (transfer.returnState && transfer.returnState.owner === previousOwner) transfer.returnState.owner = nextOwner;
+        });
         localStorage.setItem(newKey, JSON.stringify(saved));
         localStorage.removeItem(oldKey);
       } catch (e) { /* retain the outgoing copy when adoption cannot finish */ }
@@ -259,7 +266,7 @@ function renderCoachPracticeNextAction() {
   const sprint = dailySprintToday();
   const hasNext = coachPracticeRun.index + 1 < coachPracticeRun.items.length;
   const transfer = !hasNext && sprint && !sprint.completedAt && sprint.mode === 'adaptive' && sprint.phase === 'moves';
-  $('#btn-coach-practice-next').text(hasNext ? 'Next drill' : (transfer ? 'Continue to live play' : 'Finish practice')).show().prop('disabled', false);
+  $('#btn-coach-practice-next').text(hasNext ? 'Next drill' : coachPracticeSession.item.id.startsWith('opening-bridge:') ? 'Continue this opening in play' : (transfer ? 'Continue to live play' : 'Finish practice')).show().prop('disabled', false);
 }
 
 function tryRestoreCoachPractice() {
@@ -335,6 +342,7 @@ function restoreCoachPracticeReturnState(snapshot) {
     if (restored.game_over()) return false;
     coachGame = restored;
     coachStartFen = snapshot.startFen || restored.fen();
+    coachOpeningTransfer = typeof normalizeOpeningTransfer === 'function' ? normalizeOpeningTransfer(snapshot.openingTransfer) : null;
     coachGameGeneration++;
     coachLocalGameId = snapshot.localGameId || createCoachGameId();
     coachRemoteGameId = snapshot.remoteGameId || null;
@@ -398,6 +406,7 @@ function saveCoachState() {
       pgn: coachGame.pgn(),
       fen: coachGame.fen(),
       startFen: coachStartFen,
+      openingTransfer: cloneCoachValue(coachOpeningTransfer, null),
       userSide: coachUserSide,
       engineElo: coachEngineElo,
       localGameId: coachLocalGameId,
@@ -466,6 +475,7 @@ function tryRestoreCoachGame() {
     coachPendingReview = null;
     coachGame = g;
     coachStartFen = s.startFen || g.fen();
+    coachOpeningTransfer = typeof normalizeOpeningTransfer === 'function' ? normalizeOpeningTransfer(s.openingTransfer) : null;
     coachGameGeneration++;
     coachLocalGameId = s.localGameId || createCoachGameId();
     coachUserSide = s.userSide || 'white';
@@ -929,6 +939,7 @@ function insightTagsForReview(review) {
 
 function currentCoachOpeningName() {
   try {
+    if (coachOpeningTransfer) return coachOpeningTransfer.title;
     if (!coachGame || typeof identifyOpening !== 'function') return null;
     const info = identifyOpening(coachGame.history());
     return info && info.match ? info.match.name : null;
@@ -955,7 +966,7 @@ function insightEntryFromReview(review) {
     userUci: review.userUci || null,
     bestUci: review.bestUci || null,
     opening: review.opening || currentCoachOpeningName(),
-    openingId: review.openingId || null,
+    openingId: review.openingId || (coachOpeningTransfer ? coachOpeningTransfer.openingId : null),
     continuation: Array.isArray(review.continuation) ? review.continuation.slice(0, 1) : null,
     lesson: review.lesson || null,
     opponentThreat: review.opponentThreat || null,
@@ -1166,6 +1177,7 @@ function practiceCarryForwardCue(item) {
   if (!item || !item.entry) return 'Compare candidates and calculate the opponent’s strongest reply.';
   const entry = item.entry;
   if (entry.decisionCue) return entry.decisionCue;
+  if (entry.openingId && item.meta && item.meta.practice) return item.meta.practice;
   // Older records may predate the saved cue. Rebuild the position to recover
   // board facts such as stalemate, without inventing an unsaved engine reply.
   const position = new Chess(entry.fenBefore);
@@ -3728,6 +3740,24 @@ function coachExplanationContext(fenBefore, userUci, bestUci, fenAfter, afterInf
 // Side-to-move perspective: score is always in the mover's favor.
 // We pull MultiPV=3 before the move so we know if the user picked #1/#2/#3.
 async function classifyMove(fenBefore, userUciMove, fenAfter) {
+  // A legal move that ends in checkmate is fully verifiable on the board.
+  // It must not become "unknown" if Stockfish has no PV for a terminal node.
+  const afterPosition = new Chess(fenAfter);
+  if (afterPosition.in_checkmate()) {
+    const proof = new Chess(fenBefore);
+    const played = proof.move({ from: userUciMove.slice(0, 2), to: userUciMove.slice(2, 4), promotion: userUciMove[4] || undefined });
+    if (played && proof.fen() === fenAfter) return {
+      tier: 'best', label: 'Best move', emoji: '★', rank: 1, loss: 0,
+      userSan: played.san, bestSan: played.san, bestUci: userUciMove,
+      pvSan: [played.san], topAlternatives: [{ uci: userUciMove, san: played.san, cp: 9999, pvSan: [played.san] }],
+      whyBetter: 'This move delivers checkmate; the opponent has no legal reply.',
+      lesson: 'Mating net: check the king and cover every escape, capture, or block.',
+      decisionCue: 'Scan forcing checks first and verify every legal response before choosing the move.',
+      opponentThreat: 'The opponent has no legal reply.',
+      evalBefore: { mate: 1, pv: [userUciMove] }, evalAfter: { mate: 0, pv: [] },
+      reviewSummary: 'Your move delivers checkmate. The opponent has no legal reply.'
+    };
+  }
   const [beforeEval, afterEval] = await Promise.all([
     engineClient.evaluate(fenBefore, COACH_DEPTH, { multipv: 3 }),
     engineClient.evaluate(fenAfter, COACH_DEPTH)
@@ -3736,7 +3766,6 @@ async function classifyMove(fenBefore, userUciMove, fenAfter) {
   const bestLine = lines[0];
   const bestUci = (bestLine && bestLine.pv && bestLine.pv[0]) || beforeEval.bestmove;
   const afterInfo = afterEval.info;
-  const afterPosition = new Chess(fenAfter);
   const afterIsTerminal = afterPosition.game_over();
 
   // Engine timeout / stall — evaluate resolved with no bestmove and no PV data.
@@ -4341,20 +4370,23 @@ function renderCoachPresentation() {
 
   $('#coach-phase-label').text(labels[state]);
   $('#coach-game-options-label').text((coachUserSide === 'random' ? 'Random' : coachUserColor() === 'white' ? 'White' : 'Black') + ' · ' + coachEngineElo);
-  const managed = '#btn-progress-next, #btn-coach-next-action, #btn-coach-showwhy, #btn-coach-backtogame, #btn-coach-live, #btn-coach-practice-next, #btn-coach-practice-exit, #coach-keyboard-move-form button';
+  const managed = '#btn-opening-transfer-review, #btn-progress-next, #btn-coach-next-action, #btn-coach-showwhy, #btn-coach-backtogame, #btn-coach-live, #btn-coach-practice-next, #btn-coach-practice-exit, #coach-keyboard-move-form button';
   $(managed).removeClass('primary').removeAttr('data-primary-action');
   const progressActive = document.getElementById('panel-progress').classList.contains('active');
   $('#btn-progress-next').prop('disabled', ['analyzing', 'opponent-turn', 'practice-checking'].includes(state) || (typeof importedGameAnalysisActive !== 'undefined' && importedGameAnalysisActive));
   let action = null;
   if (progressActive && !$('#btn-progress-next').prop('disabled') && !['analyzing', 'opponent-turn', 'practice-checking', 'practice', 'practice-complete', 'review'].includes(state)) action = '#btn-progress-next';
+  else if (state === 'ended' && coachOpeningTransfer && coachStats.moves > 0 && !document.getElementById('panel-game').hidden) action = '#btn-opening-transfer-review';
   else if (state === 'ready' || state === 'complete' || state === 'ended') action = '#btn-coach-next-action';
   else if (state === 'review') action = coachReviewAnalysis ? '#btn-coach-backtogame' : '#btn-coach-live';
   else if (state === 'practice-complete') action = $('#btn-coach-practice-next').is(':visible') && !$('#btn-coach-practice-next').prop('disabled') ? '#btn-coach-practice-next' : '#btn-coach-practice-exit';
+  else if (state === 'user-turn' && !document.getElementById('panel-game').hidden && coachOpeningTransfer && coachStats.moves >= 4) action = '#btn-opening-transfer-review';
   else if (state === 'user-turn' && $('#coach-review').is(':visible') && !$('#btn-coach-showwhy').prop('disabled')) action = '#btn-coach-showwhy';
   else if ((state === 'user-turn' || state === 'practice') && document.getElementById('coach-keyboard-move')?.open) action = '#coach-keyboard-move-form button';
   if (action) $(action).addClass('primary').attr('data-primary-action', 'true');
   $('#coachBoard-wrap').attr('data-primary-target', !action && canEnterMove ? 'true' : 'false');
   $('#btn-coach-practice-exit').text(state === 'practice-complete' ? (coachPracticeReturnState ? 'Return to game' : 'Finish practice') : 'Exit practice');
+  if (typeof renderOpeningTransfer === 'function') renderOpeningTransfer();
   scheduleCoachBoardFit();
 }
 
@@ -4377,6 +4409,7 @@ function invalidateCoachAsyncWork(reason) {
 }
 
 function resetCoachState(fen, opts = {}) {
+  coachOpeningTransfer = null;
   coachPendingReview = null;
   invalidateCoachAsyncWork('A new game replaced the previous analysis.');
   coachPracticeSession = null;
@@ -4522,7 +4555,7 @@ async function coachHandleUserMove(source, target, promotion, opts) {
       return 'stale';
     }
     const ply = coachGame.history().length;
-    const pairNum = Math.ceil(ply / 2);
+    const pairNum = Number(fenBefore.split(/\s+/)[5]) || Math.ceil(ply / 2);
     const logged = Object.assign({}, review, {
       fenBefore,
       fenAfter,
@@ -4921,7 +4954,8 @@ function phaseBreakdown(reviews) {
 
 // Format "14. Qh5" or "14... Qh5" based on ply parity.
 function formatMoveRef(r) {
-  const dots = (r.ply % 2 === 1) ? '.' : '...';
+  const turn = r.fenBefore && r.fenBefore.split(/\s+/)[1];
+  const dots = turn ? (turn === 'w' ? '.' : '...') : (r.ply % 2 === 1 ? '.' : '...');
   return `${r.pairNum}${dots} ${r.userSan}`;
 }
 
@@ -5263,6 +5297,7 @@ function showPostGameSummary(endMsg) {
   $('#btn-summary-newgame').toggleClass('primary', dueCount === 0);
   summaryReturnFocus = document.activeElement;
   $('#summary-overlay').css('display', 'flex').attr('aria-hidden', 'false');
+  if (typeof renderOpeningTransferSummary === 'function') renderOpeningTransferSummary();
   // Scroll to top when reopening on a new game
   $('.summary-card').scrollTop(0);
   $('.summary-card').trigger('focus');
@@ -5912,7 +5947,7 @@ function finishCoachPracticeMove(session, played, quality, revealed) {
     const hasNext = coachPracticeRun.index + 1 < coachPracticeRun.items.length;
     const transferNext = !hasNext && sprint && !sprint.completedAt && sprint.mode === 'adaptive' && sprint.phase === 'moves';
     $('#btn-coach-practice-next')
-      .text(hasNext ? 'Next drill' : (transferNext ? 'Continue to live play' : 'Finish practice'))
+      .text(hasNext ? 'Next drill' : session.item.id.startsWith('opening-bridge:') ? 'Continue this opening in play' : (transferNext ? 'Continue to live play' : 'Finish practice'))
       .show()
       .prop('disabled', false);
     if (!hasNext) $('#coach-practice-status').text(`${quality}: ${played.san}. Practice complete — ${coachPracticeRun.clean}/${coachPracticeRun.completed} first-try.${transferNext ? ' Next: use the same focus in live play.' : ''}`);
@@ -6069,9 +6104,14 @@ function advanceCoachPractice() {
   if (coachPracticeRun.index + 1 >= coachPracticeRun.items.length) {
     const completed = coachPracticeRun.completed;
     const clean = coachPracticeRun.clean;
+    const openingItem = coachPracticeSession.item.id.startsWith('opening-bridge:') ? coachPracticeSession.item : null;
     const sprint = dailySprintToday();
     const transferNext = sprint && !sprint.completedAt && sprint.mode === 'adaptive' && sprint.phase === 'moves';
     exitCoachPractice(`Practice session complete — ${clean}/${completed} solved on the first try.`);
+    if (openingItem && typeof beginOpeningTransfer === 'function') {
+      beginOpeningTransfer(openingItem.entry.openingId, 'main', openingItem.entry.ply + (Array.isArray(openingItem.entry.continuation) && openingItem.entry.continuation.length ? 2 : 0));
+      return;
+    }
     if (transferNext) {
       if (!coachGameActive) startCoachGame();
       else setCoachStatus(`Your game is restored. Use this focus: ${sprint.focusCue || sprint.focus}`);
@@ -6294,7 +6334,11 @@ function isValidFen(fen) {
   } catch (e) { return false; }
 }
 
-function startCoachGame() {
+function startCoachGame(options = {}) {
+  if (coachOpeningTransfer && !options.openingTransfer) {
+    finishOpeningTransfer();
+    return;
+  }
   clearCoachPracticeState();
   // Starting a new game is the explicit discard/reset action for an active
   // drill. Do not restore the borrowed game after this click.
@@ -6305,7 +6349,8 @@ function startCoachGame() {
     persistCoachPracticeReturnState(null);
   }
   if (typeof applyAdaptiveCoachElo === 'function') applyAdaptiveCoachElo();
-  const fenRaw = ($('#coach-fen').val() || '').trim();
+  const transfer = options.openingTransfer || null;
+  const fenRaw = transfer ? transfer.sourceFen : ($('#coach-fen').val() || '').trim();
   let startFen = null;
   if (fenRaw) {
     if (!isValidFen(fenRaw)) {
@@ -6318,12 +6363,13 @@ function startCoachGame() {
   beginDailyMoveSprint();
 
   // Resolve "random" side
-  const chosenSide = $('.side-toggle button.active').data('side') || 'white';
+  const chosenSide = transfer ? transfer.side : $('.side-toggle button.active').data('side') || 'white';
   coachUserSide = chosenSide === 'random'
     ? (Math.random() < 0.5 ? 'white' : 'black')
     : chosenSide;
 
   resetCoachState(startFen);
+  coachOpeningTransfer = transfer;
   const generation = coachGameGeneration;
   coachGameActive = true;
   CoachController.setPhase(coachIsUserTurn() ? 'userTurn' : 'opponentThinking');
@@ -6404,9 +6450,11 @@ function updateCoachControlsState() {
   $('#btn-coach-prev').prop('disabled', practicing || !coachGame || total === 0 || cur === 0);
   $('#btn-coach-next').prop('disabled', practicing || !coachGame || total === 0 || cur === total);
   $('#btn-coach-live').toggle(reviewing);
+  const openingPosition = coachOpeningTransfer && coachGame
+    ? (reviewing ? coachFenAtPly(cur) : coachGame.fen()) : null;
   $('#coach-nav-label').text(
-    practicing ? 'Practice' : !coachGame || total === 0 ? '' :
-    reviewing ? `Move ${cur}/${total}` : `Move ${total} • Live`
+    practicing ? 'Practice' : openingPosition ? `Move ${openingPosition.split(/\s+/)[5]} • ${reviewing ? 'Review' : 'Live'}` :
+    !coachGame || total === 0 ? '' : reviewing ? `Move ${cur}/${total}` : `Move ${total} • Live`
   );
   renderCoachPresentation();
 }
@@ -6725,6 +6773,14 @@ function updateOpeningLabel() {
     $('#opening-section').hide();
     return;
   }
+  if (coachOpeningTransfer) {
+    const source = OPENINGS.find(opening => opening.id === coachOpeningTransfer.openingId);
+    coachOpeningId = source && source.id;
+    $('#coach-opening-eco').text(source ? source.eco : '');
+    $('#coach-opening-name').text(`${coachOpeningTransfer.title} · ${coachOpeningTransfer.lineName} · free play from move ${coachOpeningTransfer.sourceFen.split(' ')[5]}`);
+    $('#opening-section').show();
+    return;
+  }
   // Respect the history cursor so navigating back shows the opening as it was
   // at that ply, not the latest one.
   const fullSans = coachGame.history();
@@ -6793,6 +6849,9 @@ function coachGetPgn() {
     ['Black', coachUserColor() === 'black' ? 'Player' : `Opponent ${coachEngineElo || ''}`.trim()],
     ['Result', result],
   ];
+  if (coachOpeningTransfer) {
+    headers.push(['Opening', coachOpeningTransfer.title], ['Variation', coachOpeningTransfer.lineName]);
+  }
   if (autoTags.SetUp) headers.push(['SetUp', autoTags.SetUp]);
   if (autoTags.FEN) headers.push(['FEN', autoTags.FEN]);
   const header = headers
@@ -6896,8 +6955,8 @@ function resolveAccessibleMove(gameObj, rawMove) {
     return legalMoves.find(move => move.from === uci[1] && move.to === uci[2] &&
       (!move.promotion || (uci[3] || 'q') === move.promotion)) || null;
   }
-  const normalized = value.replace(/\s+/g, '').toLowerCase();
-  return legalMoves.find(move => move.san.replace(/\s+/g, '').toLowerCase() === normalized) || null;
+  const normalized = value.replace(/\s+/g, '').replace(/[+#?!]+$/, '').toLowerCase();
+  return legalMoves.find(move => move.san.replace(/\s+/g, '').replace(/[+#?!]+$/, '').toLowerCase() === normalized) || null;
 }
 
 function focusableElements(container) {
@@ -7149,6 +7208,7 @@ function finishQuiz() {
   if (quizMissedMoves.length > 0) $('#btn-review-misses').show();
   updateSRSidebar();
   updateSRPanel();
+  if (typeof renderOpeningTransferEntry === 'function') renderOpeningTransferEntry();
 }
 
 function autoPlayOpponent() {
@@ -7191,6 +7251,14 @@ function applyExploreMove(source, target, promotion, opts) {
   return true;
 }
 
+function quizMoveMatches(position, played, expectedSan) {
+  if (!position || !played || !expectedSan) return false;
+  try {
+    const expected = new Chess(position.fen()).move(expectedSan);
+    return !!expected && uciFromMove(expected) === uciFromMove(played);
+  } catch (e) { return false; }
+}
+
 function handleQuizDrop(source, target, promotion) {
   if (!quizMode || !currentOpening) return 'snapback';
   promotion = promotion || 'q';
@@ -7202,7 +7270,7 @@ function handleQuizDrop(source, target, promotion) {
     const tempGame = new Chess(game.fen());
     const move = tempGame.move({ from: source, to: target, promotion });
     if (!move) return 'snapback';
-    if (move.san === expectedSAN) {
+    if (quizMoveMatches(game, move, expectedSAN)) {
       game.move({ from: source, to: target, promotion });
       currentMoveIdx = expectedIdx;
       board.position(game.fen(), false);
@@ -7232,7 +7300,7 @@ function handleQuizDrop(source, target, promotion) {
   const move = tempGame.move({ from: source, to: target, promotion });
   if (!move) return 'snapback';
 
-  if (move.san === expectedSAN) {
+  if (quizMoveMatches(game, move, expectedSAN)) {
     game.move({ from: source, to: target, promotion });
     currentMoveIdx = nextIdx;
     quizAttempts = 0;
@@ -7436,6 +7504,7 @@ function renderKeyIdeas() {
 
 function updateProgress() {
   if (board) updateLibraryBoardAccessibility();
+  if (typeof renderOpeningTransferEntry === 'function') renderOpeningTransferEntry();
   if (!currentOpening) { $('#progress-fill').css('width', '0%'); return; }
   const moves = activeMoves();
   const pct = moves.length ? ((currentMoveIdx + 1) / moves.length) * 100 : 0;
@@ -7935,7 +8004,9 @@ $(function () {
       setCoachStatus('This opening is not in the local study library yet.');
       return;
     }
-    loadOpening(coachOpeningId);
+    const context = coachOpeningTransfer;
+    loadOpening(coachOpeningId, context ? context.lineId : undefined);
+    if (context) goToMove(context.sourcePly - 1);
   });
 
   // Sound toggle — restore prior preference, persist on change. The first

@@ -39,6 +39,15 @@ Drills evaluate sound alternatives, provide progressive hints, and can ask for
 a follow-up after an opponent reply. Unverified engine results are not counted
 as mistakes.
 
+**Opening → game** carries a selected Library position and idea into free,
+unrated Coach play, including variations and completed quizzes. Finished mating
+lines back up to a playable student decision. After a few reviewed moves, the
+review separates engine move quality from the player's self-reported use of the
+idea. Up to six recent opening reviews remain in Progress and training backups.
+An unfinished Coach game is protected, including when a drill temporarily
+borrows the opening game or the browser reloads. See the
+[opening transfer audit](docs/opening-transfer-loop.md).
+
 **Progress** leads with one next focus, its evidence, a cue, and a direct action to
 practice or play. It resumes an unfinished session before suggesting a new one.
 Activity, unassisted attempts, assisted completions, and observed mistake rates
@@ -61,6 +70,7 @@ discards the staged batch rather than saving a partially analysed history.
 ## Stack
 
 - `index.html` + `styles.css` + `app.js` (runtime) + `openings.js` (opening content data)
+  + `opening-transfer.js` (Library-to-game exercises and reviews)
   + `growth.js` (personal training layer: profile, repertoire, imported games,
   endgames, cross-device sync) — no build tooling, no package manager,
   no framework

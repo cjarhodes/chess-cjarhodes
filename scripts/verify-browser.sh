@@ -993,3 +993,15 @@ if [[ "$PROGRESS_EXIT" -ne 0 || "$PROGRESS_OUTPUT" == *"### Error"* ]]; then
   exit 1
 fi
 echo "Useful Progress journey validation passed."
+
+OPENING_TRANSFER_CODE=$(cat "$ROOT/scripts/verify-opening-transfer-journeys.js")
+set +e
+OPENING_TRANSFER_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$OPENING_TRANSFER_CODE")
+OPENING_TRANSFER_EXIT=$?
+set -e
+echo "$OPENING_TRANSFER_OUTPUT"
+if [[ "$OPENING_TRANSFER_EXIT" -ne 0 || "$OPENING_TRANSFER_OUTPUT" == *"### Error"* ]]; then
+  echo "Opening transfer journey validation failed." >&2
+  exit 1
+fi
+echo "Opening transfer journey validation passed."

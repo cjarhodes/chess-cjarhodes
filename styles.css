@@ -2464,3 +2464,18 @@ input[type=range].strength-slider::-moz-range-thumb {
 .progress-method { color: var(--muted); font-size: 0.74rem; line-height: 1.5; }
 .progress-method summary { cursor: pointer; padding: 0.4rem 0; }
 .progress-method p { margin: 0.5rem 0 0; }
+
+/* Move from a studied position into a real opponent, keeping its purpose visible. */
+.opening-transfer-entry, .opening-transfer-card { padding: 0.8rem; background: var(--surface); border-left: 2px solid var(--accent); display: flex; flex-direction: column; gap: 0.6rem; min-width: 0; }
+.opening-transfer-entry label, #summary-opening-transfer label { color: var(--text); font-size: 0.8rem; }
+.opening-transfer-entry p, .opening-transfer-card p, .opening-transfer-card details { margin: 0; color: var(--muted); font-size: 0.8rem; line-height: 1.5; }
+.opening-transfer-entry select, #summary-transfer-reflection { width: 100%; min-width: 0; max-width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 0.55rem; font: inherit; font-size: 0.75rem; }
+.opening-transfer-card h2 { margin: 0; color: var(--text); font: 1.05rem/1.35 var(--font-reading); }
+.opening-transfer-card #opening-transfer-plan { color: var(--text); font-family: var(--font-reading); font-size: 0.95rem; }
+.opening-transfer-card summary { cursor: pointer; }
+.opening-transfer-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.opening-transfer-history-item { margin-top: 0.5rem; padding: 0.65rem; border: 1px solid var(--border); font-size: 0.78rem; line-height: 1.5; }
+.opening-transfer-history-item summary { cursor: pointer; color: var(--text); }
+.opening-transfer-history-item p { color: var(--muted); margin: 0.6rem 0; }
+
+.opening-transfer-summary .summary-actions { position: sticky; bottom: -1.5rem; z-index: 1; background: var(--surface); padding: 0.75rem 0; border-top: 1px solid var(--border); }

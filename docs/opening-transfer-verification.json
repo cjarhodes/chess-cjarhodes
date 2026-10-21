@@ -1,0 +1,296 @@
+{
+  "environment": "local HTTP preview",
+  "recordedAt": "2026-10-21T05:11:05.698647+00:00",
+  "baseCommit": "7a6c09b6a9c0c5a2a662dfac8e4aba44fd1fcbae",
+  "sourceSha256": {
+    "app.js": "04fa4365b8f37441b062ce30d33599dfaeac1e767d0570e1dac674e0a95b28c2",
+    "growth.js": "450576ba2e14b9645468883490c8c2c1ea29370d02b768013befab98cd38316c",
+    "index.html": "310bdafa80331ceab079b5412cd72bdf035bf7f5a810725176034cbe3369873e",
+    "styles.css": "213135ed899db0d36d79014cf0bb6b4d476a48638b7bd8513b60162ee9deab5e",
+    "opening-transfer.js": "48db4acf6830cfad72c1873cf2dba30da9f9c831273abb927d1ba1a46a496f99"
+  },
+  "syntaxChecks": [
+    "node --check app.js",
+    "node --check growth.js",
+    "node --check opening-transfer.js"
+  ],
+  "validators": [
+    "validate-accessibility.js",
+    "validate-difficulty.js",
+    "validate-growth-upgrades.js",
+    "validate-growth.js",
+    "validate-maintainability.js",
+    "validate-opening-transfer.js",
+    "validate-openings.js",
+    "validate-performance.js",
+    "validate-practice-logic.js",
+    "validate-practice-upgrades.js",
+    "validate-practice.js",
+    "validate-recovery.js",
+    "validate-reliability.js",
+    "validate-review-teaching.js",
+    "validate-security.js",
+    "validate-useful-progress.js"
+  ],
+  "openingTransferBehavioralChecks": 1853,
+  "authoredContent": {
+    "openings": 28,
+    "lines": 35,
+    "quizMoves": 806
+  },
+  "browserCommand": "scripts/verify-browser.sh",
+  "browserPassMarkers": [
+    "Browser smoke validation passed.",
+    "Teaching journey validation passed.",
+    "Interruption recovery validation passed.",
+    "Opponent journey validation passed.",
+    "Coaching UI journey validation passed.",
+    "Useful Progress journey validation passed.",
+    "Opening transfer journey validation passed."
+  ],
+  "openingTransferJourney": {
+    "scenarios": [
+      "Study -> chosen cue -> four real reviews -> nested practice/reload -> reflection -> original game and daily progress preserved -> Progress and backup",
+      "Black-side Dragon variation -> real opponent first -> reviewed response -> protected import -> same Library variation",
+      "Real keyboard quiz completion -> terminal-line recovery -> real mating move and review -> unrated lesson return",
+      "Corrected bridge -> legal opponent reply and follow-up -> reload -> matching opening position in free play"
+    ],
+    "checks": [
+      {
+        "name": "study",
+        "width": 1280,
+        "height": 800,
+        "documentWidth": 1280,
+        "boardSize": 500,
+        "boardBottom": 635.375,
+        "boardX": 330,
+        "boardRight": 830,
+        "actionBottom": 400.546875,
+        "primary": []
+      },
+      {
+        "name": "study",
+        "width": 1440,
+        "height": 900,
+        "documentWidth": 1440,
+        "boardSize": 600,
+        "boardBottom": 731.375,
+        "boardX": 360,
+        "boardRight": 960,
+        "actionBottom": 400.546875,
+        "primary": []
+      },
+      {
+        "name": "study",
+        "width": 1920,
+        "height": 1080,
+        "documentWidth": 1920,
+        "boardSize": 760,
+        "boardBottom": 891.375,
+        "boardX": 505,
+        "boardRight": 1265,
+        "actionBottom": 400.546875,
+        "primary": []
+      },
+      {
+        "name": "play",
+        "width": 1280,
+        "height": 800,
+        "documentWidth": 1280,
+        "boardSize": 384,
+        "boardBottom": 559.09375,
+        "boardX": 409.59375,
+        "boardRight": 793.59375,
+        "actionBottom": 391.84375,
+        "primary": [
+          "keyboard-submit"
+        ]
+      },
+      {
+        "name": "play",
+        "width": 1440,
+        "height": 900,
+        "documentWidth": 1440,
+        "boardSize": 480,
+        "boardBottom": 654,
+        "boardX": 436.796875,
+        "boardRight": 916.796875,
+        "actionBottom": 372.65625,
+        "primary": [
+          "keyboard-submit"
+        ]
+      },
+      {
+        "name": "play",
+        "width": 1920,
+        "height": 1080,
+        "documentWidth": 1920,
+        "boardSize": 664,
+        "boardBottom": 838,
+        "boardX": 568,
+        "boardRight": 1232,
+        "actionBottom": 372.65625,
+        "primary": [
+          "keyboard-submit"
+        ]
+      },
+      {
+        "name": "ready-review",
+        "width": 1280,
+        "height": 800,
+        "documentWidth": 1280,
+        "boardSize": 384,
+        "boardBottom": 558,
+        "boardX": 409.59375,
+        "boardRight": 793.59375,
+        "actionBottom": 372.65625,
+        "primary": [
+          "btn-opening-transfer-review"
+        ]
+      },
+      {
+        "name": "ready-review",
+        "width": 1440,
+        "height": 900,
+        "documentWidth": 1440,
+        "boardSize": 488,
+        "boardBottom": 662,
+        "boardX": 432.796875,
+        "boardRight": 920.796875,
+        "actionBottom": 372.65625,
+        "primary": [
+          "btn-opening-transfer-review"
+        ]
+      },
+      {
+        "name": "ready-review",
+        "width": 1920,
+        "height": 1080,
+        "documentWidth": 1920,
+        "boardSize": 664,
+        "boardBottom": 838,
+        "boardX": 568,
+        "boardRight": 1232,
+        "actionBottom": 372.65625,
+        "primary": [
+          "btn-opening-transfer-review"
+        ]
+      },
+      {
+        "name": "summary",
+        "width": 1280,
+        "height": 800,
+        "documentWidth": 1280,
+        "cardTop": 32.062164306640625,
+        "cardBottom": 768.0229797363281,
+        "actionTop": 723.650390625,
+        "actionBottom": 755.023681640625,
+        "primaries": 1
+      },
+      {
+        "name": "summary",
+        "width": 1440,
+        "height": 900,
+        "documentWidth": 1440,
+        "cardTop": 36,
+        "cardBottom": 864,
+        "actionTop": 819.625,
+        "actionBottom": 851,
+        "primaries": 1
+      },
+      {
+        "name": "summary",
+        "width": 1920,
+        "height": 1080,
+        "documentWidth": 1920,
+        "cardTop": 43.203125,
+        "cardBottom": 1036.796875,
+        "actionTop": 992.421875,
+        "actionBottom": 1023.796875,
+        "primaries": 1
+      },
+      {
+        "name": "black-variation",
+        "width": 1280,
+        "height": 800,
+        "documentWidth": 1280,
+        "boardSize": 384,
+        "boardBottom": 558,
+        "boardX": 409.59375,
+        "boardRight": 793.59375,
+        "actionBottom": 414.640625,
+        "primary": [
+          "keyboard-submit"
+        ]
+      },
+      {
+        "name": "black-variation",
+        "width": 1440,
+        "height": 900,
+        "documentWidth": 1440,
+        "boardSize": 488,
+        "boardBottom": 662,
+        "boardX": 432.796875,
+        "boardRight": 920.796875,
+        "actionBottom": 395.453125,
+        "primary": [
+          "keyboard-submit"
+        ]
+      },
+      {
+        "name": "black-variation",
+        "width": 1920,
+        "height": 1080,
+        "documentWidth": 1920,
+        "boardSize": 664,
+        "boardBottom": 838,
+        "boardX": 568,
+        "boardRight": 1232,
+        "actionBottom": 372.65625,
+        "primary": [
+          "keyboard-submit"
+        ]
+      },
+      {
+        "name": "quiz-finish",
+        "width": 1280,
+        "height": 800,
+        "documentWidth": 1280,
+        "boardSize": 500,
+        "boardBottom": 635.375,
+        "boardX": 330,
+        "boardRight": 830,
+        "actionBottom": 419.734375,
+        "primary": []
+      },
+      {
+        "name": "quiz-finish",
+        "width": 1440,
+        "height": 900,
+        "documentWidth": 1440,
+        "boardSize": 600,
+        "boardBottom": 731.375,
+        "boardX": 360,
+        "boardRight": 960,
+        "actionBottom": 419.734375,
+        "primary": []
+      },
+      {
+        "name": "quiz-finish",
+        "width": 1920,
+        "height": 1080,
+        "documentWidth": 1920,
+        "boardSize": 760,
+        "boardBottom": 891.375,
+        "boardX": 505,
+        "boardRight": 1265,
+        "actionBottom": 419.734375,
+        "primary": []
+      }
+    ],
+    "keyboardFocus": true,
+    "pageErrors": 0,
+    "consoleErrors": 0
+  },
+  "interpretation": "Functional regression evidence with real engine responses. Plan-use reflection is self-reported; four reviewed moves do not establish lasting learning. Account history uses the existing JSON sync path; this run checks client merge, adoption, and owner isolation, not a fresh human cross-device login."
+}

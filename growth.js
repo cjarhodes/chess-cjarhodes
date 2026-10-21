@@ -89,6 +89,7 @@ function emptyGrowthState() {
       updatedAt: 0
     },
     repertoire: { ids: [], updatedAt: 0, focusKey: null, focusUpdatedAt: 0, observed: [], repairs: [], comparisons: [] },
+    openingTransfers: [],
     library: { records: {} }
   };
 }
@@ -157,12 +158,39 @@ function normalizeGrowthState(value) {
       repairs,
       comparisons
     },
+    openingTransfers: normalizeOpeningTransferRecords(value.openingTransfers),
     library: {
       records: value.library && value.library.records && typeof value.library.records === 'object'
         ? value.library.records
         : {}
     }
   };
+}
+
+// A bounded review history shares the existing owner-scoped training JSON,
+// backup, and merge path. It stores observations and self-reports, not mastery.
+function normalizeOpeningTransferRecords(value) {
+  const records = new Map();
+  (Array.isArray(value) ? value : []).forEach(item => {
+    if (!item || typeof item.id !== 'string' || !Number.isFinite(item.at) ||
+        !OPENINGS.some(opening => opening.id === item.openingId)) return;
+    const existing = records.get(item.id);
+    if (existing && existing.at >= item.at) return;
+    records.set(item.id, {
+      id: item.id, at: item.at, openingId: item.openingId,
+      lineId: typeof item.lineId === 'string' ? item.lineId : 'main',
+      sourcePly: Math.max(0, Math.floor(Number(item.sourcePly) || 0)),
+      side: item.side === 'black' ? 'black' : 'white',
+      cue: String(item.cue || '').slice(0, 500),
+      reflection: ['applied', 'adapted', 'unsure'].includes(item.reflection) ? item.reflection : 'unsure',
+      reviewed: Math.max(0, Math.floor(Number(item.reviewed) || 0)),
+      problems: Math.max(0, Math.floor(Number(item.problems) || 0)),
+      examples: (Array.isArray(item.examples) ? item.examples : []).filter(example => example && typeof example === 'object').slice(0, 2).map(example => ({
+        move: String(example.move || '').slice(0, 40), lesson: String(example.lesson || '').slice(0, 500)
+      }))
+    });
+  });
+  return Array.from(records.values()).sort((a, b) => b.at - a.at).slice(0, 6);
 }
 
 function loadGrowthState(ownerId = growthOwnerId()) {
@@ -372,6 +400,7 @@ function mergeGrowthStates(localValue, remoteValue) {
       merged.library.records[id] = bRank > aRank ? b : a;
     }
   });
+  merged.openingTransfers = normalizeOpeningTransferRecords([...local.openingTransfers, ...remote.openingTransfers]);
   merged.updatedAt = Math.max(local.updatedAt, remote.updatedAt);
   return normalizeGrowthState(merged);
 }
@@ -379,7 +408,7 @@ function mergeGrowthStates(localValue, remoteValue) {
 function adoptAnonymousGrowthState(ownerId) {
   if (!ownerId) return;
   const anonymous = loadGrowthState(null);
-  const hasData = anonymous.profile.onboarded || anonymous.repertoire.ids.length || anonymous.repertoire.observed.length || anonymous.repertoire.repairs.length || Object.keys(anonymous.library.records).length;
+  const hasData = anonymous.openingTransfers.length || anonymous.profile.onboarded || anonymous.repertoire.ids.length || anonymous.repertoire.observed.length || anonymous.repertoire.repairs.length || Object.keys(anonymous.library.records).length;
   if (!hasData) return;
   const merged = mergeGrowthStates(loadGrowthState(ownerId), anonymous);
   const saved = saveGrowthState(merged, ownerId, { skipSync: true, preserveTimestamp: true });
@@ -548,21 +577,29 @@ function openingBridgeItem(opening) {
   for (let i = 0; i < targetIndex; i++) {
     if (!position.move(opening.moves[i])) return null;
   }
+  const fenBefore = position.fen();
   const best = position.move(opening.moves[targetIndex]);
   if (!best) return null;
+  const reply = opening.moves[targetIndex + 1] && position.move(opening.moves[targetIndex + 1]);
+  const followup = reply && opening.moves[targetIndex + 2] && position.move(opening.moves[targetIndex + 2]);
+  const continuation = reply && followup ? [{
+    opponentUci: `${reply.from}${reply.to}${reply.promotion || ''}`,
+    followupUci: `${followup.from}${followup.to}${followup.promotion || ''}`
+  }] : [];
   return {
     id: `opening-bridge:${opening.id}`,
     tag: 'opening_principles',
     entry: {
       id: `opening-bridge:${opening.id}`,
-      fenBefore: position.fen(),
+      fenBefore,
       bestUci: typeof uciFromMove === 'function' ? uciFromMove(best) : `${best.from}${best.to}${best.promotion || ''}`,
       bestSan: best.san,
       opening: opening.name,
       openingId: opening.id,
       pairNum: 7,
       ply: targetIndex + 1,
-      phase: 'middlegame'
+      phase: 'opening',
+      continuation
     },
     meta: {
       title: `${opening.name} → middlegame`,
@@ -853,6 +890,7 @@ function userScoreFromGameResult(result) {
 }
 
 function ratedCoachEligibility(endReason) {
+  if (typeof coachOpeningTransfer !== 'undefined' && coachOpeningTransfer) return { eligible: false, reason: 'opening exercise' };
   if (!coachGame || !coachLocalGameId) return { eligible: false, reason: 'missing game' };
   if (coachStartFen !== new Chess().fen()) return { eligible: false, reason: 'custom position' };
   if (!coachStats || coachStats.moves < 4) return { eligible: false, reason: 'fewer than four reviewed moves' };
@@ -1130,6 +1168,7 @@ function renderWeeklyReview(entriesOverride) {
     $('<strong></strong>').text(recommendation.focusTag ? `After practice · ${recommendation.title}` : 'After practice · build evidence'),
     $('<span></span>').text(comparison)
   ));
+  if (typeof renderOpeningTransferHistory === 'function') renderOpeningTransferHistory();
   renderCoachPresentation();
 }
 
@@ -1272,6 +1311,10 @@ function importRunOwnsBoard(run) {
 }
 
 async function analyseImportedPgn() {
+  if (typeof coachOpeningTransfer !== 'undefined' && coachOpeningTransfer) {
+    $('#game-inbox-status').addClass('error').text('Return from the current opening session before importing another game.');
+    return;
+  }
   if (importedGameAnalysisActive) return;
   const pgn = ($('#game-inbox-pgn').val() || '').trim();
   const side = $('#game-inbox-side').val() === 'black' ? 'black' : 'white';

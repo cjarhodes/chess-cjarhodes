@@ -165,6 +165,13 @@
         <button class="btn-share" id="btn-share" title="Copy shareable link">Share link</button>
         <button class="btn-share repertoire-action" id="btn-repertoire-toggle" type="button">☆ Add to my repertoire</button>
       </div>
+      <section class="opening-transfer-entry" id="opening-transfer-entry" aria-label="Play this opening">
+        <div class="section-label">Opening → game</div>
+        <label for="opening-transfer-cue">Idea to test</label>
+        <select id="opening-transfer-cue"></select>
+        <p id="opening-transfer-detail"></p>
+        <button type="button" class="ctrl-btn primary" id="btn-library-transfer">Play this position</button>
+      </section>
       <div class="opening-desc" id="opening-desc"></div>
       <div id="sr-status-panel" class="sr-panel" style="display:none"></div>
 
@@ -501,6 +508,18 @@
     </div>
 
     <div class="panel-page active" id="panel-game" role="tabpanel" aria-labelledby="tab-game">
+<section class="coach-panel-section opening-transfer-card" id="coach-opening-transfer" style="display:none;" aria-labelledby="opening-transfer-title">
+      <div class="section-label">Opening → game · unrated position</div>
+      <h2 id="opening-transfer-title"></h2>
+      <p id="opening-transfer-plan"></p>
+      <p id="opening-transfer-count"></p>
+      <details><summary>Before each move</summary><p>Check the opponent’s threats first. Choose an opening idea that still fits this position, then calculate the reply. You can change plans.</p></details>
+      <div class="opening-transfer-actions">
+        <button type="button" class="ctrl-btn" id="btn-opening-transfer-review">Review opening session</button>
+        <button type="button" class="movelist-copy" id="btn-opening-transfer-return">Return to saved game</button>
+      </div>
+    </section>
+
       <div class="coach-review-empty" id="coach-review-empty" role="note">
         <div class="title">Your next move, explained</div>
         <p>Play a move to see what it changes, what to watch for, and what to try next.</p>
@@ -641,6 +660,10 @@
         <p>After practice compares 30 reviewed moves before an unassisted completion with the first 30 after it. Rehearsing again keeps that checkpoint while its baseline is retained. A lower flag rate does not prove practice caused a change.</p>
       </details>
     </div>
+<section class="coach-panel-section" id="opening-transfer-history" style="display:none;">
+      <div class="section-label">Opening sessions · recent 6</div>
+      <div id="opening-transfer-history-list"></div>
+    </section>
 <details class="coach-panel-section progress-history" id="insights-section" style="display:none;">
       <summary class="section-label">Retained review history</summary>
       <div class="lifetime-head">
@@ -687,6 +710,17 @@
     <div class="summary-title" id="summary-title">Game over</div>
     <div class="summary-subtitle" id="summary-subtitle" style="display:none;"></div>
 
+    <section class="summary-section" id="summary-opening-transfer" style="display:none;">
+      <div class="summary-section-title">Opening idea in play</div>
+      <p id="summary-transfer-cue"></p>
+      <p id="summary-transfer-observation"></p>
+      <label for="summary-transfer-reflection">Your reflection · self-reported</label>
+      <select id="summary-transfer-reflection">
+        <option value="unsure">I’m still working out the plan</option>
+        <option value="applied">I found a way to use the idea</option>
+        <option value="adapted">The opponent made me change plans</option>
+      </select>
+    </section>
     <!-- Headline metrics: three big numbers -->
     <div class="summary-metrics">
       <div class="summary-metric">
@@ -753,6 +787,7 @@
 
     <div class="summary-actions">
       <button class="ctrl-btn primary" id="btn-summary-practice" style="display:none;">Practice this mistake</button>
+      <button type="button" class="ctrl-btn" id="btn-summary-opening-return" style="display:none;">Return to saved game</button>
       <button class="ctrl-btn primary" id="btn-summary-newgame">New game</button>
       <button class="ctrl-btn" id="btn-summary-copypgn">Copy PGN</button>
       <button class="ctrl-btn" id="btn-summary-close">Close</button>
@@ -769,5 +804,6 @@
 <script src="openings.js"></script>
 <script src="app.js"></script>
 <script src="growth.js"></script>
+<script src="opening-transfer.js"></script>
 </body>
 </html>
