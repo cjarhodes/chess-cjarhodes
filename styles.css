@@ -2377,3 +2377,76 @@ input[type=range].strength-slider::-moz-range-thumb {
 #coach-review-analysis { padding: 0.65rem 0.8rem; border-left: 3px solid var(--accent); background: var(--surface2); color: var(--text); font-size: 0.82rem; line-height: 1.5; }
 .coach-analysis-actions { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.45rem; }
 .coach-view.practice-active .coach-analysis-strip { display: none; }
+
+
+/* Coaching workspace: keep the board and its tools inside the laptop viewport. */
+.coach-view {
+  --rail-left: clamp(260px, 21vw, 320px);
+  --rail-right: clamp(340px, 27vw, 440px);
+  --board-size: var(--coach-board-size, 440px);
+  min-height: 0;
+}
+.coach-settings, .coach-panel { min-width: 0; padding: 1.15rem 1.1rem 1.5rem; }
+.coach-board-area { min-width: 0; min-height: 0; padding: 1rem 1.25rem; gap: 0.5rem; }
+.coach-board-area .board-nav { margin-top: 0; }
+.coach-board-area .board-controls { width: var(--board-size); max-width: 100%; flex-wrap: wrap; gap: 0.35rem; }
+.coach-board-area .board-controls .ctrl-btn { font-size: 0.72rem; padding: 0.4rem 0.55rem; }
+#coachBoard-wrap { width: var(--board-size); max-width: 100%; }
+.coach-turn-header { width: var(--board-size); max-width: 100%; }
+.coach-phase-label { font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--highlight); margin-bottom: 0.25rem; }
+.coach-turn-header .coach-status { margin: 0; padding: 0; border: 0; background: none; color: var(--text); font-family: var(--font-reading); font-size: 1rem; line-height: 1.4; }
+.coach-panel { gap: 1rem; }
+.coach-panel .coach-practice-banner, .coach-panel .coach-analysis-strip { width: 100%; }
+.coach-panel .panel-tabs { top: -1.15rem; }
+.coach-daily-plan { display: flex; flex-direction: column; gap: 0.65rem; padding: 0.8rem; }
+.coach-daily-plan .plan-title { font-family: var(--font-reading); font-size: 1.2rem; font-weight: 500; }
+.coach-daily-plan .ctrl-btn { align-self: stretch; text-align: center; }
+.daily-sprint-meta { flex-wrap: wrap; gap: 0.2rem 0.6rem; font-size: 0.62rem; }
+.daily-sprint-focus { padding: 0.5rem; }
+.daily-sprint-focus-detail { font-size: 0.9rem; }
+.play-card { padding: 0.7rem; gap: 0.65rem; }
+.play-actions .ctrl-btn { font-size: 0.72rem; padding: 0.4rem 0.5rem; }
+.coach-view.practice-active .coach-turn-header #coach-status { display: block !important; }
+
+
+/* Session state and progressive disclosure. */
+.game-options summary { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.45rem 0; cursor: pointer; font-size: 0.72rem; color: var(--text); }
+.game-options summary span { color: var(--muted); font-size: 0.68rem; }
+.game-options-body { display: flex; flex-direction: column; gap: 0.65rem; padding-top: 0.6rem; }
+.game-options-body .play-divider { display: none; }
+.plan-explanation summary { cursor: pointer; color: var(--muted); font-size: 0.68rem; padding-top: 0.35rem; }
+.daily-sprint-focus-cue { font-family: var(--font-reading); font-size: 0.95rem; line-height: 1.4; margin-top: 0.3rem; }
+.coach-view[data-ui-state="analyzing"] .coach-phase-label,
+.coach-view[data-ui-state="opponent-turn"] .coach-phase-label { color: var(--muted); }
+.coach-view[data-ui-state="review"] .coach-turn-header { border-left: 2px solid var(--highlight); padding-left: 0.7rem; }
+.coach-view[data-ui-state="practice"] .coach-phase-label,
+.coach-view[data-ui-state="practice-complete"] .coach-phase-label { color: var(--accent-soft); }
+.coach-view[data-ui-state="review"] #btn-coach-next-action { display: none; }
+
+.coach-review-actions { gap: 0.45rem; }
+.coach-review-actions .ctrl-btn { text-align: left; }
+.coach-review-actions #btn-coach-showwhy { text-align: center; }
+
+
+/* Reading and keyboard polish within the existing umber/claret palette. */
+.coach-view :is(button, input, textarea, select, summary):focus-visible,
+.summary-card :is(button, summary):focus-visible { outline: 2px solid var(--accent-soft); outline-offset: 3px; }
+.coach-view .ctrl-btn.primary:hover,
+.summary-card .ctrl-btn.primary:hover { background: #b13c51; border-color: var(--accent-soft); color: #fff8f0; }
+.coach-review-cue { font-size: 1rem; line-height: 1.45; }
+.coach-review-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.coach-review-actions #btn-coach-showwhy { grid-column: 1 / -1; }
+.coach-review-actions .ctrl-btn { padding: 0.5rem; font-size: 0.72rem; text-align: center; }
+.coach-review-empty { padding: 1rem; border: 1px solid var(--border); background: var(--surface); }
+.coach-review-empty .title { font: 1.2rem/1.3 var(--font-reading); color: var(--text); margin-bottom: 0.5rem; }
+.coach-review-empty p { font: 1rem/1.5 var(--font-reading); color: var(--muted); }
+.session-details > summary { cursor: pointer; padding: 0.5rem 0; margin: 0; }
+.session-details[open] > summary { margin-bottom: 0.5rem; }
+.game-options summary, .plan-explanation summary, .keyboard-move summary { min-height: 32px; }
+@media (prefers-reduced-motion: reduce) {
+  .coach-view *, .summary-card * { scroll-behavior: auto !important; transition: none !important; }
+}
+
+.coach-turn-header { min-height: 64px; }
+
+.coach-view[data-ui-state="practice-complete"] #btn-coach-next-action { display: none; }

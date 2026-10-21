@@ -29,6 +29,7 @@ async page => {
     await page.reload();
     await page.locator('#group-position').evaluate(el => { el.open = true; });
     await page.locator('#coach-fen').fill(fixture.fen);
+    await page.locator('#coach-game-options').evaluate(el => { el.open = true; });
     await page.locator('.side-toggle button[data-side="white"]').click();
     await page.locator('#btn-coach-newgame').click();
     await play(fixture.move);

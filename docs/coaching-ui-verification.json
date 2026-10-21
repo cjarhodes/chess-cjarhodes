@@ -1,0 +1,477 @@
+{
+  "baselineCommit": "cfd63055b8e227de0652bfa83793a6748421a175",
+  "date": "2026-10-20",
+  "checks": [
+    {
+      "name": "ready",
+      "state": "ready",
+      "width": 1280,
+      "height": 800,
+      "boardSize": 456,
+      "boardBottom": 630,
+      "controlsBottom": 774.375,
+      "keyboardBottom": 672,
+      "overflow": 0,
+      "primary": [
+        "btn-coach-next-action"
+      ],
+      "boardPrimary": false
+    },
+    {
+      "name": "ready",
+      "state": "ready",
+      "width": 1440,
+      "height": 900,
+      "boardSize": 560,
+      "boardBottom": 734,
+      "controlsBottom": 878.375,
+      "keyboardBottom": 776,
+      "overflow": 0,
+      "primary": [
+        "btn-coach-next-action"
+      ],
+      "boardPrimary": false
+    },
+    {
+      "name": "ready",
+      "state": "ready",
+      "width": 1920,
+      "height": 1080,
+      "boardSize": 736,
+      "boardBottom": 910,
+      "controlsBottom": 1054.375,
+      "keyboardBottom": 952,
+      "overflow": 0,
+      "primary": [
+        "btn-coach-next-action"
+      ],
+      "boardPrimary": false
+    },
+    {
+      "name": "your-turn",
+      "state": "user-turn",
+      "width": 1280,
+      "height": 800,
+      "boardSize": 456,
+      "boardBottom": 630,
+      "controlsBottom": 774.375,
+      "keyboardBottom": 672,
+      "overflow": 0,
+      "primary": [],
+      "boardPrimary": true
+    },
+    {
+      "name": "your-turn",
+      "state": "user-turn",
+      "width": 1440,
+      "height": 900,
+      "boardSize": 560,
+      "boardBottom": 734,
+      "controlsBottom": 878.375,
+      "keyboardBottom": 776,
+      "overflow": 0,
+      "primary": [],
+      "boardPrimary": true
+    },
+    {
+      "name": "your-turn",
+      "state": "user-turn",
+      "width": 1920,
+      "height": 1080,
+      "boardSize": 736,
+      "boardBottom": 910,
+      "controlsBottom": 1054.375,
+      "keyboardBottom": 952,
+      "overflow": 0,
+      "primary": [],
+      "boardPrimary": true
+    },
+    {
+      "name": "analyzing",
+      "state": "analyzing",
+      "width": 1280,
+      "height": 800,
+      "boardSize": 400,
+      "boardBottom": 574,
+      "controlsBottom": 774.25,
+      "keyboardBottom": 671.875,
+      "overflow": 0,
+      "primary": [],
+      "boardPrimary": false
+    },
+    {
+      "name": "analyzing",
+      "state": "analyzing",
+      "width": 1440,
+      "height": 900,
+      "boardSize": 504,
+      "boardBottom": 678,
+      "controlsBottom": 878.25,
+      "keyboardBottom": 775.875,
+      "overflow": 0,
+      "primary": [],
+      "boardPrimary": false
+    },
+    {
+      "name": "analyzing",
+      "state": "analyzing",
+      "width": 1920,
+      "height": 1080,
+      "boardSize": 680,
+      "boardBottom": 854,
+      "controlsBottom": 1054.25,
+      "keyboardBottom": 951.875,
+      "overflow": 0,
+      "primary": [],
+      "boardPrimary": false
+    },
+    {
+      "name": "opponent-turn",
+      "state": "opponent-turn",
+      "width": 1280,
+      "height": 800,
+      "boardSize": 384,
+      "boardBottom": 558,
+      "controlsBottom": 775.515625,
+      "keyboardBottom": 673.140625,
+      "overflow": 0,
+      "primary": [],
+      "boardPrimary": false
+    },
+    {
+      "name": "opponent-turn",
+      "state": "opponent-turn",
+      "width": 1440,
+      "height": 900,
+      "boardSize": 488,
+      "boardBottom": 662,
+      "controlsBottom": 879.515625,
+      "keyboardBottom": 777.140625,
+      "overflow": 0,
+      "primary": [],
+      "boardPrimary": false
+    },
+    {
+      "name": "opponent-turn",
+      "state": "opponent-turn",
+      "width": 1920,
+      "height": 1080,
+      "boardSize": 664,
+      "boardBottom": 838,
+      "controlsBottom": 1055.515625,
+      "keyboardBottom": 953.140625,
+      "overflow": 0,
+      "primary": [],
+      "boardPrimary": false
+    },
+    {
+      "name": "feedback",
+      "state": "user-turn",
+      "width": 1280,
+      "height": 800,
+      "boardSize": 384,
+      "boardBottom": 558,
+      "controlsBottom": 775.515625,
+      "keyboardBottom": 673.140625,
+      "overflow": 0,
+      "primary": [
+        "btn-coach-showwhy"
+      ],
+      "boardPrimary": false
+    },
+    {
+      "name": "feedback",
+      "state": "user-turn",
+      "width": 1440,
+      "height": 900,
+      "boardSize": 488,
+      "boardBottom": 662,
+      "controlsBottom": 879.515625,
+      "keyboardBottom": 777.140625,
+      "overflow": 0,
+      "primary": [
+        "btn-coach-showwhy"
+      ],
+      "boardPrimary": false
+    },
+    {
+      "name": "feedback",
+      "state": "user-turn",
+      "width": 1920,
+      "height": 1080,
+      "boardSize": 664,
+      "boardBottom": 838,
+      "controlsBottom": 1055.515625,
+      "keyboardBottom": 953.140625,
+      "overflow": 0,
+      "primary": [
+        "btn-coach-showwhy"
+      ],
+      "boardPrimary": false
+    },
+    {
+      "name": "review",
+      "state": "review",
+      "width": 1280,
+      "height": 800,
+      "boardSize": 376,
+      "boardBottom": 551.09375,
+      "controlsBottom": 772.390625,
+      "keyboardBottom": 666.234375,
+      "overflow": 0,
+      "primary": [
+        "btn-coach-backtogame"
+      ],
+      "boardPrimary": false
+    },
+    {
+      "name": "review",
+      "state": "review",
+      "width": 1440,
+      "height": 900,
+      "boardSize": 480,
+      "boardBottom": 654,
+      "controlsBottom": 875.296875,
+      "keyboardBottom": 769.140625,
+      "overflow": 0,
+      "primary": [
+        "btn-coach-backtogame"
+      ],
+      "boardPrimary": false
+    },
+    {
+      "name": "review",
+      "state": "review",
+      "width": 1920,
+      "height": 1080,
+      "boardSize": 664,
+      "boardBottom": 838,
+      "controlsBottom": 1059.296875,
+      "keyboardBottom": 953.140625,
+      "overflow": 0,
+      "primary": [
+        "btn-coach-backtogame"
+      ],
+      "boardPrimary": false
+    },
+    {
+      "name": "practice",
+      "state": "practice",
+      "width": 1280,
+      "height": 800,
+      "boardSize": 536,
+      "boardBottom": 680,
+      "controlsBottom": 0,
+      "keyboardBottom": 777.875,
+      "overflow": 0,
+      "primary": [
+        "keyboard-submit"
+      ],
+      "boardPrimary": false
+    },
+    {
+      "name": "practice",
+      "state": "practice",
+      "width": 1440,
+      "height": 900,
+      "boardSize": 632,
+      "boardBottom": 776,
+      "controlsBottom": 0,
+      "keyboardBottom": 873.875,
+      "overflow": 0,
+      "primary": [
+        "keyboard-submit"
+      ],
+      "boardPrimary": false
+    },
+    {
+      "name": "practice",
+      "state": "practice",
+      "width": 1920,
+      "height": 1080,
+      "boardSize": 752,
+      "boardBottom": 896,
+      "controlsBottom": 0,
+      "keyboardBottom": 993.875,
+      "overflow": 0,
+      "primary": [
+        "keyboard-submit"
+      ],
+      "boardPrimary": false
+    },
+    {
+      "name": "resumed-practice",
+      "state": "practice",
+      "width": 1280,
+      "height": 800,
+      "boardSize": 592,
+      "boardBottom": 736,
+      "controlsBottom": 0,
+      "keyboardBottom": 778,
+      "overflow": 0,
+      "primary": [],
+      "boardPrimary": true
+    },
+    {
+      "name": "resumed-practice",
+      "state": "practice",
+      "width": 1440,
+      "height": 900,
+      "boardSize": 688,
+      "boardBottom": 832,
+      "controlsBottom": 0,
+      "keyboardBottom": 874,
+      "overflow": 0,
+      "primary": [],
+      "boardPrimary": true
+    },
+    {
+      "name": "resumed-practice",
+      "state": "practice",
+      "width": 1920,
+      "height": 1080,
+      "boardSize": 752,
+      "boardBottom": 896,
+      "controlsBottom": 0,
+      "keyboardBottom": 938,
+      "overflow": 0,
+      "primary": [],
+      "boardPrimary": true
+    },
+    {
+      "name": "practice-checking",
+      "state": "practice-checking",
+      "width": 1280,
+      "height": 800,
+      "boardSize": 536,
+      "boardBottom": 680,
+      "controlsBottom": 0,
+      "keyboardBottom": 777.875,
+      "overflow": 0,
+      "primary": [],
+      "boardPrimary": false
+    },
+    {
+      "name": "practice-checking",
+      "state": "practice-checking",
+      "width": 1440,
+      "height": 900,
+      "boardSize": 632,
+      "boardBottom": 776,
+      "controlsBottom": 0,
+      "keyboardBottom": 873.875,
+      "overflow": 0,
+      "primary": [],
+      "boardPrimary": false
+    },
+    {
+      "name": "practice-checking",
+      "state": "practice-checking",
+      "width": 1920,
+      "height": 1080,
+      "boardSize": 752,
+      "boardBottom": 896,
+      "controlsBottom": 0,
+      "keyboardBottom": 993.875,
+      "overflow": 0,
+      "primary": [],
+      "boardPrimary": false
+    },
+    {
+      "name": "practice-complete",
+      "state": "practice-complete",
+      "width": 1280,
+      "height": 800,
+      "boardSize": 520,
+      "boardBottom": 664,
+      "controlsBottom": 0,
+      "keyboardBottom": 779.140625,
+      "overflow": 0,
+      "primary": [
+        "btn-coach-practice-next"
+      ],
+      "boardPrimary": false
+    },
+    {
+      "name": "practice-complete",
+      "state": "practice-complete",
+      "width": 1440,
+      "height": 900,
+      "boardSize": 616,
+      "boardBottom": 760,
+      "controlsBottom": 0,
+      "keyboardBottom": 875.140625,
+      "overflow": 0,
+      "primary": [
+        "btn-coach-practice-next"
+      ],
+      "boardPrimary": false
+    },
+    {
+      "name": "practice-complete",
+      "state": "practice-complete",
+      "width": 1920,
+      "height": 1080,
+      "boardSize": 752,
+      "boardBottom": 896,
+      "controlsBottom": 0,
+      "keyboardBottom": 1011.140625,
+      "overflow": 0,
+      "primary": [
+        "btn-coach-practice-next"
+      ],
+      "boardPrimary": false
+    },
+    {
+      "name": "complete",
+      "state": "ended",
+      "width": 1280,
+      "height": 800,
+      "boardSize": 384,
+      "boardBottom": 558,
+      "controlsBottom": 775.515625,
+      "keyboardBottom": 673.140625,
+      "overflow": 0,
+      "primary": [
+        "btn-coach-next-action"
+      ],
+      "boardPrimary": false
+    },
+    {
+      "name": "complete",
+      "state": "ended",
+      "width": 1440,
+      "height": 900,
+      "boardSize": 488,
+      "boardBottom": 662,
+      "controlsBottom": 879.515625,
+      "keyboardBottom": 777.140625,
+      "overflow": 0,
+      "primary": [
+        "btn-coach-next-action"
+      ],
+      "boardPrimary": false
+    },
+    {
+      "name": "complete",
+      "state": "ended",
+      "width": 1920,
+      "height": 1080,
+      "boardSize": 664,
+      "boardBottom": 838,
+      "controlsBottom": 1055.515625,
+      "keyboardBottom": 953.140625,
+      "overflow": 0,
+      "primary": [
+        "btn-coach-next-action"
+      ],
+      "boardPrimary": false
+    }
+  ],
+  "focus": {
+    "focused": true,
+    "outline": "solid"
+  },
+  "pageErrors": 0,
+  "journey": "start, keyboard move, analysis, opponent reply, review, practice reload, completion, live return, resume, daily completion and Progress"
+}

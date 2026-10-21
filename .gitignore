@@ -11,3 +11,6 @@
 
 # Calibration output
 .calibration.json
+
+# Screenshots produced by the coaching UI journeys
+output/playwright/

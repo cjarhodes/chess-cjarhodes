@@ -728,6 +728,7 @@ async page => {
   assert(firstVisitSprintBox && firstVisitAccountBox && firstVisitSprintBox.y < firstVisitAccountBox.y, 'mobile first visit did not show the Daily Sprint before optional account setup');
   await openRailGroup('group-position');
   await page.locator('#coach-fen').fill('7k/8/5KQ1/8/8/8/8/8 w - - 0 1');
+  await page.locator('#coach-game-options').evaluate(el => { el.open = true; });
   await page.locator('.side-toggle button[data-side="white"]').click();
   await page.locator('#btn-coach-next-action').click();
   assert(await page.locator('#coach-daily-plan-title').textContent() === 'Build your baseline in play', 'active baseline did not explain its in-progress state');
@@ -764,6 +765,7 @@ async page => {
   // still reply afterwards instead of the move handler dying mid-flight.
   await openRailGroup('group-position');
   await page.locator('#coach-fen').fill('rnbqkbnr/pppp1ppp/8/4p3/3P4/8/PPP1PPPP/RNBQKBNR w KQkq e6 0 2');
+  await page.locator('#coach-game-options').evaluate(el => { el.open = true; });
   await page.locator('.side-toggle button[data-side="white"]').click();
   await leavePractice();
   await page.locator('#btn-coach-newgame').click();
@@ -779,6 +781,7 @@ async page => {
   assert(afterCapture.plies >= 2 && !afterCapture.status.includes('Engine error'), `opponent did not reply after a capture (${afterCapture.plies} plies, ${afterCapture.status})`);
   await openRailGroup('group-position');
   await page.locator('#coach-fen').fill('7k/8/5KQ1/8/8/8/8/8 w - - 0 1');
+  await page.locator('#coach-game-options').evaluate(el => { el.open = true; });
   await page.locator('.side-toggle button[data-side="white"]').click();
   await leavePractice();
   await page.locator('#btn-coach-newgame').click();
@@ -829,6 +832,7 @@ async page => {
   await page.reload();
   await openRailGroup('group-position');
   await page.locator('#coach-fen').fill('7k/8/5KQ1/8/8/8/8/8 w - - 0 1');
+  await page.locator('#coach-game-options').evaluate(el => { el.open = true; });
   await page.locator('.side-toggle button[data-side="white"]').click();
   await page.locator('#btn-coach-next-action').click();
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
@@ -862,10 +866,8 @@ async page => {
   assert(await page.locator('#coach-review-analysis').isVisible(), 'Show why did not label the analysis board');
   assert(await page.evaluate(() => coachGame.pgn()) === preservedGame.pgn, 'Show why changed the live game');
   await page.locator('#btn-coach-review-analysis-next').click();
-  await page.locator('#coach-keyboard-move-input').fill('g4');
-  await page.locator('#coach-keyboard-move-form button[type=submit]').click();
-  await settlePracticeMove();
-  assert(await page.evaluate(() => coachGame.pgn()) === preservedGame.pgn, 'keyboard move changed live game during analysis');
+  assert(await page.locator('#coach-keyboard-move-input').isDisabled() && await page.locator('#coach-keyboard-move-form button[type=submit]').isDisabled(), 'move entry stayed enabled during hypothetical analysis');
+  assert(await page.evaluate(() => coachGame.pgn()) === preservedGame.pgn, 'analysis changed the live game');
   await page.locator('#btn-coach-backtogame').click();
   assert(!(await page.locator('#coach-review-analysis').isVisible()), 'Back to game left analysis visible');
   await page.locator('#btn-coach-review-practice').click();
@@ -967,3 +969,15 @@ if [[ "$OPPONENT_EXIT" -ne 0 || "$OPPONENT_OUTPUT" == *"### Error"* ]]; then
   exit 1
 fi
 echo "Opponent journey validation passed."
+
+UI_CODE=$(cat "$ROOT/scripts/verify-ui-journeys.js")
+set +e
+UI_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$UI_CODE")
+UI_EXIT=$?
+set -e
+echo "$UI_OUTPUT"
+if [[ "$UI_EXIT" -ne 0 || "$UI_OUTPUT" == *"### Error"* ]]; then
+  echo "Coaching UI journey validation failed." >&2
+  exit 1
+fi
+echo "Coaching UI journey validation passed."

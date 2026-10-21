@@ -247,10 +247,13 @@
 
     <div class="field-group play-card" id="coach-play-card">
       <div class="play-actions">
-      <button class="ctrl-btn primary" id="btn-coach-newgame">▶ New game</button>
+      <button class="ctrl-btn" id="btn-coach-newgame">▶ New game</button>
       <button class="ctrl-btn" id="btn-coach-resign" disabled>Resign &amp; review</button>
       <button class="ctrl-btn" id="btn-coach-openreview" style="display:none;">Open review</button>
       </div>
+      <details id="coach-game-options" class="game-options" open>
+        <summary>Game setup <span id="coach-game-options-label">White · 1200</span></summary>
+        <div class="game-options-body">
       <div class="section-label" id="coach-side-label">Play as</div>
       <div class="side-toggle" role="group" aria-labelledby="coach-side-label">
         <button type="button" class="active" data-side="white" aria-pressed="true">White</button>
@@ -267,6 +270,8 @@
       <div class="strength-tier" id="coach-strength-tier">Club novice</div>
       <label class="toggle-label" for="coach-auto-elo"><input type="checkbox" id="coach-auto-elo" checked> <span>Adapt level automatically</span></label>
       <div class="auto-elo-note" id="coach-auto-elo-note"></div>
+        </div>
+      </details>
     </div>
 
     <details class="rail-group" id="group-position">
@@ -278,7 +283,7 @@
       </div>
     </details>
 
-    <details class="rail-group" id="group-account" open>
+    <details class="rail-group" id="group-account">
       <summary><span class="section-label">Account</span></summary>
       <div class="rail-group-body">
       <div class="auth-card" id="coach-auth-card">
@@ -396,36 +401,19 @@
 
   <!-- BOARD -->
   <main class="coach-board-area">
-    <div class="coach-practice-banner" id="coach-practice-banner" role="region" aria-labelledby="coach-practice-title">
-      <div class="session-status" id="coach-practice-session-status">Single drill</div>
-      <div class="title" id="coach-practice-title">Practice drill</div>
-      <div class="prompt" id="coach-practice-prompt"></div>
-      <div class="status" id="coach-practice-status" role="status" aria-live="polite"></div>
-      <div id="coach-practice-takeaway" class="prompt" role="note" style="display:none;"></div>
-      <div class="coach-practice-actions">
-        <button type="button" class="ctrl-btn" id="btn-coach-practice-hint">Hint</button>
-        <button type="button" class="ctrl-btn" id="btn-coach-practice-answer">Show answer</button>
-        <button type="button" class="ctrl-btn primary" id="btn-coach-practice-next" style="display:none;">Next drill</button>
-        <button type="button" class="ctrl-btn" id="btn-coach-practice-exit">Exit practice</button>
-      </div>
-    </div>
-    <div class="coach-analysis-strip" aria-label="Analysis controls">
-      <div id="coach-review-analysis" role="status" aria-live="polite" style="display:none;"></div>
-      <div class="coach-analysis-actions">
-        <button type="button" class="ctrl-btn" id="btn-coach-review-analysis-prev" style="display:none;">Previous step</button>
-        <button type="button" class="ctrl-btn" id="btn-coach-review-analysis-next" style="display:none;">Next step</button>
-        <button type="button" class="ctrl-btn primary" id="btn-coach-backtogame" style="display:none;">Back to game</button>
-      </div>
+    <div class="coach-turn-header">
+      <div id="coach-phase-label" class="coach-phase-label">Ready to train</div>
+      <div id="coach-status" class="coach-status" role="status" aria-live="polite">Choose Start training when you’re ready.</div>
     </div>
     <div class="captured-bar" id="captured-top">
       <span class="captured-pieces" id="captured-top-pieces"></span>
       <span class="material-lead" id="captured-top-lead"></span>
     </div>
     <div id="coachBoard-wrap" style="position:relative;" role="group" aria-label="Coach board">
-      <div id="coachBoard" role="img" aria-label="Starting position"></div>
+      <div id="coachBoard" tabindex="-1" role="img" aria-label="Starting position"></div>
       <div id="coachBoard-placeholder" class="board-empty-state" style="display:none;">
         <div class="icon">♟</div>
-        <p>Start a new game to begin</p>
+        <p>Choose Start training to begin</p>
       </div>
     </div>
     <details class="keyboard-move" id="coach-keyboard-move">
@@ -468,7 +456,8 @@
       <div class="plan-detail" id="coach-daily-plan-detail">Play ten reviewed moves and Coach will choose your first training focus.</div>
       <div class="daily-sprint-focus" id="daily-sprint-focus" aria-live="polite" style="display:none;">
         <div class="daily-sprint-focus-title" id="daily-sprint-focus-title"></div>
-        <div class="daily-sprint-focus-detail" id="daily-sprint-focus-detail"></div>
+        <div class="daily-sprint-focus-cue" id="daily-sprint-focus-cue"></div>
+        <details class="plan-explanation"><summary>Why this focus</summary><div class="daily-sprint-focus-detail" id="daily-sprint-focus-detail"></div></details>
       </div>
       <div class="daily-sprint-progress" aria-label="Adaptive session progress">
         <div class="daily-sprint-progress-head">
@@ -480,8 +469,30 @@
       <div class="daily-sprint-takeaway" id="daily-sprint-takeaway" role="status" aria-live="polite" style="display:none;"></div>
       <button type="button" class="ctrl-btn primary" id="btn-coach-next-action" data-action="game">Start training</button>
     </div>
-<div id="coach-status" class="coach-status" role="status" aria-live="polite">Set a level and start a new game.</div>
+
 <div id="coach-premove-hint" class="coach-premove-hint" style="display:none;"></div>
+
+    <div class="coach-practice-banner" id="coach-practice-banner" role="region" aria-labelledby="coach-practice-title">
+      <div class="session-status" id="coach-practice-session-status">Single drill</div>
+      <div class="title" id="coach-practice-title">Practice drill</div>
+      <div class="prompt" id="coach-practice-prompt"></div>
+      <div class="status" id="coach-practice-status" role="status" aria-live="polite"></div>
+      <div id="coach-practice-takeaway" class="prompt" role="note" style="display:none;"></div>
+      <div class="coach-practice-actions">
+        <button type="button" class="ctrl-btn" id="btn-coach-practice-hint">Hint</button>
+        <button type="button" class="ctrl-btn" id="btn-coach-practice-answer">Show answer</button>
+        <button type="button" class="ctrl-btn primary" id="btn-coach-practice-next" style="display:none;">Next drill</button>
+        <button type="button" class="ctrl-btn" id="btn-coach-practice-exit">Exit practice</button>
+      </div>
+    </div>
+    <div class="coach-analysis-strip" aria-label="Analysis controls">
+      <div id="coach-review-analysis" role="status" aria-live="polite" style="display:none;"></div>
+      <div class="coach-analysis-actions">
+        <button type="button" class="ctrl-btn" id="btn-coach-review-analysis-prev" style="display:none;">Previous step</button>
+        <button type="button" class="ctrl-btn" id="btn-coach-review-analysis-next" style="display:none;">Next step</button>
+        <button type="button" class="ctrl-btn primary" id="btn-coach-backtogame" style="display:none;">Back to game</button>
+      </div>
+    </div>
 
     <div class="panel-tabs" role="tablist" aria-label="Coach panels">
       <button type="button" class="panel-tab active" role="tab" id="tab-game" data-panel="game" aria-selected="true" aria-controls="panel-game">Game</button>
@@ -490,6 +501,10 @@
     </div>
 
     <div class="panel-page active" id="panel-game" role="tabpanel" aria-labelledby="tab-game">
+      <div class="coach-review-empty" id="coach-review-empty" role="note">
+        <div class="title">Your next move, explained</div>
+        <p>Play a move to see what it changes, what to watch for, and what to try next.</p>
+      </div>
 <div id="coach-review" class="coach-review" style="display:none">
       <div class="coach-review-header">
         <span id="coach-classification" class="coach-classification coach-class-best">Best</span>
@@ -552,8 +567,8 @@
       </div>
       <div id="movelist" class="movelist"></div>
     </div>
-<div class="coach-panel-section" id="session-section">
-      <div class="section-label">Session</div>
+<details class="coach-panel-section session-details" id="session-section">
+      <summary class="section-label">Session stats</summary>
       <div class="coach-summary" id="coach-summary">
         <span class="k">Moves played</span><span class="v" id="coach-moves-count">0</span>
         <span class="k">Accuracy</span><span class="v big" id="coach-accuracy">—</span>
@@ -565,7 +580,7 @@
         <span class="k">Mistakes</span><span class="v" id="coach-tally-mistake">0</span>
         <span class="k">Blunders</span><span class="v" id="coach-tally-blunder">0</span>
       </div>
-    </div>
+    </details>
     </div>
 
     <div class="panel-page" id="panel-practice" role="tabpanel" aria-labelledby="tab-practice" hidden>

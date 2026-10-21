@@ -117,6 +117,11 @@ more often at lower settings. It favors smaller mistakes, retains sound moves,
 converts known mates, and avoids engine-detected forced losses when a non-mating
 line exists. This is a weakened engine, not a model trained on human moves.
 
+The browser suite checks the coaching UI at 1280×800, 1440×900, and 1920×1080,
+including keyboard focus, board/control visibility, session start and resume,
+review, practice recovery, and completion. Screenshots are written beneath
+`output/playwright/`. See [the UI improvement audit](docs/coaching-ui-loop.md).
+
 The browser suite also finishes mating endings and six-turn opening sessions at
 400, 1200, and 2400, checking legal replies, reviews, results, and reloads. See
 [the opponent-quality audit](docs/opponent-quality-loop.md) for measurements and limits.

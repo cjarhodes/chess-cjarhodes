@@ -118,6 +118,7 @@ const CoachController = {
   phase: 'idle',
   setPhase(phase) {
     this.phase = phase;
+    renderCoachPresentation();
     return this.phase;
   }
 };
@@ -1787,8 +1788,11 @@ function renderDailySprintChrome(day) {
     ? ` Repertoire focus: ${renderedAdaptivePlan.repertoireFocus}.`
     : '';
   $('#daily-sprint-focus-title').text(focus ? `Focus · ${focus.title}` : '');
-  $('#daily-sprint-focus-detail').text(focus ? `${focus.cue} ${focus.reason} ${style}${repertoire}${day && day.recoveryNote ? ' ' + day.recoveryNote : ''}` : '');
-  $('#daily-sprint-focus').toggle(!!focus);
+  $('#daily-sprint-focus-cue').text(focus ? focus.cue : '');
+  $('#daily-sprint-focus-detail').text(focus ? `${focus.reason} ${style}${repertoire}${day && day.recoveryNote ? ' ' + day.recoveryNote : ''}` : '');
+  const hasFocus = !!(day ? day.focusTag : renderedAdaptivePlan && renderedAdaptivePlan.focusTag);
+  $('#daily-sprint-focus').toggle(!!focus && hasFocus);
+  renderCoachPresentation();
   $('#daily-sprint-takeaway')
     .text(day && day.takeaway ? day.takeaway : '')
     .toggle(!!(day && day.completedAt && day.takeaway));
@@ -2214,7 +2218,7 @@ function renderCoachDailyPlan(queue, due, totals, entries) {
     const target = sprint && sprint.mode === 'adaptive' ? sprint.target : (coachPracticeRun ? coachPracticeRun.items.length : 1);
     const completed = sprint && sprint.mode === 'adaptive' ? sprint.completedUnits : (coachPracticeRun ? coachPracticeRun.completed : 0);
     setDailySprintProgress(completed, target, sprint && sprint.mode === 'adaptive' ? 'step' : 'drill');
-    $('#coach-daily-plan-title').text(`Rehearse ${sprint && sprint.focus ? sprint.focus : 'today’s focus'}`);
+    $('#coach-daily-plan-title').text(coachPracticeSession.completed ? 'Practice saved' : `Rehearse ${sprint && sprint.focusTag ? sprint.focus : 'this position'}`);
     $('#coach-daily-plan-detail').text('Solve the focused positions first. Live transfer moves come next.');
     $action.text('Return to the drill').attr('data-action', 'continue');
     return;
@@ -4289,13 +4293,63 @@ function renderCoachReview(review) {
   const canExplain = !isBest && !isUnknown && !!review.bestUci && coachMode &&
     !coachThinking && (!coachGameActive || coachIsUserTurn()) && !coachIsReviewing();
   $('#btn-coach-showbest').prop('disabled', !canExplain);
-  $('#btn-coach-showwhy').prop('disabled', !canExplain);
+  $('#btn-coach-showwhy').toggle(!isBest && !isUnknown && !!review.bestUci).prop('disabled', !canExplain);
   $('#btn-coach-consequence').prop('disabled', !canExplain);
 }
 
 function setCoachStatus(msg) {
-  $('#coach-status').text(msg);
+  const guidance = {
+    'Your move.': 'Play on the board or enter a move below.',
+    'Opponent thinking…': 'Choosing a reply. You can queue a premove.',
+    'Analyzing your move…': 'Checking your move before the opponent replies.'
+  };
+  $('#coach-status').text(guidance[msg] || msg);
+  renderCoachPresentation();
 }
+
+// Presentation follows the existing game/practice state; it never changes it.
+function renderCoachPresentation() {
+  const view = document.getElementById('coach-view');
+  if (!view) return;
+  const practicing = !!coachPracticeSession;
+  const reviewing = coachIsReviewing();
+  const day = dailySprintToday();
+  const state = practicing ? (coachPracticeSession.completed ? 'practice-complete' : coachPracticeSession.grading || coachPracticeSession.pendingMove ? 'practice-checking' : 'practice')
+    : reviewing ? 'review'
+    : coachGameActive ? (coachThinking || CoachController.phase === 'analyzing' ? 'analyzing' : coachIsUserTurn() ? 'user-turn' : 'opponent-turn')
+    : coachLastEndMsg ? 'ended' : day && day.completedAt ? 'complete' : 'ready';
+  const labels = {
+    ready: 'Ready to train', 'user-turn': 'Your turn · ' + (coachUserColor() === 'white' ? 'White' : 'Black'),
+    analyzing: 'Reviewing your move', 'opponent-turn': 'Opponent’s turn',
+    review: 'Review · viewing another position', practice: 'Practice · find the move',
+    'practice-checking': 'Practice · checking your move', 'practice-complete': 'Practice saved · next step', ended: 'Game complete', complete: 'Today’s training complete'
+  };
+  if (view.dataset.uiState === 'ready' && ['user-turn', 'analyzing', 'opponent-turn'].includes(state)) {
+    document.getElementById('coach-game-options').open = false;
+  }
+  view.dataset.uiState = state;
+  const canEnterMove = state === 'user-turn' || state === 'practice';
+  $('#coach-keyboard-move-input, #coach-keyboard-move-form button').prop('disabled', !canEnterMove);
+  $('#coachBoard-wrap').attr('aria-busy', ['analyzing', 'opponent-turn', 'practice-checking'].includes(state) ? 'true' : 'false');
+  $('#coachBoard').attr('aria-describedby', practicing ? 'coach-status coach-practice-prompt' : 'coach-status');
+  $('#coach-review-empty').toggle(!coachLastReview && !practicing);
+
+  $('#coach-phase-label').text(labels[state]);
+  $('#coach-game-options-label').text((coachUserSide === 'random' ? 'Random' : coachUserColor() === 'white' ? 'White' : 'Black') + ' · ' + coachEngineElo);
+  const managed = '#btn-coach-next-action, #btn-coach-showwhy, #btn-coach-backtogame, #btn-coach-live, #btn-coach-practice-next, #btn-coach-practice-exit, #coach-keyboard-move-form button';
+  $(managed).removeClass('primary').removeAttr('data-primary-action');
+  let action = null;
+  if (state === 'ready' || state === 'complete' || state === 'ended') action = '#btn-coach-next-action';
+  else if (state === 'review') action = coachReviewAnalysis ? '#btn-coach-backtogame' : '#btn-coach-live';
+  else if (state === 'practice-complete') action = $('#btn-coach-practice-next').is(':visible') && !$('#btn-coach-practice-next').prop('disabled') ? '#btn-coach-practice-next' : '#btn-coach-practice-exit';
+  else if (state === 'user-turn' && $('#coach-review').is(':visible') && !$('#btn-coach-showwhy').prop('disabled')) action = '#btn-coach-showwhy';
+  else if ((state === 'user-turn' || state === 'practice') && document.getElementById('coach-keyboard-move')?.open) action = '#coach-keyboard-move-form button';
+  if (action) $(action).addClass('primary').attr('data-primary-action', 'true');
+  $('#coachBoard-wrap').attr('data-primary-target', !action && canEnterMove ? 'true' : 'false');
+  $('#btn-coach-practice-exit').text(state === 'practice-complete' ? (coachPracticeReturnState ? 'Return to game' : 'Finish practice') : 'Exit practice');
+  scheduleCoachBoardFit();
+}
+
 
 function showCoachRetryStatus(msg) {
   const $status = $('#coach-status').empty();
@@ -5195,8 +5249,10 @@ function showPostGameSummary(endMsg) {
   const dueCount = summaryPracticeItems.length;
   $('#btn-summary-practice')
     .text(dueCount === 1 ? 'Practice this mistake' : `Practice ${dueCount} mistakes`)
-    .toggle(dueCount > 0);
+    .toggle(dueCount > 0)
+    .toggleClass('primary', dueCount > 0);
 
+  $('#btn-summary-newgame').toggleClass('primary', dueCount === 0);
   summaryReturnFocus = document.activeElement;
   $('#summary-overlay').css('display', 'flex').attr('aria-hidden', 'false');
   // Scroll to top when reopening on a new game
@@ -5476,6 +5532,7 @@ function showCoachPanel(name, opts) {
   $('#panel-' + name).addClass('active').removeAttr('hidden');
   if (opts.focus) $tab.trigger('focus');
   try { sessionStorage.setItem(COACH_PANEL_TAB_KEY, name); } catch (e) { /* session only */ }
+  renderCoachPresentation();
 }
 
 function initCoachPanelTabs() {
@@ -5520,6 +5577,43 @@ function placeDailySprintCard() {
   // status, review, and progress.
   const hero = settings.querySelector('.coach-hero');
   if (hero && hero.nextElementSibling !== card) hero.insertAdjacentElement('afterend', card);
+}
+
+// Fit the actual workspace, including expanded keyboard entry and live text.
+// Container changes also occur without a window resize (for example practice).
+let coachBoardFitFrame = null;
+function fitCoachBoard() {
+  const area = document.querySelector('.coach-board-area');
+  const view = document.getElementById('coach-view');
+  if (!area || !view || !area.clientWidth || !area.clientHeight) return;
+  const css = getComputedStyle(area);
+  const children = Array.from(area.children).filter(el => el.id !== 'coachBoard-wrap' && getComputedStyle(el).display !== 'none');
+  const gap = parseFloat(css.rowGap) || 0;
+  const height = area.clientHeight - parseFloat(css.paddingTop) - parseFloat(css.paddingBottom)
+    - children.reduce((sum, el) => {
+      const style = getComputedStyle(el);
+      return sum + el.getBoundingClientRect().height + (parseFloat(style.marginTop) || 0) + (parseFloat(style.marginBottom) || 0);
+    }, 0) - gap * children.length;
+  const width = area.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight);
+  const size = Math.max(240, Math.floor((Math.min(760, width, height) - 4) / 8) * 8);
+  if (view.style.getPropertyValue('--coach-board-size') === size + 'px') return;
+  view.style.setProperty('--coach-board-size', size + 'px');
+  if (coachBoard) coachBoard.resize();
+}
+function scheduleCoachBoardFit() {
+  if (coachBoardFitFrame !== null) return;
+  coachBoardFitFrame = requestAnimationFrame(() => { coachBoardFitFrame = null; fitCoachBoard(); });
+}
+function initCoachWorkspaceLayout() {
+  const area = document.querySelector('.coach-board-area');
+  if (!area) return;
+  if (typeof ResizeObserver !== 'undefined') {
+    const observer = new ResizeObserver(scheduleCoachBoardFit);
+    observer.observe(area);
+    Array.from(area.children).filter(el => el.id !== 'coachBoard-wrap').forEach(el => observer.observe(el));
+  }
+  document.getElementById('coach-keyboard-move').addEventListener('toggle', renderCoachPresentation);
+  renderCoachPresentation();
 }
 
 function orderedPracticeRunItems(items, firstItem) {
@@ -5798,6 +5892,7 @@ function finishCoachPracticeMove(session, played, quality, revealed) {
   const sprint = recordDailySprintDrill(session.item, assisted, !assisted && session.misses === 0);
   const due = formatPracticeDue(record);
   $('#coach-practice-status').text(`${quality}: ${played.san}. ${due}.`);
+  $('#coach-practice-prompt').text('Position solved. Carry the cue into your next game.');
   setCoachStatus(`${quality}. Practice progress saved.`);
   $('#coach-practice-takeaway').text(`Carry into your next game: ${practiceCarryForwardCue(session.item)}`).show();
   $('#btn-coach-practice-answer').prop('disabled', true);
@@ -5897,6 +5992,7 @@ function coachHandlePracticeMove(source, target, promotion, opts) {
   if (!session.analysisReady && session.analysisPromise) {
     if (session.grading) return 'pending';
     session.grading = true;
+    renderCoachPresentation();
     session.pendingMove = { source, target, promotion, opts: opts || {} };
     $('#coach-practice-status').text('Checking the position…');
     return session.analysisPromise.then(() => {
@@ -5906,12 +6002,15 @@ function coachHandlePracticeMove(source, target, promotion, opts) {
       return coachHandlePracticeMove(source, target, promotion, opts || {});
     }).finally(() => {
       session.grading = false;
+      renderCoachPresentation();
     });
   }
   if (session.grading) return 'pending';
   session.grading = true;
+  renderCoachPresentation();
   return evaluate().finally(() => {
     session.grading = false;
+    renderCoachPresentation();
   });
 }
 
@@ -6139,7 +6238,7 @@ function switchView(view) {
         // Show an idle board so the user has visual context
         $('#coachBoard-placeholder').hide();
         createCoachBoard('start', 'white');
-        setCoachStatus(restore.warning || 'Set a level and start a new game.');
+        setCoachStatus(restore.warning || 'Choose Start training when you’re ready.');
       }
     } else {
       // Returning to an existing game — resize the board and re-kick the
@@ -6229,6 +6328,9 @@ function startCoachGame() {
   createCoachBoard(coachGame.fen(), coachBoardFlipped ? 'black' : 'white');
   $('#coach-view').addClass('game-active');
 
+  document.getElementById('coach-game-options').open = false;
+  showCoachPanel('game');
+  document.getElementById('coachBoard')?.focus({ preventScroll: true });
   const tier = strengthTierLabel(coachEngineElo);
   const opening = coachIsUserTurn()
     ? `Playing ${coachUserColor() === 'white' ? 'White' : 'Black'} vs Opponent ${coachEngineElo} (${tier}). Your move.`
@@ -6297,6 +6399,7 @@ function updateCoachControlsState() {
     practicing ? 'Practice' : !coachGame || total === 0 ? '' :
     reviewing ? `Move ${cur}/${total}` : `Move ${total} • Live`
   );
+  renderCoachPresentation();
 }
 
 // ─────────────────────────────────────────────
@@ -7701,6 +7804,7 @@ $(function () {
     coachEngineElo = parseInt($(this).val(), 10);
     $('#coach-strength-value').text(coachEngineElo);
     $('#coach-strength-tier').text(strengthTierLabel(coachEngineElo));
+    renderCoachPresentation();
   });
 
   $('.side-toggle button').on('click', function() {
@@ -7708,6 +7812,7 @@ $(function () {
     $(this).addClass('active').attr('aria-pressed', 'true');
     const side = $(this).data('side');
     coachUserSide = side; // 'white' | 'black' | 'random'
+    renderCoachPresentation();
   });
 
   $('#coach-fen').on('input', function() {
@@ -7795,6 +7900,8 @@ $(function () {
       return;
     }
     if (action === 'continue') {
+      if (!coachPracticeSession && coachIsReviewing()) coachGotoLive();
+      showCoachPanel(coachPracticeSession ? 'practice' : 'game');
       document.querySelector('.coach-board-area')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
       document.getElementById('coachBoard')?.focus({ preventScroll: true });
       return;
@@ -8227,6 +8334,7 @@ $(function () {
       if (board) board.resize();
       if (coachBoard) coachBoard.resize();
       placeDailySprintCard();
+      scheduleCoachBoardFit();
       updateLibraryBoardAccessibility();
       updateCoachBoardAccessibility();
     }, 120);
@@ -8486,6 +8594,7 @@ $(function () {
   bindExploreEvents();
   bindGlobalInputEvents();
   placeDailySprintCard();
+  initCoachWorkspaceLayout();
   updateSRSidebar();
   validateOpeningData();
   hydrateFromUrl();
