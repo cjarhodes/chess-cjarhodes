@@ -34,7 +34,11 @@ browsers. Leaving `coach-config.js` blank keeps Coach local-only.
 Move reviews start with a short explanation. **Show why** steps through the
 recommended line on the main board without changing the live game; **Back to
 game** restores the actual position. Engine details remain expandable.
-Practice borrows the board and returns to the same unfinished game when closed.
+Practice recommends one lesson or a bounded session of distinct positions from
+your games. Session labels match the actual length; repeated weakness tags do not
+repeat the same position and answer. Lessons state their objective, explain
+misses, highlight staged hints, and show position-level progress. Practice borrows
+the board and returns to the same unfinished game when closed.
 Drills evaluate sound alternatives, provide progressive hints, and can ask for
 a follow-up after an opponent reply. Unverified engine results are not counted
 as mistakes.

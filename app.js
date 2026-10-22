@@ -274,7 +274,7 @@ function renderCoachPracticeNextAction() {
   const sprint = dailySprintToday();
   const hasNext = coachPracticeRun.index + 1 < coachPracticeRun.items.length;
   const transfer = !hasNext && sprint && !sprint.completedAt && sprint.mode === 'adaptive' && sprint.phase === 'moves';
-  $('#btn-coach-practice-next').text(hasNext ? 'Next drill' : coachPracticeSession.item.id.startsWith('opening-bridge:') ? 'Continue this opening in play' : (transfer ? 'Continue to live play' : 'Finish practice')).show().prop('disabled', false);
+  $('#btn-coach-practice-next').text(hasNext ? 'Next drill' : coachPracticeSession.item.id.startsWith('opening-bridge:') ? 'Continue this opening in play' : (transfer ? 'Continue to live play' : coachPracticeReturnState ? 'Return to saved game' : 'Choose another lesson')).show().prop('disabled', false);
 }
 
 function tryRestoreCoachPractice() {
@@ -321,6 +321,7 @@ function tryRestoreCoachPractice() {
     updateMoveList();
     updateCoachControlsState();
     renderCoachDailyPlan();
+    focusPracticeTarget();
     setCoachStatus(stable.completed ? 'Practice restored — your result is already saved. Continue when ready.' : 'Practice restored — continue from your saved position.');
     if (!stable.completed) preparePracticeAnalysis(coachPracticeSession);
     return { restored: true };
@@ -1195,7 +1196,8 @@ function practiceIdeaForMove(fen, uci) {
 function practicePromptForItem(item) {
   if (!item || !item.entry) return 'Find a sound move for this position.';
   const side = fenSideToUserSide(item.entry.fenBefore) === 'black' ? 'Black' : 'White';
-  return `${side} to move. What is the opponent threatening? Compare your candidates and find a sound move. Hints are available if you need them.`;
+  const objective = item.meta && item.meta.practice;
+  return `${side} to move. ${objective || 'What is the opponent threatening? Compare your candidates and find a sound move.'}`;
 }
 
 function practiceCarryForwardCue(item) {
@@ -1852,7 +1854,14 @@ function practiceItemId(entry, tag) {
 }
 
 function practiceRecordFor(item) {
-  return loadPracticeProgress().records[item.id] || null;
+  const records = loadPracticeProgress().records;
+  if (!item.entry || !item.id.startsWith('drill-')) return records[item.id] || null;
+  // Older queues stored one schedule per weakness tag for the same position.
+  // Respect the latest attempt across those tags without duplicating events or
+  // rewriting historical IDs (including account-backed records).
+  const tags = Array.from(new Set([item.tag].concat(item.entry.tags || []).filter(Boolean)));
+  const related = [records[item.id]].concat(tags.map(tag => records[practiceItemId(item.entry, tag)])).filter(Boolean);
+  return related.sort((a, b) => (b.lastAttemptAt || 0) - (a.lastAttemptAt || 0))[0] || null;
 }
 
 function practiceIsDue(item, now = Date.now()) {
@@ -2240,6 +2249,17 @@ function renderCoachDailyPlan(queue, due, totals, entries) {
   if (!sprint) renderedAdaptivePlan = adaptiveDailyPlan(entries || [], items, dueItems, progress);
   renderDailySprintChrome(sprint);
 
+  if (coachPracticeSession) {
+    const run = coachPracticeRun;
+    setDailySprintProgress(run ? run.completed : Number(coachPracticeSession.completed), run ? run.items.length : 1, 'position');
+    $('#coach-daily-plan-title').text(coachPracticeSession.completed ? 'Practice saved' : 'One decision at a time');
+    $('#coach-daily-plan-detail').text(coachPracticeReturnState
+      ? 'Your game is saved. You can return to it at any point.'
+      : 'Play on the board or use Keyboard move below it. Hints build up one step at a time.');
+    $action.text('Return to the drill').attr('data-action', 'continue');
+    return;
+  }
+
   if (sprint && sprint.completedAt) {
     setDailySprintProgress(sprint.target, sprint.target, dailySprintProgressUnit(sprint));
     $('#coach-daily-plan-title').text('✓ Today’s training complete');
@@ -2254,15 +2274,6 @@ function renderCoachDailyPlan(queue, due, totals, entries) {
     return;
   }
 
-  if (coachPracticeSession) {
-    const target = sprint && sprint.mode === 'adaptive' ? sprint.target : (coachPracticeRun ? coachPracticeRun.items.length : 1);
-    const completed = sprint && sprint.mode === 'adaptive' ? sprint.completedUnits : (coachPracticeRun ? coachPracticeRun.completed : 0);
-    setDailySprintProgress(completed, target, sprint && sprint.mode === 'adaptive' ? 'step' : 'drill');
-    $('#coach-daily-plan-title').text(coachPracticeSession.completed ? 'Practice saved' : `Rehearse ${sprint && sprint.focusTag ? sprint.focus : 'this position'}`);
-    $('#coach-daily-plan-detail').text('Solve the focused positions first. Live transfer moves come next.');
-    $action.text('Return to the drill').attr('data-action', 'continue');
-    return;
-  }
 
   if (sprint && sprint.mode === 'adaptive' && sprint.phase === 'drills') {
     setDailySprintProgress(sprint.completedUnits, sprint.target, 'step');
@@ -2331,7 +2342,7 @@ function renderCoachDailyPlan(queue, due, totals, entries) {
 
 function renderPracticeQueue(entries, counts) {
   const profiles = adaptiveFocusProfile(entries);
-  const queue = prioritizeAdaptivePractice(practiceItemsForEntries(entries, counts), profiles);
+  const queue = distinctPracticeItems(prioritizeAdaptivePractice(practiceItemsForEntries(entries, counts), profiles));
   const $section = $('#practice-section');
   const $list = $('#practice-list').empty();
   const totals = practiceProgressTotals();
@@ -2340,6 +2351,7 @@ function renderPracticeQueue(entries, counts) {
     if (!totals.attempts) {
       $section.hide();
       renderCoachDailyPlan(queue, [], totals, entries);
+      renderPracticeRecommendation();
       return;
     }
     $('#practice-count').text('0 due');
@@ -2348,13 +2360,15 @@ function renderPracticeQueue(entries, counts) {
     $('#practice-progress-success').text(Math.round(totals.correct / totals.attempts * 100) + '%');
     $('#practice-progress-mastered').text(totals.mastered);
     $('#practice-empty').show();
-    $('#btn-practice-session-start').text('Start practice').prop('disabled', true);
     renderPracticeTrends();
     $section.show();
     renderCoachDailyPlan(queue, [], totals, entries);
+    renderPracticeRecommendation();
     return;
   }
   const due = queue.filter(item => practiceIsDue(item));
+  renderCoachDailyPlan(queue, due, totals, entries);
+  renderPracticeRecommendation();
   const successRate = totals.attempts ? Math.round(totals.correct / totals.attempts * 100) : null;
   $('#practice-count').text(`${due.length} due`);
   updatePracticeTabBadge(due.length);
@@ -2363,9 +2377,6 @@ function renderPracticeQueue(entries, counts) {
   $('#practice-progress-mastered').text(totals.mastered);
   renderPracticeTrends();
   $('#practice-empty').toggle(due.length === 0);
-  $('#btn-practice-session-start')
-    .text(due.length > 1 ? `Start ${due.length}-drill session` : 'Start practice')
-    .prop('disabled', due.length === 0);
   due.forEach(item => {
     const entry = item.entry;
     const meta = item.meta;
@@ -2377,12 +2388,11 @@ function renderPracticeQueue(entries, counts) {
       .attr('data-practice-id', item.id);
     $row.append($title);
     $row.append($button);
-    $row.append($('<div class="practice-detail"></div>').text(`${meta.practice} ${formatPracticeContext(entry)} ${formatPracticeDue(record)}.`));
+    $row.append($('<div class="practice-detail"></div>').text(`${formatPracticeContext(entry)} ${formatPracticeDue(record)}.`));
     $list.append($row);
   });
   $section.show();
   markActivePracticeRow();
-  renderCoachDailyPlan(queue, due, totals, entries);
 }
 
 function renderTheoryCards(entries, counts) {
@@ -4490,14 +4500,21 @@ function renderCoachPresentation() {
   $('#coachBoard').attr('aria-describedby', practicing ? 'coach-status coach-practice-prompt' : 'coach-status');
   $('#coach-review-empty').toggle(!coachLastReview && !practicing);
 
-  $('#coach-phase-label').text(labels[state]);
+  const selecting = !practicing && document.getElementById('panel-practice').classList.contains('active');
+  $('#coach-phase-label').text(selecting && state === 'ready' ? 'Practice · choose a lesson' : labels[state]);
+  $('#practice-selection-guidance').toggle(selecting && state === 'ready');
+  $('#coach-daily-plan-label').text(practicing ? 'Practice session' : 'Adaptive session · 5–10 min');
   $('#coach-game-options-label').text((coachUserSide === 'random' ? 'Random' : coachUserColor() === 'white' ? 'White' : 'Black') + ' · ' + coachEngineElo);
-  const managed = '#btn-opening-transfer-review, #btn-progress-next, #btn-coach-next-action, #btn-coach-showwhy, #btn-coach-backtogame, #btn-coach-live, #btn-coach-practice-next, #btn-coach-practice-exit, #coach-keyboard-move-form button';
+  const managed = '#btn-practice-session-start, #btn-opening-transfer-review, #btn-progress-next, #btn-coach-next-action, #btn-coach-showwhy, #btn-coach-backtogame, #btn-coach-live, #btn-coach-practice-next, #btn-coach-practice-exit, #coach-keyboard-move-form button';
   $(managed).removeClass('primary').removeAttr('data-primary-action');
   const progressActive = document.getElementById('panel-progress').classList.contains('active');
   $('#btn-progress-next').prop('disabled', ['analyzing', 'opponent-turn', 'practice-checking'].includes(state) || (typeof importedGameAnalysisActive !== 'undefined' && importedGameAnalysisActive));
+  const practiceSelection = !practicing && document.getElementById('panel-practice').classList.contains('active');
+  view.classList.toggle('practice-browsing', practiceSelection);
+  renderPracticeRecommendation();
   let action = null;
-  if (progressActive && !$('#btn-progress-next').prop('disabled') && !['analyzing', 'opponent-turn', 'practice-checking', 'practice', 'practice-complete', 'review'].includes(state)) action = '#btn-progress-next';
+  if (practiceSelection && !coachThinking) action = '#btn-practice-session-start';
+  else if (progressActive && !$('#btn-progress-next').prop('disabled') && !['analyzing', 'opponent-turn', 'practice-checking', 'practice', 'practice-complete', 'review'].includes(state)) action = '#btn-progress-next';
   else if (state === 'ended' && coachOpeningTransfer && coachStats.moves > 0 && !document.getElementById('panel-game').hidden) action = '#btn-opening-transfer-review';
   else if (state === 'ready' || state === 'complete' || state === 'ended') action = '#btn-coach-next-action';
   else if (state === 'review') action = coachReviewAnalysis ? '#btn-coach-backtogame' : '#btn-coach-live';
@@ -4507,7 +4524,10 @@ function renderCoachPresentation() {
   else if ((state === 'user-turn' || state === 'practice') && document.getElementById('coach-keyboard-move')?.open) action = '#coach-keyboard-move-form button';
   if (action) $(action).addClass('primary').attr('data-primary-action', 'true');
   $('#coachBoard-wrap').attr('data-primary-target', !action && canEnterMove ? 'true' : 'false');
-  $('#btn-coach-practice-exit').text(state === 'practice-complete' ? (coachPracticeReturnState ? 'Return to game' : 'Finish practice') : 'Exit practice');
+  $('#btn-coach-practice-exit').text(practicing && coachPracticeReturnState ? 'Return to saved game' : 'Exit practice');
+  $('#btn-coach-practice-exit').toggle(state !== 'practice-complete' || !!(coachPracticeRun && coachPracticeRun.index + 1 < coachPracticeRun.items.length));
+  $('#btn-coach-practice-hint, #btn-coach-practice-answer').toggle(state !== 'practice-complete');
+  renderPracticeBoardCue();
   if (typeof renderOpeningTransfer === 'function') renderOpeningTransfer();
   if (typeof renderLearningTransfer === 'function') renderLearningTransfer();
   scheduleCoachBoardFit();
@@ -5628,7 +5648,10 @@ function setBoardLastMove(boardId, move) {
 function observeBoardLastMove(boardId) {
   const root = document.getElementById(boardId);
   if (!root || root.__lastMoveObserver || typeof MutationObserver === 'undefined') return;
-  const observer = new MutationObserver(() => applyBoardLastMove(boardId));
+  const observer = new MutationObserver(() => {
+    applyBoardLastMove(boardId);
+    if (boardId === 'coachBoard') renderPracticeBoardCue();
+  });
   observer.observe(root, { childList: true, subtree: true });
   root.__lastMoveObserver = observer;
 }
@@ -5784,10 +5807,42 @@ function initCoachWorkspaceLayout() {
   renderCoachPresentation();
 }
 
+function distinctPracticeItems(items) {
+  const seen = new Set();
+  return (items || []).filter(item => {
+    if (!item || !item.entry) return false;
+    const key = `${item.entry.fenBefore.split(/\s+/).slice(0, 4).join(' ')}|${item.entry.bestUci}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function practiceRecommendation() {
+  const due = orderedPracticeRunItems(Array.from(renderedPracticeItems.values()));
+  if (due.length) return { items: due, title: due[0].meta.title,
+    detail: `${due.length} position${due.length === 1 ? '' : 's'} from your games. Revisit the decision, then take the idea back into play.`,
+    label: `Start ${due.length}-position practice` };
+  if (typeof ENDGAME_LESSONS === 'undefined') return null;
+  const lesson = ENDGAME_LESSONS.find(row => !practiceRecordFor({ id: row.id })?.correct) || ENDGAME_LESSONS[0];
+  const item = endgamePracticeItem(lesson);
+  return { items: [item], title: lesson.title, detail: `One short lesson. ${lesson.detail}`,
+    label: practiceRecordFor(item)?.correct ? 'Revisit this lesson' : 'Start this lesson' };
+}
+
+function renderPracticeRecommendation() {
+  const recommendation = practiceRecommendation();
+  if (!recommendation) return;
+  $('#practice-start-title').text(recommendation.title);
+  $('#practice-start-detail').text(recommendation.detail);
+  $('#practice-start-context').text(coachGameActive ? 'Your game will be saved while you practise.' : 'Play a move, get feedback, then choose your next step.');
+  $('#btn-practice-session-start').text(recommendation.label).prop('disabled', coachThinking);
+}
+
 function orderedPracticeRunItems(items, firstItem) {
   const unique = [];
   const seen = new Set();
-  const ordered = [firstItem].concat(items || []);
+  const ordered = distinctPracticeItems([firstItem].concat(items || []));
   ordered.forEach(item => {
     if (!item || seen.has(item.id) || !practiceIsDue(item)) return;
     seen.add(item.id);
@@ -5895,7 +5950,7 @@ function startCoachPractice(item, opts = {}) {
   $('#coach-practice-title').text(item.meta.title);
   $('#coach-practice-prompt').text(practicePromptForItem(item));
   $('#coach-practice-session-status').text(practiceRunPositionText());
-  $('#coach-practice-status').text('Attempt the move without engine help.');
+  $('#coach-practice-status').text('Choose your move. You can ask for a hint at any time.');
   $('#coach-practice-takeaway').hide().empty();
   $('#btn-coach-practice-answer').prop('disabled', false);
   $('#btn-coach-practice-answer').text('Show answer');
@@ -5903,12 +5958,13 @@ function startCoachPractice(item, opts = {}) {
   $('#btn-coach-practice-next').hide().prop('disabled', true);
   $('#coach-practice-banner').show().css('display', 'flex');
   $('#coach-keyboard-move-status').text('');
-  setCoachStatus('Practice drill — find the best move.');
+  setCoachStatus('Play on the board or enter a move below.');
   updateCoachControlsState();
   renderCoachDailyPlan();
   setPracticeFocus(true);
   preparePracticeAnalysis(coachPracticeSession);
   saveCoachPracticeState();
+  focusPracticeTarget();
 }
 
 function coachPracticeMoveLabel(item) {
@@ -5961,6 +6017,7 @@ function preparePracticeAnalysis(session) {
         bestCp,
         bestMate: bestLine && bestLine.mate != null ? bestLine.mate : null,
         known,
+        candidatePvs: Object.fromEntries(lines.filter(line => line.pv && line.pv[0]).map(line => [line.pv[0], line.pv])),
         pv: bestLine && bestLine.pv ? bestLine.pv.slice() : []
       };
       session.analysisReady = true;
@@ -5991,6 +6048,7 @@ async function evaluatePracticeMove(session, actualUci) {
   }
   if (practiceUciEqual(actualUci, expected)) return { sound: true, exact: true, loss: 0 };
   const analysis = session.analysis || {};
+  let replyUci = analysis.candidatePvs && analysis.candidatePvs[actualUci] && analysis.candidatePvs[actualUci][1];
   let candidateCp = analysis.known && analysis.known[actualUci];
   if (candidateCp == null && analysis.bestCp != null) {
     const temp = new Chess(coachGame.fen());
@@ -6000,6 +6058,7 @@ async function evaluatePracticeMove(session, actualUci) {
     const afterResult = await engineClient.evaluate(afterFen, PRACTICE_ANALYSIS_DEPTH, {});
     if (!practicePositionIsCurrent(session)) return { stale: true };
     candidateCp = practiceAfterMoveScore(afterFen, afterResult);
+    replyUci = (afterResult.info && afterResult.info.pv && afterResult.info.pv[0]) || (afterResult.lines && afterResult.lines[0] && afterResult.lines[0].pv && afterResult.lines[0].pv[0]);
   }
   if (analysis.bestCp == null || candidateCp == null) return { unknown: true };
   const loss = Math.max(0, Math.round(analysis.bestCp - candidateCp));
@@ -6015,7 +6074,8 @@ async function evaluatePracticeMove(session, actualUci) {
   return {
     sound: !forcedMateMiss && loss <= PRACTICE_SOUND_LOSS_CP,
     inaccurate: !forcedMateMiss && loss > PRACTICE_SOUND_LOSS_CP && loss <= PRACTICE_INACCURACY_LOSS_CP,
-    loss: forcedMateMiss ? Math.max(loss, 250) : loss
+    loss: forcedMateMiss ? Math.max(loss, 250) : loss,
+    replyUci
   };
 }
 
@@ -6074,7 +6134,7 @@ function finishCoachPracticeMove(session, played, quality, revealed) {
     const hasNext = coachPracticeRun.index + 1 < coachPracticeRun.items.length;
     const transferNext = !hasNext && sprint && !sprint.completedAt && sprint.mode === 'adaptive' && sprint.phase === 'moves';
     $('#btn-coach-practice-next')
-      .text(hasNext ? 'Next drill' : session.item.id.startsWith('opening-bridge:') ? 'Continue this opening in play' : (transferNext ? 'Continue to live play' : 'Finish practice'))
+      .text(hasNext ? 'Next drill' : session.item.id.startsWith('opening-bridge:') ? 'Continue this opening in play' : (transferNext ? 'Continue to live play' : coachPracticeReturnState ? 'Return to saved game' : 'Choose another lesson'))
       .show()
       .prop('disabled', false);
     if (!hasNext) $('#coach-practice-status').text(`${quality}: ${played.san}. Practice complete — ${coachPracticeRun.clean}/${coachPracticeRun.completed} first-try.${transferNext ? ' Next: use the same focus in live play.' : ''}`);
@@ -6083,6 +6143,7 @@ function finishCoachPracticeMove(session, played, quality, revealed) {
   renderInsights();
   if (sprint && sprint.completedAt) renderCoachDailyPlan();
   saveCoachPracticeState();
+  focusPracticeTarget();
 }
 
 function applyCoachPracticeMove(session, source, target, promotion, evaluation, opts) {
@@ -6152,10 +6213,9 @@ function coachHandlePracticeMove(source, target, promotion, opts) {
     }
     session.misses += 1;
     recordPracticeAttempt(session.item, false, false);
-    const label = result.inaccurate ? 'Inaccuracy' : result.unknown ? 'Engine could not verify that move' : 'Bad move';
-    const detail = result.loss == null ? '' : ` (${(result.loss / 100).toFixed(2)} pawns below the best line)`;
-    $('#coach-practice-status').text(`${label}${detail}. Find a sound move for this position.`);
-    setCoachStatus('Practice: compare another candidate.');
+    $('#coach-practice-status').text(practiceMistakeFeedback(session, actualUci, result));
+    setCoachStatus('Board reset. Compare another candidate.');
+    focusPracticeTarget();
     saveCoachPracticeState();
     renderInsights();
     return 'snapback';
@@ -6183,6 +6243,35 @@ function coachHandlePracticeMove(source, target, promotion, opts) {
     session.grading = false;
     renderCoachPresentation();
   });
+}
+
+function focusPracticeTarget() {
+  requestAnimationFrame(() => {
+    if (!coachPracticeSession) return;
+    const id = coachPracticeSession.completed ? 'btn-coach-practice-next'
+      : document.getElementById('coach-keyboard-move')?.open ? 'coach-keyboard-move-input' : 'coachBoard';
+    document.getElementById(id)?.focus({ preventScroll: true });
+  });
+}
+
+function renderPracticeBoardCue() {
+  $('#coachBoard .practice-cue-source, #coachBoard .practice-cue-target').removeClass('practice-cue-source practice-cue-target');
+  const session = coachPracticeSession;
+  if (!session || session.completed || session.hintStage < 2) return;
+  const move = practiceMoveFor(coachGame.fen(), session.expectedUci);
+  if (!move) return;
+  $(`#coachBoard .square-${move.from}`).addClass('practice-cue-source');
+  if (session.hintStage >= 3) $(`#coachBoard .square-${move.to}`).addClass('practice-cue-target');
+}
+
+function practiceMistakeFeedback(session, uci, result) {
+  const fen = coachGame.fen(), after = new Chess(fen);
+  const move = after.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || 'q' });
+  if (!move) return 'Try another legal move.';
+  if (after.in_stalemate()) return `${move.san} leaves no legal reply without giving check: stalemate is a draw. Leave the king a move, or find a checkmate.`;
+  if (practiceMoveIsMate(fen, session.expectedUci)) return `${move.san} misses a mate in one. Look for a check, then count the king’s escapes, captures and blocks.`;
+  const context = coachExplanationContext(fen, uci, session.expectedUci, after.fen(), result.replyUci ? { pv: [result.replyUci] } : null);
+  return `${context.consequence || `${move.san} gives the opponent a stronger position than the best candidates.`} ${context.cue}`;
 }
 
 function revealCoachPracticeAnswer() {
@@ -6246,6 +6335,7 @@ function advanceCoachPractice() {
       beginOpeningTransfer(openingItem.entry.openingId, 'main', openingItem.entry.ply + (Array.isArray(openingItem.entry.continuation) && openingItem.entry.continuation.length ? 2 : 0));
       return;
     }
+    if (!transferNext && !coachGameActive) showCoachPanel('practice');
     if (transferNext) {
       if (!coachGameActive) startCoachGame();
       else setCoachStatus(`Your game is restored. Use this focus: ${sprint.focusCue || sprint.focus}`);
@@ -8099,9 +8189,12 @@ $(function () {
   });
 
   $('#btn-practice-session-start').on('click', function() {
-    const due = Array.from(renderedPracticeItems.values()).filter(item => practiceIsDue(item));
-    startCoachPracticeSession(due, due[0]);
+    const recommendation = practiceRecommendation();
+    if (!recommendation || coachThinking) return;
+    if (recommendation.items[0].id.startsWith('drill-')) startCoachPracticeSession(recommendation.items, recommendation.items[0]);
+    else startCoachPractice(recommendation.items[0]);
   });
+
   $('#btn-coach-next-action').on('click', function() {
     const action = $(this).attr('data-action');
     if (action === 'progress') {
@@ -8187,7 +8280,8 @@ $(function () {
       ? await coachHandlePracticeMove(move.from, move.to, move.promotion || 'q', { updateBoard: true })
       : await coachHandleUserMove(move.from, move.to, move.promotion || 'q', { updateBoard: true });
     if (result === 'snapback') {
-      $status.text(coachPracticeSession ? 'Not the best move yet. Try again.' : 'That move could not be played.');
+      $status.text(coachPracticeSession ? 'Position reset. Read the feedback, then try another move.' : 'That move could not be played.');
+      if (coachPracticeSession) $('#coach-keyboard-move-input').trigger('focus').trigger('select');
       return;
     }
     if (result === 'stale') {

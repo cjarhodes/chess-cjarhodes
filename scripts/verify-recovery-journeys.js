@@ -5,7 +5,7 @@ async page => {
   const assert = (value, message) => { if (!value) throw new Error(message); };
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.route('**/*', route => route.continue());
-  const fresh = async () => { await page.evaluate(() => localStorage.clear()); await page.reload(); };
+  const fresh = async () => { await page.evaluate(() => { localStorage.clear(); sessionStorage.removeItem('ui:coach-panel-tab'); }); await page.reload(); };
   const play = async move => {
     await page.locator('#coach-keyboard-move').evaluate(el => { el.open = true; });
     await page.locator('#coach-keyboard-move-input').fill(move);

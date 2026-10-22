@@ -1,0 +1,484 @@
+{
+  "verifiedAt": "2026-10-22T02:47:15.906749+00:00",
+  "baseCommit": "373ee6d0634460272f6787c160c9534fd13ad1e8",
+  "evidenceKind": "real-workflows-and-isolated-review-fixture",
+  "practiceChecks": 66,
+  "sourceSha256": {
+    "index.html": "c5b62ba44c4156456fc00fdcc400df6928c5f3f69cf20741944c4cc34942167d",
+    "styles.css": "f9e0d3a3c79a2eb838a1d964584eb11a6cde863f4a1a507fbca3938f3790b200",
+    "app.js": "b30abf79e18ea164ed000fb8d536981b902d38c4a3c48477885be064c10dcec6",
+    "growth.js": "ea1aaaa5cfcdf149b264683939f2f95c34ca472b25d0ac568aeff205c3f05613",
+    "account-continuity.js": "a6a8291968efeeb0761551d72d8fad5d067873c5938f9c194a67ed55cc0e3988",
+    "opening-transfer.js": "48db4acf6830cfad72c1873cf2dba30da9f9c831273abb927d1ba1a46a496f99",
+    "learning-transfer.js": "57bec01092dd503c34adde6c72e69f5b23e8313ba884aac5f4c42b0db9e6c0d5",
+    "openings.js": "70fda75c82fb14ce2cf7e1be7600a0b20a41f4f8590362f826c7fad9e204b254",
+    "coach-config.js": "137128312af2629a549a8656abbe7b9ff9d1cd88099a63576d7b9e29e7fe9c92"
+  },
+  "queueFixture": {
+    "raw": 5,
+    "distinct": 3,
+    "planned": 2,
+    "label": "Start 2-position practice"
+  },
+  "viewports": [
+    {
+      "state": "selection",
+      "width": 1280,
+      "height": 800,
+      "documentWidth": 1280,
+      "board": {
+        "x": 373.59375,
+        "y": 174,
+        "width": 456,
+        "height": 456,
+        "top": 174,
+        "right": 829.59375,
+        "bottom": 630,
+        "left": 373.59375
+      },
+      "nextAction": [
+        "btn-practice-session-start"
+      ],
+      "actionBottom": 308.4375,
+      "hintOutlines": 0
+    },
+    {
+      "state": "selection",
+      "width": 1440,
+      "height": 900,
+      "documentWidth": 1440,
+      "board": {
+        "x": 396.796875,
+        "y": 174,
+        "width": 560,
+        "height": 560,
+        "top": 174,
+        "right": 956.796875,
+        "bottom": 734,
+        "left": 396.796875
+      },
+      "nextAction": [
+        "btn-practice-session-start"
+      ],
+      "actionBottom": 308.4375,
+      "hintOutlines": 0
+    },
+    {
+      "state": "selection",
+      "width": 1920,
+      "height": 1080,
+      "documentWidth": 1920,
+      "board": {
+        "x": 532,
+        "y": 174,
+        "width": 736,
+        "height": 736,
+        "top": 174,
+        "right": 1268,
+        "bottom": 910,
+        "left": 532
+      },
+      "nextAction": [
+        "btn-practice-session-start"
+      ],
+      "actionBottom": 308.4375,
+      "hintOutlines": 0
+    },
+    {
+      "state": "lesson",
+      "width": 1280,
+      "height": 800,
+      "documentWidth": 1280,
+      "board": {
+        "x": 305.59375,
+        "y": 144,
+        "width": 592,
+        "height": 592,
+        "top": 144,
+        "right": 897.59375,
+        "bottom": 736,
+        "left": 305.59375
+      },
+      "nextAction": [
+        "board"
+      ],
+      "actionBottom": 312.234375,
+      "hintOutlines": 0
+    },
+    {
+      "state": "lesson",
+      "width": 1440,
+      "height": 900,
+      "documentWidth": 1440,
+      "board": {
+        "x": 332.796875,
+        "y": 144,
+        "width": 688,
+        "height": 688,
+        "top": 144,
+        "right": 1020.796875,
+        "bottom": 832,
+        "left": 332.796875
+      },
+      "nextAction": [
+        "board"
+      ],
+      "actionBottom": 312.234375,
+      "hintOutlines": 0
+    },
+    {
+      "state": "lesson",
+      "width": 1920,
+      "height": 1080,
+      "documentWidth": 1920,
+      "board": {
+        "x": 524,
+        "y": 144,
+        "width": 752,
+        "height": 752,
+        "top": 144,
+        "right": 1276,
+        "bottom": 896,
+        "left": 524
+      },
+      "nextAction": [
+        "board"
+      ],
+      "actionBottom": 289.5,
+      "hintOutlines": 0
+    },
+    {
+      "state": "mistake",
+      "width": 1280,
+      "height": 800,
+      "documentWidth": 1280,
+      "board": {
+        "x": 341.59375,
+        "y": 144,
+        "width": 520,
+        "height": 520,
+        "top": 144,
+        "right": 861.59375,
+        "bottom": 664,
+        "left": 341.59375
+      },
+      "nextAction": [
+        "keyboard-submit"
+      ],
+      "actionBottom": 740.09375,
+      "hintOutlines": 0
+    },
+    {
+      "state": "mistake",
+      "width": 1440,
+      "height": 900,
+      "documentWidth": 1440,
+      "board": {
+        "x": 368.796875,
+        "y": 144,
+        "width": 616,
+        "height": 616,
+        "top": 144,
+        "right": 984.796875,
+        "bottom": 760,
+        "left": 368.796875
+      },
+      "nextAction": [
+        "keyboard-submit"
+      ],
+      "actionBottom": 836.09375,
+      "hintOutlines": 0
+    },
+    {
+      "state": "mistake",
+      "width": 1920,
+      "height": 1080,
+      "documentWidth": 1920,
+      "board": {
+        "x": 524,
+        "y": 144,
+        "width": 752,
+        "height": 752,
+        "top": 144,
+        "right": 1276,
+        "bottom": 896,
+        "left": 524
+      },
+      "nextAction": [
+        "keyboard-submit"
+      ],
+      "actionBottom": 972.09375,
+      "hintOutlines": 0
+    },
+    {
+      "state": "hints",
+      "width": 1280,
+      "height": 800,
+      "documentWidth": 1280,
+      "board": {
+        "x": 341.59375,
+        "y": 144,
+        "width": 520,
+        "height": 520,
+        "top": 144,
+        "right": 861.59375,
+        "bottom": 664,
+        "left": 341.59375
+      },
+      "nextAction": [
+        "keyboard-submit"
+      ],
+      "actionBottom": 289.5,
+      "hintOutlines": 2
+    },
+    {
+      "state": "hints",
+      "width": 1440,
+      "height": 900,
+      "documentWidth": 1440,
+      "board": {
+        "x": 368.796875,
+        "y": 144,
+        "width": 616,
+        "height": 616,
+        "top": 144,
+        "right": 984.796875,
+        "bottom": 760,
+        "left": 368.796875
+      },
+      "nextAction": [
+        "keyboard-submit"
+      ],
+      "actionBottom": 289.5,
+      "hintOutlines": 2
+    },
+    {
+      "state": "hints",
+      "width": 1920,
+      "height": 1080,
+      "documentWidth": 1920,
+      "board": {
+        "x": 524,
+        "y": 144,
+        "width": 752,
+        "height": 752,
+        "top": 144,
+        "right": 1276,
+        "bottom": 896,
+        "left": 524
+      },
+      "nextAction": [
+        "keyboard-submit"
+      ],
+      "actionBottom": 266.765625,
+      "hintOutlines": 2
+    },
+    {
+      "state": "completion",
+      "width": 1280,
+      "height": 800,
+      "documentWidth": 1280,
+      "board": {
+        "x": 341.59375,
+        "y": 144,
+        "width": 520,
+        "height": 520,
+        "top": 144,
+        "right": 861.59375,
+        "bottom": 664,
+        "left": 341.59375
+      },
+      "nextAction": [
+        "btn-coach-practice-next"
+      ],
+      "actionBottom": 431.5,
+      "hintOutlines": 0
+    },
+    {
+      "state": "completion",
+      "width": 1440,
+      "height": 900,
+      "documentWidth": 1440,
+      "board": {
+        "x": 368.796875,
+        "y": 144,
+        "width": 616,
+        "height": 616,
+        "top": 144,
+        "right": 984.796875,
+        "bottom": 760,
+        "left": 368.796875
+      },
+      "nextAction": [
+        "btn-coach-practice-next"
+      ],
+      "actionBottom": 431.5,
+      "hintOutlines": 0
+    },
+    {
+      "state": "completion",
+      "width": 1920,
+      "height": 1080,
+      "documentWidth": 1920,
+      "board": {
+        "x": 524,
+        "y": 144,
+        "width": 752,
+        "height": 752,
+        "top": 144,
+        "right": 1276,
+        "bottom": 896,
+        "left": 524
+      },
+      "nextAction": [
+        "btn-coach-practice-next"
+      ],
+      "actionBottom": 363.296875,
+      "hintOutlines": 0
+    },
+    {
+      "state": "personalised",
+      "width": 1280,
+      "height": 800,
+      "documentWidth": 1280,
+      "board": {
+        "x": 373.59375,
+        "y": 174,
+        "width": 456,
+        "height": 456,
+        "top": 174,
+        "right": 829.59375,
+        "bottom": 630,
+        "left": 373.59375
+      },
+      "nextAction": [
+        "btn-practice-session-start"
+      ],
+      "actionBottom": 309.78125,
+      "hintOutlines": 0
+    },
+    {
+      "state": "personalised",
+      "width": 1440,
+      "height": 900,
+      "documentWidth": 1440,
+      "board": {
+        "x": 396.796875,
+        "y": 174,
+        "width": 560,
+        "height": 560,
+        "top": 174,
+        "right": 956.796875,
+        "bottom": 734,
+        "left": 396.796875
+      },
+      "nextAction": [
+        "btn-practice-session-start"
+      ],
+      "actionBottom": 309.78125,
+      "hintOutlines": 0
+    },
+    {
+      "state": "personalised",
+      "width": 1920,
+      "height": 1080,
+      "documentWidth": 1920,
+      "board": {
+        "x": 532,
+        "y": 174,
+        "width": 736,
+        "height": 736,
+        "top": 174,
+        "right": 1268,
+        "bottom": 910,
+        "left": 532
+      },
+      "nextAction": [
+        "btn-practice-session-start"
+      ],
+      "actionBottom": 309.78125,
+      "hintOutlines": 0
+    },
+    {
+      "state": "session-complete",
+      "width": 1280,
+      "height": 800,
+      "documentWidth": 1280,
+      "board": {
+        "x": 341.59375,
+        "y": 144,
+        "width": 520,
+        "height": 520,
+        "top": 144,
+        "right": 861.59375,
+        "bottom": 664,
+        "left": 341.59375
+      },
+      "nextAction": [
+        "btn-coach-practice-next"
+      ],
+      "actionBottom": 454.234375,
+      "hintOutlines": 0
+    },
+    {
+      "state": "session-complete",
+      "width": 1440,
+      "height": 900,
+      "documentWidth": 1440,
+      "board": {
+        "x": 368.796875,
+        "y": 144,
+        "width": 616,
+        "height": 616,
+        "top": 144,
+        "right": 984.796875,
+        "bottom": 760,
+        "left": 368.796875
+      },
+      "nextAction": [
+        "btn-coach-practice-next"
+      ],
+      "actionBottom": 431.5,
+      "hintOutlines": 0
+    },
+    {
+      "state": "session-complete",
+      "width": 1920,
+      "height": 1080,
+      "documentWidth": 1920,
+      "board": {
+        "x": 524,
+        "y": 144,
+        "width": 752,
+        "height": 752,
+        "top": 144,
+        "right": 1276,
+        "bottom": 896,
+        "left": 524
+      },
+      "nextAction": [
+        "btn-coach-practice-next"
+      ],
+      "actionBottom": 363.296875,
+      "hintOutlines": 0
+    }
+  ],
+  "runtimeErrors": [],
+  "releaseGates": {
+    "validators": 18,
+    "browserJourneys": 10,
+    "fullBrowserResult": "passed",
+    "journeys": [
+      "core smoke",
+      "teaching",
+      "interruption recovery",
+      "opponent",
+      "coaching UI",
+      "useful progress",
+      "opening transfer",
+      "learning transfer",
+      "account continuity",
+      "practice UX"
+    ]
+  }
+}

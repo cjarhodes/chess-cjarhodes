@@ -436,22 +436,22 @@ async page => {
   await showPanel('practice');
   assert(await page.locator('#practice-section').isVisible(), 'practice queue did not render from a reviewed mistake');
   assert(await page.locator('.practice-load').count() === 2, 'expected two due practice drills');
-  await page.locator('#btn-coach-next-action').click();
+  await page.locator('#btn-practice-session-start').click();
   assert(await page.locator('#coach-practice-banner').isVisible(), 'practice banner did not open');
   assert(await page.locator('#coach-practice-session-status').textContent() === 'Drill 1 of 2', 'multi-drill session did not start');
   assert(await page.locator('#btn-coach-resign').isDisabled(), 'normal game controls stayed enabled during practice');
   await page.reload();
-  assert(await page.locator('#coach-daily-plan-title').textContent() === 'Rehearse Opening principle gaps', 'reload skipped an unfinished adaptive drill phase');
+  assert(await page.locator('#coach-daily-plan-title').textContent() === 'One decision at a time', 'reload skipped an unfinished adaptive drill phase');
   assert(await page.locator('#btn-coach-next-action').textContent() === 'Return to the drill', 'reload did not restore the adaptive drill action');
-  assert(await page.locator('#daily-sprint-progress-label').textContent() === '0 of 8 steps', 'reload did not preserve adaptive session progress');
-  await page.locator('#btn-coach-next-action').click();
+  assert(await page.locator('#daily-sprint-progress-label').textContent() === '0 of 2 positions', 'reload did not preserve adaptive session progress');
+  await page.locator('#coachBoard').focus();
   assert(await page.locator('#coach-practice-session-status').textContent() === 'Drill 1 of 2', 'restored adaptive drill session did not restart at the due position');
 
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
   await page.locator('#coach-keyboard-move-input').fill('f3');
   await page.locator('#coach-keyboard-move-form button[type=submit]').click();
   await settlePracticeMove();
-  assert((await page.locator('#coach-practice-status').textContent()).includes('Find a sound move'), 'incorrect drill move was not rejected');
+  assert((await page.locator('#coach-practice-status').textContent()).includes('f3'), 'incorrect drill move was not rejected');
   assert(await page.locator('#practice-progress-attempts').textContent() === '1', 'incorrect attempt was not measured');
 
   await page.locator('#coach-keyboard-move-input').fill('e4');
@@ -473,7 +473,7 @@ async page => {
   assert(await page.locator('#practice-progress-success').textContent() === '67%', 'session success rate is wrong');
   assert(await page.locator('#practice-count').textContent() === '0 due', 'completed drill was not rescheduled');
   await showPanel('practice');
-  assert(await page.locator('#practice-empty').isVisible(), 'caught-up state did not render');
+  assert(!(await page.locator('#practice-empty').isVisible()), 'active lesson displayed a competing queue-empty message');
   assert(await page.locator('#practice-progress-week').textContent() === '3', 'seven-day attempts did not update');
   assert(await page.locator('#practice-progress-streak').textContent() === '1d', 'practice streak did not update');
   assert(await page.locator('#btn-coach-practice-next').textContent() === 'Continue to live play', 'final drill did not explain the live-play handoff');
@@ -495,6 +495,7 @@ async page => {
   assert((await page.locator('#daily-sprint-takeaway').textContent()).includes('does not establish improvement'), 'adaptive takeaway did not assess live transfer with appropriate uncertainty');
 
   assert((await page.locator('#coach-daily-plan-detail').textContent()).includes('2 drills and 6 reviewed moves saved'), 'completion did not describe actual session activity');
+  await showPanel('game');
   await page.locator('#btn-coach-next-action').click();
   assert(await page.locator('#panel-progress').isVisible(), 'completion action did not open progress');
   await page.reload();
@@ -708,17 +709,18 @@ async page => {
 
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(page.url().split('?')[0] + '?view=coach');
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => { localStorage.clear(); sessionStorage.removeItem('ui:coach-panel-tab'); });
   await page.reload();
   await openRailGroup('group-profile');
   await page.locator('#player-minutes').fill('5');
   await page.locator('#player-style').selectOption('drills');
   await page.locator('#player-profile-form button[type=submit]').click();
   assert((await page.locator('#coach-daily-plan-detail').textContent()).includes('4 reviewed moves'), 'fresh profile did not update the displayed target');
+  await showPanel('game');
   await page.locator('#btn-coach-next-action').click();
   const freshDay = await page.evaluate(() => dailySprintToday());
   assert(freshDay.phase === 'moves' && freshDay.drillTarget === 0 && freshDay.target === 4, 'drills-first new player was assigned unavailable drills');
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => { localStorage.clear(); sessionStorage.removeItem('ui:coach-panel-tab'); });
   await page.reload();
   assert(await page.locator('#coach-daily-plan-title').textContent() === 'Start your first coached session', 'clean first visit did not explain the bounded baseline');
   assert(await page.locator('#btn-coach-next-action').textContent() === 'Start training', 'clean first visit did not offer a one-click training start');
@@ -731,6 +733,7 @@ async page => {
   await page.locator('#coach-fen').fill('7k/8/5KQ1/8/8/8/8/8 w - - 0 1');
   await page.locator('#coach-game-options').evaluate(el => { el.open = true; });
   await page.locator('.side-toggle button[data-side="white"]').click();
+  await showPanel('game');
   await page.locator('#btn-coach-next-action').click();
   assert(await page.locator('#coach-daily-plan-title').textContent() === 'Build your baseline in play', 'active baseline did not explain its in-progress state');
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
@@ -760,8 +763,8 @@ async page => {
   assert((await page.locator('#coach-practice-status').textContent()).includes('Correct on the first try'), 'generated drill did not accept the reviewed best move');
   assert(await page.locator('#practice-progress-success').textContent() === '100%', 'generated drill result was not measured');
 
-  if (!(await page.locator('#btn-coach-practice-exit').isVisible())) throw new Error('Practice exit missing at checkpoint 1: ' + JSON.stringify(await page.evaluate(() => ({practice:!!coachPracticeSession,owner:coachMemoryOwnerId(),sessionOwner:coachPracticeSession?.owner,status:document.querySelector('#coach-status').textContent,mode:coachMode}))));
-  await page.locator('#btn-coach-practice-exit').click();
+  assert(await page.locator('#btn-coach-practice-next').isVisible(), 'completed practice did not offer a clear next action');
+  await page.locator(await page.locator('#btn-coach-practice-exit').isVisible() ? '#btn-coach-practice-exit' : '#btn-coach-practice-next').click();
   // A capture exercises the material path in insight tagging; the opponent must
   // still reply afterwards instead of the move handler dying mid-flight.
   await openRailGroup('group-position');
@@ -816,8 +819,8 @@ async page => {
   await settlePracticeMove();
   assert((await page.locator('#coach-practice-status').textContent()).includes('Correct on the first try'), 'structured endgame lesson was not graded');
   assert(await page.locator('#endgame-track-progress').textContent() === '1/4', 'structured endgame progress did not update');
-  if (!(await page.locator('#btn-coach-practice-exit').isVisible())) throw new Error('Practice exit missing at checkpoint 2: ' + JSON.stringify(await page.evaluate(() => ({practice:!!coachPracticeSession,owner:coachMemoryOwnerId(),sessionOwner:coachPracticeSession?.owner,status:document.querySelector('#coach-status').textContent,mode:coachMode}))));
-  await page.locator('#btn-coach-practice-exit').click();
+  assert(await page.locator('#btn-coach-practice-next').isVisible(), 'completed endgame lesson did not offer a next action');
+  await page.locator(await page.locator('#btn-coach-practice-exit').isVisible() ? '#btn-coach-practice-exit' : '#btn-coach-practice-next').click();
 
   await openRailGroup('group-inbox');
   await page.locator('#game-inbox-pgn').fill('[Event "Smoke import"]\n[Result "*"]\n\n1. e4 *');
@@ -829,12 +832,13 @@ async page => {
   assert((await page.locator('#game-inbox-status').textContent()).includes('1 move reviewed'), 'PGN Game Inbox did not complete a bounded imported review');
 
   await page.goto(page.url().split('?')[0] + '?view=coach');
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => { localStorage.clear(); sessionStorage.removeItem('ui:coach-panel-tab'); });
   await page.reload();
   await openRailGroup('group-position');
   await page.locator('#coach-fen').fill('7k/8/5KQ1/8/8/8/8/8 w - - 0 1');
   await page.locator('#coach-game-options').evaluate(el => { el.open = true; });
   await page.locator('.side-toggle button[data-side="white"]').click();
+  await showPanel('game');
   await page.locator('#btn-coach-next-action').click();
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
   await page.locator('#coach-keyboard-move-input').fill('Qe4');
@@ -852,7 +856,7 @@ async page => {
 
   // Real game -> explanation -> practice -> the same live game.
   await page.goto(page.url().split('?')[0] + '?view=coach');
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => { localStorage.clear(); sessionStorage.removeItem('ui:coach-panel-tab'); });
   await page.reload();
   await page.locator('#btn-coach-newgame').click();
   await page.locator('#coach-keyboard-move').evaluate(element => { element.open = true; });
@@ -1030,3 +1034,15 @@ if [[ "$ACCOUNT_EXIT" -ne 0 || "$ACCOUNT_OUTPUT" == *"### Error"* ]]; then
   exit 1
 fi
 echo "Account continuity journey validation passed."
+
+PRACTICE_UX_CODE=$(cat "$ROOT/scripts/verify-practice-ux-journeys.js")
+set +e
+PRACTICE_UX_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$PRACTICE_UX_CODE")
+PRACTICE_UX_EXIT=$?
+set -e
+echo "$PRACTICE_UX_OUTPUT"
+if [[ "$PRACTICE_UX_EXIT" -ne 0 || "$PRACTICE_UX_OUTPUT" == *"### Error"* ]]; then
+  echo "Practice UX journey validation failed." >&2
+  exit 1
+fi
+echo "Practice UX journey validation passed."

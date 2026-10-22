@@ -169,7 +169,7 @@ function extractConst(name) {
 
 // --- Build the vm slice --------------------------------------------------
 
-const constNames = ['DAY_MS', 'PRACTICE_PROGRESS_KEY', 'LEGACY_PRACTICE_PROGRESS_KEY', 'PRACTICE_EVENT_LIMIT', 'practiceRemoteSyncChains'];
+const constNames = ['DAILY_DRILL_TARGET', 'DAY_MS', 'PRACTICE_PROGRESS_KEY', 'LEGACY_PRACTICE_PROGRESS_KEY', 'PRACTICE_EVENT_LIMIT', 'practiceRemoteSyncChains'];
 const functionNames = [
   'emptyPracticeProgress',
   'activePracticeOwnerId',
@@ -180,6 +180,8 @@ const functionNames = [
   'hashPracticeValue',
   'practiceItemId',
   'practiceRecordFor',
+  'distinctPracticeItems',
+  'orderedPracticeRunItems',
   'practiceIsDue',
   'practiceProgressTotals',
   'practiceDayKey',
@@ -474,6 +476,33 @@ resetStorage();
     threw = true;
   }
   assert(threw === false, 'queueRemotePracticeProgressSync must no-op (not throw) when there is no active Coach DB session');
+}
+
+// Grouping preserves legacy schedules and events instead of inventing credit.
+resetStorage();
+{
+  const entry = { fenBefore: 'position w KQ - 0 1', bestUci: 'e2e4', tags: ['development', 'king_safety'] };
+  const make = tag => ({ id: context.practiceItemId(entry, tag), tag, entry, meta: { practice: 'Compare candidates.' } });
+  const first = make('development'), second = make('king_safety');
+  context.recordPracticeAttempt(first, true, false);
+  assert(!context.practiceIsDue(second), 'one completion must schedule equivalent weakness tags together');
+  assertEqual(context.practiceProgressTotals().attempts, 1, 'grouping must not duplicate attempt counts');
+  currentNow += 1000;
+  context.recordPracticeAttempt(second, false, false);
+  assert(context.practiceIsDue(first), 'a newer miss on another tag must reopen the position');
+  assertEqual(context.loadPracticeProgress().events.length, 2, 'grouping must preserve the two real events');
+  assertEqual(Object.keys(context.loadPracticeProgress().records).length, 2, 'existing per-tag record IDs must remain intact');
+  assertEqual(context.practiceProgressTotals().attempts, 2, 'a second real attempt must add only one attempt');
+  const changedCounters = {...second, entry: {...entry, fenBefore: 'position w KQ - 8 24'}};
+  const another = {...first, id: 'different', entry: {...entry, fenBefore: 'other b - - 0 1', bestUci: 'e7e5'}};
+  assertEqual(context.distinctPracticeItems([first, second, changedCounters, another]).length, 2, 'counter changes and tags must not create extra positions');
+  context.renderedAdaptivePlan = { drillTarget: 1 };
+  assertEqual(context.orderedPracticeRunItems([first, second, another], second).length, 1, 'session must honour its displayed adaptive cap');
+  assertEqual(context.orderedPracticeRunItems([first, second, another], second)[0].id, second.id, 'selected lesson must stay first when grouping');
+  context.renderedAdaptivePlan = { drillTarget: 0 };
+  assertEqual(context.orderedPracticeRunItems([first, second]).length, 1, 'manual practice must remain available for a play-first plan');
+  context.renderedAdaptivePlan = { drillTarget: 4 };
+  assertEqual(context.orderedPracticeRunItems([first, second, another]).length, 2, 'session must cap to available distinct positions');
 }
 
 // --- Report ---------------------------------------------------------------

@@ -416,6 +416,7 @@
   <main class="coach-board-area">
     <div class="coach-turn-header">
       <div id="coach-phase-label" class="coach-phase-label">Ready to train</div>
+      <div id="practice-selection-guidance" class="coach-status" style="display:none;">Choose a focused lesson on the right.</div>
       <div id="coach-status" class="coach-status" role="status" aria-live="polite">Choose Start training when you’re ready.</div>
     </div>
     <div class="captured-bar" id="captured-top">
@@ -612,15 +613,24 @@
     </div>
 
     <div class="panel-page" id="panel-practice" role="tabpanel" aria-labelledby="tab-practice" hidden>
+<section class="coach-panel-section practice-start" id="practice-start" aria-labelledby="practice-start-title">
+      <div class="section-label">Recommended practice</div>
+      <h2 id="practice-start-title">Queen mate</h2>
+      <p id="practice-start-detail">One short lesson to sharpen your decisions.</p>
+      <button type="button" class="ctrl-btn" id="btn-practice-session-start">Start this lesson</button>
+      <p id="practice-start-context" class="practice-context"></p>
+    </section>
 <div class="coach-panel-section" id="practice-section" style="display:none;">
       <div class="lifetime-head">
-        <span class="section-label">Practice Queue</span>
+        <span class="section-label">From your games</span>
         <span class="practice-head-actions">
           <span class="practice-tag" id="practice-count">0 due</span>
-          <button id="btn-practice-session-start" class="movelist-copy" disabled>Start practice</button>
-          <button id="btn-practice-progress-reset" class="movelist-copy" title="Reset practice progress">Reset</button>
         </span>
       </div>
+      <div class="practice-empty" id="practice-empty" style="display:none;">No positions are due from your games. Choose a lesson below, or play a coached game to find your next focus.</div>
+      <div class="practice-list" id="practice-list"></div>
+      <details class="practice-activity">
+        <summary>Practice activity</summary>
       <div class="practice-progress" aria-label="Practice progress">
         <div class="metric"><span class="value" id="practice-progress-attempts">0</span><span class="label">Attempts</span></div>
         <div class="metric"><span class="value" id="practice-progress-success">—</span><span class="label">Completed</span></div>
@@ -634,8 +644,8 @@
         <div class="practice-trend-bars" id="practice-trend-bars"></div>
         <div class="practice-trend-summary" id="practice-trend-summary">No attempts in the last 7 days.</div>
       </div>
-      <div class="practice-empty" id="practice-empty" style="display:none;">All caught up. Completed drills return when they are due.</div>
-      <div class="practice-list" id="practice-list"></div>
+        <button id="btn-practice-progress-reset" class="movelist-copy" title="Reset practice progress">Reset practice history</button>
+      </details>
     </div>
 <div class="coach-panel-section" id="endgame-track-section">
       <div class="lifetime-head"><span class="section-label">Endgame essentials</span><span class="practice-tag" id="endgame-track-progress">0/4</span></div>

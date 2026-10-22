@@ -2490,3 +2490,35 @@ input[type=range].strength-slider::-moz-range-thumb {
 .account-recovery { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 10px; }
 .account-recovery .ctrl-btn { width: 100%; margin-top: 6px; white-space: normal; }
 .account-recovery [hidden] { display: none; }
+
+/* Practice selection has a single starting point; the saved game stays in view. */
+.practice-start h2 { margin: 0; color: var(--text); font-family: var(--font-reading); font-size: 1.3rem; font-weight: 500; }
+.practice-start p { margin: .6rem 0; line-height: 1.5; }
+.practice-start .ctrl-btn { width: 100%; }
+.practice-context { color: var(--muted); font-size: .78rem; }
+.coach-view.practice-browsing #btn-coach-next-action { display: none; }
+
+/* Keep lesson progress separate from the daily game plan. */
+.coach-view.practice-browsing #coach-daily-plan,
+.coach-view.practice-browsing .play-card,
+.coach-view.practice-browsing[data-ui-state="ready"] .coach-turn-header #coach-status,
+.coach-view.practice-active #practice-section,
+.coach-view.practice-active #daily-sprint-streak,
+.coach-view.practice-active #daily-sprint-focus,
+.coach-view.practice-active #daily-sprint-takeaway,
+.coach-view.practice-active #btn-coach-next-action { display: none !important; }
+.coach-view.practice-active .coach-daily-plan .plan-detail { display: block; }
+.coach-practice-banner .status:empty { display: none; }
+.coach-practice-banner .status { padding: .65rem 0; border-top: 1px solid var(--border); color: var(--text); }
+.coach-practice-actions .ctrl-btn { min-height: 36px; }
+.coach-practice-actions #btn-coach-practice-next { flex: 1 0 100%; }
+#btn-coach-practice-exit { border-color: transparent; color: var(--muted); }
+#coachBoard .practice-cue-source { box-shadow: inset 0 0 0 4px #5c2540; }
+#coachBoard .practice-cue-target { box-shadow: inset 0 0 0 4px #164b3b; }
+#coachBoard:focus-visible { outline: 2px solid var(--accent-soft); outline-offset: 4px; }
+
+.practice-activity { margin-top: .8rem; color: var(--muted); }
+.practice-activity summary { cursor: pointer; padding: .5rem 0; font-size: .78rem; }
+.practice-activity .practice-progress { margin-top: .7rem; }
+.practice-start p:not(.practice-context) { font-family: var(--font-reading); font-size: 1rem; }
+#practice-selection-guidance { padding: 0; margin: 0; border: 0; background: none; }

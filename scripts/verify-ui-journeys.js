@@ -3,7 +3,7 @@ async page => {
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  const assert=(x,message)=>{if(!x)throw new Error(message);};
  await page.route('**/*',route=>route.continue());
- await page.evaluate(()=>localStorage.clear());await page.reload();
+ await page.evaluate(()=>{localStorage.clear();sessionStorage.removeItem('ui:coach-panel-tab');});await page.reload();
  const checks=[];
  const capture=async name=>{
   for(const [width,height]of [[1280,800],[1440,900],[1920,1080]]){

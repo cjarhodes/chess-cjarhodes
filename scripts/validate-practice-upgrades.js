@@ -90,6 +90,8 @@ function makeSession(known, bestCp, extra = {}) {
   const hintSession = makeSession({}, 0);
   assert(context.practicePromptForItem(hintSession.item).includes('opponent threatening'), 'practice must ask for a candidate scan before hinting');
   assert(!context.practicePromptForItem(hintSession.item).includes('e4'), 'initial prompt must not give away the move');
+  const authored = {...hintSession.item, meta: { practice: 'Find the immediate checkmate.' }};
+  assert(context.practicePromptForItem(authored).includes('Find the immediate checkmate.'), 'authored objectives must appear before asking for a move');
   assert(context.practiceHintForSession(hintSession, 1).includes('centre'), 'first hint must introduce the central-play idea');
   assert(context.practiceHintForSession(hintSession, 2).includes('e2'), 'piece hint must locate the pawn');
   assert(context.practiceHintForSession(hintSession, 3).includes('e4'), 'destination hint must name e4');

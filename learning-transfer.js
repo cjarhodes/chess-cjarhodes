@@ -69,7 +69,7 @@ function learningTransferPracticeItem(record) {
     id: 'learning-check:' + record.id, tag: record.tag,
     entry: { fenBefore: position.fen, bestUci: position.uci, bestSan: move.san, pairNum: Number(position.fen.split(' ')[5]), ply: 1, decisionCue: record.cue },
     learningTransfer: { recordId: record.id, challengeId: position.id },
-    meta: { title: record.firstResult === 'pending' ? 'Different-position check' : 'Rehearse this check', practice: 'Check threats, compare candidates, and choose a sound move.', theory: position.explanation }
+    meta: { title: record.firstResult === 'pending' ? 'Different-position check' : 'Rehearse this check', practice: `${record.cue} Check what has changed in this position before choosing a move.`, theory: position.explanation }
   };
 }
 
@@ -123,7 +123,7 @@ function finishLearningTransferCheck(session, played) {
   $('#btn-coach-practice-hint, #btn-coach-practice-answer').prop('disabled', true);
   $('#btn-coach-practice-next').text('Use this cue in play').show().prop('disabled', false);
   setCoachStatus('Different-position check saved. Try the cue in play.');
-  updateCoachControlsState(); saveCoachPracticeState(); renderInsights();
+  updateCoachControlsState(); saveCoachPracticeState(); renderInsights(); focusPracticeTarget();
 }
 
 function continueLearningTransferPlay(id) {
@@ -161,7 +161,7 @@ function renderLearningTransfer() {
   const exhausted = session && session.completed && !probe && !session.item.id.startsWith('opening-bridge:');
   $('#learning-transfer-note').toggle(!!offer || !!probe || !!exhausted).text(offer
     ? 'Optional: try the same decision process in a different position before returning to play.'
-    : probe ? 'The first graded decision is kept separately. Hints and retries do not create a new independent result.'
+    : probe ? 'Try the idea without help first. You can use hints or retry; your first decision stays in your progress.'
       : exhausted ? 'No fresh authored check for this cue is available. Use it in play; repeating a known position is rehearsal.' : '');
   if (!probe) return;
   $('#coach-practice-session-status').text('Different-position check');

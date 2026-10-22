@@ -8,7 +8,7 @@ const context={Chess,window:{},$:()=>chain,localStorage:{getItem:k=>store.get(k)
  activePracticeOwnerId:()=>owner,coachMemoryOwnerId:()=>owner?'user:'+owner:'anon:test',currentInsightEntries:()=>entries,
  moveFromUci:(fen,uci)=>new Chess(fen).move({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]}),
  setCoachStatus:()=>{},isInsightProblem:t=>['mistake','blunder','inaccuracy'].includes(t),insightTagsForReview:r=>r.tags||[],
- updateCoachControlsState:()=>{},saveCoachPracticeState:()=>{},renderInsights:()=>{},coachThinking:false,coachPracticeSession:null,coachPracticeRun:null,coachLocalGameId:'live-a'};
+ focusPracticeTarget:()=>{},updateCoachControlsState:()=>{},saveCoachPracticeState:()=>{},renderInsights:()=>{},coachThinking:false,coachPracticeSession:null,coachPracticeRun:null,coachLocalGameId:'live-a'};
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(path.join(root,'openings.js'),'utf8')+'\n'+fs.readFileSync(path.join(root,'growth.js'),'utf8')+'\n'+fs.readFileSync(path.join(root,'learning-transfer.js'),'utf8')+'\nthis.positions=LEARNING_TRANSFER_POSITIONS;renderLearningTransferProgress=()=>{};queueGrowthRemoteSync=()=>{};',context);
 const assert=(ok,message)=>{checks++;if(!ok)throw Error(message);};

@@ -5,7 +5,7 @@ async page => {
  const results=[];
  await page.setViewportSize({width:1440,height:1000});
  const fresh=async level=>{
-  await page.evaluate(()=>localStorage.clear());await page.reload();
+  await page.evaluate(()=>{localStorage.clear();sessionStorage.removeItem('ui:coach-panel-tab');});await page.reload();
   await page.locator('#coach-auto-elo').uncheck();
   await page.locator('#coach-strength').fill(String(level));
   await page.locator('#coach-strength').dispatchEvent('input');

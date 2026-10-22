@@ -25,7 +25,7 @@ async page => {
   };
   const snapshot = () => page.evaluate(() => ({ pgn: coachGame.pgn(), id: coachLocalGameId, stats: JSON.stringify(coachStats), active: coachGameActive }));
   for (const fixture of fixtures) {
-    await page.evaluate(() => localStorage.clear());
+    await page.evaluate(() => { localStorage.clear(); sessionStorage.removeItem('ui:coach-panel-tab'); });
     await page.reload();
     await page.locator('#group-position').evaluate(el => { el.open = true; });
     await page.locator('#coach-fen').fill(fixture.fen);
