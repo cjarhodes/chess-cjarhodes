@@ -29,7 +29,7 @@ requirePattern(/CoachController\.setPhase\('ended'\)/, 'Coach game-over flow mus
 
 requirePattern(/const coachSync\s*=/, 'Supabase behavior must be behind a coachSync API');
 requirePattern(/saveMove\(review\)[\s\S]{0,120}syncRemoteCoachMove\(review\)/, 'coachSync API must expose saveMove');
-requirePattern(/deleteMove\(review\)[\s\S]{0,120}deleteRemoteCoachMove\(review\)/, 'coachSync API must expose deleteMove');
+requirePattern(/deleteMove\(review\)[\s\S]{0,350}deleteRemoteCoachMove\(review\)/, 'coachSync API must expose deleteMove');
 requirePattern(/saveGame\(endReason\)[\s\S]{0,120}updateRemoteCoachGame\(endReason\)/, 'coachSync API must expose saveGame');
 requirePattern(/loadInsights\(opts\)[\s\S]{0,120}refreshRemoteInsights\(opts/, 'coachSync API must expose loadInsights');
 

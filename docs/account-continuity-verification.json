@@ -1,0 +1,148 @@
+{
+  "goal": "Account continuity",
+  "baseline": "e425b4858c56634a0bf8eeff0dc3cc1f0f634207",
+  "controlledBrowser": {
+    "kind": "controlled-auth-and-rest-with-real-sdk",
+    "checks": 50,
+    "captures": [
+      {
+        "name": "continued",
+        "width": 1280,
+        "height": 800,
+        "documentWidth": 1280,
+        "boardBottom": 559.09375,
+        "boardWidth": 384,
+        "boardRight": 793.59375
+      },
+      {
+        "name": "continued",
+        "width": 1440,
+        "height": 900,
+        "documentWidth": 1440,
+        "boardBottom": 655.09375,
+        "boardWidth": 480,
+        "boardRight": 916.796875
+      },
+      {
+        "name": "continued",
+        "width": 1920,
+        "height": 1080,
+        "documentWidth": 1920,
+        "boardBottom": 838,
+        "boardWidth": 664,
+        "boardRight": 1232
+      },
+      {
+        "name": "backup-return",
+        "width": 1280,
+        "height": 800,
+        "documentWidth": 1280,
+        "boardBottom": 574,
+        "boardWidth": 400,
+        "boardRight": 801.59375
+      },
+      {
+        "name": "backup-return",
+        "width": 1440,
+        "height": 900,
+        "documentWidth": 1440,
+        "boardBottom": 678,
+        "boardWidth": 504,
+        "boardRight": 928.796875
+      },
+      {
+        "name": "backup-return",
+        "width": 1920,
+        "height": 1080,
+        "documentWidth": 1920,
+        "boardBottom": 854,
+        "boardWidth": 680,
+        "boardRight": 1240
+      },
+      {
+        "name": "separate-owner",
+        "width": 1280,
+        "height": 800,
+        "documentWidth": 1280,
+        "boardBottom": 630,
+        "boardWidth": 456,
+        "boardRight": 829.59375
+      },
+      {
+        "name": "separate-owner",
+        "width": 1440,
+        "height": 900,
+        "documentWidth": 1440,
+        "boardBottom": 734,
+        "boardWidth": 560,
+        "boardRight": 956.796875
+      },
+      {
+        "name": "separate-owner",
+        "width": 1920,
+        "height": 1080,
+        "documentWidth": 1920,
+        "boardBottom": 910,
+        "boardWidth": 736,
+        "boardRight": 1268
+      }
+    ],
+    "scenarios": [
+      "email form and callback",
+      "two-browser game recovery",
+      "previous board recovery",
+      "offline move retry after replacement",
+      "offline takebacks before and after upload",
+      "practice backup and live-game return",
+      "malformed and quota rollback",
+      "concurrent profile merge",
+      "stale-tab conflict across reload and copy",
+      "failed and local sign-out",
+      "account isolation"
+    ],
+    "errors": []
+  },
+  "validators": {
+    "continuityBehavioralChecks": 31,
+    "allValidators": "passed",
+    "validatorCount": 18
+  },
+  "productionBackend": {
+    "restoredExistingProject": true,
+    "statusVerified": "ACTIVE_HEALTHY",
+    "migration": "account_session_checkpoints",
+    "migrationVersion": "20261022013302",
+    "transactionalIsolationAndRevisionChecks": "passed; all fixtures rolled back",
+    "emailLinkSentThroughLiveUI": true,
+    "humanConfirmedEmailSignIn": true,
+    "liveEmailUserExistsVerified": true,
+    "remainingFixtureUsers": 0
+  },
+  "fullBrowserRegression": {
+    "passed": true,
+    "journeys": [
+      "Browser smoke validation passed.",
+      "Teaching journey validation passed.",
+      "Interruption recovery validation passed.",
+      "Opponent journey validation passed.",
+      "Coaching UI journey validation passed.",
+      "Useful Progress journey validation passed.",
+      "Opening transfer journey validation passed.",
+      "Learning transfer journey validation passed.",
+      "Account continuity journey validation passed."
+    ]
+  },
+  "deploymentAndLiveVerification": "pending",
+  "affectedJourneyRecheckAfterFinalReview": "passed",
+  "releaseAssetHashes": {
+    "index.html": "6c1db06ed01b3256c81a278654c7a3e8bc8d6289bccd32d697ffc44ab2939401",
+    "styles.css": "46d44addf58b9729611bede1e4fd286695c3a90a04c77ec1e9a56568bda92969",
+    "app.js": "a090aa9eda21bb52e7bd204c3bfd1a5069676d52df1a027f27cb588ab6c48769",
+    "growth.js": "e0ec0419d6e8bc5af83a1ec33b1d9e609219a2569a71a1fd13af20ad72a90bf5",
+    "account-continuity.js": "a6a8291968efeeb0761551d72d8fad5d067873c5938f9c194a67ed55cc0e3988",
+    "opening-transfer.js": "48db4acf6830cfad72c1873cf2dba30da9f9c831273abb927d1ba1a46a496f99",
+    "learning-transfer.js": "bdcb89faa245c78fb3596faa6971fea9a9d640d4903f0c8bdb0aef792370a747",
+    "openings.js": "70fda75c82fb14ce2cf7e1be7600a0b20a41f4f8590362f826c7fad9e204b254",
+    "coach-config.js": "137128312af2629a549a8656abbe7b9ff9d1cd88099a63576d7b9e29e7fe9c92"
+  }
+}

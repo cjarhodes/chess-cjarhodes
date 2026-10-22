@@ -148,7 +148,10 @@ context.coachRemoteInsightsLoaded = true;
 context.coachRemoteInsightEntries = [review(now - 1000, true, { tags: ['development'] })];
 assert(context.currentInsightEntries()[0].tags[0] === 'development', 'loaded account reviews were replaced by stale local data');
 context.coachRemoteInsightEntries = [];
-assert(context.currentInsightEntries().length === 0, 'empty loaded account history fell back to another source');
+assert(context.currentInsightEntries().length === 1, 'sync hid this account\'s local offline reviews');
+context.testEntries = [review(now - 1000, true, {id:'same',gameId:'game',ply:1})];
+context.coachRemoteInsightEntries = [review(now - 1000, true, {id:'same',gameId:'game',ply:1})];
+assert(context.currentInsightEntries().length === 1, 'local and remote copies double-counted a review');
 context.coachRemoteInsightsLoaded = false;
 assert(context.currentInsightEntries().length === 1, 'account-local history was unavailable while sync had not loaded');
 

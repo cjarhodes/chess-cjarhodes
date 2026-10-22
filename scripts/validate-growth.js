@@ -18,7 +18,7 @@ function requirePattern(source, pattern, message) {
 }
 
 requirePattern(growth, /function loadGrowthState[\s\S]+function mergeGrowthStates[\s\S]+function adoptAnonymousGrowthState/, 'growth state must migrate, merge, and adopt anonymous work');
-requirePattern(growth, /function syncGrowthState[\s\S]+player_training_profiles[\s\S]+\.upsert/, 'growth state must sync through the account-scoped table');
+requirePattern(growth, /function syncGrowthState[\s\S]+player_training_profiles[\s\S]+\.eq\('updated_at', result.data.updated_at\)/, 'growth state must sync through the account-scoped table');
 requirePattern(app, /function loadSR\(\)[\s\S]{0,180}loadSyncedLibrarySR[\s\S]{0,220}function saveSR[\s\S]{0,180}saveSyncedLibrarySR/, 'Library spaced repetition must use the synced growth store');
 requirePattern(growth, /function toggleRepertoireOpening[\s\S]+function renderRepertoireUI/, 'players must be able to build and render a personal repertoire');
 requirePattern(growth, /function renderPersonalRepertoire[\s\S]+function recordImportedOpenings/, 'imported games must build a personal repertoire view and repair queue');

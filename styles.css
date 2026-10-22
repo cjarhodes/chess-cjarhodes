@@ -2485,3 +2485,8 @@ input[type=range].strength-slider::-moz-range-thumb {
 .learning-transfer-result summary { cursor: pointer; color: var(--text); }
 .learning-transfer-result p { color: var(--muted); margin: 0.65rem 0; }
 #learning-transfer-note { color: var(--muted); font-size: 0.76rem; line-height: 1.45; }
+
+/* Account recovery uses the existing compact rail controls. */
+.account-recovery { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 10px; }
+.account-recovery .ctrl-btn { width: 100%; margin-top: 6px; white-space: normal; }
+.account-recovery [hidden] { display: none; }

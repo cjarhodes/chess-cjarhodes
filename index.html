@@ -313,11 +313,17 @@
           <div class="auth-user">Signed in as <strong id="coach-auth-user">-</strong></div>
           <div class="auth-actions">
             <button class="ctrl-btn" id="btn-coach-sync">Sync now</button>
-            <button class="ctrl-btn" id="btn-coach-logout">Sign out</button>
+            <button class="ctrl-btn" id="btn-coach-logout">Sign out here</button>
           </div>
         </div>
         <div class="auth-status" id="coach-auth-status" role="status" aria-live="polite"></div>
+        <button class="ctrl-btn" id="btn-coach-reconnect" type="button" style="display:none;">Reload to reconnect</button>
         <div class="growth-status" id="coach-memory-status">Progress is saved on this browser. Sign in to sync it across browsers.</div>
+        <div class="account-recovery" id="account-recovery">
+          <div class="growth-status" id="account-checkpoint-status" role="status" aria-live="polite">Saved sessions stay on this browser until you sign in.</div>
+          <button class="ctrl-btn" id="btn-account-resume" type="button" hidden>Continue saved session</button>
+          <button class="ctrl-btn" id="btn-account-previous" type="button" hidden>Return to previous session</button>
+        </div>
       </div>
       </div>
     </details>
@@ -394,7 +400,7 @@
       <summary><span class="section-label">Training data</span></summary>
       <div class="rail-group-body">
       <div class="growth-card" id="training-data-card">
-      <div class="growth-status">Export a backup or merge one from another device. Existing local progress is kept.</div>
+      <div class="growth-status">Export a backup or merge one from another device. Progress is merged. A saved board is offered separately, so your current session is kept.</div>
       <div class="training-data-actions">
         <button class="ctrl-btn" id="btn-export-training-data" type="button">Export backup</button>
         <button class="ctrl-btn" id="btn-import-training-data" type="button">Import backup</button>
@@ -812,6 +818,7 @@
 <script src="openings.js"></script>
 <script src="app.js"></script>
 <script src="growth.js"></script>
+<script src="account-continuity.js"></script>
 <script src="opening-transfer.js"></script>
 <script src="learning-transfer.js"></script>
 </body>

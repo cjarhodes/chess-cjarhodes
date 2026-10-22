@@ -40,14 +40,14 @@ Library spaced-repetition schedules, trends, and theory cards:
 6. Commit and push. Vercel will deploy `main` automatically.
 7. Smoke test:
    - Open Coach, send a sign-in link, and sign in once by clicking the link
-     and once by typing the emailed code into the original tab.
+     and, only when `emailCodeEnabled` is enabled, by typing the emailed code into the original tab.
    - Finish a game with a review mistake.
    - Complete at least two practice drills, including one incorrect attempt.
    - Reload the page and verify the attempts, schedule, and 7-day trend remain.
    - Sign in on a second browser and verify the same progress appears.
    - Confirm rows exist in `coach_games`, `coach_moves`, `drill_queue`,
      `practice_attempts`, `daily_training_sessions`,
-     `player_training_profiles`, and `theory_cards`.
+     `player_training_profiles`, `coach_checkpoints`, and `theory_cards`.
 
 Practice storage is scoped by account in the browser. Anonymous practice is
 moved into the account on sign-in, and it is only removed from the anonymous
@@ -56,7 +56,27 @@ IDs; retries are idempotent, and the database replays each drill's history by
 attempt time so a late event from another device cannot rewind its schedule.
 The player training profile uses field-aware reconciliation: the newest profile
 and repertoire choices win, while Library opening records merge individually so
-progress made on either device is retained.
+progress made on either device is retained. Writes compare `updated_at` and
+reread/merge after a concurrent change instead of replacing a newer profile.
+
+`coach_checkpoints` stores a bounded snapshot for each `(user_id, device_id)`.
+SELECT, INSERT, and UPDATE require the authenticated owner, including `WITH
+CHECK` on updates. A server trigger increments the revision and timestamp;
+clients update only the revision they last read. A stale tab pauses and keeps
+that pause across reload. Explicit continuation creates a separate checkpoint
+stream and strips remote game IDs so it cannot rewrite the source game.
+Checkpoint copies are unrated; their inherited reviews do not add another
+lifetime game. Game and practice recovery, including opening return context,
+are also available in training backups. Imports merge progress and offer the
+saved board separately, with an owner-scoped rollback journal for storage
+failures. Authentication storage is never exported.
+
+Run `scripts/verify-account-checkpoints.sql` against a migrated database to
+verify owner/anonymous isolation, owner reassignment rejection, payload bounds,
+and stale revisions. It creates fixture auth users inside a transaction and
+rolls back every row. The browser runner adds controlled two-browser auth/REST
+coverage using the real vendored SDK; actual email delivery needs a separate
+live check. Never put real links, codes, or session tokens in test artifacts.
 
 Only a publishable or legacy anon public key belongs in `coach-config.js`. Do
 not put secret keys, service-role keys, database passwords, or access tokens in

@@ -74,11 +74,22 @@ with progress and cancellation. A completed batch contributes to Insights
 and repertoire evidence; the final game's review is shown in Coach. Cancelling
 discards the staged batch rather than saving a partially analysed history.
 
+Account continuity keeps each browser's session in its own account checkpoint.
+In **Account**, choose **Continue saved session** to continue a separate copy;
+the source browser is unchanged, and **Return to previous session** keeps the
+board you displaced recoverable. Copies are unrated and do not add inherited
+reviews to lifetime game totals. New moves still receive normal coaching.
+Backups include live boards, interrupted practice, opening context, and training
+history; importing offers the saved board separately. Offline move reviews and
+takebacks retry when you reconnect or choose **Sync now**. **Sign out here**
+affects this browser's session. See [the account continuity audit](docs/account-continuity-loop.md).
+
 ## Stack
 
 - `index.html` + `styles.css` + `app.js` (runtime) + `openings.js` (opening content data)
   + `opening-transfer.js` (Library-to-game exercises and reviews)
   + `learning-transfer.js` (different-position checks and follow-up observations)
+  + `account-continuity.js` (saved-session copies, offline review retries, safe backup imports)
   + `growth.js` (personal training layer: profile, repertoire, imported games,
   endgames, cross-device sync) — no build tooling, no package manager,
   no framework

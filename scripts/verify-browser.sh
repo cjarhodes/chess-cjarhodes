@@ -1018,3 +1018,15 @@ if [[ "$LEARNING_TRANSFER_EXIT" -ne 0 || "$LEARNING_TRANSFER_OUTPUT" == *"### Er
   exit 1
 fi
 echo "Learning transfer journey validation passed."
+
+ACCOUNT_CODE=$(cat "$ROOT/scripts/verify-account-journeys.js")
+set +e
+ACCOUNT_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$ACCOUNT_CODE")
+ACCOUNT_EXIT=$?
+set -e
+echo "$ACCOUNT_OUTPUT"
+if [[ "$ACCOUNT_EXIT" -ne 0 || "$ACCOUNT_OUTPUT" == *"### Error"* ]]; then
+  echo "Account continuity journey validation failed." >&2
+  exit 1
+fi
+echo "Account continuity journey validation passed."

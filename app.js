@@ -67,6 +67,7 @@ let coachDbInitPromise = null;
 let coachRemoteInsightEntries = null;
 let coachDbStatus = 'local';
 let coachRemoteInsightsLoaded = false;
+let coachAuthEventRevision = 0;
 let coachAuthPhase = 'local'; // local | sending | callback | signed-in | signed-out | error
 let remoteGameUpdateTimer = null;
 let pendingRemoteGameEndReason = null;
@@ -139,6 +140,7 @@ window.COACH_SUPABASE_CONFIG = window.COACH_SUPABASE_CONFIG || {
 // next page load. Saved on every move; cleared when the user starts a new
 // game or dismisses the review summary after a game ends.
 let coachPendingReview = null;
+let coachContinuityCopy = false;
 const COACH_STATE_KEY = 'coach:state:v1';
 const COACH_STATE_BACKUP_KEY = 'coach:state:corrupt:v1';
 const COACH_PRACTICE_RETURN_KEY = 'coach:practice-return:v1';
@@ -164,6 +166,7 @@ function captureCoachPracticeReturnState() {
     userSide: coachUserSide,
     engineElo: coachEngineElo,
     localGameId: coachLocalGameId,
+    continuityCopy: coachContinuityCopy,
     remoteGameId: coachRemoteGameId,
     reviewLog: cloneCoachValue(coachReviewLog, []),
     stats: cloneCoachValue(coachStats, null),
@@ -180,6 +183,7 @@ function persistCoachPracticeReturnState(snapshot) {
   try {
     if (snapshot) localStorage.setItem(coachMemoryKey(COACH_PRACTICE_RETURN_KEY), JSON.stringify(snapshot));
     else localStorage.removeItem(coachMemoryKey(COACH_PRACTICE_RETURN_KEY));
+    if (typeof queueAccountCheckpoint === 'function') queueAccountCheckpoint();
   } catch (e) { /* recovery is best effort */ }
 }
 
@@ -214,8 +218,11 @@ function saveCoachPracticeState() {
       boardFlipped: coachBoardFlipped,
       prompt: $('#coach-practice-prompt').text(), status: $('#coach-practice-status').text(), ts: Date.now()
     }));
+    if (typeof queueAccountCheckpoint === 'function') queueAccountCheckpoint();
+    return true;
   } catch (e) {
     setCoachStatus('Practice is available, but this browser could not save its resume point.');
+    return false;
   }
 }
 
@@ -229,6 +236,7 @@ function applyCoachRecoveryUser(user) {
   saveCoachState();
   saveCoachPracticeState();
   coachAuthUser = user || null;
+  if (typeof recoverContinuityWrites === 'function') recoverContinuityWrites();
   coachRemoteInsightEntries = null;
   coachRemoteInsightsLoaded = false;
   if (previousOwner.startsWith('anon:') && nextOwner.startsWith('user:')) {
@@ -345,6 +353,7 @@ function restoreCoachPracticeReturnState(snapshot) {
     coachOpeningTransfer = typeof normalizeOpeningTransfer === 'function' ? normalizeOpeningTransfer(snapshot.openingTransfer) : null;
     coachGameGeneration++;
     coachLocalGameId = snapshot.localGameId || createCoachGameId();
+    coachContinuityCopy = !!snapshot.continuityCopy;
     coachRemoteGameId = snapshot.remoteGameId || null;
     coachUserSide = snapshot.userSide || 'white';
     coachEngineElo = typeof snapshot.engineElo === 'number' ? snapshot.engineElo : coachEngineElo;
@@ -373,7 +382,7 @@ function restoreCoachPracticeReturnState(snapshot) {
     updateCoachSummary();
     updateCoachControlsState();
     renderCoachReview(coachLastReview);
-    setCoachStatus(coachIsUserTurn() ? 'Your game is restored. Your move.' : 'Your game is restored. Opponent thinking…');
+    setCoachStatus(coachIsUserTurn() ? (coachContinuityCopy ? 'Continued copy (unrated). Your move.' : 'Your game is restored. Your move.') : (coachContinuityCopy ? 'Continued copy (unrated). Opponent thinking…' : 'Your game is restored. Opponent thinking…'));
     saveCoachState();
     persistCoachPracticeReturnState(null);
     return true;
@@ -410,6 +419,7 @@ function saveCoachState() {
       userSide: coachUserSide,
       engineElo: coachEngineElo,
       localGameId: coachLocalGameId,
+      continuityCopy: coachContinuityCopy,
       remoteGameId: coachRemoteGameId,
       reviewLog: coachReviewLog,
       pendingReview: coachPendingReview,
@@ -420,8 +430,11 @@ function saveCoachState() {
       ts: Date.now()
     };
     localStorage.setItem(coachMemoryKey(COACH_STATE_KEY), JSON.stringify(snapshot));
+    if (typeof queueAccountCheckpoint === 'function') queueAccountCheckpoint();
+    return true;
   } catch (e) {
-    // Quota exceeded or storage blocked — fail silently; not critical.
+    // Keep play available, but let backup export detect an unsaved latest move.
+    return false;
   }
 }
 function loadCoachState() {
@@ -478,6 +491,7 @@ function tryRestoreCoachGame() {
     coachOpeningTransfer = typeof normalizeOpeningTransfer === 'function' ? normalizeOpeningTransfer(s.openingTransfer) : null;
     coachGameGeneration++;
     coachLocalGameId = s.localGameId || createCoachGameId();
+    coachContinuityCopy = !!s.continuityCopy;
     coachUserSide = s.userSide || 'white';
     coachEngineElo = typeof s.engineElo === 'number' ? s.engineElo : 1200;
     coachRemoteGameId = s.remoteGameId || null;
@@ -515,8 +529,8 @@ function tryRestoreCoachGame() {
     if (coachGameActive) {
       const tier = strengthTierLabel(coachEngineElo);
       setCoachStatus(coachIsUserTurn()
-        ? `Resumed — Opponent ${coachEngineElo} (${tier}). Your move.`
-        : `Resumed — Opponent ${coachEngineElo} (${tier}). Opponent thinking…`);
+        ? `${coachContinuityCopy ? 'Continued copy (unrated)' : 'Resumed'} — Opponent ${coachEngineElo} (${tier}). Your move.`
+        : `${coachContinuityCopy ? 'Continued copy (unrated)' : 'Resumed'} — Opponent ${coachEngineElo} (${tier}). Opponent thinking…`);
       // Re-render last review card if we have one.
       if (coachLastReview) renderCoachReview(coachLastReview);
       if (pending) {
@@ -608,6 +622,8 @@ function applyLifetimeContribution(lifetime, contribution, direction) {
 }
 
 function rollGameIntoLifetime() {
+  // A recovered copy includes earlier reviews; do not count them again.
+  if (coachContinuityCopy) return;
   if (coachLifetimeRolledForThisGame) return;
   const contribution = lifetimeContribution();
   if (!contribution) return;
@@ -623,6 +639,7 @@ function rollGameIntoLifetime() {
 }
 
 function unrollGameFromLifetime() {
+  if (coachContinuityCopy) return;
   if (!coachLocalGameId) return;
   const lt = loadLifetime();
   const previous = lt.rollups[coachLocalGameId];
@@ -634,6 +651,7 @@ function unrollGameFromLifetime() {
 }
 
 function registerRestoredLifetimeRollup() {
+  if (coachContinuityCopy) return;
   if (!coachLocalGameId) return;
   const contribution = lifetimeContribution();
   if (!contribution) return;
@@ -953,7 +971,10 @@ function insightEntryFromReview(review) {
   const tags = review.insightTags || insightTagsForReview(review);
   review.insightTags = tags;
   return {
-    ts: Date.now(),
+    id: review.insightId || null,
+    gameId: review.remoteGameId || coachRemoteGameId || null,
+    localGameId: review.localGameId || coachLocalGameId || null,
+    ts: review.insightAt || Date.now(),
     tier: review.tier,
     loss: Math.round(review.loss || 0),
     phase: phaseOf(pairNum),
@@ -978,8 +999,12 @@ function recordCoachInsight(review) {
   if (!review || !review.tier || review.tier === 'unknown') return;
   review.insightTags = review.insightTags || insightTagsForReview(review);
   const state = loadInsights();
+  review.insightAt = review.insightAt || Date.now();
   state.entries.push(insightEntryFromReview(review));
   saveInsights(state);
+  if (typeof queuePendingAccountReview === 'function') {
+    try { queuePendingAccountReview(review); } catch (error) { handleAccountCheckpointError(error); }
+  }
   renderInsights();
 }
 
@@ -2383,8 +2408,12 @@ function renderTheoryCards(entries, counts) {
 }
 
 function currentInsightEntries() {
-  const source = coachAuthUser && coachRemoteInsightsLoaded ? coachRemoteInsightEntries : loadInsights().entries;
-  return reviewedProgressEntries(source);
+  const local = loadInsights().entries;
+  const remote = coachAuthUser && coachRemoteInsightsLoaded ? (coachRemoteInsightEntries || []) : [];
+  const ids = new Set(remote.map(entry => entry.id).filter(Boolean));
+  const moves = new Set(remote.filter(entry => entry.gameId).map(entry => `${entry.gameId}|${entry.ply}`));
+  return reviewedProgressEntries(remote.concat(local.filter(entry =>
+    !(entry.id && ids.has(entry.id)) && !(entry.gameId && moves.has(`${entry.gameId}|${entry.ply}`)))));
 }
 
 function renderInsights() {
@@ -2609,8 +2638,8 @@ function renderCoachAuth() {
     $('#coach-auth-user').text(coachAuthUser.email || coachAuthUser.id);
     setCoachAuthStatus(coachDbStatus || 'Account sync on.');
     $('#coach-memory-status').text(coachRemoteInsightsLoaded
-      ? 'Your training memory is connected and synced.'
-      : 'Your local progress is safe. Loading account memory...');
+      ? 'Account history loaded. Saved-session status is shown below.'
+      : 'Progress is saved here. Account history has not finished syncing.');
   } else {
     const pendingEmail = pendingCoachAuthEmail();
     $('#coach-auth-code-form').toggle(coachEmailCodeEnabled() && !!pendingEmail);
@@ -2658,7 +2687,11 @@ async function initCoachDb() {
           storage: storageCheck.storage
         }
       });
-      const { data } = await coachDbClient.auth.getSession();
+      const { data, error: sessionError } = await Promise.race([
+        coachDbClient.auth.getSession(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Account connection timed out. Reload to reconnect; your local session is kept.')), 12000))
+      ]);
+      if (sessionError) throw sessionError;
       applyCoachRecoveryUser(data && data.session ? data.session.user : null);
       if (authUrlState.present) clearCoachAuthUrlState();
       if (coachAuthUser) {
@@ -2684,28 +2717,42 @@ async function initCoachDb() {
         // The initial session was already applied above; replaying it here
         // would blank a link-error status and reload insights a second time.
         if (event === 'INITIAL_SESSION') return;
-        applyCoachRecoveryUser(session ? session.user : null);
-        if (session) cleanAuthCallbackUrl();
-        if (coachAuthUser) {
-          setPendingCoachAuthEmail('');
-          adoptAnonymousCoachMemory(coachAuthUser.id);
-          adoptAnonymousPracticeProgress(coachAuthUser.id);
-          adoptAnonymousDailySprint(coachAuthUser.id);
-          if (typeof adoptAnonymousGrowthState === 'function') adoptAnonymousGrowthState(coachAuthUser.id);
-        }
-        coachRemoteInsightEntries = null;
-        coachRemoteInsightsLoaded = false;
-        coachDbStatus = coachAccountSyncStatus();
-        renderCoachAuth();
-        renderInsights();
-        if (coachAuthUser) {
-          coachSync.loadInsights({ silent: true }).catch(handleCoachDbError);
-          if (coachGameActive) ensureRemoteCoachGame().catch(handleCoachDbError);
-        }
+        // Leave the auth lock before starting any database request.
+        const authRevision = ++coachAuthEventRevision;
+        setTimeout(() => {
+          if (authRevision !== coachAuthEventRevision) return;
+          const nextUser = session ? session.user : null;
+          if (nextUser && coachAuthUser && nextUser.id === coachAuthUser.id) {
+            coachAuthUser = nextUser;
+            return;
+          }
+          applyCoachRecoveryUser(session ? session.user : null);
+          if (session) cleanAuthCallbackUrl();
+          if (coachAuthUser) {
+            setPendingCoachAuthEmail('');
+            adoptAnonymousCoachMemory(coachAuthUser.id);
+            adoptAnonymousPracticeProgress(coachAuthUser.id);
+            adoptAnonymousDailySprint(coachAuthUser.id);
+            if (typeof adoptAnonymousGrowthState === 'function') adoptAnonymousGrowthState(coachAuthUser.id);
+          }
+          coachRemoteInsightEntries = null;
+          coachRemoteInsightsLoaded = false;
+          coachDbStatus = event === 'SIGNED_OUT'
+            ? (coachDbStatus.startsWith('Signed out on this browser.') ? coachDbStatus : 'Signed out on this browser. Other devices stay signed in.')
+            : coachAccountSyncStatus();
+          renderCoachAuth();
+          renderInsights();
+          if (coachAuthUser) {
+            coachSync.loadInsights({ silent: true }).catch(handleCoachDbError);
+            if (coachGameActive) ensureRemoteCoachGame().catch(handleCoachDbError);
+          }
+          if (typeof refreshAccountCheckpoints === 'function') refreshAccountCheckpoints().catch(handleAccountCheckpointError);
+        }, 0);
       });
     } catch (err) {
       coachAuthPhase = 'error';
-      coachDbStatus = 'Account sync unavailable.';
+      coachDbStatus = 'Account sync unavailable. Your local session is kept; reload to reconnect.';
+      $('#btn-coach-reconnect').show();
       setCoachAuthStatus((err && err.message) || coachDbStatus);
     }
   })();
@@ -2725,7 +2772,7 @@ async function sendCoachLoginLink() {
   if (!coachDbClient) {
     await coachSync.init();
   }
-  if (!coachDbClient) return;
+  if (!coachDbClient || coachAuthPhase === 'sending') return;
   const email = ($('#coach-auth-email').val() || '').trim();
   if (!email) {
     setCoachAuthStatus('Enter an email address.');
@@ -2735,15 +2782,22 @@ async function sendCoachLoginLink() {
   setCoachAuthStatus('Sending link...');
   coachAuthPhase = 'sending';
   const redirectTo = location.origin + location.pathname + '?view=coach';
-  const { error } = await coachDbClient.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: redirectTo }
-  });
+  $('#btn-coach-login').prop('disabled', true);
+  let result;
+  try {
+    result = await coachDbClient.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
+  } catch (error) {
+    coachAuthPhase = 'error';
+    setCoachAuthStatus('The link could not be sent. Reconnect and try again.');
+    return;
+  } finally { $('#btn-coach-login').prop('disabled', false); }
+  const { error } = result;
   if (error) {
     coachAuthPhase = 'error';
     setCoachAuthStatus(error.message);
     return;
   }
+  coachAuthPhase = 'link-sent';
   setPendingCoachAuthEmail(email);
   if (coachEmailCodeEnabled()) {
     $('#coach-auth-code-form').show();
@@ -2799,15 +2853,44 @@ async function signOutCoach() {
     clearTimeout(growthRemoteSync.timer);
     growthRemoteSync.timer = null;
   }
-  await coachDbClient.auth.signOut();
+  $('#btn-coach-logout').prop('disabled', true);
+  let result;
+  try {
+    result = await Promise.race([
+      coachDbClient.auth.signOut({ scope: 'local' }),
+      new Promise(resolve => setTimeout(() => resolve({ error: new Error('Sign-out timed out') }), 8000))
+    ]);
+  } catch (error) { result = { error }; }
+  finally { $('#btn-coach-logout').prop('disabled', false); }
+  if (result.error) {
+    // This SDK can clear its local session even if the server rejects logout.
+    // Reconcile the real session before describing the result to the user.
+    let sessionResult = null;
+    try {
+      sessionResult = await Promise.race([
+        coachDbClient.auth.getSession(),
+        new Promise(resolve => setTimeout(() => resolve(null), 3000))
+      ]);
+    } catch (error) { /* leave the last known owner until auth confirms */ }
+    if (sessionResult && !sessionResult.error) {
+      applyCoachRecoveryUser(sessionResult.data && sessionResult.data.session ? sessionResult.data.session.user : null);
+      coachDbStatus = coachAuthUser
+        ? 'Sign-out did not finish. You are still signed in here; reconnect and try again.'
+        : 'Signed out on this browser. Server confirmation was unavailable; other devices stay signed in.';
+      renderCoachAuth();
+      renderInsights();
+      if (typeof refreshAccountCheckpoints === 'function') refreshAccountCheckpoints().catch(handleAccountCheckpointError);
+    } else setCoachAuthStatus('Sign-out could not be confirmed. Reload to check this browser’s session.');
+    return;
+  }
   setPendingCoachAuthEmail('');
   applyCoachRecoveryUser(null);
   coachRemoteInsightEntries = null;
   coachRemoteInsightsLoaded = false;
-  coachRemoteGameId = null;
   coachRemoteGamePromise = null;
   coachRemoteGamePromiseGeneration = null;
-  coachDbStatus = '';
+  coachDbStatus = 'Signed out on this browser. Other devices stay signed in.';
+  if (typeof refreshAccountCheckpoints === 'function') refreshAccountCheckpoints().catch(handleAccountCheckpointError);
   renderCoachAuth();
   renderInsights();
 }
@@ -2848,7 +2931,10 @@ function remoteGamePayload(endReason) {
 }
 
 async function ensureRemoteCoachGame(generation = coachGameGeneration) {
-  if (!hasCoachDbSession() || !coachGame) return null;
+  if (!hasCoachDbSession() || !coachGame || coachPracticeSession) return null;
+  const syncOwner = coachMemoryOwnerId();
+  if (typeof ensureAccountWritePermission === 'function') await ensureAccountWritePermission();
+  if (syncOwner !== coachMemoryOwnerId() || generation !== coachGameGeneration) return null;
   if (coachRemoteGameId) return coachRemoteGameId;
   if (coachRemoteGamePromise && coachRemoteGamePromiseGeneration === generation) {
     return coachRemoteGamePromise;
@@ -2887,9 +2973,19 @@ async function ensureRemoteCoachGame(generation = coachGameGeneration) {
   }
 }
 
-async function updateRemoteCoachGame(endReason, generation = coachGameGeneration) {
+function updateRemoteCoachGame(endReason, generation = coachGameGeneration) {
+  const owner = coachMemoryOwnerId(), localGameId = coachLocalGameId;
+  const write = () => {
+    if (owner !== coachMemoryOwnerId() || localGameId !== coachLocalGameId || generation !== coachGameGeneration) return;
+    return commitRemoteCoachGame(endReason, generation);
+  };
+  return typeof runAccountGameWrite === 'function' ? runAccountGameWrite(write) : Promise.resolve(write());
+}
+
+async function commitRemoteCoachGame(endReason, generation = coachGameGeneration) {
   if (!hasCoachDbSession() || !coachGame) return;
   const gameRef = coachGame;
+  const syncOwner = coachMemoryOwnerId();
   const gameId = await ensureRemoteCoachGame(generation);
   if (!gameId) return;
   if (generation !== coachGameGeneration || coachGame !== gameRef || !hasCoachDbSession()) return;
@@ -2897,6 +2993,7 @@ async function updateRemoteCoachGame(endReason, generation = coachGameGeneration
     .from('coach_games')
     .update(remoteGamePayload(endReason || null))
     .eq('id', gameId);
+  if (syncOwner !== coachMemoryOwnerId() || generation !== coachGameGeneration) return;
   if (error) throw error;
   setCoachDbStatus(endReason ? 'Game saved.' : 'Game synced.');
 }
@@ -3031,26 +3128,44 @@ async function syncRemoteCoachMove(review) {
   if (generation !== coachGameGeneration || review.localGameId !== coachLocalGameId) return;
   if (data && data.id) await syncRemoteLearningArtifacts(review, data.id, generation);
   if (generation !== coachGameGeneration) return;
-  if (data && data.id) upsertRemoteInsightEntry(remoteInsightEntryFromReview(review, data.id));
+  if (data && data.id) {
+    review.insightId = data.id;
+    review.remoteGameId = gameId;
+    const local = loadInsights();
+    const entry = local.entries.find(e => e.localGameId === review.localGameId && e.ply === review.ply);
+    if (entry) { entry.id = data.id; entry.gameId = gameId; saveInsights(local); }
+    if (typeof markPendingAccountReviewSynced === 'function') markPendingAccountReviewSynced(review);
+    upsertRemoteInsightEntry(remoteInsightEntryFromReview(review, data.id));
+    saveCoachState();
+  }
   queueRemoteCoachGameUpdate(null);
 }
 
 async function deleteRemoteCoachMove(review) {
+  if (review && review.localGameId && review.localGameId !== coachLocalGameId) return;
   if (!hasCoachDbSession() || !coachRemoteGameId || !review || !review.ply) return;
+  const deleteOwner = coachMemoryOwnerId(), gameId = coachRemoteGameId;
   const existing = await coachDbClient
     .from('coach_moves')
     .select('id')
     .eq('game_id', coachRemoteGameId)
     .eq('ply', review.ply)
     .maybeSingle();
+  if (deleteOwner !== coachMemoryOwnerId() || gameId !== coachRemoteGameId) return;
   if (existing.error) throw existing.error;
   if (existing.data && existing.data.id) await deleteRemoteLearningArtifacts(existing.data.id);
+  if (deleteOwner !== coachMemoryOwnerId() || gameId !== coachRemoteGameId) return;
   const { error } = await coachDbClient
     .from('coach_moves')
     .delete()
     .eq('game_id', coachRemoteGameId)
     .eq('ply', review.ply);
+  if (deleteOwner !== coachMemoryOwnerId()) return;
   if (error) throw error;
+  if (typeof pendingAccountReviews === 'function') {
+    const key = `${review.localGameId}|${review.ply}`;
+    savePendingAccountReviews(pendingAccountReviews().filter(entry => entry.key !== key || !entry.deleted));
+  }
   if (existing.data && existing.data.id) removeRemoteInsightEntry(existing.data.id);
   queueRemoteCoachGameUpdate(null);
 }
@@ -3058,6 +3173,7 @@ async function deleteRemoteCoachMove(review) {
 function remoteMoveToInsightEntry(row) {
   return {
     id: row.id || null,
+    gameId: row.game_id || null,
     ts: row.played_at ? Date.parse(row.played_at) : Date.now(),
     tier: row.classification,
     loss: row.centipawn_loss || 0,
@@ -3130,16 +3246,18 @@ async function refreshRemoteInsights(opts = {}) {
     return;
   }
   const ownerId = activePracticeOwnerId();
+  if (typeof refreshAccountCheckpoints === 'function') refreshAccountCheckpoints().catch(handleAccountCheckpointError);
   if (!opts.silent) setCoachDbStatus('Loading account insights...');
   await Promise.all([
     syncPendingPracticeEvents(),
+    typeof flushPendingAccountReviews === 'function' ? flushPendingAccountReviews() : Promise.resolve(),
     syncRemoteDailySprints({ silent: true }),
     typeof syncGrowthState === 'function' ? syncGrowthState({ silent: true }) : Promise.resolve()
   ]);
   const [movesResult, drillsResult, attemptsResult] = await Promise.all([
     coachDbClient
       .from('coach_moves')
-      .select('id,played_at,classification,centipawn_loss,phase,tags,pair_num,ply,fen_before,user_uci,user_san,best_uci,best_san,opening_name')
+      .select('id,game_id,played_at,classification,centipawn_loss,phase,tags,pair_num,ply,fen_before,user_uci,user_san,best_uci,best_san,opening_name')
       .eq('user_id', ownerId)
       .order('played_at', { ascending: false })
       .limit(300),
@@ -3173,10 +3291,13 @@ const coachSync = {
     return initCoachDb();
   },
   saveMove(review) {
-    return syncRemoteCoachMove(review);
+    return typeof runAccountMoveWrite === 'function'
+      ? runAccountMoveWrite(() => syncRemoteCoachMove(review)) : syncRemoteCoachMove(review);
   },
   deleteMove(review) {
-    return deleteRemoteCoachMove(review);
+    if (typeof queueDeletedAccountReview === 'function') queueDeletedAccountReview(review);
+    return typeof runAccountMoveWrite === 'function'
+      ? runAccountMoveWrite(() => deleteRemoteCoachMove(review)) : deleteRemoteCoachMove(review);
   },
   saveGame(endReason) {
     return updateRemoteCoachGame(endReason);
@@ -4411,6 +4532,7 @@ function invalidateCoachAsyncWork(reason) {
 }
 
 function resetCoachState(fen, opts = {}) {
+  coachContinuityCopy = false;
   coachOpeningTransfer = null;
   coachPendingReview = null;
   invalidateCoachAsyncWork('A new game replaced the previous analysis.');
@@ -7920,16 +8042,20 @@ $(function () {
   $('#btn-coach-logout').on('click', function() {
     signOutCoach().catch(handleCoachDbError);
   });
+  $('#btn-coach-reconnect').on('click', () => location.reload());
   $('#btn-coach-sync').on('click', async function() {
     if (!hasCoachDbSession()) {
       setCoachDbStatus('Sign in to sync games.');
       return;
     }
+    const syncOwner = coachMemoryOwnerId();
     setCoachDbStatus('Syncing...');
     const [insightsResult, gameResult] = await Promise.allSettled([
       coachSync.loadInsights(),
-      coachSync.saveGame(coachGameActive ? null : coachLastEndMsg)
+      coachPracticeSession ? Promise.resolve() : coachSync.saveGame(coachGameActive ? null : coachLastEndMsg)
     ]);
+    if (syncOwner !== coachMemoryOwnerId()) return;
+    if (typeof flushAccountCheckpoint === 'function') flushAccountCheckpoint().catch(handleAccountCheckpointError);
     const insightError = insightsResult.status === 'rejected' ? insightsResult.reason : null;
     const gameError = gameResult.status === 'rejected' ? gameResult.reason : null;
     if (insightError && gameError) {
@@ -8161,6 +8287,14 @@ $(function () {
     setCoachStatus('Your move.');
     updateCoachControlsState();
     saveCoachState();
+    if (removedReview) {
+      const insights = loadInsights();
+      insights.entries = insights.entries.filter(entry =>
+        !(removedReview.insightId && entry.id === removedReview.insightId) &&
+        !(removedReview.localGameId && entry.localGameId === removedReview.localGameId && entry.ply === removedReview.ply));
+      saveInsights(insights);
+      renderInsights();
+    }
     coachSync.deleteMove(removedReview).catch(handleCoachDbError);
   });
 

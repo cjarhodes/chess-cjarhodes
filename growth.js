@@ -260,11 +260,18 @@ function trainingBackupKeys(ownerId = growthOwnerId()) {
     practiceProgressStorageKey(ownerId),
     dailySprintStorageKey(ownerId),
     coachMemoryKey(INSIGHTS_KEY),
-    coachMemoryKey(LIFETIME_KEY)
+    coachMemoryKey(LIFETIME_KEY),
+    coachMemoryKey(COACH_STATE_KEY),
+    coachMemoryKey(COACH_PRACTICE_STATE_KEY),
+    coachMemoryKey(COACH_PRACTICE_RETURN_KEY)
   ];
 }
 
 function readTrainingBackup() {
+  if (typeof recoverContinuityWrites === 'function' && !recoverContinuityWrites()) throw new Error('Finish import recovery before exporting another backup.');
+  const sessionSaved = typeof coachPracticeSession !== 'undefined' && coachPracticeSession
+    ? saveCoachPracticeState() : (typeof saveCoachState === 'function' ? saveCoachState() : true);
+  if (sessionSaved === false) throw new Error('The latest session could not be saved. Free browser storage and retry; use Copy PGN to keep the current game.');
   const data = {};
   trainingBackupKeys().forEach(key => {
     const raw = localStorage.getItem(key);
@@ -296,66 +303,98 @@ function downloadTrainingBackup() {
 
 function importedBackupValue(data, exactKey, prefixKey) {
   if (Object.prototype.hasOwnProperty.call(data, exactKey)) return data[exactKey];
-  const match = Object.keys(data).find(key => key === prefixKey || key.startsWith(prefixKey + ':'));
-  return match ? data[match] : null;
+  const matches = Object.keys(data).filter(key => key === prefixKey || key.startsWith(prefixKey + ':'));
+  if (matches.length > 1) throw new Error('This backup contains more than one owner. Export each account separately.');
+  return matches.length ? data[matches[0]] : null;
 }
 
 function mergeImportedTrainingData(payload) {
-  if (!payload || payload.schema !== 'chess-coach-training-backup' || payload.version !== TRAINING_BACKUP_VERSION || !payload.data || typeof payload.data !== 'object') {
+  if (!payload || payload.schema !== 'chess-coach-training-backup' || payload.version !== TRAINING_BACKUP_VERSION ||
+      !payload.data || typeof payload.data !== 'object' || Array.isArray(payload.data)) {
     throw new Error('That file is not a Chess Coach training backup.');
   }
-  const ownerId = growthOwnerId();
-  const data = payload.data;
-  const incomingGrowth = importedBackupValue(data, growthStorageKey(ownerId), PLAYER_GROWTH_KEY);
-  if (incomingGrowth) saveGrowthState(mergeGrowthStates(loadGrowthState(ownerId), incomingGrowth), ownerId);
-
-  const incomingPractice = importedBackupValue(data, practiceProgressStorageKey(ownerId), PRACTICE_PROGRESS_KEY);
-  if (incomingPractice && incomingPractice.v === 2) {
+  const ownerId = growthOwnerId(), data = payload.data, values = {};
+  const incoming = (key, prefix, version) => {
+    const value = importedBackupValue(data, key, prefix);
+    if (value !== null && (!value || typeof value !== 'object' || Array.isArray(value) || (version && value.v !== version))) {
+      throw new Error('A data set in this backup cannot be read. Nothing was imported.');
+    }
+    return value;
+  };
+  const growth = incoming(growthStorageKey(ownerId), PLAYER_GROWTH_KEY, PLAYER_GROWTH_VERSION);
+  if (growth) values[growthStorageKey(ownerId)] = mergeGrowthStates(loadGrowthState(ownerId), growth);
+  const practice = incoming(practiceProgressStorageKey(ownerId), PRACTICE_PROGRESS_KEY, 2);
+  if (practice) {
+    if (!practice.records || typeof practice.records !== 'object' || Array.isArray(practice.records) || !Array.isArray(practice.events)) throw new Error('Practice data is incomplete. Nothing was imported.');
     const current = loadPracticeProgress(ownerId);
     const merged = { v: 2, records: Object.assign({}, current.records), events: current.events.slice() };
-    Object.entries(incomingPractice.records || {}).forEach(([id, record]) => {
+    Object.entries(practice.records).forEach(([id, record]) => {
+      if (!record || typeof record !== 'object') throw new Error('Practice record is invalid. Nothing was imported.');
       const existing = merged.records[id];
       if (!existing || (record.lastAttemptAt || 0) > (existing.lastAttemptAt || 0) || ((record.lastAttemptAt || 0) === (existing.lastAttemptAt || 0) && (record.attempts || 0) > (existing.attempts || 0))) merged.records[id] = record;
     });
     const ids = new Set(merged.events.map(event => event && event.id));
-    (incomingPractice.events || []).forEach(event => { if (event && event.id && !ids.has(event.id)) { merged.events.push(event); ids.add(event.id); } });
-    savePracticeProgress(merged, ownerId);
+    const importedIds = new Set(merged.events.map(event => event && event.importSourceId).filter(Boolean));
+    practice.events.forEach(event => {
+      if (!event || !event.id) return;
+      const crossOwner = !!event.ownerId && event.ownerId !== ownerId;
+      const importSourceId = event.importSourceId || `${payload.ownerScope || 'legacy'}:${event.id}`;
+      if (crossOwner ? importedIds.has(importSourceId) : ids.has(event.id)) return;
+      const id = crossOwner ? createCoachGameId() : event.id;
+      merged.events.push(Object.assign({}, event, { id, importSourceId, ownerId, sourceMoveId: null, synced: false }));
+      ids.add(id); importedIds.add(importSourceId);
+    });
+    merged.events = merged.events.slice(-PRACTICE_EVENT_LIMIT);
+    values[practiceProgressStorageKey(ownerId)] = merged;
   }
-
-  const incomingDaily = importedBackupValue(data, dailySprintStorageKey(ownerId), DAILY_SPRINT_KEY);
-  if (incomingDaily && incomingDaily.v === 1) {
+  const daily = incoming(dailySprintStorageKey(ownerId), DAILY_SPRINT_KEY, 1);
+  if (daily) {
+    if (!daily.days || typeof daily.days !== 'object' || Array.isArray(daily.days)) throw new Error('Daily progress is incomplete. Nothing was imported.');
     const current = loadDailySprintHistory(ownerId);
-    Object.entries(incomingDaily.days || {}).forEach(([day, value]) => {
-      current.days[day] = typeof mergeDailySprintDay === 'function' ? mergeDailySprintDay(current.days[day], value) : (current.days[day] || value);
-    });
-    saveDailySprintHistory(current, ownerId);
+    Object.entries(daily.days).forEach(([day, value]) => { current.days[day] = mergeDailySprintDay(current.days[day], value); });
+    values[dailySprintStorageKey(ownerId)] = { v: 1, days: Object.fromEntries(Object.entries(current.days).sort(([a],[b]) => b.localeCompare(a)).slice(0, DAILY_HISTORY_LIMIT)) };
   }
-
-  const incomingInsights = data[INSIGHTS_KEY];
-  if (incomingInsights && incomingInsights.v === 1) {
+  const insights = incoming(coachMemoryKey(INSIGHTS_KEY), INSIGHTS_KEY, 1);
+  if (insights) {
+    if (!Array.isArray(insights.entries)) throw new Error('Review history is incomplete. Nothing was imported.');
     const current = loadInsights();
-    const ids = new Set(current.entries.map(entry => entry && (entry.id || `${entry.ts}|${entry.fenBefore}|${entry.userUci}`)));
-    (incomingInsights.entries || []).forEach(entry => {
-      const id = entry && (entry.id || `${entry.ts}|${entry.fenBefore}|${entry.userUci}`);
-      if (entry && !ids.has(id)) { current.entries.push(entry); ids.add(id); }
-    });
-    saveInsights(current);
+    const identity = entry => entry && (entry.id || `${entry.ts}|${entry.fenBefore}|${entry.userUci}`);
+    const ids = new Set(current.entries.map(identity));
+    insights.entries.forEach(entry => { if (entry && !ids.has(identity(entry))) { current.entries.push(entry); ids.add(identity(entry)); } });
+    current.entries = current.entries.slice(-INSIGHTS_MAX_ENTRIES);
+    values[coachMemoryKey(INSIGHTS_KEY)] = current;
   }
-
-  const incomingLifetime = data[LIFETIME_KEY];
-  if (incomingLifetime && typeof incomingLifetime === 'object') {
+  const lifetime = incoming(coachMemoryKey(LIFETIME_KEY), LIFETIME_KEY);
+  if (lifetime) {
     const current = loadLifetime();
-    const incomingRollups = incomingLifetime.rollups && typeof incomingLifetime.rollups === 'object' ? incomingLifetime.rollups : {};
-    const currentRollups = current.rollups && typeof current.rollups === 'object' ? current.rollups : {};
-    const mergedRollups = Object.assign({}, currentRollups, incomingRollups);
     const currentScore = (current.games || 0) * 100000 + (current.moves || 0);
-    const incomingScore = (incomingLifetime.games || 0) * 100000 + (incomingLifetime.moves || 0);
-    const richer = incomingScore > currentScore ? incomingLifetime : current;
-    saveLifetime(Object.assign(emptyLifetime(), richer, { rollups: mergedRollups }));
+    const incomingScore = (lifetime.games || 0) * 100000 + (lifetime.moves || 0);
+    const richer = incomingScore > currentScore ? lifetime : current;
+    values[coachMemoryKey(LIFETIME_KEY)] = Object.assign(emptyLifetime(), richer, {
+      rollups: Object.assign({}, lifetime.rollups || {}, current.rollups || {})
+    });
   }
+  if (typeof accountCheckpointKeys === 'function') {
+    const snapshot = { v: 1, owner: coachMemoryOwnerId(), savedAt: Date.now() };
+    Object.entries(accountCheckpointKeys()).forEach(([name, key]) => { snapshot[name] = cloneCoachValue(importedBackupValue(data, coachMemoryKey(key), key), null); });
+    if (snapshot.game || snapshot.practice) {
+      // Imported files are an explicit request to transfer training data. Bind
+      // all recovery owners to the current workspace, and drop remote IDs.
+      const rebind = value => {
+        if (!value || typeof value !== 'object') return;
+        Object.entries(value).forEach(([key, item]) => { if (key === 'owner') value[key] = snapshot.owner; else if (key === 'remoteGameId') value[key] = null; else rebind(item); });
+      };
+      rebind(snapshot);
+      values[coachMemoryKey(ACCOUNT_CHECKPOINT_KEY)] = validateAccountCheckpoint(snapshot);
+    }
+  }
+  if (!Object.keys(values).length) throw new Error('This backup has no supported training data.');
+  writeContinuityValues(values);
+  queueGrowthRemoteSync();
   hydrateGrowthUI();
+  if (typeof renderAccountCheckpoint === 'function') renderAccountCheckpoint();
   if (typeof renderInsights === 'function') renderInsights();
-  return Object.keys(data).length;
+  return Object.keys(values).length;
 }
 
 async function importTrainingBackupFile(file) {
@@ -499,30 +538,35 @@ function queueGrowthRemoteSync() {
 }
 
 async function syncGrowthState(opts = {}) {
+  if (typeof recoverContinuityWrites === 'function' && !recoverContinuityWrites()) throw new Error('Import recovery must finish before syncing.');
   if (typeof hasCoachDbSession !== 'function' || !hasCoachDbSession()) return;
   const ownerId = growthOwnerId();
   if (!opts.silent) setCoachDbStatus('Syncing profile and repertoire...');
-  const result = await coachDbClient
-    .from('player_training_profiles')
-    .select('state,updated_at')
-    .eq('user_id', ownerId)
-    .maybeSingle();
-  if (result.error) throw result.error;
-  if (growthOwnerId() !== ownerId) return;
-  const merged = mergeGrowthStates(loadGrowthState(ownerId), result.data && result.data.state);
-  const saved = saveGrowthState(merged, ownerId, { skipSync: true, preserveTimestamp: true });
-  if (!saved.ok) throw saved.error;
-  const write = await coachDbClient.from('player_training_profiles').upsert({
-    user_id: ownerId,
-    state: saved.state,
-    client_updated_at: new Date(saved.state.updatedAt || Date.now()).toISOString()
-  }, { onConflict: 'user_id' });
-  if (write.error) throw write.error;
-  if (growthOwnerId() !== ownerId) return;
-  hydrateGrowthUI();
-  updateSRSidebar();
-  updateSRPanel();
-  if (!opts.silent) setCoachDbStatus('Profile, repertoire, and Library progress synced.');
+  // Compare the server revision on every write. A concurrent browser must be
+  // merged again rather than overwritten by a stale read + upsert.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const result = await coachDbClient.from('player_training_profiles')
+      .select('state,updated_at').eq('user_id', ownerId).maybeSingle();
+    if (growthOwnerId() !== ownerId) return;
+    if (result.error) throw result.error;
+    const merged = mergeGrowthStates(loadGrowthState(ownerId), result.data && result.data.state);
+    const payload = { user_id: ownerId, state: merged, client_updated_at: new Date(merged.updatedAt || Date.now()).toISOString() };
+    const query = result.data
+      ? coachDbClient.from('player_training_profiles').update(payload).eq('user_id', ownerId).eq('updated_at', result.data.updated_at)
+      : coachDbClient.from('player_training_profiles').insert(payload);
+    const write = await query.select('updated_at').maybeSingle();
+    if (growthOwnerId() !== ownerId) return;
+    if ((write.error && write.error.code === '23505') || (!write.error && !write.data)) continue;
+    if (write.error) throw write.error;
+    const saved = saveGrowthState(mergeGrowthStates(loadGrowthState(ownerId), merged), ownerId, { skipSync: true, preserveTimestamp: true });
+    if (!saved.ok) throw saved.error;
+    hydrateGrowthUI();
+    updateSRSidebar();
+    updateSRPanel();
+    if (!opts.silent) setCoachDbStatus('Profile, repertoire, and Library progress synced.');
+    return;
+  }
+  throw new Error('Another browser is still syncing. Your local progress is kept; try Sync now again.');
 }
 
 function playerProfile() {
@@ -924,6 +968,7 @@ function userScoreFromGameResult(result) {
 }
 
 function ratedCoachEligibility(endReason) {
+  if (typeof coachContinuityCopy !== 'undefined' && coachContinuityCopy) return { eligible: false, reason: 'recovered session copy' };
   if (typeof coachOpeningTransfer !== 'undefined' && coachOpeningTransfer) return { eligible: false, reason: 'opening exercise' };
   if (!coachGame || !coachLocalGameId) return { eligible: false, reason: 'missing game' };
   if (coachStartFen !== new Chess().fen()) return { eligible: false, reason: 'custom position' };
@@ -1580,7 +1625,7 @@ function initGrowthFeatures() {
       const count = downloadTrainingBackup();
       $('#training-data-status').removeClass('error').addClass('success').text(`Backup downloaded with ${count} local data sets.`);
     } catch (error) {
-      $('#training-data-status').removeClass('success').addClass('error').text('Backup could not be created in this browser.');
+      $('#training-data-status').removeClass('success').addClass('error').text((error && error.message) || 'Backup could not be created in this browser.');
     }
   });
   $('#btn-import-training-data').on('click', () => $('#training-data-file').trigger('click'));
