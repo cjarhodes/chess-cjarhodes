@@ -56,6 +56,12 @@ assert(staged.game.openingTransfer.owner==='user:account-b','opening owner was n
 assert(storage.get('sb-unrelated-auth-token')==='untouched','import changed unrelated auth storage');
 context.mergeImportedTrainingData(clone(backup));assert(context.loadInsights().entries.length===1,'repeat import duplicated reviews');
 assert(context.loadPracticeProgress().events.length===1,'repeat cross-owner import duplicated practice attempts');
+const practiceTransfer=clone(backup),practiceFen='7k/8/5KQ1/8/8/8/8/8 w - - 0 1';
+const practiceItem={id:'portable-drill',entry:{id:'foreign-source-move',gameId:'foreign-game',fenBefore:practiceFen,bestUci:'g6g7'}};
+practiceTransfer.data[context.COACH_PRACTICE_STATE_KEY+':user:account-a']={v:1,owner:'user:account-a',pgn:'',fen:practiceFen,session:{item:practiceItem,phase:'initial',misses:0,hintStage:0,expectedUci:'g6g7',completed:false,completionRecorded:false},run:{items:[practiceItem],index:0},ts:100};
+context.mergeImportedTrainingData(practiceTransfer);
+const portablePractice=context.storedAccountCheckpoint('coach:checkpoint-import:v1').practice;
+assert(portablePractice.session.item.entry.id===null&&portablePractice.session.item.entry.gameId===null&&portablePractice.run.items[0].entry.id===null,'imported active drill retained another owner\'s source-move references');
 const before=JSON.stringify([...storage]);
 const malformed=clone(backup),gameKey=Object.keys(malformed.data).find(key=>key.startsWith(context.COACH_STATE_KEY));malformed.data[gameKey].fen='invalid';
 let rejected=false;try{context.mergeImportedTrainingData(malformed);}catch(e){rejected=true;}

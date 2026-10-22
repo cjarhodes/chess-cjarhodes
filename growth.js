@@ -382,7 +382,12 @@ function mergeImportedTrainingData(payload) {
       // all recovery owners to the current workspace, and drop remote IDs.
       const rebind = value => {
         if (!value || typeof value !== 'object') return;
-        Object.entries(value).forEach(([key, item]) => { if (key === 'owner') value[key] = snapshot.owner; else if (key === 'remoteGameId') value[key] = null; else rebind(item); });
+        Object.entries(value).forEach(([key, item]) => {
+          if (key === 'entry' && item && typeof item === 'object') { item.id = null; item.gameId = null; }
+          if (key === 'owner') value[key] = snapshot.owner;
+          else if (key === 'remoteGameId' || key === 'sourceMoveId') value[key] = null;
+          else rebind(item);
+        });
       };
       rebind(snapshot);
       values[coachMemoryKey(ACCOUNT_CHECKPOINT_KEY)] = validateAccountCheckpoint(snapshot);

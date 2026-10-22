@@ -66,7 +66,7 @@ newly selected account's state or status.
 ## Verification and evidence boundaries
 
 - All syntax checks and every `scripts/validate-*.js` validator are required.
-  The continuity validator has 31 behavioral checks, including persistent
+  The continuity validator has 32 behavioral checks, including persistent
   storage failure/recovery and repeated cross-owner import.
 - `scripts/verify-browser.sh` runs the existing eight regression journeys plus
   the new account journey. Account coverage uses empty browser contexts, the
@@ -93,4 +93,18 @@ newly selected account's state or status.
 
 Measured browser results are stored in
 [account-continuity-verification.json](account-continuity-verification.json).
-Deployment and live verification are recorded after the release checks pass.
+The production release was `READY` on the custom domain, and all nine initial
+runtime assets matched the tested source. The deployed controlled account
+journey passed all 50 checks. A separate real local-mode workflow completed a
+reviewed move/opponent reply, a practice drill, exact live-game return, backup
+capture, and reload with no page or console errors. The real REST API rejected
+an anonymous checkpoint read with HTTP 401.
+
+The user confirmed both actual email sign-in and **Session saved to your
+account** on the deployed UI. A database count then confirmed one real account
+checkpoint (last saved `2026-10-22T02:10:04.078037Z`), without inspecting its game
+content. The transactional fixture users were confirmed absent. Final review
+also verified that imported active drills drop foreign source-move references;
+all 18 validators (32 continuity behavior checks) and the affected 50-check
+browser journey passed again. Two real email-authenticated production browsers
+were not used; that recovery/race coverage remains explicitly controlled.
