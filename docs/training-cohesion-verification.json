@@ -1,0 +1,1037 @@
+{
+  "verifiedAt": "2026-10-23T04:28:00.826191+00:00",
+  "baseCommit": "c220635a5bff049ebb7b086c8d11e67d3ba4e029",
+  "kind": "real-workflows-with-controlled-in-flight-responses",
+  "checks": 92,
+  "captures": [
+    {
+      "name": "study",
+      "workspace": "library",
+      "width": 1280,
+      "height": 800,
+      "documentWidth": 1280,
+      "board": {
+        "x": 344,
+        "y": 111.375,
+        "width": 472,
+        "height": 472,
+        "top": 111.375,
+        "right": 816,
+        "bottom": 583.375,
+        "left": 344
+      },
+      "action": {
+        "x": 344,
+        "y": 689.25,
+        "width": 472,
+        "height": 34,
+        "top": 689.25,
+        "right": 816,
+        "bottom": 723.25,
+        "left": 344
+      },
+      "keyboard": {
+        "x": 344,
+        "y": 591.375,
+        "width": 472,
+        "height": 89.875,
+        "top": 591.375,
+        "right": 816,
+        "bottom": 681.25,
+        "left": 344
+      }
+    },
+    {
+      "name": "study",
+      "workspace": "library",
+      "width": 1440,
+      "height": 900,
+      "documentWidth": 1440,
+      "board": {
+        "x": 352,
+        "y": 111.375,
+        "width": 616,
+        "height": 616,
+        "top": 111.375,
+        "right": 968,
+        "bottom": 727.375,
+        "left": 352
+      },
+      "action": {
+        "x": 352,
+        "y": 833.25,
+        "width": 616,
+        "height": 34,
+        "top": 833.25,
+        "right": 968,
+        "bottom": 867.25,
+        "left": 352
+      },
+      "keyboard": {
+        "x": 352,
+        "y": 735.375,
+        "width": 616,
+        "height": 89.875,
+        "top": 735.375,
+        "right": 968,
+        "bottom": 825.25,
+        "left": 352
+      }
+    },
+    {
+      "name": "study",
+      "workspace": "library",
+      "width": 1920,
+      "height": 1080,
+      "documentWidth": 1920,
+      "board": {
+        "x": 509,
+        "y": 111.375,
+        "width": 752,
+        "height": 752,
+        "top": 111.375,
+        "right": 1261,
+        "bottom": 863.375,
+        "left": 509
+      },
+      "action": {
+        "x": 509,
+        "y": 969.25,
+        "width": 752,
+        "height": 34,
+        "top": 969.25,
+        "right": 1261,
+        "bottom": 1003.25,
+        "left": 509
+      },
+      "keyboard": {
+        "x": 509,
+        "y": 871.375,
+        "width": 752,
+        "height": 89.875,
+        "top": 871.375,
+        "right": 1261,
+        "bottom": 961.25,
+        "left": 509
+      }
+    },
+    {
+      "name": "paused-lesson",
+      "workspace": "library",
+      "width": 1280,
+      "height": 800,
+      "documentWidth": 1280,
+      "board": {
+        "x": 344,
+        "y": 111.375,
+        "width": 472,
+        "height": 472,
+        "top": 111.375,
+        "right": 816,
+        "bottom": 583.375,
+        "left": 344
+      },
+      "action": {
+        "x": 344,
+        "y": 689.25,
+        "width": 472,
+        "height": 34,
+        "top": 689.25,
+        "right": 816,
+        "bottom": 723.25,
+        "left": 344
+      },
+      "keyboard": {
+        "x": 344,
+        "y": 591.375,
+        "width": 472,
+        "height": 89.875,
+        "top": 591.375,
+        "right": 816,
+        "bottom": 681.25,
+        "left": 344
+      }
+    },
+    {
+      "name": "paused-lesson",
+      "workspace": "library",
+      "width": 1440,
+      "height": 900,
+      "documentWidth": 1440,
+      "board": {
+        "x": 352,
+        "y": 111.375,
+        "width": 616,
+        "height": 616,
+        "top": 111.375,
+        "right": 968,
+        "bottom": 727.375,
+        "left": 352
+      },
+      "action": {
+        "x": 352,
+        "y": 833.25,
+        "width": 616,
+        "height": 34,
+        "top": 833.25,
+        "right": 968,
+        "bottom": 867.25,
+        "left": 352
+      },
+      "keyboard": {
+        "x": 352,
+        "y": 735.375,
+        "width": 616,
+        "height": 89.875,
+        "top": 735.375,
+        "right": 968,
+        "bottom": 825.25,
+        "left": 352
+      }
+    },
+    {
+      "name": "paused-lesson",
+      "workspace": "library",
+      "width": 1920,
+      "height": 1080,
+      "documentWidth": 1920,
+      "board": {
+        "x": 509,
+        "y": 111.375,
+        "width": 752,
+        "height": 752,
+        "top": 111.375,
+        "right": 1261,
+        "bottom": 863.375,
+        "left": 509
+      },
+      "action": {
+        "x": 509,
+        "y": 969.25,
+        "width": 752,
+        "height": 34,
+        "top": 969.25,
+        "right": 1261,
+        "bottom": 1003.25,
+        "left": 509
+      },
+      "keyboard": {
+        "x": 509,
+        "y": 871.375,
+        "width": 752,
+        "height": 89.875,
+        "top": 871.375,
+        "right": 1261,
+        "bottom": 961.25,
+        "left": 509
+      }
+    },
+    {
+      "name": "returned-lesson",
+      "workspace": "coach",
+      "width": 1280,
+      "height": 800,
+      "documentWidth": 1280,
+      "board": {
+        "x": 341.59375,
+        "y": 144,
+        "width": 520,
+        "height": 520,
+        "top": 144,
+        "right": 861.59375,
+        "bottom": 664,
+        "left": 341.59375
+      },
+      "action": {
+        "x": 341.59375,
+        "y": 672,
+        "width": 520,
+        "height": 107.140625,
+        "top": 672,
+        "right": 861.59375,
+        "bottom": 779.140625,
+        "left": 341.59375
+      },
+      "keyboard": {
+        "x": 341.59375,
+        "y": 672,
+        "width": 520,
+        "height": 107.140625,
+        "top": 672,
+        "right": 861.59375,
+        "bottom": 779.140625,
+        "left": 341.59375
+      }
+    },
+    {
+      "name": "returned-lesson",
+      "workspace": "coach",
+      "width": 1440,
+      "height": 900,
+      "documentWidth": 1440,
+      "board": {
+        "x": 368.796875,
+        "y": 144,
+        "width": 616,
+        "height": 616,
+        "top": 144,
+        "right": 984.796875,
+        "bottom": 760,
+        "left": 368.796875
+      },
+      "action": {
+        "x": 368.796875,
+        "y": 768,
+        "width": 616,
+        "height": 107.140625,
+        "top": 768,
+        "right": 984.796875,
+        "bottom": 875.140625,
+        "left": 368.796875
+      },
+      "keyboard": {
+        "x": 368.796875,
+        "y": 768,
+        "width": 616,
+        "height": 107.140625,
+        "top": 768,
+        "right": 984.796875,
+        "bottom": 875.140625,
+        "left": 368.796875
+      }
+    },
+    {
+      "name": "returned-lesson",
+      "workspace": "coach",
+      "width": 1920,
+      "height": 1080,
+      "documentWidth": 1920,
+      "board": {
+        "x": 524,
+        "y": 144,
+        "width": 752,
+        "height": 752,
+        "top": 144,
+        "right": 1276,
+        "bottom": 896,
+        "left": 524
+      },
+      "action": {
+        "x": 524,
+        "y": 904,
+        "width": 752,
+        "height": 107.140625,
+        "top": 904,
+        "right": 1276,
+        "bottom": 1011.140625,
+        "left": 524
+      },
+      "keyboard": {
+        "x": 524,
+        "y": 904,
+        "width": 752,
+        "height": 107.140625,
+        "top": 904,
+        "right": 1276,
+        "bottom": 1011.140625,
+        "left": 524
+      }
+    },
+    {
+      "name": "game-review",
+      "workspace": "summary",
+      "width": 1280,
+      "height": 800,
+      "documentWidth": 1280,
+      "card": {
+        "x": 260.00408935546875,
+        "y": 16.0126953125,
+        "width": 759.9918212890625,
+        "height": 767.9917602539062,
+        "top": 16.0126953125,
+        "right": 1019.9959106445312,
+        "bottom": 784.0044555664062,
+        "left": 260.00408935546875
+      },
+      "action": {
+        "x": 291.0037536621094,
+        "y": 714.6301879882812,
+        "width": 699.9925537109375,
+        "height": 44.37451171875,
+        "top": 714.6301879882812,
+        "right": 990.9963073730469,
+        "bottom": 759.0046997070312,
+        "left": 291.0037536621094
+      },
+      "takeaway": {
+        "x": 291.0037536621094,
+        "y": 107.07421875,
+        "width": 699.9925537109375,
+        "height": 68.311767578125,
+        "top": 107.07421875,
+        "right": 990.9963073730469,
+        "bottom": 175.385986328125,
+        "left": 291.0037536621094
+      },
+      "primary": [
+        "btn-summary-practice"
+      ]
+    },
+    {
+      "name": "game-review",
+      "workspace": "summary",
+      "width": 1440,
+      "height": 900,
+      "documentWidth": 1440,
+      "card": {
+        "x": 340,
+        "y": 16,
+        "width": 760,
+        "height": 868,
+        "top": 16,
+        "right": 1100,
+        "bottom": 884,
+        "left": 340
+      },
+      "action": {
+        "x": 371,
+        "y": 814.625,
+        "width": 700,
+        "height": 44.375,
+        "top": 814.625,
+        "right": 1071,
+        "bottom": 859,
+        "left": 371
+      },
+      "takeaway": {
+        "x": 371,
+        "y": 107.0625,
+        "width": 700,
+        "height": 68.3125,
+        "top": 107.0625,
+        "right": 1071,
+        "bottom": 175.375,
+        "left": 371
+      },
+      "primary": [
+        "btn-summary-practice"
+      ]
+    },
+    {
+      "name": "game-review",
+      "workspace": "summary",
+      "width": 1920,
+      "height": 1080,
+      "documentWidth": 1920,
+      "card": {
+        "x": 580,
+        "y": 67.765625,
+        "width": 760,
+        "height": 944.46875,
+        "top": 67.765625,
+        "right": 1340,
+        "bottom": 1012.234375,
+        "left": 580
+      },
+      "action": {
+        "x": 611,
+        "y": 942.859375,
+        "width": 700,
+        "height": 44.375,
+        "top": 942.859375,
+        "right": 1311,
+        "bottom": 987.234375,
+        "left": 611
+      },
+      "takeaway": {
+        "x": 611,
+        "y": 158.828125,
+        "width": 700,
+        "height": 68.3125,
+        "top": 158.828125,
+        "right": 1311,
+        "bottom": 227.140625,
+        "left": 611
+      },
+      "primary": [
+        "btn-summary-practice"
+      ]
+    },
+    {
+      "name": "review-scrolled",
+      "workspace": "summary",
+      "width": 1280,
+      "height": 800,
+      "documentWidth": 1280,
+      "card": {
+        "x": 260,
+        "y": 16,
+        "width": 760,
+        "height": 768,
+        "top": 16,
+        "right": 1020,
+        "bottom": 784,
+        "left": 260
+      },
+      "action": {
+        "x": 291,
+        "y": 714.625,
+        "width": 700,
+        "height": 44.375,
+        "top": 714.625,
+        "right": 991,
+        "bottom": 759,
+        "left": 291
+      },
+      "takeaway": {
+        "x": 291,
+        "y": 107.0625,
+        "width": 700,
+        "height": 68.3125,
+        "top": 107.0625,
+        "right": 991,
+        "bottom": 175.375,
+        "left": 291
+      },
+      "primary": [
+        "btn-summary-practice"
+      ]
+    },
+    {
+      "name": "review-scrolled",
+      "workspace": "summary",
+      "width": 1440,
+      "height": 900,
+      "documentWidth": 1440,
+      "card": {
+        "x": 340,
+        "y": 16,
+        "width": 760,
+        "height": 868,
+        "top": 16,
+        "right": 1100,
+        "bottom": 884,
+        "left": 340
+      },
+      "action": {
+        "x": 371,
+        "y": 814.625,
+        "width": 700,
+        "height": 44.375,
+        "top": 814.625,
+        "right": 1071,
+        "bottom": 859,
+        "left": 371
+      },
+      "takeaway": {
+        "x": 371,
+        "y": 107.0625,
+        "width": 700,
+        "height": 68.3125,
+        "top": 107.0625,
+        "right": 1071,
+        "bottom": 175.375,
+        "left": 371
+      },
+      "primary": [
+        "btn-summary-practice"
+      ]
+    },
+    {
+      "name": "review-scrolled",
+      "workspace": "summary",
+      "width": 1920,
+      "height": 1080,
+      "documentWidth": 1920,
+      "card": {
+        "x": 580,
+        "y": 67.765625,
+        "width": 760,
+        "height": 944.46875,
+        "top": 67.765625,
+        "right": 1340,
+        "bottom": 1012.234375,
+        "left": 580
+      },
+      "action": {
+        "x": 611,
+        "y": 942.859375,
+        "width": 700,
+        "height": 44.375,
+        "top": 942.859375,
+        "right": 1311,
+        "bottom": 987.234375,
+        "left": 611
+      },
+      "takeaway": {
+        "x": 611,
+        "y": 158.828125,
+        "width": 700,
+        "height": 68.3125,
+        "top": 158.828125,
+        "right": 1311,
+        "bottom": 227.140625,
+        "left": 611
+      },
+      "primary": [
+        "btn-summary-practice"
+      ]
+    },
+    {
+      "name": "review-reply",
+      "workspace": "coach",
+      "width": 1280,
+      "height": 800,
+      "documentWidth": 1280,
+      "board": {
+        "x": 437.59375,
+        "y": 175.09375,
+        "width": 328,
+        "height": 328,
+        "top": 175.09375,
+        "right": 765.59375,
+        "bottom": 503.09375,
+        "left": 437.59375
+      },
+      "action": {
+        "x": 437.59375,
+        "y": 511.09375,
+        "width": 328,
+        "height": 107.140625,
+        "top": 511.09375,
+        "right": 765.59375,
+        "bottom": 618.234375,
+        "left": 437.59375
+      },
+      "keyboard": {
+        "x": 437.59375,
+        "y": 511.09375,
+        "width": 328,
+        "height": 107.140625,
+        "top": 511.09375,
+        "right": 765.59375,
+        "bottom": 618.234375,
+        "left": 437.59375
+      }
+    },
+    {
+      "name": "review-reply",
+      "workspace": "coach",
+      "width": 1440,
+      "height": 900,
+      "documentWidth": 1440,
+      "board": {
+        "x": 436.796875,
+        "y": 174,
+        "width": 480,
+        "height": 480,
+        "top": 174,
+        "right": 916.796875,
+        "bottom": 654,
+        "left": 436.796875
+      },
+      "action": {
+        "x": 436.796875,
+        "y": 662,
+        "width": 480,
+        "height": 107.140625,
+        "top": 662,
+        "right": 916.796875,
+        "bottom": 769.140625,
+        "left": 436.796875
+      },
+      "keyboard": {
+        "x": 436.796875,
+        "y": 662,
+        "width": 480,
+        "height": 107.140625,
+        "top": 662,
+        "right": 916.796875,
+        "bottom": 769.140625,
+        "left": 436.796875
+      }
+    },
+    {
+      "name": "review-reply",
+      "workspace": "coach",
+      "width": 1920,
+      "height": 1080,
+      "documentWidth": 1920,
+      "board": {
+        "x": 568,
+        "y": 174,
+        "width": 664,
+        "height": 664,
+        "top": 174,
+        "right": 1232,
+        "bottom": 838,
+        "left": 568
+      },
+      "action": {
+        "x": 568,
+        "y": 846,
+        "width": 664,
+        "height": 107.140625,
+        "top": 846,
+        "right": 1232,
+        "bottom": 953.140625,
+        "left": 568
+      },
+      "keyboard": {
+        "x": 568,
+        "y": 846,
+        "width": 664,
+        "height": 107.140625,
+        "top": 846,
+        "right": 1232,
+        "bottom": 953.140625,
+        "left": 568
+      }
+    },
+    {
+      "name": "quiz-feedback",
+      "workspace": "library",
+      "width": 1280,
+      "height": 800,
+      "documentWidth": 1280,
+      "board": {
+        "x": 356,
+        "y": 111.375,
+        "width": 448,
+        "height": 448,
+        "top": 111.375,
+        "right": 804,
+        "bottom": 559.375,
+        "left": 356
+      },
+      "action": {
+        "x": 356,
+        "y": 734.515625,
+        "width": 448,
+        "height": 34,
+        "top": 734.515625,
+        "right": 804,
+        "bottom": 768.515625,
+        "left": 356
+      },
+      "keyboard": {
+        "x": 356,
+        "y": 567.375,
+        "width": 448,
+        "height": 107.140625,
+        "top": 567.375,
+        "right": 804,
+        "bottom": 674.515625,
+        "left": 356
+      }
+    },
+    {
+      "name": "quiz-feedback",
+      "workspace": "library",
+      "width": 1440,
+      "height": 900,
+      "documentWidth": 1440,
+      "board": {
+        "x": 388,
+        "y": 111.375,
+        "width": 544,
+        "height": 544,
+        "top": 111.375,
+        "right": 932,
+        "bottom": 655.375,
+        "left": 388
+      },
+      "action": {
+        "x": 388,
+        "y": 830.515625,
+        "width": 544,
+        "height": 34,
+        "top": 830.515625,
+        "right": 932,
+        "bottom": 864.515625,
+        "left": 388
+      },
+      "keyboard": {
+        "x": 388,
+        "y": 663.375,
+        "width": 544,
+        "height": 107.140625,
+        "top": 663.375,
+        "right": 932,
+        "bottom": 770.515625,
+        "left": 388
+      }
+    },
+    {
+      "name": "quiz-feedback",
+      "workspace": "library",
+      "width": 1920,
+      "height": 1080,
+      "documentWidth": 1920,
+      "board": {
+        "x": 521,
+        "y": 111.375,
+        "width": 728,
+        "height": 728,
+        "top": 111.375,
+        "right": 1249,
+        "bottom": 839.375,
+        "left": 521
+      },
+      "action": {
+        "x": 521,
+        "y": 1014.515625,
+        "width": 728,
+        "height": 34,
+        "top": 1014.515625,
+        "right": 1249,
+        "bottom": 1048.515625,
+        "left": 521
+      },
+      "keyboard": {
+        "x": 521,
+        "y": 847.375,
+        "width": 728,
+        "height": 107.140625,
+        "top": 847.375,
+        "right": 1249,
+        "bottom": 954.515625,
+        "left": 521
+      }
+    },
+    {
+      "name": "explore",
+      "workspace": "library",
+      "width": 1280,
+      "height": 800,
+      "documentWidth": 1280,
+      "board": {
+        "x": 344,
+        "y": 111.375,
+        "width": 472,
+        "height": 472,
+        "top": 111.375,
+        "right": 816,
+        "bottom": 583.375,
+        "left": 344
+      },
+      "action": {
+        "x": 344,
+        "y": 706.515625,
+        "width": 472,
+        "height": 34,
+        "top": 706.515625,
+        "right": 816,
+        "bottom": 740.515625,
+        "left": 344
+      },
+      "keyboard": {
+        "x": 344,
+        "y": 591.375,
+        "width": 472,
+        "height": 107.140625,
+        "top": 591.375,
+        "right": 816,
+        "bottom": 698.515625,
+        "left": 344
+      }
+    },
+    {
+      "name": "explore",
+      "workspace": "library",
+      "width": 1440,
+      "height": 900,
+      "documentWidth": 1440,
+      "board": {
+        "x": 360,
+        "y": 111.375,
+        "width": 600,
+        "height": 600,
+        "top": 111.375,
+        "right": 960,
+        "bottom": 711.375,
+        "left": 360
+      },
+      "action": {
+        "x": 360,
+        "y": 834.515625,
+        "width": 600,
+        "height": 34,
+        "top": 834.515625,
+        "right": 960,
+        "bottom": 868.515625,
+        "left": 360
+      },
+      "keyboard": {
+        "x": 360,
+        "y": 719.375,
+        "width": 600,
+        "height": 107.140625,
+        "top": 719.375,
+        "right": 960,
+        "bottom": 826.515625,
+        "left": 360
+      }
+    },
+    {
+      "name": "explore",
+      "workspace": "library",
+      "width": 1920,
+      "height": 1080,
+      "documentWidth": 1920,
+      "board": {
+        "x": 509,
+        "y": 111.375,
+        "width": 752,
+        "height": 752,
+        "top": 111.375,
+        "right": 1261,
+        "bottom": 863.375,
+        "left": 509
+      },
+      "action": {
+        "x": 509,
+        "y": 986.515625,
+        "width": 752,
+        "height": 34,
+        "top": 986.515625,
+        "right": 1261,
+        "bottom": 1020.515625,
+        "left": 509
+      },
+      "keyboard": {
+        "x": 509,
+        "y": 871.375,
+        "width": 752,
+        "height": 107.140625,
+        "top": 871.375,
+        "right": 1261,
+        "bottom": 978.515625,
+        "left": 509
+      }
+    },
+    {
+      "name": "empty-review",
+      "workspace": "summary",
+      "width": 1280,
+      "height": 800,
+      "documentWidth": 1280,
+      "card": {
+        "x": 260.0040588378906,
+        "y": 267.72869873046875,
+        "width": 759.991943359375,
+        "height": 264.5596923828125,
+        "top": 267.72869873046875,
+        "right": 1019.9960021972656,
+        "bottom": 532.2883911132812,
+        "left": 260.0040588378906
+      },
+      "action": {
+        "x": 291.00372314453125,
+        "y": 462.91412353515625,
+        "width": 699.9924926757812,
+        "height": 44.37451171875,
+        "top": 462.91412353515625,
+        "right": 990.9962158203125,
+        "bottom": 507.28863525390625,
+        "left": 291.00372314453125
+      },
+      "takeaway": null,
+      "primary": [
+        "btn-summary-newgame"
+      ]
+    },
+    {
+      "name": "empty-review",
+      "workspace": "summary",
+      "width": 1440,
+      "height": 900,
+      "documentWidth": 1440,
+      "card": {
+        "x": 340,
+        "y": 317.71875,
+        "width": 760,
+        "height": 264.5625,
+        "top": 317.71875,
+        "right": 1100,
+        "bottom": 582.28125,
+        "left": 340
+      },
+      "action": {
+        "x": 371,
+        "y": 512.90625,
+        "width": 700,
+        "height": 44.375,
+        "top": 512.90625,
+        "right": 1071,
+        "bottom": 557.28125,
+        "left": 371
+      },
+      "takeaway": null,
+      "primary": [
+        "btn-summary-newgame"
+      ]
+    },
+    {
+      "name": "empty-review",
+      "workspace": "summary",
+      "width": 1920,
+      "height": 1080,
+      "documentWidth": 1920,
+      "card": {
+        "x": 580,
+        "y": 407.71875,
+        "width": 760,
+        "height": 264.5625,
+        "top": 407.71875,
+        "right": 1340,
+        "bottom": 672.28125,
+        "left": 580
+      },
+      "action": {
+        "x": 611,
+        "y": 602.90625,
+        "width": 700,
+        "height": 44.375,
+        "top": 602.90625,
+        "right": 1311,
+        "bottom": 647.28125,
+        "left": 611
+      },
+      "takeaway": null,
+      "primary": [
+        "btn-summary-newgame"
+      ]
+    }
+  ],
+  "runtimeErrors": [],
+  "sourceSha256": {
+    "index.html": "b8b3f0c04ab6fc94db3d289771571bb84ea17045ffa560ad51ce777a1047554e",
+    "styles.css": "d90243b31683b4bf3c87f5952ca8e176d672bcd587592efe0f3d2bbf497a6251",
+    "app.js": "205e62da4375f8e1babf2078cb303fc8cd78386667832831d63190413c3a1fcc",
+    "growth.js": "ea1aaaa5cfcdf149b264683939f2f95c34ca472b25d0ac568aeff205c3f05613",
+    "account-continuity.js": "a6a8291968efeeb0761551d72d8fad5d067873c5938f9c194a67ed55cc0e3988",
+    "opening-transfer.js": "091bb744bcd57379dca492a2efa468bcfad5d86653db1bf8abb93422c07fb148",
+    "learning-transfer.js": "57bec01092dd503c34adde6c72e69f5b23e8313ba884aac5f4c42b0db9e6c0d5",
+    "openings.js": "70fda75c82fb14ce2cf7e1be7600a0b20a41f4f8590362f826c7fad9e204b254",
+    "coach-config.js": "137128312af2629a549a8656abbe7b9ff9d1cd88099a63576d7b9e29e7fe9c92"
+  },
+  "releaseGates": {
+    "validators": 18,
+    "browserJourneys": 11,
+    "fullBrowserResult": "passed",
+    "journeys": [
+      "core smoke",
+      "teaching",
+      "interruption recovery",
+      "opponent",
+      "coaching UI",
+      "useful progress",
+      "opening transfer",
+      "learning transfer",
+      "account continuity",
+      "practice UX",
+      "training cohesion"
+    ]
+  }
+}

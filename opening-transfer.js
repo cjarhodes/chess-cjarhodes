@@ -100,11 +100,16 @@ function renderOpeningTransferEntry() {
     $select.val(preferred >= 0 ? preferred : Math.max(0, practical));
   }
   const existing = coachOpeningTransfer;
+  const waiting = coachThinking || (coachGameActive && !coachIsUserTurn());
   $('#btn-library-transfer').text(coachPracticeSession ? 'Resume current drill'
-    : existing ? 'Resume opening game' : coachThinking ? 'Return to current game'
+    : existing ? 'Resume opening game' : waiting ? 'Return to current game'
       : target.adjusted ? 'Play before the finish' : currentMoveIdx < 0 ? 'Play after this line' : 'Play this position');
   const move = target.sourceFen.split(' ')[5];
-  $('#opening-transfer-detail').text(existing ? `Opening session in progress: ${existing.title}. Finish or return from it before starting another.`
+  $select.prop('disabled', !!coachPracticeSession || !!existing || waiting);
+  $('#opening-transfer-detail').text(coachPracticeSession
+    ? `Your ${coachPracticeSession.item.meta.title} lesson is still in progress. Resume it before starting an opening game.`
+    : waiting ? 'A move is in progress in Coach. Return to your game before starting an opening position.'
+    : existing ? `Opening session in progress: ${existing.title}. Finish or return from it before starting another.`
     : `Start at move ${move} as ${target.side === 'black' ? 'Black' : 'White'}. ${target.adjusted ? 'The final position is over, so this starts at your last decision. ' : ''}The opponent chooses its own moves. Any unfinished Coach game is kept for your return.`);
   $entry.show();
 }

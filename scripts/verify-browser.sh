@@ -1046,3 +1046,15 @@ if [[ "$PRACTICE_UX_EXIT" -ne 0 || "$PRACTICE_UX_OUTPUT" == *"### Error"* ]]; th
   exit 1
 fi
 echo "Practice UX journey validation passed."
+
+COHESION_CODE=$(cat "$ROOT/scripts/verify-cohesion-journeys.js")
+set +e
+COHESION_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$COHESION_CODE")
+COHESION_EXIT=$?
+set -e
+echo "$COHESION_OUTPUT"
+if [[ "$COHESION_EXIT" -ne 0 || "$COHESION_OUTPUT" == *"### Error"* ]]; then
+  echo "Training cohesion journey validation failed." >&2
+  exit 1
+fi
+echo "Training cohesion journey validation passed."

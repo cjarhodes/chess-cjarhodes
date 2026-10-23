@@ -4504,6 +4504,7 @@ function renderCoachPresentation() {
   $('#coach-phase-label').text(selecting && state === 'ready' ? 'Practice · choose a lesson' : labels[state]);
   $('#practice-selection-guidance').toggle(selecting && state === 'ready');
   $('#coach-daily-plan-label').text(practicing ? 'Practice session' : 'Adaptive session · 5–10 min');
+  $('.daily-sprint-progress').attr('aria-label', practicing ? 'Practice progress' : 'Adaptive session progress');
   $('#coach-game-options-label').text((coachUserSide === 'random' ? 'Random' : coachUserColor() === 'white' ? 'White' : 'Black') + ' · ' + coachEngineElo);
   const managed = '#btn-practice-session-start, #btn-opening-transfer-review, #btn-progress-next, #btn-coach-next-action, #btn-coach-showwhy, #btn-coach-backtogame, #btn-coach-live, #btn-coach-practice-next, #btn-coach-practice-exit, #coach-keyboard-move-form button';
   $(managed).removeClass('primary').removeAttr('data-primary-action');
@@ -5251,12 +5252,12 @@ function coachingTakeaway(reviews, phases) {
     return `${blunders} blunders tipped this one. Use the Threats tool before committing to a move — it surfaces hanging pieces and forcing replies.`;
   }
   if (blunders >= 1) {
-    return 'One blunder was the turning point — scrub to the critical moment below and try a different move with Show best to see the line you missed.';
+    return 'Start with the largest blunder below. Compare your move with the recommendation, then rehearse that decision.';
   }
   if (mistakes >= 3) {
     return 'Several mistakes without blunders — often a sign of missed candidate moves. Before moving, ask: what\'s the engine\'s #1 doing that mine isn\'t?';
   }
-  return 'Mixed game with room to grow. The critical moments below are where the game turned.';
+  return 'Choose one critical moment below. Compare the opponent’s reply and take one useful idea into your next game.';
 }
 
 function showPostGameSummary(endMsg) {
@@ -5432,10 +5433,10 @@ function showPostGameSummary(endMsg) {
     $('#summary-takeaway').hide();
   }
 
-  summaryPracticeItems = currentGameDuePracticeItems();
+  summaryPracticeItems = orderedPracticeRunItems(currentGameDuePracticeItems());
   const dueCount = summaryPracticeItems.length;
   $('#btn-summary-practice')
-    .text(dueCount === 1 ? 'Practice this mistake' : `Practice ${dueCount} mistakes`)
+    .text(dueCount === 1 ? 'Practice this mistake' : `Practice ${dueCount} positions`)
     .toggle(dueCount > 0)
     .toggleClass('primary', dueCount > 0);
 
@@ -5444,7 +5445,7 @@ function showPostGameSummary(endMsg) {
   $('#summary-overlay').css('display', 'flex').attr('aria-hidden', 'false');
   if (typeof renderOpeningTransferSummary === 'function') renderOpeningTransferSummary();
   // Scroll to top when reopening on a new game
-  $('.summary-card').scrollTop(0);
+  $('.summary-card, .summary-body').scrollTop(0);
   $('.summary-card').trigger('focus');
 }
 
@@ -5768,6 +5769,43 @@ function placeDailySprintCard() {
   // status, review, and progress.
   const hero = settings.querySelector('.coach-hero');
   if (hero && hero.nextElementSibling !== card) hero.insertAdjacentElement('afterend', card);
+}
+
+// Library uses the same viewport budget as Coach, including open move entry
+// and quiz feedback. Both the width and actual tools determine board size.
+let libraryBoardFitFrame = null;
+function fitLibraryBoard() {
+  const area = document.querySelector('#library-view .board-area');
+  const view = document.getElementById('library-view');
+  if (!area || !area.clientWidth || !area.clientHeight) return;
+  const css = getComputedStyle(area);
+  const children = Array.from(area.children).filter(el => el.id !== 'board-wrap' && getComputedStyle(el).display !== 'none');
+  const gap = parseFloat(css.rowGap) || 0;
+  const height = area.clientHeight - parseFloat(css.paddingTop) - parseFloat(css.paddingBottom)
+    - children.reduce((sum, el) => {
+      const style = getComputedStyle(el);
+      return sum + el.getBoundingClientRect().height + (parseFloat(style.marginTop) || 0) + (parseFloat(style.marginBottom) || 0);
+    }, 0) - gap * children.length;
+  const width = area.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight);
+  const size = Math.max(240, Math.floor((Math.min(760, width, height) - 4) / 8) * 8);
+  if (view.style.getPropertyValue('--library-board-size') === size + 'px') return;
+  view.style.setProperty('--library-board-size', size + 'px');
+  if (board) board.resize();
+}
+function scheduleLibraryBoardFit() {
+  if (libraryBoardFitFrame !== null) return;
+  libraryBoardFitFrame = requestAnimationFrame(() => { libraryBoardFitFrame = null; fitLibraryBoard(); });
+}
+function initLibraryWorkspaceLayout() {
+  const area = document.querySelector('#library-view .board-area');
+  if (!area) return;
+  if (typeof ResizeObserver !== 'undefined') {
+    const observer = new ResizeObserver(scheduleLibraryBoardFit);
+    observer.observe(area);
+    Array.from(area.children).filter(el => el.id !== 'board-wrap').forEach(el => observer.observe(el));
+  }
+  document.getElementById('library-keyboard-move').addEventListener('toggle', scheduleLibraryBoardFit);
+  scheduleLibraryBoardFit();
 }
 
 // Fit the actual workspace, including expanded keyboard entry and live text.
@@ -6245,6 +6283,27 @@ function coachHandlePracticeMove(source, target, promotion, opts) {
   });
 }
 
+function resumeCoachPracticeAfterNavigation() {
+  const previous = coachPracticeSession;
+  if (!previous || !coachGame || previous.owner !== coachMemoryOwnerId()) return;
+  // A new object keeps a cancelled candidate search from becoming current
+  // again when the player returns quickly from Library.
+  coachPracticeSession = Object.assign({}, previous, {
+    requestId: coachGameGeneration, positionFen: coachGame.fen(),
+    analysis: null, analysisReady: false, analysisPromise: null,
+    analysisToken: (previous.analysisToken || 0) + 1, pendingMove: null, grading: false
+  });
+  if (coachBoard) coachBoard.position(coachGame.fen(), false);
+  coachSyncLastMove();
+  updateCoachBoardAccessibility();
+  CoachController.setPhase('practice');
+  setPracticeFocus(true);
+  setCoachStatus(previous.completed ? 'Practice saved. Choose your next step.' : 'Practice resumed. Continue from this position.');
+  if (!previous.completed) preparePracticeAnalysis(coachPracticeSession);
+  saveCoachPracticeState();
+  focusPracticeTarget();
+}
+
 function focusPracticeTarget() {
   requestAnimationFrame(() => {
     if (!coachPracticeSession) return;
@@ -6389,6 +6448,7 @@ function createBoard(position, draggable, orientation) {
     onSnapEnd: handleSnapEnd,
   });
   observeBoardLastMove('myBoard');
+  scheduleLibraryBoardFit();
   updateLibraryBoardAccessibility();
 }
 
@@ -6478,6 +6538,13 @@ function switchView(view) {
   if (wasCoachMode && view !== 'coach') {
     // Leaving Coach must stop any pending engine reply and clear a transient
     // analysis line before the library view takes over.
+    if (coachPracticeSession) {
+      if (coachPracticeSession.grading || coachPracticeSession.pendingMove) {
+        $('#coach-practice-status').text('That move was interrupted. Choose your move again.');
+        $('#coach-keyboard-move-status').text('');
+      }
+      saveCoachPracticeState();
+    }
     invalidateCoachAsyncWork('Coach view changed.');
   }
   appView = view;
@@ -6514,12 +6581,28 @@ function switchView(view) {
         setCoachStatus(restore.warning || 'Choose Start training when you’re ready.');
       }
     } else {
-      // Returning to an existing game — resize the board and re-kick the
-      // opponent if the previous respond was aborted by the view switch.
-      if (coachBoard) setTimeout(() => coachBoard.resize(), 0);
-      if (coachGameActive && !coachPracticeSession && !coachIsUserTurn() && !coachGame.game_over()) {
-        coachOpponentRespond();
+      // A view change cancels transient engine work. Restore the displayed
+      // position from the actual session before accepting another move.
+      if (coachPracticeSession) {
+        resumeCoachPracticeAfterNavigation();
+      } else {
+        const fen = coachReviewCursor === null ? coachGame.fen() : coachFenAtPly(coachReviewCursor);
+        if (coachBoard && fen) coachBoard.position(fen, false);
+        coachSyncLastMove();
+        updateCapturedDisplay(fen);
+        updateCoachBoardAccessibility();
+        if (coachIsReviewing()) {
+          if (coachGameActive && !coachIsUserTurn() && !coachGame.game_over()) coachOpponentRespond();
+          CoachController.setPhase('reviewing');
+          setCoachStatus('Reviewing an earlier position. Choose Live to return.');
+        } else if (coachGameActive && !coachIsUserTurn() && !coachGame.game_over()) {
+          coachOpponentRespond();
+        } else {
+          CoachController.setPhase(coachGameActive ? 'userTurn' : 'ended');
+          setCoachStatus(coachGameActive ? 'Your move.' : coachLastEndMsg || 'Choose Start training when you’re ready.');
+        }
       }
+      if (coachBoard) setTimeout(() => coachBoard.resize(), 0);
     }
     updateCoachControlsState();
   } else {
@@ -6530,6 +6613,7 @@ function switchView(view) {
     $('#nav-library').addClass('active').attr({ 'aria-selected': 'true', tabindex: '0' });
     // If library board exists, kick it into life via a resize so it redraws correctly
     if (board) setTimeout(() => board.resize(), 0);
+    scheduleLibraryBoardFit();
   }
   updateURL();
 }
@@ -7821,8 +7905,10 @@ function setMode(mode) {
     renderExplanation(currentMoveIdx);
     clearFeedback();
   }
+  updateProgress();
   updateSRPanel();
   updateURL();
+  scheduleLibraryBoardFit();
 }
 
 // ─────────────────────────────────────────────
@@ -8276,9 +8362,12 @@ $(function () {
       $status.text('That move is not legal here. Try SAN such as Nf3 or coordinates such as g1f3.');
       return;
     }
+    const inputGeneration = coachGameGeneration;
+    const inputPractice = coachPracticeSession;
     const result = coachPracticeSession
       ? await coachHandlePracticeMove(move.from, move.to, move.promotion || 'q', { updateBoard: true })
       : await coachHandleUserMove(move.from, move.to, move.promotion || 'q', { updateBoard: true });
+    if (!coachMode || inputGeneration !== coachGameGeneration || inputPractice !== coachPracticeSession) return;
     if (result === 'snapback') {
       $status.text(coachPracticeSession ? 'Position reset. Read the feedback, then try another move.' : 'That move could not be played.');
       if (coachPracticeSession) $('#coach-keyboard-move-input').trigger('focus').trigger('select');
@@ -8495,10 +8584,11 @@ $(function () {
   // ← previous ply, → next ply, End returns to the live position. Only
   // fire in coach mode and never while the user is typing in a form field.
   $(document).on('keydown', function(e) {
-    if (!coachMode || !coachGame) return;
+    if (!coachMode || !coachGame || coachPracticeSession || e.isDefaultPrevented() ||
+        $('#summary-overlay, #promotion-picker, #desktop-notice').is(':visible')) return;
     // Ignore if the user is typing (inputs, textareas, contenteditable).
     const tag = (e.target && e.target.tagName) || '';
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === 'ArrowLeft') {
       const total = coachGame.history().length;
@@ -8562,6 +8652,7 @@ $(function () {
     const summary = document.getElementById('summary-overlay');
     if (!summary || !$('#summary-overlay').is(':visible')) return;
     if (e.key === 'Escape') {
+      e.preventDefault();
       closeSummaryOverlay();
     } else {
       trapDialogTab(e, summary);
@@ -8655,6 +8746,7 @@ $(function () {
       if (coachBoard) coachBoard.resize();
       placeDailySprintCard();
       scheduleCoachBoardFit();
+      scheduleLibraryBoardFit();
       updateLibraryBoardAccessibility();
       updateCoachBoardAccessibility();
     }, 120);
@@ -8711,6 +8803,7 @@ $(function () {
 
   // ─── KEYBOARD SHORTCUTS ─────────────────
   $(document).on('keydown', function (e) {
+    if (e.isDefaultPrevented() || $('#summary-overlay').is(':visible') || $('#desktop-notice').is(':visible')) return;
     if ($('#promotion-picker').is(':visible')) {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -8718,9 +8811,10 @@ $(function () {
         return;
       }
       trapDialogTab(e, document.getElementById('promotion-picker'));
+      return;
     }
     const tag = (e.target.tagName || '').toLowerCase();
-    if (tag === 'input' || tag === 'textarea') {
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) {
       if (e.key === 'Escape') e.target.blur();
       return;
     }
@@ -8915,6 +9009,7 @@ $(function () {
   bindGlobalInputEvents();
   placeDailySprintCard();
   initCoachWorkspaceLayout();
+  initLibraryWorkspaceLayout();
   updateSRSidebar();
   validateOpeningData();
   hydrateFromUrl();

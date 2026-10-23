@@ -43,6 +43,10 @@ Drills evaluate sound alternatives, provide progressive hints, and can ask for
 a follow-up after an opponent reply. Unverified engine results are not counted
 as mistakes.
 
+Library visits preserve the current drill or selected review position. Both
+workspaces fit their boards and tools to the desktop viewport. Post-game reviews
+keep the takeaway and next actions visible while supporting details scroll.
+
 **Opening → game** carries a selected Library position and idea into free,
 unrated Coach play, including variations and completed quizzes. Finished mating
 lines back up to a playable student decision. After a few reviewed moves, the
