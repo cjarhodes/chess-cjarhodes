@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en" data-direction="paper" data-panel="review">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design directions — chess.cjarhodes.com</title>
+<!-- Prototype only. Fonts load from Google here; the real app must vendor
+     them as woff2 because the production CSP blocks third-party fonts. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>
+@layer reset, tokens, base, components, layout, prototype;
+
+@layer reset {
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  img, svg { display: block; }
+}
+
+/* ───────────────────────── TOKENS ─────────────────────────
+   Every direction sets the same semantic tokens. Components only read
+   tokens, so a direction is nothing more than this block. */
+@layer tokens {
+  :root {
+    --space-unit: 4px;
+    --s1: calc(var(--space-unit) * 1);
+    --s2: calc(var(--space-unit) * 2);
+    --s3: calc(var(--space-unit) * 3);
+    --s4: calc(var(--space-unit) * 4);
+    --s5: calc(var(--space-unit) * 6);
+    --s6: calc(var(--space-unit) * 8);
+    --s7: calc(var(--space-unit) * 12);
+
+    --step--1: 0.8125rem;
+    --step-0: 0.9375rem;
+    --step-1: 1.125rem;
+    --step-2: 1.5rem;
+    --step-3: 2rem;
+
+    --accent-text: var(--accent); /* accent used as text or icon colour */
+    --nav-w: 84px;
+    --panel-w: 400px;
+    --strip-h: 40px;
+    --toolbar-h: 44px;
+    --board: min(calc(100vh - 2 * var(--strip-h) - var(--toolbar-h) - 128px),
+                 calc(100vw - var(--nav-w) - var(--panel-w) - 120px));
+  }
+
+  /* A — PAPER: light, editorial, calm. A study you sit down in. */
+  [data-direction="paper"] {
+    --bg: #f5f1e8;
+    --surface: #fbf9f4;
+    --surface-2: #efe9dc;
+    --line: #ddd5c3;
+    --text: #1f1c17;
+    --text-2: #5b5448;
+    --text-3: #8a8173;
+    --accent: #23495e;
+    --accent-ink: #f8f5ee;
+    --accent-soft: #dfe7ea;
+    --nav-bg: #ebe5d7;
+    --nav-active: #fbf9f4;
+
+    --font-ui: 'Public Sans', system-ui, sans-serif;
+    --font-display: 'Newsreader', Georgia, serif;
+    --font-prose: 'Newsreader', Georgia, serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --display-weight: 500;
+    --display-size: var(--step-3);
+    --prose-size: 1.125rem;
+    --label-case: uppercase;
+    --label-tracking: 0.09em;
+
+    --radius-s: 3px;
+    --radius-m: 4px;
+    --radius-l: 6px;
+    --shadow: none;
+    --card-border: 1px solid var(--line);
+
+    --board-light: #ece4d0;
+    --board-dark: #a99c7f;
+    --board-frame: #d6ccb6;
+    --hl-last: rgba(214, 170, 60, 0.38);
+    --arrow-best: #2c6e4f;
+    --arrow-played: #b2452f;
+    --arrow-threat: #23495e;
+
+    --mq-best: #2c6e4f;
+    --mq-good: #6a8b4a;
+    --mq-inaccuracy: #b98a1c;
+    --mq-mistake: #c76a1e;
+    --mq-blunder: #b2452f;
+
+    --eval-white: #ffffff;
+    --eval-black: #3a352d;
+  }
+
+  /* B — NIGHT: dark, cool, precise. An analysis instrument. */
+  [data-direction="night"] {
+    --bg: #0e1116;
+    --surface: #161a21;
+    --surface-2: #1d222b;
+    --line: #262c37;
+    --text: #e7eaf0;
+    --text-2: #a3abba;
+    --text-3: #6d7586;
+    --accent: #5b9cff;
+    --accent-ink: #08101f;
+    --accent-soft: rgba(91, 156, 255, 0.14);
+    --nav-bg: #0b0e12;
+    --nav-active: #1d222b;
+
+    --font-ui: 'Inter', system-ui, sans-serif;
+    --font-display: 'Inter', system-ui, sans-serif;
+    --font-prose: 'Inter', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    --display-weight: 600;
+    --display-size: var(--step-2);
+    --prose-size: var(--step-0);
+    --label-case: uppercase;
+    --label-tracking: 0.06em;
+
+    --radius-s: 4px;
+    --radius-m: 6px;
+    --radius-l: 8px;
+    --shadow: none;
+    --card-border: 1px solid var(--line);
+
+    --board-light: #c7cfd8;
+    --board-dark: #6c8193;
+    --board-frame: #1d222b;
+    --hl-last: rgba(91, 156, 255, 0.35);
+    --arrow-best: #3ccf8e;
+    --arrow-played: #ff5d6c;
+    --arrow-threat: #ffb547;
+
+    --mq-best: #3ccf8e;
+    --mq-good: #8fd16a;
+    --mq-inaccuracy: #f2c94c;
+    --mq-mistake: #ff9f43;
+    --mq-blunder: #ff5d6c;
+
+    --eval-white: #e7eaf0;
+    --eval-black: #2a303b;
+  }
+
+  /* D — BLEND (Paper + Club). Paper's calm page and reading serif; Club's
+     rounded floating cards, brass accent and bolder headlines. Light by
+     default, dark when the device asks for it, overridable in Settings. */
+  [data-direction="blend"] {
+    --bg: #f5efe3;
+    --surface: #fffcf6;
+    --surface-2: #f1e8d6;
+    --line: #e3d9c5;
+    --text: #1f1b15;
+    --text-2: #5c5446;
+    --text-3: #6e6452;
+    --accent: #e9ac3f;
+    --accent-ink: #261a05;
+    --accent-soft: rgba(233, 172, 63, 0.18);
+    --accent-text: #8f620c;
+    --nav-bg: #ece4d3;
+    --nav-active: #fffcf6;
+
+    --font-ui: 'DM Sans', system-ui, sans-serif;
+    --font-display: 'Fraunces', Georgia, serif;
+    --font-prose: 'Newsreader', Georgia, serif;
+    --font-mono: 'DM Mono', ui-monospace, monospace;
+    --display-weight: 600;
+    --display-size: var(--step-3);
+    --prose-size: 1.125rem;
+    --label-case: none;
+    --label-tracking: 0;
+
+    --radius-s: 8px;
+    --radius-m: 12px;
+    --radius-l: 18px;
+    --shadow: 0 1px 2px rgba(70, 50, 20, 0.06), 0 8px 24px rgba(70, 50, 20, 0.08);
+    --card-border: 1px solid var(--line);
+
+    --board-light: #f1e6cb;
+    --board-dark: #84a184;
+    --board-frame: #e3d9c5;
+    --hl-last: rgba(233, 172, 63, 0.42);
+    --arrow-best: #2f7d4c;
+    --arrow-played: #cf4f35;
+    --arrow-threat: #c58f22;
+
+    --mq-best: #2f7d4c;
+    --mq-good: #6b8f3a;
+    --mq-inaccuracy: #b5861b;
+    --mq-mistake: #cc6a21;
+    --mq-blunder: #c2412d;
+
+    --eval-white: #ffffff;
+    --eval-black: #2b2a24;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    [data-direction="blend"]:not([data-theme="light"]) { 
+    --bg: #121714;
+    --surface: #1b221e;
+    --surface-2: #242d28;
+    --line: #2e3933;
+    --text: #f2ece0;
+    --text-2: #c2c4b6;
+    --text-3: #8d9587;
+    --accent: #f0b84a;
+    --accent-ink: #1f1607;
+    --accent-soft: rgba(240, 184, 74, 0.15);
+    --accent-text: #f0b84a;
+    --nav-bg: #0e1310;
+    --nav-active: #242d28;
+    --shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
+    --card-border: 1px solid transparent;
+    --board-light: #e8dcc0;
+    --board-dark: #6e8d71;
+    --board-frame: #0e1310;
+    --hl-last: rgba(240, 184, 74, 0.42);
+    --arrow-best: #8fdc6a;
+    --arrow-played: #ff7a59;
+    --arrow-threat: #f0b84a;
+    --mq-best: #7fd65a;
+    --mq-good: #b5d86b;
+    --mq-inaccuracy: #f0c95a;
+    --mq-mistake: #ff9a52;
+    --mq-blunder: #ff6a5a;
+    --eval-white: #f2ece0;
+    --eval-black: #0e1310;
+   }
+  }
+  [data-direction="blend"][data-theme="dark"] { 
+    --bg: #121714;
+    --surface: #1b221e;
+    --surface-2: #242d28;
+    --line: #2e3933;
+    --text: #f2ece0;
+    --text-2: #c2c4b6;
+    --text-3: #8d9587;
+    --accent: #f0b84a;
+    --accent-ink: #1f1607;
+    --accent-soft: rgba(240, 184, 74, 0.15);
+    --accent-text: #f0b84a;
+    --nav-bg: #0e1310;
+    --nav-active: #242d28;
+    --shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
+    --card-border: 1px solid transparent;
+    --board-light: #e8dcc0;
+    --board-dark: #6e8d71;
+    --board-frame: #0e1310;
+    --hl-last: rgba(240, 184, 74, 0.42);
+    --arrow-best: #8fdc6a;
+    --arrow-played: #ff7a59;
+    --arrow-threat: #f0b84a;
+    --mq-best: #7fd65a;
+    --mq-good: #b5d86b;
+    --mq-inaccuracy: #f0c95a;
+    --mq-mistake: #ff9a52;
+    --mq-blunder: #ff6a5a;
+    --eval-white: #f2ece0;
+    --eval-black: #0e1310;
+   }
+
+  /* C — CLUB: warm, bold, friendly. A coach who's glad to see you. */
+  [data-direction="club"] {
+    --bg: #10241d;
+    --surface: #173229;
+    --surface-2: #1f4034;
+    --line: #2a4d40;
+    --text: #f4efe2;
+    --text-2: #c4c9b6;
+    --text-3: #8fa395;
+    --accent: #f0b84a;
+    --accent-ink: #1f1607;
+    --accent-soft: rgba(240, 184, 74, 0.16);
+    --nav-bg: #0c1c16;
+    --nav-active: #1f4034;
+
+    --font-ui: 'DM Sans', system-ui, sans-serif;
+    --font-display: 'Fraunces', Georgia, serif;
+    --font-prose: 'DM Sans', system-ui, sans-serif;
+    --font-mono: 'DM Mono', ui-monospace, monospace;
+    --display-weight: 700;
+    --display-size: var(--step-3);
+    --prose-size: 1.0625rem;
+    --label-case: none;
+    --label-tracking: 0;
+
+    --radius-s: 10px;
+    --radius-m: 14px;
+    --radius-l: 20px;
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+    --card-border: 1px solid transparent;
+
+    --board-light: #efe3c6;
+    --board-dark: #6f9a78;
+    --board-frame: #0c1c16;
+    --hl-last: rgba(240, 184, 74, 0.45);
+    --arrow-best: #9be26b;
+    --arrow-played: #ff7a59;
+    --arrow-threat: #f0b84a;
+
+    --mq-best: #7fd65a;
+    --mq-good: #b5d86b;
+    --mq-inaccuracy: #f0c95a;
+    --mq-mistake: #ff9a52;
+    --mq-blunder: #ff6a5a;
+
+    --eval-white: #f4efe2;
+    --eval-black: #0c1c16;
+  }
+}
+
+/* ───────────────────────── BASE ───────────────────────── */
+@layer base {
+  html { background: var(--bg); color: var(--text); }
+  body {
+    font-family: var(--font-ui);
+    font-size: var(--step-0);
+    line-height: 1.5;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    transition: background 0.2s;
+  }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+}
+
+/* ───────────────────────── COMPONENTS ───────────────────────── */
+@layer components {
+  :where(.label) {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: var(--label-tracking);
+    text-transform: var(--label-case);
+    color: var(--text-3);
+  }
+  :where(.btn) {
+    display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
+    height: 40px; padding: 0 var(--s4);
+    border-radius: var(--radius-m);
+    font-weight: 600; font-size: var(--step-0);
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--text);
+  }
+  :where(.btn--primary) { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  :where(.btn--quiet) { border-color: transparent; background: transparent; color: var(--text-2); }
+  :where(.chip) {
+    display: inline-flex; align-items: center; gap: var(--s1);
+    padding: 2px var(--s2);
+    border-radius: 999px;
+    font-size: var(--step--1); font-weight: 600;
+    background: var(--surface-2); color: var(--text-2);
+  }
+  .chip[data-mq] { color: var(--mq-color); background: color-mix(in srgb, var(--mq-color) 14%, transparent); }
+  [data-mq="best"] { --mq-color: var(--mq-best); }
+  [data-mq="good"] { --mq-color: var(--mq-good); }
+  [data-mq="inaccuracy"] { --mq-color: var(--mq-inaccuracy); }
+  [data-mq="mistake"] { --mq-color: var(--mq-mistake); }
+  [data-mq="blunder"] { --mq-color: var(--mq-blunder); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mq-color, var(--text-3)); flex: none; }
+  :where(.card) {
+    background: var(--surface);
+    border: var(--card-border);
+    border-radius: var(--radius-l);
+    box-shadow: var(--shadow);
+  }
+  .mono { font-family: var(--font-mono); font-feature-settings: "zero" 0; }
+}
+
+/* ───────────────────────── LAYOUT ───────────────────────── */
+@layer layout {
+  .shell {
+    display: grid;
+    grid-template-columns: var(--nav-w) 1fr var(--panel-w);
+    height: 100vh;
+  }
+
+  /* Nav */
+  .nav {
+    background: var(--nav-bg);
+    border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; align-items: center;
+    padding: var(--s4) 0; gap: var(--s1);
+  }
+  .nav__brand {
+    font-family: var(--font-display); font-weight: var(--display-weight);
+    font-size: 1.375rem; color: var(--text); margin-bottom: var(--s5);
+  }
+  .nav__item {
+    width: 68px; padding: var(--s2) 0;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    border-radius: var(--radius-m);
+    font-size: 0.75rem; font-weight: 500; color: var(--text-3);
+    text-decoration: none; position: relative;
+  }
+  .nav__item svg { width: 22px; height: 22px; }
+  .nav__item[aria-current] { background: var(--nav-active); color: var(--text); box-shadow: var(--shadow); }
+  .nav__item[aria-current] svg { color: var(--accent-text); }
+  .nav__spacer { flex: 1; }
+  .nav__badge {
+    position: absolute; transform: translate(12px, -4px);
+    min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
+    background: var(--accent); color: var(--accent-ink);
+    font-size: 0.625rem; font-weight: 700; line-height: 16px; text-align: center;
+  }
+
+  /* Workspace */
+  .workspace {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: var(--s5) var(--s5) 72px; /* bottom room for the prototype switcher */
+    min-width: 0;
+  }
+  .stage { display: grid; grid-template-columns: auto var(--board); column-gap: var(--s3); }
+  .strip {
+    grid-column: 2;
+    height: var(--strip-h);
+    display: flex; align-items: center; gap: var(--s3);
+    font-size: var(--step-0);
+  }
+  .strip__avatar {
+    width: 28px; height: 28px; border-radius: var(--radius-s);
+    background: var(--surface-2); display: grid; place-items: center;
+    font-size: 0.8rem; font-weight: 700; color: var(--text-2);
+  }
+  .strip__name { font-weight: 600; }
+  .strip__meta { color: var(--text-3); font-size: var(--step--1); }
+  .strip__caps { display: flex; margin-left: auto; align-items: center; gap: 2px; }
+  .strip__caps img { width: 18px; height: 18px; opacity: 0.85; }
+  .strip__caps span { font-size: var(--step--1); color: var(--text-3); margin-left: 4px; }
+
+  /* Eval bar */
+  .evalbar {
+    grid-row: 2; width: 14px; height: var(--board);
+    border-radius: var(--radius-s); overflow: hidden;
+    background: var(--eval-black);
+    display: flex; flex-direction: column;
+    border: 1px solid var(--line);
+    position: relative;
+  }
+  .evalbar__white { background: var(--eval-white); height: 53%; transition: height 0.4s; }
+  [data-panel="train"] .evalbar { visibility: hidden; }
+
+  /* Board */
+  .board {
+    grid-row: 2; grid-column: 2;
+    width: var(--board); height: var(--board);
+    position: relative;
+    border-radius: var(--radius-m);
+    overflow: hidden;
+    box-shadow: var(--shadow), 0 0 0 6px var(--board-frame);
+  }
+  .board__grid { display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); width: 100%; height: 100%; }
+  .sq { position: relative; background: var(--board-light); }
+  .sq.dark { background: var(--board-dark); }
+  .sq.last::after { content: ""; position: absolute; inset: 0; background: var(--hl-last); }
+  .sq img { position: absolute; inset: 4%; width: 92%; height: 92%; z-index: 1; }
+  .sq .coord { position: absolute; font-family: var(--font-ui); font-size: 0.6875rem; font-weight: 700; z-index: 1; }
+  .sq .coord.rank { top: 3px; left: 4px; }
+  .sq .coord.file { bottom: 2px; right: 5px; }
+  .sq.dark .coord { color: var(--board-light); }
+  .sq:not(.dark) .coord { color: var(--board-dark); }
+  .board__arrows { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+  [data-panel="train"] .board__arrows, [data-panel="train"] .glyph { display: none; }
+  .glyph {
+    position: absolute; z-index: 3;
+    width: 26px; height: 26px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: var(--mq-color); color: #fff;
+    font-weight: 800; font-size: 0.8125rem; font-family: var(--font-ui);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    transform: translate(-40%, 40%);
+  }
+
+  /* Toolbar */
+  .toolbar {
+    grid-column: 2; height: var(--toolbar-h); margin-top: var(--s3);
+    display: flex; align-items: center; gap: var(--s1);
+  }
+  .toolbar .btn { height: 36px; width: 44px; padding: 0; }
+  .toolbar__hint { margin-left: auto; font-size: var(--step--1); color: var(--text-3); }
+  kbd {
+    font-family: var(--font-mono); font-size: 0.6875rem;
+    border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px;
+    padding: 0 5px; color: var(--text-2); background: var(--surface);
+  }
+
+  /* Panel */
+  .panel {
+    background: var(--surface);
+    border-left: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    min-height: 0;
+  }
+  :is([data-direction="club"], [data-direction="blend"]) .panel { background: transparent; border-left: 0; padding: var(--s4) var(--s4) var(--s4) 0; gap: var(--s3); }
+  :is([data-direction="club"], [data-direction="blend"]) .panel > section { background: var(--surface); border-radius: var(--radius-l); border: var(--card-border); box-shadow: var(--shadow); }
+  .panel__head { padding: var(--s5) var(--s5) var(--s4); border-bottom: 1px solid var(--line); }
+  :is([data-direction="club"], [data-direction="blend"]) .panel__head { border-bottom: 0; }
+  .panel__title {
+    font-family: var(--font-display); font-weight: var(--display-weight);
+    font-size: var(--display-size); line-height: 1.15; margin-top: var(--s1);
+  }
+  .panel__sub { color: var(--text-2); margin-top: var(--s1); font-size: var(--step--1); }
+  .panel__body { padding: var(--s4) var(--s5); overflow: auto; flex: 1; display: flex; flex-direction: column; gap: var(--s5); }
+
+  .summary { display: grid; grid-template-columns: auto 1fr; gap: var(--s4); align-items: center; margin-top: var(--s4); }
+  .acc { display: flex; gap: var(--s4); }
+  .acc__item b { display: block; font-family: var(--font-display); font-weight: var(--display-weight); font-size: var(--step-2); line-height: 1; }
+  .acc__item span { font-size: var(--step--1); color: var(--text-3); }
+  .graph { width: 100%; height: 44px; }
+  .phases { display: flex; gap: var(--s2); margin-top: var(--s3); flex-wrap: wrap; }
+
+  .moments { display: flex; flex-direction: column; gap: 2px; margin-top: var(--s2); }
+  .moment {
+    display: grid; grid-template-columns: auto 64px 1fr auto; align-items: center; gap: var(--s3);
+    padding: var(--s2) var(--s3); border-radius: var(--radius-m);
+    color: var(--text-2); text-align: left;
+  }
+  .moment .mono { color: var(--text); }
+  .moment[aria-current="true"] { background: var(--accent-soft); color: var(--text); }
+  .moment small { color: var(--text-3); font-size: var(--step--1); }
+
+  .explain { border-radius: var(--radius-l); padding: var(--s4); background: var(--surface-2); }
+  :is([data-direction="club"], [data-direction="blend"]) .explain { background: var(--surface-2); }
+  .explain__moves { display: flex; gap: var(--s4); font-size: var(--step--1); color: var(--text-3); margin-top: var(--s2); }
+  .explain__moves b { font-family: var(--font-mono); font-weight: 500; color: var(--text); font-size: var(--step-0); }
+  .explain p { font-family: var(--font-prose); font-size: var(--prose-size); line-height: 1.5; margin-top: var(--s3); }
+  .ref { border-bottom: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); cursor: help; }
+  .explain__actions { display: flex; gap: var(--s2); margin-top: var(--s4); flex-wrap: wrap; }
+
+  .notation { display: grid; grid-template-columns: 36px 1fr 1fr; font-family: var(--font-mono); font-size: 0.875rem; margin-top: var(--s2); }
+  .notation > * { padding: 3px var(--s2); }
+  .notation .n { color: var(--text-3); }
+  .notation .m { border-radius: var(--radius-s); display: flex; align-items: center; gap: 6px; }
+  .notation .m.cur { background: var(--accent); color: var(--accent-ink); }
+  .notation .m .g { font-weight: 700; color: var(--mq-color); }
+  .notation .m.cur .g { color: inherit; }
+
+  /* Train state */
+  .train { display: none; }
+  [data-panel="train"] .train { display: flex; }
+  [data-panel="train"] .review { display: none; }
+  .segments { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-top: var(--s4); }
+  .segments i { height: 6px; border-radius: 3px; background: var(--surface-2); }
+  .segments i.done { background: var(--mq-best); }
+  .segments i.miss { background: var(--mq-mistake); }
+  .segments i.now { background: var(--accent); }
+  .prompt { font-family: var(--font-prose); font-size: var(--prose-size); line-height: 1.5; }
+  .hints { display: flex; flex-direction: column; gap: var(--s2); }
+  .hint { display: flex; align-items: center; gap: var(--s3); padding: var(--s3); border-radius: var(--radius-m); border: 1px dashed var(--line); color: var(--text-2); text-align: left; }
+  .hint b { color: var(--text); font-weight: 600; }
+  .hint.open { border-style: solid; background: var(--surface-2); }
+  .status { display: flex; align-items: center; gap: var(--s2); color: var(--text-2); font-size: var(--step--1); }
+  .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 50% { opacity: 0.3; } }
+
+  /* Elements that only exist on small screens, and per-state labels */
+  .appbar, .movestrip { display: none; }
+  .only-train { display: none; }
+  [data-panel="train"] .only-train { display: inline; }
+  [data-panel="train"] .only-review { display: none; }
+
+  /* ── Tablet / small laptop: tighter rails, icon-only nav ── */
+  @media (max-width: 1199px) and (min-width: 760px) {
+    :root { --nav-w: 64px; --panel-w: 340px; }
+    .nav__item { width: 52px; font-size: 0; gap: 0; }
+    .nav__brand { font-size: 1.125rem; }
+    .toolbar__hint { display: none; }
+  }
+
+  /* ── Phone: board edge to edge, panel flows below, tab bar at bottom ── */
+  @media (max-width: 759px) {
+    :root {
+      --board: 100vw;
+      --strip-h: 36px;
+      --tabbar-h: 60px;
+      --display-size: var(--step-2);
+    }
+    .shell {
+      display: flex; flex-direction: column;
+      height: auto; min-height: 100dvh;
+      padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+    }
+
+    .appbar {
+      order: 0; position: sticky; top: 0; z-index: 20;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 48px; padding: 0 var(--s2) 0 var(--s4);
+      padding-top: env(safe-area-inset-top);
+      background: var(--bg);
+      border-bottom: 1px solid var(--line);
+    }
+    .appbar__title { font-weight: 600; font-size: var(--step-1); }
+    .appbar__btn { width: 44px; height: 44px; display: grid; place-items: center; color: var(--text-2); }
+    .appbar__btn svg { width: 22px; height: 22px; }
+
+    .workspace { order: 2; padding: 0; display: block; }
+    .stage { grid-template-columns: 1fr; width: 100vw; }
+    .strip, .board, .toolbar, .movestrip { grid-column: 1; }
+    .strip, .evalbar, .board { grid-row: auto; }
+    .strip { padding: 0 var(--s3); }
+    .evalbar { width: 100%; height: 6px; flex-direction: row; border: 0; border-radius: 0; }
+    .evalbar__white { height: auto; width: 53%; }
+    .board { border-radius: 0; box-shadow: none; }
+    .glyph { width: 22px; height: 22px; font-size: 0.75rem; }
+
+    .movestrip {
+      display: flex; align-items: center; gap: 2px;
+      overflow-x: auto; scrollbar-width: none;
+      padding: var(--s1) var(--s3);
+      border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+      font-family: var(--font-mono); font-size: 0.875rem; white-space: nowrap;
+    }
+    .movestrip span { color: var(--text-3); margin: 0 2px 0 var(--s2); }
+    .movestrip b { font-weight: 500; padding: 6px 6px; border-radius: var(--radius-s); }
+    .movestrip b.cur { background: var(--accent); color: var(--accent-ink); }
+    [data-panel="train"] .movestrip { display: none; }
+
+    .toolbar { padding: 0 var(--s3); margin: var(--s2) 0 0; height: auto; gap: var(--s2); }
+    .toolbar .btn { flex: 1; width: auto; height: 44px; }
+    .toolbar__hint { display: none; }
+    [data-panel="train"] .toolbar { display: none; }
+
+    /* The panel's sections join the page flow; train's header moves above
+       the board so the prompt is read before the position. */
+    .panel { display: contents; }
+    .panel > section { order: 3; }
+    [data-panel="train"] .panel__head.train { order: 1; }
+    /* Review on a phone leads with the moment and its one action; the game
+       summary follows. */
+    .panel__head.review { order: 4; border-top: 1px solid var(--line); }
+    .explain { order: -1; }
+    .panel__head { padding: var(--s4) var(--s4) var(--s2); border-bottom: 0; }
+    .panel__body { padding: var(--s2) var(--s4) var(--s5); overflow: visible; gap: var(--s4); }
+    [data-panel="train"] .panel__head.train { padding-bottom: var(--s3); }
+    [data-panel="train"] .panel__head.train .panel__sub { display: none; }
+    .explain__actions .btn--primary { flex: 1 1 100%; height: 48px; }
+    .moves-block { display: none; }
+
+    :is([data-direction="club"], [data-direction="blend"]) .panel > section { margin: var(--s3) var(--s3) 0; }
+    :is([data-direction="club"], [data-direction="blend"]) .panel__body.review { background: transparent; padding: 0; }
+    :is([data-direction="club"], [data-direction="blend"]) .panel__body.review > div:not(.explain) { background: var(--surface); border-radius: var(--radius-l); padding: var(--s3); }
+
+    .nav {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+      flex-direction: row; justify-content: space-around; gap: 0;
+      height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+      padding: var(--s1) var(--s2) env(safe-area-inset-bottom);
+      border-right: 0; border-top: 1px solid var(--line);
+    }
+    .nav__brand, .nav__spacer, .nav__item--settings { display: none; }
+    .nav__item { flex: 1; width: auto; max-width: 96px; }
+  }
+}
+
+/* ───────────────────────── PROTOTYPE CHROME ───────────────────────── */
+@layer prototype {
+  .switcher {
+    position: fixed; left: calc((100vw - var(--panel-w) + var(--nav-w)) / 2); bottom: 14px; transform: translateX(-50%);
+    z-index: 50;
+    display: flex; gap: 12px; align-items: center;
+    padding: 6px 8px 6px 14px; border-radius: 999px;
+    background: #111; color: #eee; font: 500 13px/1 system-ui, sans-serif;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+  }
+  .switcher__group { display: flex; background: #262626; border-radius: 999px; padding: 3px; }
+  .switcher button { padding: 7px 12px; border-radius: 999px; color: #bbb; font: inherit; white-space: nowrap; }
+  .switcher button[aria-pressed="true"] { background: #f2f2f2; color: #111; }
+  .switcher__desc { color: #999; max-width: 260px; font-size: 12px; line-height: 1.3; }
+  [data-chrome="off"] .switcher { display: none; }
+  @media (max-width: 759px) {
+    .switcher {
+      left: 50%; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 10px);
+      padding: 4px; gap: 4px; font-size: 12px;
+    }
+    .switcher button { padding: 6px 9px; }
+    .switcher__desc { display: none; }
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <nav class="nav" aria-label="Main">
+    <div class="nav__brand" aria-label="chess.cjarhodes.com">c.</div>
+    <a class="nav__item" href="#" data-for="train">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
+      <span class="nav__badge">8</span>
+      Train
+    </a>
+    <a class="nav__item" href="#" data-for="review">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h10M8 16h8l-1-4 2-3c0-3-2.5-5-6-5-1 0-2 .5-2 .5L7 6l1.5 1.5L6 10l1 1.5 3-1V12l-2 4z"/></svg>
+      Play
+    </a>
+    <a class="nav__item" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/></svg>
+      Study
+    </a>
+    <a class="nav__item" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+      Progress
+    </a>
+    <div class="nav__spacer"></div>
+    <a class="nav__item nav__item--settings" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      Settings
+    </a>
+  </nav>
+
+  <header class="appbar">
+    <span class="appbar__title"><span class="only-review">Game review</span><span class="only-train">Training</span></span>
+    <button class="appbar__btn" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </header>
+
+  <main class="workspace">
+    <div class="stage">
+      <div class="strip">
+        <div class="strip__avatar">C</div>
+        <span class="strip__name">Coach</span><span class="strip__meta"><span class="only-review">1400 · Live</span><span class="only-train">Drill position</span></span>
+        <div class="strip__caps"><img src="../../vendor/pieces/cburnett/bP.svg" alt="black pawn"><span>+1</span></div>
+      </div>
+      <div class="evalbar" aria-label="Evaluation +0.3"><div class="evalbar__white"></div></div>
+      <div class="board" id="board" role="img" aria-label="Board position"></div>
+      <div class="strip">
+        <div class="strip__avatar">Y</div>
+        <span class="strip__name">You</span><span class="strip__meta">Black</span>
+        <div class="strip__caps"></div>
+      </div>
+      <div class="movestrip" aria-label="Moves">
+        <span>1.</span><b>e4</b><b>e5</b><span>2.</span><b>Nf3</b><b>Nc6</b><span>3.</span><b>Bc4</b><b>Nf6</b>
+        <span>4.</span><b>Ng5</b><b>d5</b><span>5.</span><b>exd5</b><b class="cur">Nxd5?</b>
+        <span>6.</span><b>Nxf7</b><b>Kxf7</b><span>7.</span><b>Qf3+</b><b>Ke6</b>
+      </div>
+      <div class="toolbar">
+        <button class="btn" aria-label="Start">⏮</button>
+        <button class="btn" aria-label="Back">◀</button>
+        <button class="btn" aria-label="Forward">▶</button>
+        <button class="btn" aria-label="End">⏭</button>
+        <button class="btn" aria-label="Flip board">⇅</button>
+        <span class="toolbar__hint"><kbd>←</kbd> <kbd>→</kbd> step · <kbd>f</kbd> flip · <kbd>/</kbd> type a move</span>
+      </div>
+    </div>
+  </main>
+
+  <aside class="panel">
+    <!-- REVIEW STATE -->
+    <section class="panel__head review">
+      <div class="label">Game review</div>
+      <h1 class="panel__title">You lost the thread on move 5</h1>
+      <div class="panel__sub">vs Coach 1400 · Two Knights Defence · 0–1 in 34</div>
+      <div class="summary">
+        <div class="acc">
+          <div class="acc__item"><b>74</b><span>Your accuracy</span></div>
+          <div class="acc__item"><b>91</b><span>Coach</span></div>
+        </div>
+        <svg class="graph" viewBox="0 0 200 44" preserveAspectRatio="none" aria-label="Evaluation over the game">
+          <line x1="0" y1="22" x2="200" y2="22" stroke="var(--line)" stroke-width="1"/>
+          <path d="M0 22 L12 21 L24 22 L30 20 L36 12 L48 10 L60 14 L72 13 L84 17 L96 18 L108 15 L120 22 L132 26 L144 30 L156 28 L168 34 L180 38 L200 40" fill="none" stroke="var(--text-2)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+          <circle cx="36" cy="12" r="4" fill="var(--mq-mistake)"/>
+        </svg>
+      </div>
+      <div class="phases">
+        <span class="chip" data-mq="mistake"><span class="dot"></span>Opening</span>
+        <span class="chip" data-mq="good"><span class="dot"></span>Middlegame</span>
+        <span class="chip" data-mq="best"><span class="dot"></span>Endgame</span>
+      </div>
+    </section>
+
+    <section class="panel__body review">
+      <div>
+        <div class="label">Key moments</div>
+        <div class="moments">
+          <button class="moment" aria-current="true" data-mq="mistake"><span class="dot"></span><span class="mono">5…Nxd5</span><span>Allowed the knight jump to f7</span><small>?</small></button>
+          <button class="moment" data-mq="inaccuracy"><span class="dot"></span><span class="mono">11…Bd6</span><span>Missed …Qxd4</span><small>?!</small></button>
+          <button class="moment" data-mq="best"><span class="dot"></span><span class="mono">19…c5</span><span>Found the only defence</span><small>!</small></button>
+          <button class="moment" data-mq="blunder"><span class="dot"></span><span class="mono">27…Re8</span><span>Dropped the e-pawn</span><small>??</small></button>
+        </div>
+      </div>
+
+      <div class="explain" data-mq="mistake">
+        <span class="chip" data-mq="mistake">Mistake</span>
+        <div class="explain__moves"><span>You played <b>Nxd5</b></span><span>Better was <b>Na5</b></span></div>
+        <p>Taking on d5 leaves <span class="ref">the knight on g5</span> free to jump into <span class="ref">f7</span>, forking your queen and rook. <span class="ref">Na5</span> hits the bishop first and wins time.</p>
+        <div class="explain__actions">
+          <button class="btn btn--primary">Retry this move</button>
+          <button class="btn">Show line</button>
+          <button class="btn btn--quiet">+ Add to training</button>
+        </div>
+      </div>
+
+      <div class="moves-block">
+        <div class="label">Moves</div>
+        <div class="notation">
+          <span class="n">1.</span><span class="m">e4</span><span class="m">e5</span>
+          <span class="n">2.</span><span class="m">Nf3</span><span class="m">Nc6</span>
+          <span class="n">3.</span><span class="m">Bc4</span><span class="m">Nf6</span>
+          <span class="n">4.</span><span class="m">Ng5</span><span class="m">d5</span>
+          <span class="n">5.</span><span class="m">exd5</span><span class="m cur" data-mq="mistake">Nxd5 <span class="g">?</span></span>
+          <span class="n">6.</span><span class="m">Nxf7</span><span class="m">Kxf7</span>
+          <span class="n">7.</span><span class="m">Qf3+</span><span class="m">Ke6</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- TRAIN STATE -->
+    <section class="panel__head train" style="flex-direction:column">
+      <div class="label">Training · 3 of 8</div>
+      <h1 class="panel__title">Find the move that wins time</h1>
+      <div class="panel__sub">From your game on 1 Nov · opening hidden</div>
+      <div class="segments"><i class="done"></i><i class="miss"></i><i class="now"></i><i></i><i></i><i></i><i></i><i></i></div>
+    </section>
+    <section class="panel__body train" style="flex-direction:column">
+      <p class="prompt">Black to move. White's knight on g5 is eyeing f7. Last time you took on d5 and walked into a fork.</p>
+      <div class="hints">
+        <button class="hint open"><span class="label">Idea</span><span>Attack something before you recapture.</span></button>
+        <button class="hint"><span class="label">Piece</span><b>Show which piece moves</b></button>
+        <button class="hint"><span class="label">Answer</span><b>Show the move</b></button>
+      </div>
+      <div class="status">Your move: drag a piece or press <kbd>/</kbd> to type it</div>
+      <div style="margin-top:auto; display:flex; gap:var(--s2)">
+        <button class="btn btn--quiet">Skip</button>
+        <button class="btn btn--quiet">End session</button>
+      </div>
+    </section>
+  </aside>
+</div>
+
+<div class="switcher" role="group" aria-label="Prototype controls">
+  <span class="switcher__desc" id="desc"></span>
+  <div class="switcher__group" id="dir">
+    <button data-v="blend" aria-pressed="true">D · Blend</button>
+    <button data-v="paper" aria-pressed="false">A · Paper</button>
+    <button data-v="night" aria-pressed="false">B · Night</button>
+    <button data-v="club" aria-pressed="false">C · Club</button>
+  </div>
+  <div class="switcher__group" id="theme" title="Light/dark (Blend only)">
+    <button data-v="auto" aria-pressed="true">Auto</button>
+    <button data-v="light" aria-pressed="false">Light</button>
+    <button data-v="dark" aria-pressed="false">Dark</button>
+  </div>
+  <div class="switcher__group" id="panel">
+    <button data-v="review" aria-pressed="true">Review</button>
+    <button data-v="train" aria-pressed="false">Train</button>
+  </div>
+</div>
+
+<script>
+// Two Knights, 5.exd5 — Black (you) to move. Shown from Black's side.
+const FEN = 'r1bqkb1r/ppp2ppp/2n2n2/3Pp1N1/2B5/8/PPPP1PPP/RNBQK2R';
+const ORIENT = 'black';
+const LAST = ['e4', 'd5'];
+const ARROWS = [
+  { from: 'g5', to: 'f7', color: 'var(--arrow-threat)', opacity: 0.55 },
+  { from: 'f6', to: 'd5', color: 'var(--arrow-played)', opacity: 0.85 },
+  { from: 'c6', to: 'a5', color: 'var(--arrow-best)', opacity: 0.9 },
+];
+const GLYPH = { sq: 'd5', text: '?', mq: 'mistake' };
+const DESCRIPTIONS = {
+  blend: 'Paper + Club. Calm page and reading serif, rounded floating cards, brass accent. Follows device light/dark.',
+  paper: 'Light, editorial, calm. Serif for explanations, hairline rules, no shadows.',
+  night: 'Dark, cool, precise. One sans, mono notation, vivid signal colours.',
+  club: 'Warm, bold, friendly. Rounded cards, display serif, brass accent.',
+};
+
+function xy(sq) {
+  const f = sq.charCodeAt(0) - 97, r = +sq[1] - 1;
+  const col = ORIENT === 'white' ? f : 7 - f;
+  const row = ORIENT === 'white' ? 7 - r : r;
+  return [col + 0.5, row + 0.5];
+}
+
+function arrowPolygon(from, to) {
+  const [x1, y1] = xy(from), [x2, y2] = xy(to);
+  const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy);
+  const ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
+  const w = 0.17, hw = 0.5, hl = 0.42;
+  const sx = x1 + ux * 0.22, sy = y1 + uy * 0.22;
+  const tx = x2 - ux * 0.08, ty = y2 - uy * 0.08;
+  const bx = tx - ux * hl, by = ty - uy * hl;
+  const p = [
+    [sx + nx * w / 2, sy + ny * w / 2], [bx + nx * w / 2, by + ny * w / 2],
+    [bx + nx * hw / 2, by + ny * hw / 2], [tx, ty],
+    [bx - nx * hw / 2, by - ny * hw / 2], [bx - nx * w / 2, by - ny * w / 2],
+    [sx - nx * w / 2, sy - ny * w / 2],
+  ];
+  return p.map(([a, b]) => `${a.toFixed(3)},${b.toFixed(3)}`).join(' ');
+}
+
+function renderBoard() {
+  const el = document.getElementById('board');
+  const rows = FEN.split('/').map(r => r.replace(/\d/g, n => '.'.repeat(+n)).split(''));
+  const grid = document.createElement('div');
+  grid.className = 'board__grid';
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const f = ORIENT === 'white' ? col : 7 - col;
+      const r = ORIENT === 'white' ? 7 - row : row;
+      const sq = String.fromCharCode(97 + f) + (r + 1);
+      const cell = document.createElement('div');
+      cell.className = 'sq' + ((f + r) % 2 === 0 ? ' dark' : '') + (LAST.includes(sq) ? ' last' : '');
+      const p = rows[7 - r][f];
+      if (p !== '.') {
+        const img = document.createElement('img');
+        const color = p === p.toUpperCase() ? 'w' : 'b';
+        img.src = `../../vendor/pieces/cburnett/${color}${p.toUpperCase()}.svg`;
+        img.alt = '';
+        cell.append(img);
+      }
+      if (col === 0) cell.insertAdjacentHTML('beforeend', `<span class="coord rank">${r + 1}</span>`);
+      if (row === 7) cell.insertAdjacentHTML('beforeend', `<span class="coord file">${String.fromCharCode(97 + f)}</span>`);
+      grid.append(cell);
+    }
+  }
+  el.append(grid);
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 8 8');
+  svg.setAttribute('class', 'board__arrows');
+  svg.innerHTML = ARROWS.map(a =>
+    `<polygon points="${arrowPolygon(a.from, a.to)}" fill="${a.color}" opacity="${a.opacity}"/>`).join('');
+  el.append(svg);
+
+  const [gx, gy] = xy(GLYPH.sq);
+  const g = document.createElement('div');
+  g.className = 'glyph';
+  g.dataset.mq = GLYPH.mq;
+  g.textContent = GLYPH.text;
+  g.style.left = `${(gx + 0.5) / 8 * 100}%`;
+  g.style.top = `${(gy - 0.5) / 8 * 100}%`;
+  el.append(g);
+}
+
+function bindGroup(id, attr) {
+  const group = document.getElementById(id);
+  group.addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    document.documentElement.dataset[attr] = btn.dataset.v;
+    group.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === btn));
+    if (attr === 'direction') document.getElementById('desc').textContent = DESCRIPTIONS[btn.dataset.v];
+    if (attr === 'panel') document.querySelectorAll('.nav__item').forEach(a =>
+      a.dataset.for === btn.dataset.v ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
+    const url = new URL(location);
+    url.searchParams.set(attr, btn.dataset.v);
+    history.replaceState(null, '', url);
+  });
+  const initial = new URL(location).searchParams.get(attr);
+  const btn = initial && group.querySelector(`[data-v="${initial}"]`);
+  (btn || group.querySelector('button')).click();
+}
+
+renderBoard();
+if (new URL(location).searchParams.get('chrome') === 'off') document.documentElement.dataset.chrome = 'off';
+const strip = document.querySelector('.movestrip');
+const cur = strip.querySelector('.cur');
+strip.scrollLeft = cur.offsetLeft - strip.clientWidth / 2 + cur.offsetWidth / 2;
+bindGroup('dir', 'direction');
+bindGroup('panel', 'panel');
+bindGroup('theme', 'theme');
+</script>
+</body>
+</html>
