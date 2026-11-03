@@ -5,8 +5,11 @@ keep doing through the redesign. Each item says how it is checked today:
 
 - **B**: a behavioural test that runs the code (`validate-practice-logic`,
   `validate-difficulty`, `validate-growth-upgrades`, `validate-practice-upgrades`,
-  `validate-review-teaching`, `validate-openings`).
-- **S**: the browser smoke suite (`scripts/verify-browser.sh`).
+  `validate-review-teaching`, `validate-openings`, `validate-account-continuity`,
+  `validate-learning-transfer`, `validate-opening-transfer`, `validate-recovery`,
+  `validate-useful-progress`).
+- **S**: the browser smoke suite (`scripts/verify-browser.sh`, which also runs
+  the `scripts/verify-*-journeys.js` flows).
 - **R**: only a regex over the source text. **Phase 2 must give each R item a
   behavioural test** (unit test or smoke step) before the code moves.
 - **DB**: Supabase migrations and database tests.
@@ -166,6 +169,49 @@ Reference screenshots: [`docs/baseline/`](baseline/), regenerated with
 - [ ] CSP: no `'unsafe-inline'` in `script-src`; no Wikimedia image hosts. **R** (artefact check; keep)
 - [ ] Supabase: RLS on every table, with owner-only policies using `(select auth.uid())`; `handle_new_user` is security definer with an empty search_path and revoked from public; the practice RPC is security invoker, idempotent by event ID and rebuilds schedules chronologically. **R**, **DB**
 - [ ] Database tests prove account isolation, idempotency and late-event ordering. **DB**
+
+## 13. Account continuity and recovery
+
+- [ ] A real game saves a checkpoint and its reviewed moves. A second browser is offered the saved session, but cloud history never replaces the board automatically. Continuing keeps the PGN under a separate, unrated game identity and leaves the source game unchanged. **S**, **B**
+- [ ] A displaced local session can be recovered, with the exact moves restored. **S**
+- [ ] Offline reviewed moves queue durably, stay visible locally and drain after reconnect, even if the board has since been replaced. A take-back cancels an unsent review, and that review never reappears remotely. **S**, **B**
+- [ ] Stale-tab checkpoint writes pause instead of overwriting; the pause survives reload; explicit continuation forks the stale tab and leaves the source intact. **S**, **B**, **DB** (`verify-account-checkpoints.sql`)
+- [ ] Simultaneous profile syncs from two browsers merge. Profile conflicts reread and retry without overwriting concurrent evidence. Game snapshots commit in order, and a held write doesn't block unrelated games. **S**, **B**
+- [ ] Sign-out affects only this browser. If server logout fails, the cleared local credentials are reconciled. A retained SDK session is reported honestly. A different account sees none of the previous account's history or board. **S**
+- [ ] Backup export includes saved and unsaved games and practice, never authentication storage. Import is staged for the current owner, without remote IDs, keeps the current board, doesn't duplicate data on repeat, and rejects malformed or partial input with nothing changed. Quota and storage failures roll back. **B**, **S**
+- [ ] A recovery journal survives storage failure and recovers once storage returns, without losing data. Ambiguous multi-owner history is refused. **B**
+
+## 14. Learning transfer checks
+
+- [ ] After a rehearsal, a different-position check tests the same idea. It never repeats the source position, the same position with changed move counters still counts as the same, opened checks aren't offered as new, and an exhausted pool doesn't repeat. **B**, **S**
+- [ ] The first decision is recorded and kept: correct retries, hints, completion and merges never erase it, and a hinted first decision isn't called unassisted. **B**
+- [ ] Unknown or unavailable engine results are never graded as misses. **B**, **S**
+- [ ] Checks don't inflate rehearsal or daily progress, and the borrowed game's identity, PGN, stats and level are unchanged afterwards; reload keeps the borrowed game and pending result. **S**
+- [ ] Check history is isolated per account; guest evidence is adopted without leaking. **B**
+
+## 15. Opening transfer (study → play → review)
+
+- [ ] All 35 authored lines produce valid exercises, while missing lessons and invalid lines produce none. A mismatched opening or side is rejected. **B**
+- [ ] Opening context and borrowed games never leak between owners. Opening history is bounded, de-duplicated, survives cross-device merges, and is adopted from guest without loss. **B**, **S**
+- [ ] A proven mate stays graded without engine data. Finishing an exercise restores the old game only after the outgoing save completes. **B**
+- [ ] Custom and zero-move PGN games keep their FEN and history; invalid snapshots are rejected. **B**
+
+## 16. Useful progress
+
+- [ ] Monthly flag windows count each review once and ignore future, malformed, unknown or duplicate entries. Duplicate tags aren't double-counted. Rates use reviewed volume as the denominator. **B**
+- [ ] Comparisons need ≥30 reviews per window (29 stays inconclusive). Missing history never implies improvement, and equal rates say "unchanged". A higher raw count with a lower rate still reports the lower rate. **B**
+- [ ] Hinted, revealed, missed and invalid attempts don't open a transfer checkpoint, and an incomplete baseline never implies progress. **B**
+- [ ] Progress recommends one real next action. An empty state starts a baseline in one click, sparse evidence uses careful language, unplayable positions produce no dead buttons, it respects the play-first preference, and it doesn't replace an unfinished daily focus or a live game. **B**, **S**
+- [ ] Loaded account reviews aren't replaced by stale local data or double-counted. **B**
+- [ ] Unreachable daily plans are repaired without fabricating completion or rewriting a completed day or active play. **B**
+
+## 17. Layout and interaction invariants (current desktop UI)
+
+- [ ] At 1280×800, 1440×900 and 1920×1080: the Coach board area doesn't scroll, the board is square and at least 320px, there's no horizontal page scroll, and exactly one visible primary action is shown per state. **S** (`verify-ui-journeys.js`) *(changes: the new shell keeps the spirit of this check and adds 375px and 1024px)*
+- [ ] The review dialog traps focus, blocks background board shortcuts, and returns focus to an available control when closed. **S**
+- [ ] Top-tab arrow keys don't also step the Library board; the idea selector's arrows aren't consumed by board shortcuts. **S**
+- [ ] Navigating away and back preserves the drill position, hints, attempts and daily progress, and a resumed drill accepts its solution. **S**
+- [ ] Returning from a transient explanation shows the real live board; resuming from Progress reveals feedback and focuses the board. **S**
 
 ---
 

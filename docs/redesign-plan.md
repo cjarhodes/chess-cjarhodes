@@ -110,36 +110,46 @@ real commitment.
 
 ## 1. Why it feels un-tweakable today
 
-Measured against the current `main` (plus the uncommitted work in the tree).
+Measured against `main` at `4a941b3` (22 October 2026). Some pure logic has
+already moved out of `app.js` into `account-continuity.js`,
+`learning-transfer.js` and `opening-transfer.js`, with behavioural
+validators. That's the right direction, and the plan builds on it.
 
 ### Code
 
 | Symptom | Evidence | Why it hurts |
 |---|---|---|
-| One giant runtime file | `app.js` is 8,089 lines, ~470 top-level functions, ~73 module-level `let`s (`app.js:1-90`) | Any change means reading far more than you touch; state can be mutated from anywhere |
-| UI state lives in the DOM | 55 inline `style="display:none"` in `index.html`, ~130 show/hide calls in `app.js` | To know what's on screen you have to replay every handler that ran |
-| Hard-wired element ids | 313 ids in `index.html`, ~210 distinct `$('#…')` lookups in `app.js` | Moving or renaming markup silently breaks behaviour |
-| Two board stacks | `board` (`#myBoard`) and `coachBoard` (`#coachBoard`), each with its own nav, flip, keyboard-move form, highlight and a11y code (`app.js:5620`, `app.js:5634`) | Every board feature is built twice, or only in one mode |
-| Board library ceiling | chessboard.js 1.0 + jQuery: no arrows, no square markers, no premove API, PNG/SVG swap only | "Show why", candidates, threats and drill hints all work around the board instead of drawing on it |
-| Tests that pin the source text | ~220 `requirePattern`/`forbidPattern` regexes over `app.js` across `scripts/validate-*.js`, e.g. `requirePattern(/const CoachController\s*=/)` | A behaviour-preserving refactor fails the validators; renaming a function is a "regression" |
+| One giant runtime file | `app.js` is 9,019 lines, with 383 top-level functions and 81 module-level `let`s (`app.js:1-100`) | Any change means reading far more than you touch, and state can be mutated from anywhere |
+| UI state lives in the DOM | 67 inline `style="display:none"` in `index.html`; ~140 show/hide calls in `app.js` | To know what's on screen, you have to replay every handler that ran |
+| Hard-wired element ids | 360 ids in `index.html`; ~290 distinct `$('#…')` lookups across the scripts | Moving or renaming markup silently breaks behaviour |
+| Two board stacks | `board` (`#myBoard`) and `coachBoard` (`#coachBoard`), each with its own nav, flip, keyboard-move form, highlight and accessibility code (`app.js:6442`, `app.js:6457`) | Every board feature is built twice, or exists in only one mode |
+| Board library ceiling | chessboard.js 1.0 + jQuery: no arrows, no square markers, no premove API, and pieces can only be swapped as images | "Show why", candidates, threats and drill hints all work around the board instead of drawing on it |
+| Tests that pin the source text | ~200 `requirePattern`/`forbidPattern` regexes over the source in `scripts/validate-*.js`, e.g. `requirePattern(/const CoachController\s*=/)` | A refactor that keeps behaviour intact still fails the validators; renaming a function counts as a "regression" |
 
-The source-regex validators deserve special mention: they were a cheap way
+The source-regex validators need special mention. They were a cheap way
 to lock in fixes, but they now act as a cast around the code. They are the
-main reason restructuring feels risky, and the plan replaces them with
-behaviour tests before moving code (Phase 1).
+main reason restructuring feels risky. The plan replaces them with
+behaviour tests before moving code (Phase 2). The newer validators
+(`validate-account-continuity`, `-learning-transfer`, `-opening-transfer`,
+`-useful-progress`, `-recovery`) already test behaviour, and are the model
+to follow.
 
 ### Styles
 
 | Symptom | Evidence |
 |---|---|
-| Tokens exist but are bypassed | 22 colour tokens in `:root`, yet 55 distinct hard-coded hex colours across 81 uses in `styles.css` |
-| No type scale | ~25 distinct `font-size` values between 0.62rem and 1.15rem; 97 `font-family` declarations |
+| Tokens exist but are bypassed | 28 custom properties in `:root`, yet 58 distinct hard-coded hex colours across 85 uses in `styles.css` |
+| No type scale | 47 distinct `font-size` values; 106 `font-family` declarations |
 | No spacing or radius scale | Paddings and gaps are hand-picked per rule |
-| Specificity fights | 20 `!important`; view styles and component styles share one flat file |
+| Specificity fights | 24 `!important`; view styles and component styles share one flat 2,549-line file |
 | Monospace as the body font | Everything is the same width and tone, so hierarchy has to come from tiny uppercase labels |
-| The brand fonts never load | `--font-mono` (JetBrains Mono) and `--font-reading` (Newsreader) have no `@font-face` and no font files; the CSP (`default-src 'self'`) would block Google Fonts anyway. Most visitors see Menlo/Consolas and Georgia |
+| The brand fonts never load | `--font-mono` (JetBrains Mono) and `--font-reading` (Newsreader) have no `@font-face` and no font files, and the CSP (`default-src 'self'`) would block Google Fonts anyway. Most visitors see Menlo/Consolas and Georgia |
 
-### Product / UX (observed at 1440×900)
+### Product / UX (observed at 1440×900; see `docs/baseline/`)
+
+The October work already fixed some of this. Coach now has a status line
+above the board, a single filled "Start training" button, collapsed game
+setup and a calmer first review panel. What remains:
 
 - **Two apps in one tab.** Library and Coach have different layouts, board
   sizes, empty states and control bars. Moving between them feels like
@@ -149,19 +159,20 @@ behaviour tests before moving code (Phase 1).
   Practice/Progress tabs, an adaptive-session card, and seven collapsible
   rail groups (starting position, account, profile, import, repertoire,
   board & sounds, training data).
-- **The Coach left rail is a junk drawer.** Game setup, account sign-in,
-  profile, PGN import, repertoire, settings and backups sit in one column.
-- **Competing primary actions.** "Start adaptive session" and "New game"
-  are both filled claret buttons a few centimetres apart.
-- **Jargon in the most prominent copy.** "Train Opening principle gaps,
-  then transfer" is the headline a new user sees first.
+- **The Coach left rail is still a drawer.** Game setup, account sign-in,
+  profile, PGN import, repertoire, settings and backups all sit in one
+  column (`coach-rail-groups-open.png`).
 - **The board loses space to stacked strips.** `--board-size` is
-  `100vh - 300px` because the centre column stacks a practice banner, an
-  analysis strip, two captured bars, a keyboard-move drawer, a nav row and a
-  control row. On a 900px-tall screen the controls sit at the fold.
-- **The right rail is one long scroll.** Review, opening name, move list,
-  session stats and charts stack vertically; the move list is a row of chips
-  rather than a two-column notation table.
+  `100vh - 300px` because the centre column stacks a status line, a practice
+  banner, an analysis strip, two captured bars, a keyboard-move drawer, a nav
+  row and a control row. `verify-ui-journeys.js` keeps it all on screen at
+  1280×800 and up, but at 1440×900 the controls only just fit along the
+  bottom edge.
+- **The right rail is one long scroll.** Review, threats, opening,
+  evaluation, move list and session stats stack vertically. Library's move
+  list is a grid of chips rather than a notation table.
+- **Quiz shows the answers.** In Library → Quiz, the full move list stays
+  visible (`library-quiz.png`).
 - **Feedback is off the board.** Move quality, best move and threats are
   shown as text in the rail, not as arrows, square tints or glyphs on the
   board where the eye already is.
@@ -322,7 +333,7 @@ Risks that only appear on phones (resolve before shipping phone support):
   and dark themes.
 - Whatever the direction: a UI typeface for controls, a reading face for
   explanations, a mono face only for notation, FEN and numbers.
-- A short type scale and a 4px spacing scale replace the ~25 ad-hoc sizes.
+- A short type scale and a 4px spacing scale replace the 47 ad-hoc sizes.
 - Board themes and piece sets are token swaps.
 
 ---
