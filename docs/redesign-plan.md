@@ -2,6 +2,7 @@
 
 Status: plan agreed in outline, 2 November 2026. Phase 0 done: see
 [behaviour-checklist.md](behaviour-checklist.md) and [baseline/](baseline/).
+Phase 1 done: see [design-spec.md](design-spec.md) and [design-system/](design-system/).
 
 The goal is an app that is pleasant to use and cheap to change: a new
 colour, a new panel, or a new training mode should be a small, local edit
@@ -423,7 +424,7 @@ long before the restructuring is finished.
 | Phase | Scope | Done when |
 |---|---|---|
 | **0. Baseline** ✅ | Commit or shelve the current uncommitted work. Capture reference screenshots of every view (`scripts/capture-baseline.sh` → `docs/baseline/`). Write a behaviour checklist from README + validators (`docs/behaviour-checklist.md`). | Checklist and screenshots exist |
-| **1. Visual direction** | Refine **D · Blend** (Paper + Club, see §6) in `docs/design-directions/`, then specify it fully at all three widths (phone, tablet, desktop): type scale, colour (dark + light), board and piece themes, move-quality colours, arrows, buttons, cards, tabs, notation table and strip, tab bar. Choose fonts that can be vendored as woff2 under the CSP. | One direction chosen; a written token spec with phone and desktop mockups |
+| **1. Visual direction** ✅ | Refine **D · Blend** (Paper + Club, see §6) in `docs/design-directions/`, then specify it fully at all three widths (phone, tablet, desktop): type scale, colour (dark + light), board and piece themes, move-quality colours, arrows, buttons, cards, tabs, notation table and strip, tab bar. Choose fonts that can be vendored as woff2 under the CSP. | One direction chosen; a written token spec with phone and desktop mockups |
 | **2. Safety net** | Convert source-regex validators into behaviour tests (node unit tests for logic, browser smoke for UI). Add `data-testid`s. Can run alongside Phase 1. | Validators no longer read `app.js` as text; all checks green |
 | **3. Tokens + reskin** | Introduce `styles/tokens.css` and layers with the chosen direction's values; replace every raw colour, size, radius and font; vendor the fonts; add the lint script and theme switch. The current layout gets the new look. It stays desktop-only (with the notice) because the old layout can't reflow cheaply. | Lint passes; whole app is in the new direction; light + dark both pass contrast |
 | **4. Extract the core** | Move pure logic (engine, classification, opponent, explanations, storage, sync) into `src/core` and `src/data` as ES modules. Replace SM-2 with FSRS (see §6). | `app.js` < 5,000 lines; core has unit tests; calibration script runs unchanged |
@@ -509,9 +510,9 @@ architecture, and it shows how cheaply the look can change later.
 | Board | Parchment and stone | Slate blue-grey | Ivory and green |
 | Risk | Light-only apps tire some eyes at night, so it needs a dark sibling | Closest to Lichess and Chess.com, so the least distinctive | Most personality; can feel heavy over long sessions |
 
-**Chosen: D · Blend (Paper + Club).** It is the default in the prototype
-(the switcher's Auto / Light / Dark control applies to it). Starting spec,
-to be refined in Phase 1:
+**Chosen: D · Blend (Paper + Club).** The full spec, which supersedes the
+starting values below and settles the open questions, is in
+[design-spec.md](design-spec.md). Starting spec as first proposed:
 
 | Token group | Light | Dark |
 |---|---|---|

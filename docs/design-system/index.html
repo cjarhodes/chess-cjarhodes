@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design system — chess.cjarhodes.com</title>
+<!-- Gallery only: fonts come from Google here. The app vendors them under
+     /fonts/ in Phase 3, because the production CSP blocks Google Fonts. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components.css">
+<style>
+@layer layout {
+  body { padding-bottom: 96px; }
+  .ds-top {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3);
+    padding: var(--space-3) var(--space-5);
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  .ds-top .c-title { font-size: var(--text-lg); margin-right: auto; }
+  .ds-wrap { max-width: 1120px; margin: 0 auto; padding: var(--space-6) var(--space-5); display: grid; gap: var(--space-7); }
+  .ds-sec { display: grid; gap: var(--space-4); }
+  .ds-sec > h2 { font-family: var(--family-display); font-weight: var(--weight-semibold); font-size: var(--text-xl); }
+  .ds-sec > p.lead { color: var(--text-2); max-width: 70ch; }
+  .ds-row { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+  .ds-grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); }
+  .ds-cols { display: grid; gap: var(--space-5); grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); align-items: start; }
+
+  .ds-type { display: grid; grid-template-columns: 230px 1fr; gap: var(--space-2) var(--space-4); align-items: baseline; }
+  .ds-type code { font-family: var(--family-mono); font-size: var(--text-xs); color: var(--text-3); }
+
+  .ds-swatch { border-radius: var(--radius-md); border: 1px solid var(--line); overflow: hidden; background: var(--surface); }
+  .ds-swatch .chip { height: 56px; }
+  .ds-swatch .info { padding: var(--space-2) var(--space-3); font-size: var(--text-xs); display: grid; gap: 2px; }
+  .ds-swatch .info b { font-size: var(--text-sm); }
+  .ds-swatch .info code { font-family: var(--family-mono); color: var(--text-3); }
+
+  .ds-contrast { display: grid; grid-template-columns: 1fr auto auto; gap: 6px var(--space-4); font-size: var(--text-sm); }
+  .ds-contrast .pass { color: var(--success); font-weight: var(--weight-semibold); }
+  .ds-contrast .fail { color: var(--danger); font-weight: var(--weight-semibold); }
+
+  .ds-board-demo { display: grid; grid-template-columns: auto 1fr; gap: var(--space-3); max-width: 460px; }
+  .ds-board-demo .c-strip { grid-column: 2; }
+  .ds-board-demo .c-evalbar { grid-row: 2; }
+  .board { position: relative; aspect-ratio: 1; border-radius: var(--radius-md); overflow: hidden; box-shadow: 0 0 0 6px var(--board-frame), var(--shadow-1); }
+  .board .grid { display: grid; grid-template: repeat(8, 1fr) / repeat(8, 1fr); width: 100%; height: 100%; }
+  .board .sq { position: relative; background: var(--board-light); }
+  .board .sq.dark { background: var(--board-dark); }
+  .board .sq > .mark { position: absolute; inset: 0; }
+  .board .sq img { position: absolute; inset: 4%; width: 92%; height: 92%; z-index: 1; }
+  .board .coord { position: absolute; z-index: 1; font: var(--weight-bold) 0.6875rem/1 var(--family-ui); }
+  .board .coord.r { top: 3px; left: 4px; }
+  .board .coord.f { bottom: 3px; right: 4px; }
+  .board .sq .coord { color: var(--board-coord-on-light); }
+  .board .sq.dark .coord { color: var(--board-coord-on-dark); }
+  .board svg.arrows { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+  .board .c-glyph { position: absolute; z-index: 3; transform: translate(-45%, 45%); }
+
+  .ds-legend { display: grid; gap: var(--space-2); font-size: var(--text-sm); }
+  .ds-legend span { display: inline-flex; align-items: center; gap: var(--space-2); }
+  .ds-legend i { width: 28px; height: 6px; border-radius: 3px; }
+
+  .ds-nav-demo { display: flex; gap: var(--space-5); align-items: flex-start; flex-wrap: wrap; }
+  .ds-nav-demo .c-nav { border-radius: var(--radius-lg); position: static; }
+  .ds-phone { width: 375px; max-width: 100%; border-radius: 28px; overflow: hidden; border: 1px solid var(--line); background: var(--bg); box-shadow: var(--shadow-2); }
+  .ds-phone .c-nav { position: static; flex-direction: row; justify-content: space-around; height: var(--tabbar-h); border-top: 1px solid var(--line); padding: var(--space-1); }
+  .ds-phone .c-nav a { flex: 1; width: auto; font-size: var(--text-xs); gap: 4px; }
+  .ds-phone .c-nav a svg { width: 22px; height: 22px; }
+
+  .ds-serif-test { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); }
+  .ds-serif-test .alt { font-family: var(--family-display); font-weight: 400; }
+
+  @media (max-width: 759px) {
+    .ds-top { position: static; padding: var(--space-3) var(--space-4); }
+    .ds-wrap { padding: var(--space-5) var(--space-4); }
+    .ds-type { grid-template-columns: 1fr; }
+    .ds-board-demo { max-width: 100%; }
+  }
+  .ds-rules { display: grid; gap: var(--space-2); padding-left: 1.2em; color: var(--text-2); }
+  .ds-rules b { color: var(--text); }
+}
+</style>
+</head>
+<body>
+
+<header class="ds-top">
+  <span class="c-title">Design system · D · Blend</span>
+  <div class="c-segmented" id="theme" role="group" aria-label="Colour theme">
+    <button data-v="auto" aria-pressed="true">Auto</button>
+    <button data-v="light" aria-pressed="false">Light</button>
+    <button data-v="dark" aria-pressed="false">Dark</button>
+  </div>
+  <div class="c-segmented" id="boardtheme" role="group" aria-label="Board theme">
+    <button data-v="sage" aria-pressed="true">Sage</button>
+    <button data-v="walnut" aria-pressed="false">Walnut</button>
+    <button data-v="slate" aria-pressed="false">Slate</button>
+    <button data-v="contrast" aria-pressed="false">High contrast</button>
+  </div>
+</header>
+
+<main class="ds-wrap">
+
+  <section class="ds-sec">
+    <h2>Principles</h2>
+    <ul class="ds-rules">
+      <li><b>One primary button per screen state.</b> Everything else is secondary, quiet, or in a menu.</li>
+      <li><b>Say it on the board first.</b> Arrows, tints and quality glyphs; the panel explains why.</li>
+      <li><b>Colour never stands alone.</b> Move quality always carries its glyph or word.</li>
+      <li><b>Three typefaces, three jobs.</b> Fraunces for titles, Newsreader for coach sentences, DM Sans for controls; DM Mono only for moves, FEN and numbers.</li>
+      <li><b>Tokens only.</b> Components never use a raw colour, size, radius or font.</li>
+    </ul>
+  </section>
+
+  <section class="ds-sec">
+    <h2>Type scale</h2>
+    <p class="lead">Seven sizes replace the 47 in today's stylesheet. Coach text is always Newsreader at <code>--text-prose</code>.</p>
+    <div class="ds-type">
+      <code>--text-2xl · Fraunces</code><span class="c-title">You lost the thread on move 5</span>
+      <code>--text-xl · Fraunces</code><span class="c-title c-title--sm">Find the move that wins time</span>
+      <code>--text-lg · DM Sans 600</code><span class="c-heading">Key moments</span>
+      <code>--text-prose · Newsreader</code><span class="c-prose">Taking on d5 leaves the knight on g5 free to jump into f7.</span>
+      <code>--text-md · DM Sans</code><span>Play on the board or type a move.</span>
+      <code>--text-sm · DM Sans / Mono</code><span class="c-meta">vs Coach 1400 · Two Knights Defence · <span class="c-mono">5…Nxd5</span></span>
+      <code>--text-xs · DM Sans 600</code><span class="c-label">Your accuracy</span>
+    </div>
+  </section>
+
+  <section class="ds-sec">
+    <h2>Colour</h2>
+    <p class="lead">Semantic tokens with their current value. Toggle the theme above to check dark.</p>
+    <div class="ds-grid" id="swatches"></div>
+    <h3 class="c-heading">Contrast (measured live)</h3>
+    <div class="ds-contrast" id="contrast"></div>
+  </section>
+
+  <section class="ds-sec">
+    <h2>Move quality</h2>
+    <p class="lead">Six classes. The chip, the notation glyph and the board badge always show the symbol, so the meaning survives colour blindness.</p>
+    <div class="ds-row">
+      <span class="c-chip" data-mq="brilliant">Brilliant</span>
+      <span class="c-chip" data-mq="best">Best</span>
+      <span class="c-chip" data-mq="good">Good</span>
+      <span class="c-chip" data-mq="inaccuracy">Inaccuracy</span>
+      <span class="c-chip" data-mq="mistake">Mistake</span>
+      <span class="c-chip" data-mq="blunder">Blunder</span>
+    </div>
+    <div class="ds-row">
+      <span class="c-glyph" data-mq="brilliant"></span>
+      <span class="c-glyph" data-mq="best"></span>
+      <span class="c-glyph" data-mq="good"></span>
+      <span class="c-glyph" data-mq="inaccuracy"></span>
+      <span class="c-glyph" data-mq="mistake"></span>
+      <span class="c-glyph" data-mq="blunder"></span>
+    </div>
+  </section>
+
+  <section class="ds-sec">
+    <h2>Board</h2>
+    <p class="lead">Four board themes. Overlays: last move, selected square, legal-move dots, check, three arrow kinds and a quality badge.</p>
+    <div class="ds-cols">
+      <div class="ds-board-demo">
+        <div class="c-strip"><span class="avatar">C</span><span class="name">Coach</span><span class="meta">1400</span><span class="caps"><img src="../../vendor/pieces/cburnett/bP.svg" alt="">+1</span></div>
+        <div class="c-evalbar" style="--eval: 56%" aria-label="Evaluation +0.3"><span></span></div>
+        <div class="board" id="board"></div>
+        <div class="c-strip"><span class="avatar">Y</span><span class="name">You</span><span class="meta">White</span></div>
+      </div>
+      <div class="ds-legend">
+        <span><i style="background: var(--arrow-best)"></i>Best move</span>
+        <span><i style="background: var(--arrow-played)"></i>Move you played</span>
+        <span><i style="background: var(--arrow-threat)"></i>Opponent threat</span>
+        <span><i style="background: var(--arrow-hint)"></i>Hint (drills)</span>
+        <span><i style="background: var(--board-last)"></i>Last move</span>
+        <span><i style="background: var(--board-select)"></i>Selected piece</span>
+        <p class="c-meta">Eval bar: vertical beside the board on tablet and desktop; a 6px horizontal bar above the board on phone. Hidden during drills.</p>
+        <div class="c-evalbar c-evalbar--horizontal" style="--eval: 56%"><span></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ds-sec">
+    <h2>Buttons and inputs</h2>
+    <div class="ds-row">
+      <button class="c-btn c-btn--primary">Retry this move</button>
+      <button class="c-btn">Show line</button>
+      <button class="c-btn c-btn--quiet">+ Add to training</button>
+      <button class="c-btn c-btn--danger">Resign</button>
+      <button class="c-btn" disabled>Disabled</button>
+      <button class="c-btn c-btn--icon" aria-label="Flip board">⇅</button>
+    </div>
+    <div class="ds-cols">
+      <label class="c-field"><span class="c-label">Type a move</span><input class="c-input c-input--mono" placeholder="e4, Nf3 or e2e4"></label>
+      <label class="c-field"><span class="c-label">Email</span><input class="c-input" type="email" placeholder="you@example.com"></label>
+    </div>
+    <div class="ds-row">
+      <div class="c-segmented" role="group" aria-label="Play as"><button aria-pressed="true">White</button><button aria-pressed="false">Black</button><button aria-pressed="false">Random</button></div>
+      <label class="c-check"><input type="checkbox" checked> Adapt level automatically</label>
+    </div>
+    <label class="c-field" style="max-width: 360px"><span class="c-label">Opponent level · 1200</span><input class="c-range" type="range" min="400" max="2400" value="1200" step="50"></label>
+    <button class="c-btn c-btn--primary c-btn--block" style="max-width: 360px">Start training</button>
+  </section>
+
+  <section class="ds-sec">
+    <h2>Panels</h2>
+    <div class="ds-cols">
+      <div class="c-card" style="display:grid; gap: var(--space-3)">
+        <div class="c-tabs" role="tablist"><button role="tab" aria-selected="true">Review</button><button role="tab" aria-selected="false">Moves</button><button role="tab" aria-selected="false">Engine</button></div>
+        <div class="c-status"><span class="c-label">Your turn · White</span><span>Play on the board or type a move.</span></div>
+        <div class="ds-row" style="gap: var(--space-5)">
+          <div class="c-stat"><b>74</b><span>Your accuracy</span></div>
+          <div class="c-stat"><b>91</b><span>Coach</span></div>
+        </div>
+        <div class="c-card c-card--inset" data-mq="mistake" style="display:grid; gap: var(--space-3)">
+          <span class="c-chip" data-mq="mistake">Mistake</span>
+          <p class="c-meta">You played <b class="c-mono">Nxd5</b> · Better was <b class="c-mono">Na5</b></p>
+          <p class="c-prose">Taking on d5 leaves <span class="c-ref">the knight on g5</span> free to jump into <span class="c-ref">f7</span>, forking your queen and rook. <span class="c-ref">Na5</span> hits the bishop first and wins time.</p>
+          <div class="ds-row"><button class="c-btn c-btn--primary">Retry this move</button><button class="c-btn">Show line</button></div>
+        </div>
+        <details class="c-disclosure"><summary>Engine details</summary><p class="c-meta">Depth 18 · Nc3 Bg7 d4 d6 Bc4</p></details>
+      </div>
+
+      <div class="c-card" style="display:grid; gap: var(--space-4)">
+        <div><span class="c-label">Training · 3 of 8</span><h3 class="c-title c-title--sm">Find the move that wins time</h3></div>
+        <div class="c-segments"><i data-state="done"></i><i data-state="missed"></i><i data-state="current"></i><i></i><i></i><i></i><i></i><i></i></div>
+        <p class="c-prose">Black to move. White's knight on g5 is eyeing f7.</p>
+        <button class="c-hint" aria-expanded="true"><span class="c-label">Idea</span>Attack something before you recapture.</button>
+        <button class="c-hint" aria-expanded="false"><span class="c-label">Piece</span><b>Show which piece moves</b></button>
+        <button class="c-hint" aria-expanded="false"><span class="c-label">Answer</span><b>Show the move</b></button>
+        <div class="c-banner" data-tone="warning">Offline. Your attempts are saved and will sync when you reconnect.</div>
+      </div>
+
+      <div class="c-card" style="display:grid; gap: var(--space-3)">
+        <span class="c-label">Moves</span>
+        <div class="c-notation">
+          <span class="n">1.</span><button>e4</button><button>e5</button>
+          <span class="n">2.</span><button>Nf3</button><button>Nc6</button>
+          <span class="n">3.</span><button>Bc4</button><button>Nf6</button>
+          <span class="n">4.</span><button>Ng5</button><button>d5</button>
+          <span class="n">5.</span><button>exd5</button><button aria-current="true" data-mq="mistake">Nxd5</button>
+          <span class="n">6.</span><button data-mq="best">Nxf7</button><button>Kxf7</button>
+        </div>
+        <span class="c-label">Phone strip</span>
+        <div class="c-notation-strip"><span class="n">4.</span><button>Ng5</button><button>d5</button><span class="n">5.</span><button>exd5</button><button aria-current="true">Nxd5?</button><span class="n">6.</span><button>Nxf7</button><button>Kxf7</button></div>
+        <dl class="c-statlist"><dt>Moves played</dt><dd>34</dd><dt>Best</dt><dd>12</dd><dt>Mistakes</dt><dd>2</dd></dl>
+        <div class="c-progress"><span style="width: 40%"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ds-sec">
+    <h2>Navigation</h2>
+    <p class="lead">Four destinations. Labelled rail on desktop, icon rail on tablet, bottom tab bar plus app bar on phone; Settings moves to the app bar gear on phone.</p>
+    <div class="ds-nav-demo">
+      <nav class="c-nav" aria-label="Main (desktop)" id="nav-rail"></nav>
+      <div class="ds-phone">
+        <div class="c-appbar"><h1>Game review</h1><button class="c-btn c-btn--quiet c-btn--icon" aria-label="Settings">⚙</button></div>
+        <div class="c-empty"><div class="c-title c-title--sm">Nothing due today</div><p>You cleared your training queue. Play a game to find the next thing to work on.</p><button class="c-btn c-btn--primary">Play a game</button></div>
+        <nav class="c-nav" aria-label="Main (phone)" id="nav-tabs"></nav>
+      </div>
+    </div>
+  </section>
+
+  <section class="ds-sec">
+    <h2>Dialog</h2>
+    <div class="c-dialog" style="position: static; display: grid; gap: var(--space-4)">
+      <div><span class="c-label">Game over</span><h3 class="c-title c-title--sm">Resigned · Black wins</h3></div>
+      <p class="c-meta">Your accuracy was 74. Two moments are worth practising.</p>
+      <div class="ds-row"><button class="c-btn c-btn--primary">Review key moments</button><button class="c-btn c-btn--quiet">New game</button></div>
+    </div>
+  </section>
+
+  <section class="ds-sec">
+    <h2>Serif test: explanation text</h2>
+    <p class="lead">Settles the two-serif question. Left: Newsreader (chosen for coach text). Right: Fraunces at text size, for comparison.</p>
+    <div class="ds-serif-test">
+      <div class="c-card c-card--inset"><span class="c-label">Newsreader · --text-prose</span><p class="c-prose" id="prose-a"></p></div>
+      <div class="c-card c-card--inset"><span class="c-label">Fraunces · --text-prose</span><p class="c-prose alt" id="prose-b"></p></div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const NAV = [
+  ['Train', '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>', '8'],
+  ['Play', '<path d="M7 20h10M8 16h8l-1-4 2-3c0-3-2.5-5-6-5-1 0-2 .5-2 .5L7 6l1.5 1.5L6 10l1 1.5 3-1V12l-2 4z"/>'],
+  ['Study', '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/>'],
+  ['Progress', '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'],
+];
+const navHtml = (current, withSettings) => NAV.map(([label, path, badge]) =>
+  `<a href="#"${label === current ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg>${badge ? `<span class="c-badge">${badge}</span>` : ''}${label}</a>`
+).join('') + (withSettings ? '<a href="#" data-desktop-only>⚙<span>Settings</span></a>' : '');
+document.getElementById('nav-rail').innerHTML = navHtml('Play', true);
+document.getElementById('nav-tabs').innerHTML = navHtml('Train', false);
+
+const PROSE = 'Taking on d5 looks natural, but it leaves the knight on g5 free to jump into f7, forking your queen and rook. Before recapturing, look for a move that attacks something: Na5 hits the bishop on c4, so White has to spend a tempo saving it, and your knight on f6 stays put to guard the kingside. Habit to keep: when the opponent has a piece aimed at f7, check every capture for what it leaves undefended.';
+document.getElementById('prose-a').textContent = PROSE;
+document.getElementById('prose-b').textContent = PROSE;
+
+// Semantic swatches.
+const SWATCHES = ['--bg', '--surface', '--surface-2', '--line', '--text', '--text-2', '--text-3', '--accent', '--accent-ink', '--accent-text', '--danger', '--success', '--board-light', '--board-dark'];
+function renderSwatches() {
+  const cs = getComputedStyle(document.documentElement);
+  document.getElementById('swatches').innerHTML = SWATCHES.map(name =>
+    `<div class="ds-swatch"><div class="chip" style="background: var(${name})"></div><div class="info"><b>${name}</b><code>${cs.getPropertyValue(name).trim()}</code></div></div>`
+  ).join('');
+}
+
+// Live contrast for the pairs the components actually use.
+const PAIRS = [
+  ['--text', '--surface', 4.5], ['--text', '--bg', 4.5], ['--text', '--surface-2', 4.5],
+  ['--text-2', '--surface', 4.5], ['--text-2', '--surface-2', 4.5], ['--text-2', '--bg', 4.5],
+  ['--text-3', '--surface', 4.5], ['--text-3', '--surface-2', 4.5], ['--text-3', '--bg', 4.5], ['--text-3', '--nav-bg', 4.5],
+  ['--accent-ink', '--accent', 4.5], ['--accent-text', '--surface', 4.5], ['--accent-text', '--bg', 4.5],
+  ['--mq-best', '--surface', 3], ['--mq-inaccuracy', '--surface', 3], ['--mq-mistake', '--surface', 3], ['--mq-blunder', '--surface', 3],
+  ['--board-dark', '--board-light', 1.5],
+];
+function rgb(value) {
+  const probe = document.createElement('span');
+  probe.style.color = value;
+  document.body.append(probe);
+  const out = getComputedStyle(probe).color.match(/[\d.]+/g).map(Number);
+  probe.remove();
+  return out;
+}
+function lum([r, g, b]) {
+  const c = [r, g, b].map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+function renderContrast() {
+  const cs = getComputedStyle(document.documentElement);
+  const rows = PAIRS.map(([fg, bg, min]) => {
+    const a = lum(rgb(cs.getPropertyValue(fg).trim())), b = lum(rgb(cs.getPropertyValue(bg).trim()));
+    const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    const ok = ratio >= min;
+    return `<span>${fg} on ${bg}</span><span class="c-mono">${ratio.toFixed(2)}:1</span><span class="${ok ? 'pass' : 'fail'}">${ok ? 'pass' : 'fail'} (≥${min})</span>`;
+  });
+  document.getElementById('contrast').innerHTML = rows.join('');
+}
+
+// Board demo: Italian, 6...Bb6 with overlays.
+const FEN = 'r1bqk2r/pppp1ppp/1bn2n2/4p3/2B1P3/2NP1N2/PPP2PPP/R1BQK2R';
+const LAST = ['c5', 'b6'], SELECT = 'f3', DOTS = ['g5', 'h4', 'd2', 'g1'], CHECK = null;
+const ARROWS = [
+  { from: 'f3', to: 'g5', color: 'var(--arrow-best)' },
+  { from: 'c3', to: 'a4', color: 'var(--arrow-played)' },
+  { from: 'b6', to: 'f2', color: 'var(--arrow-threat)', opacity: 0.6 },
+];
+const GLYPH = { sq: 'a4', mq: 'inaccuracy' };
+const xy = sq => [sq.charCodeAt(0) - 97 + 0.5, 8 - +sq[1] + 0.5];
+function arrow(from, to) {
+  const [x1, y1] = xy(from), [x2, y2] = xy(to);
+  const len = Math.hypot(x2 - x1, y2 - y1), ux = (x2 - x1) / len, uy = (y2 - y1) / len, nx = -uy, ny = ux;
+  const w = 0.17, hw = 0.5, hl = 0.42;
+  const sx = x1 + ux * 0.22, sy = y1 + uy * 0.22, tx = x2 - ux * 0.08, ty = y2 - uy * 0.08, bx = tx - ux * hl, by = ty - uy * hl;
+  return [[sx + nx * w / 2, sy + ny * w / 2], [bx + nx * w / 2, by + ny * w / 2], [bx + nx * hw / 2, by + ny * hw / 2], [tx, ty],
+    [bx - nx * hw / 2, by - ny * hw / 2], [bx - nx * w / 2, by - ny * w / 2], [sx - nx * w / 2, sy - ny * w / 2]]
+    .map(p => p.map(n => n.toFixed(3)).join(',')).join(' ');
+}
+function renderBoard() {
+  const el = document.getElementById('board');
+  const rows = FEN.split('/').map(r => r.replace(/\d/g, n => '.'.repeat(+n)).split(''));
+  let html = '<div class="grid">';
+  for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++) {
+    const sq = String.fromCharCode(97 + col) + (8 - row);
+    const dark = (row + col) % 2 === 1;
+    const p = rows[row][col];
+    let mark = '';
+    if (LAST.includes(sq)) mark = '<span class="mark c-square-last"></span>';
+    if (sq === SELECT) mark = '<span class="mark c-square-select"></span>';
+    if (sq === CHECK) mark = '<span class="mark c-square-check"></span>';
+    html += `<div class="sq${dark ? ' dark' : ''}${DOTS.includes(sq) ? ' c-square-dot' : ''}">${mark}`;
+    if (p !== '.') html += `<img alt="" src="../../vendor/pieces/cburnett/${p === p.toUpperCase() ? 'w' : 'b'}${p.toUpperCase()}.svg">`;
+    if (col === 0) html += `<span class="coord r">${8 - row}</span>`;
+    if (row === 7) html += `<span class="coord f">${sq[0]}</span>`;
+    html += '</div>';
+  }
+  html += '</div><svg class="arrows" viewBox="0 0 8 8">' + ARROWS.map(a =>
+    `<polygon points="${arrow(a.from, a.to)}" style="fill: ${a.color}; opacity: ${a.opacity || 'var(--arrow-opacity)'}"/>`).join('') + '</svg>';
+  const [gx, gy] = xy(GLYPH.sq);
+  html += `<span class="c-glyph" data-mq="${GLYPH.mq}" style="left: ${(gx + 0.5) / 8 * 100}%; top: ${(gy - 0.5) / 8 * 100}%"></span>`;
+  el.innerHTML = html;
+}
+
+function bind(id, apply) {
+  const group = document.getElementById(id);
+  const select = btn => {
+    group.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === btn));
+    apply(btn.dataset.v);
+    const url = new URL(location); url.searchParams.set(id, btn.dataset.v); history.replaceState(null, '', url);
+    renderSwatches(); renderContrast();
+  };
+  group.addEventListener('click', e => { const b = e.target.closest('button'); if (b) select(b); });
+  const initial = new URL(location).searchParams.get(id);
+  select(group.querySelector(`[data-v="${initial}"]`) || group.querySelector('button'));
+}
+renderBoard();
+bind('theme', v => { if (v === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = v; });
+bind('boardtheme', v => { document.documentElement.dataset.board = v; });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { renderSwatches(); renderContrast(); });
+</script>
+</body>
+</html>

@@ -8,9 +8,10 @@
      them as woff2 because the production CSP blocks third-party fonts. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Public+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Public+Sans:wght@400;500;600;700&display=swap">
 <style>
 @layer reset, tokens, base, components, layout, prototype;
+@import url("../design-system/tokens.css") layer(tokens);
 
 @layer reset {
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -38,7 +39,6 @@
     --step-2: 1.5rem;
     --step-3: 2rem;
 
-    --accent-text: var(--accent); /* accent used as text or icon colour */
     --nav-w: 84px;
     --panel-w: 400px;
     --strip-h: 40px;
@@ -145,122 +145,25 @@
     --eval-black: #2a303b;
   }
 
-  /* D — BLEND (Paper + Club). Paper's calm page and reading serif; Club's
-     rounded floating cards, brass accent and bolder headlines. Light by
-     default, dark when the device asks for it, overridable in Settings. */
+  /* D — BLEND: colours come straight from docs/design-system/tokens.css
+     (imported above). This block only maps the spec's names onto the
+     names this prototype's components use. */
   [data-direction="blend"] {
-    --bg: #f5efe3;
-    --surface: #fffcf6;
-    --surface-2: #f1e8d6;
-    --line: #e3d9c5;
-    --text: #1f1b15;
-    --text-2: #5c5446;
-    --text-3: #6e6452;
-    --accent: #e9ac3f;
-    --accent-ink: #261a05;
-    --accent-soft: rgba(233, 172, 63, 0.18);
-    --accent-text: #8f620c;
-    --nav-bg: #ece4d3;
-    --nav-active: #fffcf6;
-
-    --font-ui: 'DM Sans', system-ui, sans-serif;
-    --font-display: 'Fraunces', Georgia, serif;
-    --font-prose: 'Newsreader', Georgia, serif;
-    --font-mono: 'DM Mono', ui-monospace, monospace;
-    --display-weight: 600;
-    --display-size: var(--step-3);
-    --prose-size: 1.125rem;
+    --font-ui: var(--family-ui);
+    --font-display: var(--family-display);
+    --font-prose: var(--family-prose);
+    --font-mono: var(--family-mono);
+    --display-weight: var(--weight-semibold);
+    --display-size: var(--text-2xl);
+    --prose-size: var(--text-prose);
     --label-case: none;
     --label-tracking: 0;
-
-    --radius-s: 8px;
-    --radius-m: 12px;
-    --radius-l: 18px;
-    --shadow: 0 1px 2px rgba(70, 50, 20, 0.06), 0 8px 24px rgba(70, 50, 20, 0.08);
-    --card-border: 1px solid var(--line);
-
-    --board-light: #f1e6cb;
-    --board-dark: #84a184;
-    --board-frame: #e3d9c5;
-    --hl-last: rgba(233, 172, 63, 0.42);
-    --arrow-best: #2f7d4c;
-    --arrow-played: #cf4f35;
-    --arrow-threat: #c58f22;
-
-    --mq-best: #2f7d4c;
-    --mq-good: #6b8f3a;
-    --mq-inaccuracy: #b5861b;
-    --mq-mistake: #cc6a21;
-    --mq-blunder: #c2412d;
-
-    --eval-white: #ffffff;
-    --eval-black: #2b2a24;
+    --radius-s: var(--radius-sm);
+    --radius-m: var(--radius-md);
+    --radius-l: var(--radius-lg);
+    --shadow: var(--shadow-1);
+    --hl-last: var(--board-last);
   }
-
-  @media (prefers-color-scheme: dark) {
-    [data-direction="blend"]:not([data-theme="light"]) { 
-    --bg: #121714;
-    --surface: #1b221e;
-    --surface-2: #242d28;
-    --line: #2e3933;
-    --text: #f2ece0;
-    --text-2: #c2c4b6;
-    --text-3: #8d9587;
-    --accent: #f0b84a;
-    --accent-ink: #1f1607;
-    --accent-soft: rgba(240, 184, 74, 0.15);
-    --accent-text: #f0b84a;
-    --nav-bg: #0e1310;
-    --nav-active: #242d28;
-    --shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
-    --card-border: 1px solid transparent;
-    --board-light: #e8dcc0;
-    --board-dark: #6e8d71;
-    --board-frame: #0e1310;
-    --hl-last: rgba(240, 184, 74, 0.42);
-    --arrow-best: #8fdc6a;
-    --arrow-played: #ff7a59;
-    --arrow-threat: #f0b84a;
-    --mq-best: #7fd65a;
-    --mq-good: #b5d86b;
-    --mq-inaccuracy: #f0c95a;
-    --mq-mistake: #ff9a52;
-    --mq-blunder: #ff6a5a;
-    --eval-white: #f2ece0;
-    --eval-black: #0e1310;
-   }
-  }
-  [data-direction="blend"][data-theme="dark"] { 
-    --bg: #121714;
-    --surface: #1b221e;
-    --surface-2: #242d28;
-    --line: #2e3933;
-    --text: #f2ece0;
-    --text-2: #c2c4b6;
-    --text-3: #8d9587;
-    --accent: #f0b84a;
-    --accent-ink: #1f1607;
-    --accent-soft: rgba(240, 184, 74, 0.15);
-    --accent-text: #f0b84a;
-    --nav-bg: #0e1310;
-    --nav-active: #242d28;
-    --shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
-    --card-border: 1px solid transparent;
-    --board-light: #e8dcc0;
-    --board-dark: #6e8d71;
-    --board-frame: #0e1310;
-    --hl-last: rgba(240, 184, 74, 0.42);
-    --arrow-best: #8fdc6a;
-    --arrow-played: #ff7a59;
-    --arrow-threat: #f0b84a;
-    --mq-best: #7fd65a;
-    --mq-good: #b5d86b;
-    --mq-inaccuracy: #f0c95a;
-    --mq-mistake: #ff9a52;
-    --mq-blunder: #ff6a5a;
-    --eval-white: #f2ece0;
-    --eval-black: #0e1310;
-   }
 
   /* C — CLUB: warm, bold, friendly. A coach who's glad to see you. */
   [data-direction="club"] {
@@ -397,7 +300,7 @@
   }
   .nav__item svg { width: 22px; height: 22px; }
   .nav__item[aria-current] { background: var(--nav-active); color: var(--text); box-shadow: var(--shadow); }
-  .nav__item[aria-current] svg { color: var(--accent-text); }
+  .nav__item[aria-current] svg { color: var(--accent-text, var(--accent)); }
   .nav__spacer { flex: 1; }
   .nav__badge {
     position: absolute; transform: translate(12px, -4px);
@@ -934,6 +837,7 @@ function renderBoard() {
   el.append(g);
 }
 
+let themeChoice = 'auto';
 function bindGroup(id, attr) {
   const group = document.getElementById(id);
   group.addEventListener('click', e => {
@@ -942,6 +846,8 @@ function bindGroup(id, attr) {
     document.documentElement.dataset[attr] = btn.dataset.v;
     group.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === btn));
     if (attr === 'direction') document.getElementById('desc').textContent = DESCRIPTIONS[btn.dataset.v];
+    if (attr === 'theme') themeChoice = btn.dataset.v;
+    document.documentElement.dataset.theme = document.documentElement.dataset.direction === 'blend' ? themeChoice : 'light';
     if (attr === 'panel') document.querySelectorAll('.nav__item').forEach(a =>
       a.dataset.for === btn.dataset.v ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
     const url = new URL(location);

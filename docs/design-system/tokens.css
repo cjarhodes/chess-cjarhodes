@@ -1,0 +1,301 @@
+/* chess.cjarhodes.com design tokens: D · Blend (Paper + Club).
+   Phase 1 of docs/redesign-plan.md. Phase 3 moves this file to
+   styles/tokens.css unchanged.
+
+   Three tiers:
+     1. Primitives: raw palette and scales. Never used by components.
+     2. Semantic: what a colour or size is for. Light by default; dark
+        follows prefers-color-scheme unless <html data-theme="light|dark">
+        overrides it.
+     3. Component: board, arrows, move quality, eval. Board themes switch
+        with <html data-board="sage|walnut|slate|contrast">.
+
+   Components read tiers 2 and 3 only. */
+
+@layer reset, tokens, base, components, layout, utilities;
+
+@layer tokens {
+  :root {
+    /* ── 1. Primitives ───────────────────────────────────────── */
+
+    /* Paper: warm neutrals for the light theme */
+    --paper-0: #ffffff;
+    --paper-50: #fffcf6;
+    --paper-100: #f5efe3;
+    --paper-200: #f1e8d6;
+    --paper-300: #ece4d3;
+    --paper-400: #e3d9c5;
+    --paper-600: #6e6452;
+    --paper-700: #5c5446;
+    --paper-900: #1f1b15;
+
+    /* Moss: green-black neutrals for the dark theme */
+    --moss-50: #f2ece0;
+    --moss-200: #c2c4b6;
+    --moss-400: #8d9587;
+    --moss-700: #2e3933;
+    --moss-750: #242d28;
+    --moss-800: #1b221e;
+    --moss-900: #121714;
+    --moss-950: #0e1310;
+
+    /* Brass: the single accent */
+    --brass-300: #f0b84a;
+    --brass-400: #e9ac3f;
+    --brass-700: #8f620c;
+    --brass-ink: #261a05;
+
+    /* Signal hues for move quality and arrows */
+    --green-600: #2f7d4c;
+    --green-300: #8fdc6a;
+    --olive-600: #6b8f3a;
+    --olive-300: #b5d86b;
+    --amber-600: #a67a12;
+    --amber-300: #f0c95a;
+    --orange-600: #c0601a;
+    --orange-300: #ff9a52;
+    --red-600: #c2412d;
+    --red-300: #ff6a5a;
+    --clay-500: #cf4f35;
+    --clay-300: #ff7a59;
+    --iris-500: #5566cc;
+    --iris-300: #9aa8ff;
+
+    /* Type families. Phase 3 vendors these as woff2 under /fonts/ (the CSP
+       blocks Google Fonts). All four are SIL Open Font License. */
+    --family-display: 'Fraunces', Georgia, serif;
+    --family-prose: 'Newsreader', 'Iowan Old Style', Georgia, serif;
+    --family-ui: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --family-mono: 'DM Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+    /* Type scale: seven steps replace the 47 sizes in today's styles.css */
+    --text-xs: 0.75rem;     /* 12px labels, captions, coordinates */
+    --text-sm: 0.875rem;    /* 14px secondary UI, notation */
+    --text-md: 1rem;        /* 16px body UI, buttons */
+    --text-prose: 1.125rem; /* 18px coach explanations, prompts (Newsreader) */
+    --text-lg: 1.25rem;     /* 20px card titles, app bar */
+    --text-xl: 1.5rem;      /* 24px panel titles on phone, big numbers */
+    --text-2xl: 2rem;       /* 32px panel titles on desktop (Fraunces) */
+
+    --leading-tight: 1.15;
+    --leading-snug: 1.35;
+    --leading-body: 1.5;
+    --leading-prose: 1.55;
+
+    --weight-regular: 400;
+    --weight-medium: 500;
+    --weight-semibold: 600;
+    --weight-bold: 700;
+
+    /* Spacing: 4px base */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --space-7: 48px;
+    --space-8: 64px;
+
+    /* Shape */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 18px;
+    --radius-pill: 999px;
+
+    /* Motion */
+    --duration-fast: 120ms;
+    --duration-base: 200ms;
+    --duration-slow: 320ms;
+    --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* Layout. Breakpoints can't be custom properties inside media queries;
+       they are 760px (phone → tablet) and 1200px (tablet → desktop). */
+    --nav-w: 84px;
+    --nav-w-compact: 64px;
+    --panel-w: 400px;
+    --panel-w-compact: 340px;
+    --appbar-h: 48px;
+    --tabbar-h: 60px;
+    --strip-h: 40px;
+    --strip-h-phone: 36px;
+    --toolbar-h: 44px;
+    --tap-min: 44px;
+
+    /* ── 2. Semantic (light) ─────────────────────────────────── */
+    color-scheme: light;
+
+    --bg: var(--paper-100);              /* page */
+    --surface: var(--paper-50);          /* cards, panels */
+    --surface-2: var(--paper-200);       /* raised inset: explanation card, inputs */
+    --line: var(--paper-400);            /* hairlines, card borders */
+    --text: var(--paper-900);            /* primary text: 16.0:1 on surface */
+    --text-2: var(--paper-700);          /* secondary text */
+    --text-3: var(--paper-600);          /* muted labels; ≥ 4.5:1 on every surface */
+    --nav-bg: var(--paper-300);
+    --nav-active: var(--paper-50);
+
+    --accent: var(--brass-400);          /* fills only: primary button, current move */
+    --accent-ink: var(--brass-ink);      /* text and icons on --accent */
+    --accent-text: var(--brass-700);     /* accent as text or icon on surfaces */
+    --accent-soft: rgba(233, 172, 63, 0.18); /* selected rows, soft highlights */
+    --focus-ring: var(--brass-700);
+
+    --danger: var(--red-600);
+    --success: var(--green-600);
+
+    --shadow-1: 0 1px 2px rgba(70, 50, 20, 0.06), 0 8px 24px rgba(70, 50, 20, 0.08);
+    --shadow-2: 0 2px 6px rgba(70, 50, 20, 0.10), 0 18px 48px rgba(70, 50, 20, 0.16);
+    --card-border: 1px solid var(--line);
+    --scrim: rgba(31, 27, 21, 0.42);
+
+    /* ── 3. Component ────────────────────────────────────────── */
+
+    /* Move quality. Always paired with its glyph or label: never colour alone. */
+    --mq-brilliant: var(--green-600);
+    --mq-best: var(--green-600);
+    --mq-good: var(--olive-600);
+    --mq-inaccuracy: var(--amber-600);
+    --mq-mistake: var(--orange-600);
+    --mq-blunder: var(--red-600);
+
+    /* Arrows and board marks */
+    --arrow-best: var(--green-600);
+    --arrow-played: var(--clay-500);
+    --arrow-threat: var(--iris-500);  /* cool, so threats never read as advice */
+    --arrow-hint: var(--brass-700);
+    --arrow-opacity: 0.85;
+
+    /* Evaluation */
+    --eval-white: var(--paper-0);
+    --eval-black: #2b2a24;
+    --chart-line: var(--text-2);
+    --chart-grid: var(--line);
+
+    /* Board: sage (default). Other themes below. */
+    --board-light: #f1e6cb;
+    --board-dark: #84a184;
+    --board-frame: var(--paper-400);
+    --board-last: rgba(233, 172, 63, 0.42);
+    --board-select: rgba(233, 172, 63, 0.55);
+    --board-dot: rgba(31, 27, 21, 0.22);
+    --board-check: radial-gradient(circle, rgba(194, 65, 45, 0.85) 0%, rgba(194, 65, 45, 0) 70%);
+    --board-coord-on-light: #6f8a6f;
+    --board-coord-on-dark: #f1e6cb;
+  }
+
+  /* ── Dark theme ────────────────────────────────────────────── */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: var(--moss-900);
+      --surface: var(--moss-800);
+      --surface-2: var(--moss-750);
+      --line: var(--moss-700);
+      --text: var(--moss-50);
+      --text-2: var(--moss-200);
+      --text-3: var(--moss-400);
+      --nav-bg: var(--moss-950);
+      --nav-active: var(--moss-750);
+      --accent: var(--brass-300);
+      --accent-ink: #1f1607;
+      --accent-text: var(--brass-300);
+      --accent-soft: rgba(240, 184, 74, 0.15);
+      --focus-ring: var(--brass-300);
+      --danger: var(--red-300);
+      --success: var(--green-300);
+      --shadow-1: 0 10px 28px rgba(0, 0, 0, 0.32);
+      --shadow-2: 0 18px 48px rgba(0, 0, 0, 0.5);
+      --card-border: 1px solid transparent;
+      --scrim: rgba(0, 0, 0, 0.6);
+      --mq-brilliant: var(--green-300);
+      --mq-best: #7fd65a;
+      --mq-good: var(--olive-300);
+      --mq-inaccuracy: var(--amber-300);
+      --mq-mistake: var(--orange-300);
+      --mq-blunder: var(--red-300);
+      --arrow-best: var(--green-300);
+      --arrow-played: var(--clay-300);
+      --arrow-threat: var(--iris-300);
+      --arrow-hint: var(--brass-300);
+      --eval-white: var(--moss-50);
+      --eval-black: var(--moss-950);
+      --board-light: #e8dcc0;
+      --board-dark: #6e8d71;
+      --board-frame: var(--moss-950);
+      --board-dot: rgba(18, 23, 20, 0.3);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: var(--moss-900);
+    --surface: var(--moss-800);
+    --surface-2: var(--moss-750);
+    --line: var(--moss-700);
+    --text: var(--moss-50);
+    --text-2: var(--moss-200);
+    --text-3: var(--moss-400);
+    --nav-bg: var(--moss-950);
+    --nav-active: var(--moss-750);
+    --accent: var(--brass-300);
+    --accent-ink: #1f1607;
+    --accent-text: var(--brass-300);
+    --accent-soft: rgba(240, 184, 74, 0.15);
+    --focus-ring: var(--brass-300);
+    --danger: var(--red-300);
+    --success: var(--green-300);
+    --shadow-1: 0 10px 28px rgba(0, 0, 0, 0.32);
+    --shadow-2: 0 18px 48px rgba(0, 0, 0, 0.5);
+    --card-border: 1px solid transparent;
+    --scrim: rgba(0, 0, 0, 0.6);
+    --mq-brilliant: var(--green-300);
+    --mq-best: #7fd65a;
+    --mq-good: var(--olive-300);
+    --mq-inaccuracy: var(--amber-300);
+    --mq-mistake: var(--orange-300);
+    --mq-blunder: var(--red-300);
+    --arrow-best: var(--green-300);
+    --arrow-played: var(--clay-300);
+    --arrow-threat: var(--iris-300);
+    --arrow-hint: var(--brass-300);
+    --eval-white: var(--moss-50);
+    --eval-black: var(--moss-950);
+    --board-light: #e8dcc0;
+    --board-dark: #6e8d71;
+    --board-frame: var(--moss-950);
+    --board-dot: rgba(18, 23, 20, 0.3);
+  }
+
+  /* ── Board themes (both colour themes) ─────────────────────── */
+  :root[data-board="walnut"] {
+    --board-light: #efd9b4;
+    --board-dark: #b0835a;
+    --board-coord-on-light: #9c7350;
+    --board-coord-on-dark: #f5e6cc;
+  }
+  :root[data-board="slate"] {
+    --board-light: #dde3e8;
+    --board-dark: #7d93a6;
+    --board-coord-on-light: #6d8396;
+    --board-coord-on-dark: #eef2f5;
+  }
+  /* High contrast: for low vision and bright rooms. Squares differ by
+     ≥ 3:1 so square colour reads without relying on pieces. */
+  :root[data-board="contrast"] {
+    --board-light: #ffffff;
+    --board-dark: #5f6f63;
+    --board-coord-on-light: #3a443d;
+    --board-coord-on-dark: #ffffff;
+    --board-last: rgba(233, 172, 63, 0.6);
+    --board-dot: rgba(0, 0, 0, 0.45);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --duration-fast: 0ms;
+      --duration-base: 0ms;
+      --duration-slow: 0ms;
+    }
+  }
+}
