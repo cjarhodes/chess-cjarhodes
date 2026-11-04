@@ -18,7 +18,8 @@ async page => {
     }
   };
   const expect = (problems, condition, message) => { if (!condition) problems.push(message); };
-  const base = new URL(page.url()).origin;
+  // The pinned CI runner has no URL global in this sandbox, so parse the origin directly.
+  const base = page.url().match(/^https?:\/\/[^/]+/)[0];
   const settle = () => page.waitForFunction(() => !coachThinking, null, { timeout: 60000 });
   const freshCoach = async () => {
     await page.goto(base + '/?view=coach');
