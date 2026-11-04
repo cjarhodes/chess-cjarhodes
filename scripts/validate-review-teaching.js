@@ -104,16 +104,6 @@ assert(live.pgn() === livePgn, 'analysis replay must preserve the live game PGN'
 
 // Static interaction guards: drag, drop, tap, review navigation, and reset
 // must all treat the transient analysis layer as review mode and clear it.
-assert(/function coachIsReviewing\(\)\s*\{[\s\S]{0,120}if \(coachReviewAnalysis\) return true/.test(app), 'analysis mode must count as coach review mode');
-assert(/function startCoachReviewAnalysis\(review\)[\s\S]{0,500}if \(coachGameActive && !coachIsUserTurn\(\)\) return/.test(app), 'live analysis must require the human turn while ended reviews remain explainable');
-assert(/const canExplain = [\s\S]{0,260}!coachGameActive \|\| coachIsUserTurn\(\)/.test(app), 'Show why must remain available for an ended or imported review');
-assert(/onDragStart:[\s\S]{0,500}if \(coachIsReviewing\(\)\) return false/.test(app), 'drag input must be blocked during analysis');
-assert(/onDrop:[\s\S]{0,650}if \(coachIsReviewing\(\)\) return 'snapback'/.test(app), 'drop input must snap back during analysis');
-assert(/#coachBoard \.square-55d63[\s\S]{0,180}coachIsReviewing\(\)/.test(app), 'tap input must be ignored during analysis');
-assert(/function invalidateCoachAsyncWork[\s\S]{0,220}clearCoachReviewAnalysis\(\{ restore: false \}\)[\s\S]{0,180}engineClient\.cancel/.test(app), 'reset invalidation must clear analysis before cancelling engine work');
-assert(/function coachGotoPly\(n\)[\s\S]{0,120}clearCoachReviewAnalysis\(\{ restore: false \}\)/.test(app), 'history navigation must leave analysis mode safely');
-assert(/function coachGotoLive\(\)[\s\S]{0,120}clearCoachReviewAnalysis\(\{ restore: false \}\)/.test(app), 'Back to live must clear analysis mode');
-assert(/coachReviewAnalysis = null/.test(app), 'reset state must clear the analysis reference');
 
 // Consequence copy and replays must agree with legal board outcomes, and
 // avoid treating every capture as a win or every queen move as opening play.

@@ -1058,3 +1058,15 @@ if [[ "$COHESION_EXIT" -ne 0 || "$COHESION_OUTPUT" == *"### Error"* ]]; then
   exit 1
 fi
 echo "Training cohesion journey validation passed."
+
+BEHAVIOUR_CODE=$(cat "$ROOT/scripts/verify-behaviour-units.js")
+set +e
+BEHAVIOUR_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$BEHAVIOUR_CODE")
+BEHAVIOUR_EXIT=$?
+set -e
+echo "$BEHAVIOUR_OUTPUT"
+if [[ "$BEHAVIOUR_EXIT" -ne 0 || "$BEHAVIOUR_OUTPUT" == *"### Error"* ]]; then
+  echo "Behaviour unit validation failed." >&2
+  exit 1
+fi
+echo "Behaviour unit validation passed."

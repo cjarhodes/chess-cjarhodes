@@ -116,7 +116,7 @@ affects this browser's session. See [the account continuity audit](docs/account-
 - Browser-only by design: there is no web app manifest and nothing registers
   a service worker. `service-worker.js` remains only as a kill switch that
   unregisters and clears caches for browsers that installed an earlier
-  version; `scripts/validate-growth.js` enforces this.
+  version; `scripts/validate-schema.js` enforces this.
 
 ## Local preview
 
@@ -138,12 +138,16 @@ node --check app.js
 for f in scripts/validate-*.js; do node "$f" || exit 1; done
 ```
 
-The validators cover accessibility, maintainability, the openings data
-(`scripts/validate-openings.js`), performance, the practice/drill loop,
-reliability, and security.
+The validators run pure logic in Node (practice scheduling, difficulty,
+review teaching, transfer checks, recovery, progress) and check shipped
+files: the openings data (every line replayed as legal chess), design tokens
+and colour contrast, migrations and CI (`validate-schema.js`), and security.
+None of them pattern-match the app's source for function names.
 
-For broader smoke coverage (Library, Coach, the practice loop, the narrow-
-viewport desktop notice, and stale-engine handling), run:
+For browser coverage (Library, Coach, the practice loop, the journeys, and
+`scripts/verify-behaviour-units.js`, which drives engine failure, threat
+scanning, sign-in URLs, auth storage, sync, retry, storage and clipboard
+failures, accessibility and themes in the running app), run:
 
 ```sh
 scripts/verify-browser.sh

@@ -5,6 +5,8 @@ Status: plan agreed in outline, 2 November 2026. Phase 0 done: see
 Phase 1 done: see [design-spec.md](design-spec.md) and [design-system/](design-system/).
 Phase 3 done: the app uses `styles/tokens.css`, self-hosted fonts and the
 Blend look on the existing layout.
+Phase 2 done: no validator pattern-matches the app's source any more; see
+the *Phase 2 outcome* in [behaviour-checklist.md](behaviour-checklist.md).
 
 The goal is an app that is pleasant to use and cheap to change: a new
 colour, a new panel, or a new training mode should be a small, local edit
@@ -427,7 +429,7 @@ long before the restructuring is finished.
 |---|---|---|
 | **0. Baseline** ✅ | Commit or shelve the current uncommitted work. Capture reference screenshots of every view (`scripts/capture-baseline.sh` → `docs/baseline/`). Write a behaviour checklist from README + validators (`docs/behaviour-checklist.md`). | Checklist and screenshots exist |
 | **1. Visual direction** ✅ | Refine **D · Blend** (Paper + Club, see §6) in `docs/design-directions/`, then specify it fully at all three widths (phone, tablet, desktop): type scale, colour (dark + light), board and piece themes, move-quality colours, arrows, buttons, cards, tabs, notation table and strip, tab bar. Choose fonts that can be vendored as woff2 under the CSP. | One direction chosen; a written token spec with phone and desktop mockups |
-| **2. Safety net** | Convert source-regex validators into behaviour tests (node unit tests for logic, browser smoke for UI). Add `data-testid`s. Can run alongside Phase 1. | Validators no longer read `app.js` as text; all checks green |
+| **2. Safety net** ✅ | Convert source-regex validators into behaviour tests (node unit tests for logic, browser smoke for UI). Add `data-testid`s. *Done without test ids: the tests use existing element ids; Phase 6 adds `data-testid`s when it rewrites the markup.* Can run alongside Phase 1. | Validators no longer read `app.js` as text; all checks green |
 | **3. Tokens + reskin** ✅ | Introduce `styles/tokens.css` and layers with the chosen direction's values; replace every raw colour, size, radius and font; vendor the fonts; add the lint script and theme switch. The current layout gets the new look. It stays desktop-only (with the notice) because the old layout can't reflow cheaply. | Lint passes; whole app is in the new direction; light + dark both pass contrast |
 | **4. Extract the core** | Move pure logic (engine, classification, opponent, explanations, storage, sync) into `src/core` and `src/data` as ES modules. Replace SM-2 with FSRS (see §6). | `app.js` < 5,000 lines; core has unit tests; calibration script runs unchanged |
 | **5. One board** | Build `ui/board.js` on cm-chessboard; switch Coach and Library to it; add arrows, square marks, quality glyphs, eval bar beside board; drop jQuery. Check touch drag, tap-to-move and engine think time on a real phone. | One board implementation; Show why / candidates / hints draw on the board; works by touch |

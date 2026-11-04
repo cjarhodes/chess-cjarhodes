@@ -29,7 +29,7 @@ Then open `http://127.0.0.1:4173/`.
 ## Workflow
 1. Edit `index.html`, `app.js`, or the relevant vendored/config file.
 2. Run `node --check app.js` and every `scripts/validate-*.js` validator.
-3. Run `scripts/verify-browser.sh` for the repeatable Library, Coach, practice-loop, desktop-notice, and stale-engine smoke coverage.
+3. Run `scripts/verify-browser.sh` for the repeatable Library, Coach, practice-loop, journey and behaviour-unit coverage. Test behaviour, not source text: new checks go in `scripts/verify-behaviour-units.js` (browser, stub only the boundary) or a Node validator that runs the logic, never a regex over `app.js`. Checks on shipped files (migrations, CI, CSP) belong in `validate-schema.js` / `validate-security.js`.
 4. For schema changes, add a Supabase migration and run a local reset or linked `supabase db push`.
 5. If you touch `COACH_DIFFICULTY_KEYFRAMES` or `chooseCalibratedOpponentMove`, run `node scripts/calibrate-difficulty.js` (several minutes; uses the vendored engine). Check the difficulty trend, severe-blunder and mate-in-one rates as well as ACPL. The seeded suite measures regression proxies, not human Elo; do not tune toward an unsourced human ACPL curve.
 6. Commit and push to `main`; Vercel auto-deploys to chess.cjarhodes.com.

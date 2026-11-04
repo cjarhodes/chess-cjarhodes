@@ -10,7 +10,6 @@ const { Chess } = require('../vendor/chess.js/chess-0.10.3.min.js');
 
 const root = path.resolve(__dirname, '..');
 const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
-const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const errors = [];
 let assertions = 0;
 function assert(condition, message) { assertions += 1; if (!condition) errors.push(message); }
@@ -118,10 +117,6 @@ function makeSession(known, bestCp, extra = {}) {
   result = await context.evaluatePracticeMove(session, 'g6e4');
   assert(result.sound === false && result.loss >= 250, 'missing an immediate mate should be bad');
 
-  assert(/completionRecorded/.test(app), 'completion must be guarded against duplicate recording');
-  assert(/entry\.continuation[\s\S]{0,700}followupUci/.test(app), 'authored continuation must be bounded and legal');
-  assert(/captureCoachPracticeReturnState[\s\S]{0,500}!coachGameActive \|\| coachGame\.game_over\(\)/.test(app), 'ended games must not be restored');
-  assert(/id="btn-coach-practice-hint"/.test(html), 'practice must expose a separate hint action');
 
   if (errors.length) { console.error(errors.join('\n')); process.exit(1); }
   console.log(`Practice-upgrade validation passed (${assertions} assertions).`);

@@ -73,9 +73,27 @@ for (const opening of openings) {
   }
 }
 
+// Every line must be playable from the starting position with the same chess
+// rules the app uses (vendored chess.js), so Study and Quiz never show an
+// illegal move.
+vm.runInContext(fs.readFileSync(path.join(root, 'vendor/chess.js/chess-0.10.3.min.js'), 'utf8'), context, { filename: 'chess.js' });
+let movesPlayed = 0;
+for (const opening of openings) {
+  for (const line of getOpeningLines(opening)) {
+    const game = new context.Chess();
+    for (let i = 0; i < (line.moves || []).length; i++) {
+      if (!game.move(line.moves[i])) {
+        fail(`${opening.id}/${line.id}: move ${i + 1} (${line.moves[i]}) is illegal after ${game.history().join(' ') || 'the start'}`);
+        break;
+      }
+      movesPlayed++;
+    }
+  }
+}
+
 if (errors.length) {
   console.error(errors.join('\n'));
   process.exit(1);
 }
 
-console.log(`Validated ${openings.length} openings and ${openings.reduce((n, o) => n + getOpeningLines(o).length, 0)} lines.`);
+console.log(`Validated ${openings.length} openings and ${openings.reduce((n, o) => n + getOpeningLines(o).length, 0)} lines (${movesPlayed} legal moves).`);
