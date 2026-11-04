@@ -3,7 +3,8 @@
    single-class override wins without !important. State lives in ARIA and
    data attributes (aria-current, aria-selected, aria-pressed, data-mq),
    not in ad-hoc modifier classes, so JS and CSS share one source of truth.
-   Phase 3 moves this file to styles/components.css. */
+   Not yet linked from index.html: the app's markup adopts these c-*
+   classes in Phase 6. The gallery (docs/design-system/) uses it today. */
 
 @layer reset, tokens, base, components, layout, utilities;
 
@@ -98,6 +99,9 @@
   [data-mq="inaccuracy"] { --mq: var(--mq-inaccuracy); --mq-glyph: "?!"; }
   [data-mq="mistake"] { --mq: var(--mq-mistake); --mq-glyph: "?"; }
   [data-mq="blunder"] { --mq: var(--mq-blunder); --mq-glyph: "??"; }
+  [data-mq="excellent"] { --mq: var(--mq-excellent); --mq-glyph: "!"; }
+  [data-mq="book"] { --mq: var(--mq-book); --mq-glyph: "≡"; }
+  [data-mq="unknown"] { --mq: var(--mq-unknown); --mq-glyph: "·"; }
 
   :where(.c-chip) {
     display: inline-flex; align-items: center; gap: 6px;

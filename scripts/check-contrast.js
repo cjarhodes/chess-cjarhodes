@@ -7,7 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const file = process.argv[2] || path.join(__dirname, '..', 'docs', 'design-system', 'tokens.css');
+const file = process.argv[2] || path.join(__dirname, '..', 'styles', 'tokens.css');
 const css = fs.readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 
 function block(selector) {
@@ -31,9 +31,9 @@ const darkMedia = decls(block(':root:not([data-theme="light"])'));
 const darkAttr = decls(block(':root[data-theme="dark"]'));
 const boards = {
   sage: {},
-  walnut: decls(block(':root[data-board="walnut"]')),
-  slate: decls(block(':root[data-board="slate"]')),
-  contrast: decls(block(':root[data-board="contrast"]')),
+  walnut: decls(block(':root[data-board-theme="walnut"]')),
+  slate: decls(block(':root[data-board-theme="blue"]')),
+  contrast: decls(block(':root[data-board-theme="contrast"]')),
 };
 
 const errors = [];
@@ -75,7 +75,8 @@ const TEXT = [
 ].map(p => [...p, 4.5]);
 const GRAPHICS = [
   ['--mq-best', '--surface'], ['--mq-good', '--surface'], ['--mq-inaccuracy', '--surface'],
-  ['--mq-mistake', '--surface'], ['--mq-blunder', '--surface'], ['--success', '--surface'],
+  ['--mq-mistake', '--surface'], ['--mq-blunder', '--surface'], ['--mq-excellent', '--surface'],
+  ['--mq-book', '--surface'], ['--success', '--surface'], ['--warning', '--surface'],
   ['--focus-ring', '--surface'], ['--focus-ring', '--bg'],
 ].map(p => [...p, 3]);
 const BOARD = [['--board-dark', '--board-light', 1.5]];

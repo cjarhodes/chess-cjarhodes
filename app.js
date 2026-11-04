@@ -5151,17 +5151,17 @@ function renderEvalChart(reviews) {
     const y = yFor(p.cp);
     const tier = p.r.tier;
     let color = null;
-    if (tier === 'blunder') color = '#a23346';
-    else if (tier === 'mistake') color = '#c28a4e';
+    if (tier === 'blunder') color = 'var(--mq-blunder)';
+    else if (tier === 'mistake') color = 'var(--mq-mistake)';
     if (!color) return '';
-    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${color}"/>`;
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" style="fill: ${color}"/>`;
   }).join('');
 
   return `
     <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Evaluation over time">
-      <line x1="${PAD}" y1="${midY}" x2="${W - PAD}" y2="${midY}" stroke="#5a4a3b" stroke-dasharray="2,3" stroke-width="0.5"/>
-      <path d="${area}" fill="rgba(207, 109, 123, 0.12)"/>
-      <path d="${d}" fill="none" stroke="#cf6d7b" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+      <line x1="${PAD}" y1="${midY}" x2="${W - PAD}" y2="${midY}" style="stroke: var(--chart-grid)" stroke-dasharray="2,3" stroke-width="0.5"/>
+      <path d="${area}" style="fill: var(--chart-fill)"/>
+      <path d="${d}" fill="none" style="stroke: var(--chart-line)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
       ${markers}
     </svg>
   `;
@@ -5205,9 +5205,9 @@ function renderLiveEvalChart(reviews) {
   area += ` L${(PAD + (recent.length - 1) * xStep).toFixed(1)},${midY.toFixed(1)} Z`;
   return `
     <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Live evaluation">
-      <line x1="${PAD}" y1="${midY}" x2="${W - PAD}" y2="${midY}" stroke="#5a4a3b" stroke-dasharray="2,3" stroke-width="0.5"/>
-      <path d="${area}" fill="rgba(207, 109, 123, 0.12)"/>
-      <path d="${d}" fill="none" stroke="#cf6d7b" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+      <line x1="${PAD}" y1="${midY}" x2="${W - PAD}" y2="${midY}" style="stroke: var(--chart-grid)" stroke-dasharray="2,3" stroke-width="0.5"/>
+      <path d="${area}" style="fill: var(--chart-fill)"/>
+      <path d="${d}" fill="none" style="stroke: var(--chart-line)" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
     </svg>
   `;
 }
@@ -5329,7 +5329,7 @@ function showPostGameSummary(endMsg) {
       const acc = data.pct === null ? '—' : `${data.pct}%`;
       const moves = data.moves === 0 ? '—' : `${data.moves} move${data.moves === 1 ? '' : 's'}`;
       $phaseGrid.append(
-        `<span class="phase-name">${name} <span style="color:var(--muted);font-size:0.72rem">${range}</span></span>` +
+        `<span class="phase-name">${name} <span style="color:var(--text-3);font-size:var(--text-xs)">${range}</span></span>` +
         `<span class="phase-acc">${acc}</span>` +
         `<span class="phase-count">${moves}</span>`
       );
@@ -5416,7 +5416,7 @@ function showPostGameSummary(endMsg) {
       row.innerHTML =
         `<span class="moment-num">${escapeHtml(ref)}</span>` +
         `<span class="moment-desc">${escapeHtml(desc)}</span>` +
-        `<span class="moment-loss" style="color:#8aa074">✓</span>`;
+        `<span class="moment-loss" style="color:var(--mq-best)">✓</span>`;
       $best.append(row);
     }
     $('#summary-best-section').show();
@@ -5671,14 +5671,14 @@ function librarySyncLastMove(gameObj) {
   setBoardLastMove('myBoard', hist.length ? hist[hist.length - 1] : null);
 }
 
-// Board colour themes. "walnut" is the brown pairing most players know from
-// Lichess; "green" matches the chess.com default; all four keep a light/dark
-// square contrast that piece outlines were tuned against.
+// Board colour themes, defined in styles/tokens.css. The keys are the values
+// already saved under ui:board-theme: "green" is shown as Sage (the default),
+// "blue" as Slate. The retired "ivory" theme falls back to walnut.
 const BOARD_THEME_KEY = 'ui:board-theme';
-const BOARD_THEMES = ['walnut', 'green', 'blue', 'ivory'];
+const BOARD_THEMES = ['green', 'walnut', 'blue', 'contrast'];
 
 function applyBoardTheme(name) {
-  const theme = BOARD_THEMES.includes(name) ? name : 'walnut';
+  const theme = BOARD_THEMES.includes(name) ? name : (name === 'ivory' ? 'walnut' : 'green');
   document.documentElement.setAttribute('data-board-theme', theme);
   $('#board-theme').val(theme);
   try { localStorage.setItem(BOARD_THEME_KEY, theme); } catch (e) { /* preference stays for this page */ }
@@ -5687,8 +5687,30 @@ function applyBoardTheme(name) {
 function initBoardTheme() {
   let saved = null;
   try { saved = localStorage.getItem(BOARD_THEME_KEY); } catch (e) { /* default */ }
-  applyBoardTheme(saved || 'walnut');
+  applyBoardTheme(saved || 'green');
   $('#board-theme').on('change', function() { applyBoardTheme($(this).val()); });
+}
+
+// Light/dark follows the device unless the player picks one; theme-init.js
+// applies the saved choice before first paint.
+const COLOR_THEME_KEY = 'ui:theme';
+
+function applyColorTheme(name) {
+  const theme = name === 'light' || name === 'dark' ? name : 'auto';
+  if (theme === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', theme);
+  $('#color-theme').val(theme);
+  try {
+    if (theme === 'auto') localStorage.removeItem(COLOR_THEME_KEY);
+    else localStorage.setItem(COLOR_THEME_KEY, theme);
+  } catch (e) { /* preference stays for this page */ }
+}
+
+function initColorTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem(COLOR_THEME_KEY); } catch (e) { /* follow the device */ }
+  applyColorTheme(saved);
+  $('#color-theme').on('change', function() { applyColorTheme($(this).val()); });
 }
 
 function describeChessPosition(gameObj) {
@@ -8092,6 +8114,7 @@ $(function () {
   // Board is initialized lazily on first opening selection
   initDesktopNotice();
   initBoardTheme();
+  initColorTheme();
   initCoachPanelTabs();
   migrateLegacyCoachMemory();
   coachSync.init();

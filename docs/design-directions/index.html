@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Public+Sans:wght@400;500;600;700&display=swap">
 <style>
 @layer reset, tokens, base, components, layout, prototype;
-@import url("../design-system/tokens.css") layer(tokens);
+@import url("../../styles/tokens.css") layer(tokens);
 
 @layer reset {
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -145,7 +145,7 @@
     --eval-black: #2a303b;
   }
 
-  /* D — BLEND: colours come straight from docs/design-system/tokens.css
+  /* D — BLEND: colours come straight from styles/tokens.css
      (imported above). This block only maps the spec's names onto the
      names this prototype's components use. */
   [data-direction="blend"] {

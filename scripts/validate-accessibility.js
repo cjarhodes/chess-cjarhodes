@@ -2,35 +2,24 @@
 
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+const tokens = fs.readFileSync(path.join(root, 'styles', 'tokens.css'), 'utf8');
 const errors = [];
 
 function requirePattern(source, pattern, message) {
   if (!pattern.test(source)) errors.push(message);
 }
 
-function channel(hex, offset) {
-  const value = parseInt(hex.slice(offset, offset + 2), 16) / 255;
-  return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
-}
-
-function luminance(hex) {
-  return 0.2126 * channel(hex, 1) + 0.7152 * channel(hex, 3) + 0.0722 * channel(hex, 5);
-}
-
-function contrast(a, b) {
-  const values = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return (values[0] + 0.05) / (values[1] + 0.05);
-}
-
-const muted = (css.match(/--muted:\s*(#[0-9a-f]{6})/i) || [])[1];
-const surface2 = (css.match(/--surface2:\s*(#[0-9a-f]{6})/i) || [])[1];
-if (!muted || !surface2 || contrast(muted, surface2) < 4.5) {
-  errors.push('muted text must meet WCAG AA contrast on surface2');
+// Colour contrast is checked from the token file itself: every text pair at
+// 4.5:1 and every graphic at 3:1, in light and dark and every board theme.
+const contrastRun = spawnSync(process.execPath, [path.join(__dirname, 'check-contrast.js')], { encoding: 'utf8' });
+if (contrastRun.status !== 0) {
+  errors.push('colour tokens must meet WCAG AA contrast:\n' + (contrastRun.stderr || contrastRun.stdout).trim());
 }
 
 requirePattern(html, /role="tablist"[\s\S]+?aria-controls="library-view"[\s\S]+?aria-controls="coach-view"/, 'top navigation must expose a complete tab relationship');
@@ -53,7 +42,11 @@ requirePattern(html, /class="top-nav-btn active"[^>]+id="nav-coach"[^>]+aria-sel
 requirePattern(html, /class="app"[^>]+id="library-view"[^>]+aria-hidden="true"[^>]+style="display:none;"/, 'Library must be hidden in the initial application shell');
 requirePattern(html, /class="coach-view"[^>]+id="coach-view"[^>]+aria-hidden="false"/, 'Coach must be visible in the initial application shell');
 requirePattern(app, /function localPieceTheme\(piece\)[\s\S]{0,120}vendor\/pieces\/cburnett\/\$\{piece\}\.svg/, 'pieces must use the vendored vector set so white stays legible on light squares');
-requirePattern(css, /--sq-light:[\s\S]{0,200}--sq-dark:[\s\S]{0,400}html\[data-board-theme="green"\]/, 'board colours must be themeable with a green option');
+requirePattern(css, /--sq-light:\s*var\(--board-light\)[\s\S]{0,200}--sq-dark:\s*var\(--board-dark\)/, 'chessboard squares must take their colours from the board tokens');
+for (const theme of ['walnut', 'blue', 'contrast']) {
+  requirePattern(tokens, new RegExp(':root\\[data-board-theme="' + theme + '"\\]\\s*\\{[^}]*--board-light:[^}]*--board-dark:'), 'board theme ' + theme + ' must set both square colours');
+}
+requirePattern(app, /const BOARD_THEMES = \[[^\]]*'green'[^\]]*'contrast'/, 'board colours must be themeable with a green (Sage) default and a high-contrast option');
 for (const piece of ['wK','wQ','wR','wB','wN','wP','bK','bQ','bR','bB','bN','bP']) {
   if (!fs.existsSync(path.join(root, 'vendor/pieces/cburnett/' + piece + '.svg'))) errors.push('missing vendored piece ' + piece);
 }

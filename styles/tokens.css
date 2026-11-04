@@ -1,6 +1,7 @@
 /* chess.cjarhodes.com design tokens: D · Blend (Paper + Club).
-   Phase 1 of docs/redesign-plan.md. Phase 3 moves this file to
-   styles/tokens.css unchanged.
+   The single source of truth for colour, type, space, shape and motion
+   (docs/design-spec.md). styles.css, the design-system gallery and the
+   design-directions prototype all read from this file.
 
    Three tiers:
      1. Primitives: raw palette and scales. Never used by components.
@@ -8,7 +9,9 @@
         follows prefers-color-scheme unless <html data-theme="light|dark">
         overrides it.
      3. Component: board, arrows, move quality, eval. Board themes switch
-        with <html data-board="sage|walnut|slate|contrast">.
+        with <html data-board-theme="green|walnut|blue|contrast">, shown as
+        Sage (default), Walnut, Slate and High contrast; the keys match the
+        values already saved under ui:board-theme.
 
    Components read tiers 2 and 3 only. */
 
@@ -60,6 +63,8 @@
     --clay-300: #ff7a59;
     --iris-500: #5566cc;
     --iris-300: #9aa8ff;
+    --moss-green-600: #4a8a46;
+    --moss-green-300: #a6dc84;
 
     /* Type families. Phase 3 vendors these as woff2 under /fonts/ (the CSP
        blocks Google Fonts). All four are SIL Open Font License. */
@@ -144,6 +149,7 @@
 
     --danger: var(--red-600);
     --success: var(--green-600);
+    --warning: var(--amber-600);
 
     --shadow-1: 0 1px 2px rgba(70, 50, 20, 0.06), 0 8px 24px rgba(70, 50, 20, 0.08);
     --shadow-2: 0 2px 6px rgba(70, 50, 20, 0.10), 0 18px 48px rgba(70, 50, 20, 0.16);
@@ -159,6 +165,9 @@
     --mq-inaccuracy: var(--amber-600);
     --mq-mistake: var(--orange-600);
     --mq-blunder: var(--red-600);
+    --mq-excellent: var(--moss-green-600);
+    --mq-book: var(--iris-500);
+    --mq-unknown: var(--text-3);
 
     /* Arrows and board marks */
     --arrow-best: var(--green-600);
@@ -170,7 +179,8 @@
     /* Evaluation */
     --eval-white: var(--paper-0);
     --eval-black: #2b2a24;
-    --chart-line: var(--text-2);
+    --chart-line: var(--accent-text);
+    --chart-fill: color-mix(in srgb, var(--accent) 16%, transparent);
     --chart-grid: var(--line);
 
     /* Board: sage (default). Other themes below. */
@@ -183,6 +193,12 @@
     --board-check: radial-gradient(circle, rgba(194, 65, 45, 0.85) 0%, rgba(194, 65, 45, 0) 70%);
     --board-coord-on-light: #6f8a6f;
     --board-coord-on-dark: #f1e6cb;
+    --piece-shadow: rgba(0, 0, 0, 0.25);
+    --board-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+
+    /* Small before/after diagrams drawn with Unicode pieces */
+    --diagram-piece: #fbf7ee;
+    --diagram-piece-shadow: #2b2a24;
   }
 
   /* ── Dark theme ────────────────────────────────────────────── */
@@ -205,6 +221,7 @@
       --focus-ring: var(--brass-300);
       --danger: var(--red-300);
       --success: var(--green-300);
+      --warning: var(--amber-300);
       --shadow-1: 0 10px 28px rgba(0, 0, 0, 0.32);
       --shadow-2: 0 18px 48px rgba(0, 0, 0, 0.5);
       --card-border: 1px solid transparent;
@@ -215,6 +232,8 @@
       --mq-inaccuracy: var(--amber-300);
       --mq-mistake: var(--orange-300);
       --mq-blunder: var(--red-300);
+      --mq-excellent: var(--moss-green-300);
+      --mq-book: var(--iris-300);
       --arrow-best: var(--green-300);
       --arrow-played: var(--clay-300);
       --arrow-threat: var(--iris-300);
@@ -225,6 +244,7 @@
       --board-dark: #6e8d71;
       --board-frame: var(--moss-950);
       --board-dot: rgba(18, 23, 20, 0.3);
+      --board-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
     }
   }
   :root[data-theme="dark"] {
@@ -245,6 +265,7 @@
     --focus-ring: var(--brass-300);
     --danger: var(--red-300);
     --success: var(--green-300);
+    --warning: var(--amber-300);
     --shadow-1: 0 10px 28px rgba(0, 0, 0, 0.32);
     --shadow-2: 0 18px 48px rgba(0, 0, 0, 0.5);
     --card-border: 1px solid transparent;
@@ -255,6 +276,8 @@
     --mq-inaccuracy: var(--amber-300);
     --mq-mistake: var(--orange-300);
     --mq-blunder: var(--red-300);
+    --mq-excellent: var(--moss-green-300);
+    --mq-book: var(--iris-300);
     --arrow-best: var(--green-300);
     --arrow-played: var(--clay-300);
     --arrow-threat: var(--iris-300);
@@ -265,16 +288,17 @@
     --board-dark: #6e8d71;
     --board-frame: var(--moss-950);
     --board-dot: rgba(18, 23, 20, 0.3);
+    --board-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   }
 
   /* ── Board themes (both colour themes) ─────────────────────── */
-  :root[data-board="walnut"] {
+  :root[data-board-theme="walnut"] {
     --board-light: #efd9b4;
     --board-dark: #b0835a;
     --board-coord-on-light: #9c7350;
     --board-coord-on-dark: #f5e6cc;
   }
-  :root[data-board="slate"] {
+  :root[data-board-theme="blue"] {  /* shown as Slate */
     --board-light: #dde3e8;
     --board-dark: #7d93a6;
     --board-coord-on-light: #6d8396;
@@ -282,7 +306,7 @@
   }
   /* High contrast: for low vision and bright rooms. Squares differ by
      ≥ 3:1 so square colour reads without relying on pieces. */
-  :root[data-board="contrast"] {
+  :root[data-board-theme="contrast"] {
     --board-light: #ffffff;
     --board-dark: #5f6f63;
     --board-coord-on-light: #3a443d;

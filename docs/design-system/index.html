@@ -4,13 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Design system — chess.cjarhodes.com</title>
-<!-- Gallery only: fonts come from Google here. The app vendors them under
-     /fonts/ in Phase 3, because the production CSP blocks Google Fonts. -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
-<link rel="stylesheet" href="tokens.css">
-<link rel="stylesheet" href="components.css">
+<link rel="stylesheet" href="../../styles/fonts.css">
+<link rel="stylesheet" href="../../styles/tokens.css">
+<link rel="stylesheet" href="../../styles/components.css">
 <style>
 @layer layout {
   body { padding-bottom: 96px; }
@@ -96,9 +92,9 @@
     <button data-v="dark" aria-pressed="false">Dark</button>
   </div>
   <div class="c-segmented" id="boardtheme" role="group" aria-label="Board theme">
-    <button data-v="sage" aria-pressed="true">Sage</button>
+    <button data-v="green" aria-pressed="true">Sage</button>
     <button data-v="walnut" aria-pressed="false">Walnut</button>
-    <button data-v="slate" aria-pressed="false">Slate</button>
+    <button data-v="blue" aria-pressed="false">Slate</button>
     <button data-v="contrast" aria-pressed="false">High contrast</button>
   </div>
 </header>
@@ -144,10 +140,12 @@
     <div class="ds-row">
       <span class="c-chip" data-mq="brilliant">Brilliant</span>
       <span class="c-chip" data-mq="best">Best</span>
+      <span class="c-chip" data-mq="excellent">Excellent</span>
       <span class="c-chip" data-mq="good">Good</span>
       <span class="c-chip" data-mq="inaccuracy">Inaccuracy</span>
       <span class="c-chip" data-mq="mistake">Mistake</span>
       <span class="c-chip" data-mq="blunder">Blunder</span>
+      <span class="c-chip" data-mq="book">Book</span>
     </div>
     <div class="ds-row">
       <span class="c-glyph" data-mq="brilliant"></span>
@@ -275,7 +273,7 @@
 
   <section class="ds-sec">
     <h2>Serif test: explanation text</h2>
-    <p class="lead">Settles the two-serif question. Left: Newsreader (chosen for coach text). Right: Fraunces at text size, for comparison.</p>
+    <p class="lead">Settles the two-serif question. Left: Newsreader (chosen for coach text). Right: Fraunces at text size, for comparison. The app vendors only Fraunces 600, so the right-hand sample renders in that weight.</p>
     <div class="ds-serif-test">
       <div class="c-card c-card--inset"><span class="c-label">Newsreader · --text-prose</span><p class="c-prose" id="prose-a"></p></div>
       <div class="c-card c-card--inset"><span class="c-label">Fraunces · --text-prose</span><p class="c-prose alt" id="prose-b"></p></div>
@@ -400,7 +398,7 @@ function bind(id, apply) {
 }
 renderBoard();
 bind('theme', v => { if (v === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = v; });
-bind('boardtheme', v => { document.documentElement.dataset.board = v; });
+bind('boardtheme', v => { document.documentElement.dataset.boardTheme = v; });
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { renderSwatches(); renderContrast(); });
 </script>
 </body>

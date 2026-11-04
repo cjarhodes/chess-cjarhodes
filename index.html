@@ -6,8 +6,14 @@
   <title>Chess Coach &amp; Opening Library — Alex Rhodes</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" href="/favicon.svg">
-  <meta name="theme-color" content="#2a1f17">
+  <meta name="theme-color" content="#f5efe3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121714" media="(prefers-color-scheme: dark)">
+  <script src="theme-init.js"></script>
+  <link rel="preload" href="fonts/dm-sans-variable.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/fraunces-600.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="vendor/chessboardjs/chessboard-1.0.0.min.css">
+  <link rel="stylesheet" href="styles/fonts.css">
+  <link rel="stylesheet" href="styles/tokens.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -376,15 +382,23 @@
     </details>
 
     <details class="rail-group" id="group-board">
-      <summary><span class="section-label">Board &amp; sounds</span></summary>
+      <summary><span class="section-label">Appearance &amp; sounds</span></summary>
       <div class="rail-group-body">
+        <div class="pref-row">
+          <label class="pref-label" for="color-theme">Appearance</label>
+          <select id="color-theme" class="pref-select">
+            <option value="auto">Match device</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </div>
         <div class="pref-row">
           <label class="pref-label" for="board-theme">Board colours</label>
           <select id="board-theme" class="pref-select">
-            <option value="walnut">Walnut (classic brown)</option>
-            <option value="green">Green</option>
-            <option value="blue">Blue</option>
-            <option value="ivory">Ivory</option>
+            <option value="green">Sage</option>
+            <option value="walnut">Walnut</option>
+            <option value="blue">Slate</option>
+            <option value="contrast">High contrast</option>
           </select>
         </div>
         <div class="board-theme-preview" aria-hidden="true"><span></span><span></span><span></span><span></span></div>

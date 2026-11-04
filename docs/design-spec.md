@@ -5,16 +5,16 @@ three companion files are the source of truth for the new look:
 
 | File | What it is |
 |---|---|
-| [`design-system/tokens.css`](design-system/tokens.css) | Every token: primitives, light/dark semantics, board themes. Phase 3 copies it to `styles/tokens.css` unchanged |
-| [`design-system/components.css`](design-system/components.css) | Every component, reading tokens only. Phase 3 copies it to `styles/components.css` |
+| [`../styles/tokens.css`](../styles/tokens.css) | Every token: primitives, light/dark semantics, board themes. Loaded by the app (Phase 3), the gallery and the prototype |
+| [`../styles/components.css`](../styles/components.css) | Every component, reading tokens only. Used by the gallery now; the app adopts its `c-*` classes in Phase 6 |
 | [`design-system/index.html`](design-system/index.html) | Living gallery: every token and component, a theme and board switcher, and a live contrast table |
-| [`design-directions/index.html`](design-directions/index.html) | Full-screen mockups at phone, tablet and desktop. Its D · Blend imports the real `tokens.css` |
+| [`design-directions/index.html`](design-directions/index.html) | Full-screen mockups at phone, tablet and desktop. Its D · Blend imports the real `styles/tokens.css` |
+| [`../styles/fonts.css`](../styles/fonts.css), [`../fonts/`](../fonts/) | Self-hosted woff2 fonts (208 KB) with their OFL licences |
 | [`../scripts/check-contrast.js`](../scripts/check-contrast.js) | Fails if any colour pair drops below WCAG AA, or if the two dark-theme copies drift apart |
 
 To view: serve the repo (`python3 -m http.server 4173`) and open
-`/docs/design-system/` and `/docs/design-directions/`. On the deployed site,
-fonts fall back to system faces because the CSP blocks Google Fonts. That's
-expected until Phase 3 vendors them.
+`/docs/design-system/` and `/docs/design-directions/`. Both use the
+self-hosted fonts, so they render correctly on the deployed site too.
 
 Screenshots: `design-system/gallery-light.png`, `gallery-dark.png`, and
 the `blend-*` and `phone-blend-*` mockups in `design-directions/`.
@@ -29,7 +29,7 @@ the `blend-*` and `phone-blend-*` mockups in `design-directions/`.
 | Brass on cream contrast | Brass `--accent` is only ever a fill, with `--accent-ink` text on top (8.5:1). Brass as text or icon uses `--accent-text` (`#8f620c`, 5.2:1 on surface). Verified by `check-contrast.js`. |
 | Move-quality colours as text | They fail AA as small text (inaccuracy 3.8:1, mistake 4.2:1 on surface). **Chip words stay in `--text`**, and only the tint and the symbol (`?!`, `?`, `??` …) carry the colour, which needs just 3:1 as a graphic. Every quality colour also travels with its symbol, so colour blindness doesn't hide the meaning. |
 | Threat arrow colour | It was brass in the earlier blend, which made it hard to tell apart from hint arrows (identical in dark mode). **Threats are now blue-violet** (`--iris-500` / `--iris-300`). It's the only cool hue on the board, so a threat never reads as advice. |
-| Board themes | **Sage** (default), **Walnut** (close to today's board), **Slate**, and **High contrast** (squares ≥ 3:1 apart, for low vision and bright rooms). Switch with `<html data-board="…">`. |
+| Board themes | **Sage** (default), **Walnut** (close to the old board), **Slate**, and **High contrast** (squares ≥ 3:1 apart, for low vision and bright rooms). Switch with `<html data-board-theme="green|walnut|blue|contrast">`; the keys match the values already saved under `ui:board-theme`, and the retired Ivory theme falls back to Walnut. |
 | Piece sets | **cburnett only** for now. It's already vendored with its CC BY-SA 3.0 attribution. A second set waits until the board library (Phase 5) makes swapping trivial. |
 | Light / dark | Follows `prefers-color-scheme`, overridden by `<html data-theme="light|dark">` from Settings. |
 
@@ -193,6 +193,23 @@ Subset to Latin + Latin-1 + the chess and typographic symbols used
 vendoring and drop a weight if it goes over.
 
 ## 8. Handoff to Phase 3
+
+**Done (Phase 3).** What actually happened, for the record:
+
+- `styles/fonts.css` and `styles/tokens.css` load before `styles.css`;
+  `styles/components.css` is not linked yet (Phase 6 adopts its classes).
+- Every raw colour, font size, font family and radius in `styles.css` maps
+  to a token; the all-caps tracked labels became sentence case.
+- In the height-constrained board columns, the coach line and controls use
+  the compact steps (`--text-md` and `--text-xs`). The coach line and the
+  controls row also keep a readable width independent of the board: tying
+  them to the board width made wrapped text shrink the board further, which
+  had left the 1280×800 opening-return state at exactly the 320px minimum
+  before the reskin.
+- Settings gained Appearance (Match device / Light / Dark); board themes
+  are Sage (default), Walnut, Slate and High contrast.
+
+The original handoff plan:
 
 1. Copy `tokens.css` and `components.css` into `styles/`. Add
    `@layer reset, tokens, base, components, layout, views, utilities;` at
