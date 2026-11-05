@@ -784,6 +784,7 @@ async page => {
     await page.locator('.opponent-card[data-opponent="rosa"]').click();
     const chosen = await page.evaluate(() => ({ elo: coachEngineElo, auto: document.getElementById('coach-auto-elo').checked, pressed: document.querySelector('.opponent-card[data-opponent="rosa"]').getAttribute('aria-pressed'), current: document.getElementById('opponent-current').textContent }));
     if (chosen.elo !== 800 || chosen.auto || chosen.pressed !== 'true' || !/Rosa/.test(chosen.current)) problems.push('choosing Rosa did not set her level: ' + JSON.stringify(chosen));
+    if (!/Rosa · 800/.test(await page.locator('#opponent-tag').textContent())) problems.push('the opponent is not named above the board');
     await page.locator('.side-toggle button[data-side="black"]').click();
     await page.evaluate(() => { window.__opponentSearches = 0; const orig = engineClient.evaluate; engineClient.evaluate = function(fen, depth, opts) { if (opts && opts.multipv && opts.skill !== undefined) window.__opponentSearches++; return orig.apply(this, arguments); }; });
     await page.locator('#btn-coach-newgame').click();

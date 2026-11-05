@@ -120,6 +120,27 @@
     if (title) title.textContent = custom ? `Custom level · ${coachEngineElo}` : current.elo ? `${current.name} · ${current.elo} · ${current.style}` : `${current.name} · ${current.style}`;
     const about = document.getElementById('opponent-about');
     if (about) about.textContent = custom ? 'Pick an opponent to play its openings, or keep this level.' : current.blurb;
+    renderTag(current, custom);
+  }
+
+  // The opponent's name above the board, as on Chess.com.
+  function renderTag(current, custom) {
+    const bar = document.getElementById('captured-top');
+    if (!bar) return;
+    let tag = document.getElementById('opponent-tag');
+    if (!tag) {
+      tag = document.createElement('span');
+      tag.id = 'opponent-tag';
+      tag.className = 'opponent-tag';
+      tag.innerHTML = '<span class="opponent-avatar opponent-avatar-sm" aria-hidden="true"></span><span class="opponent-tag-name"></span>';
+      bar.insertBefore(tag, bar.firstChild);
+    }
+    const level = typeof coachEngineElo !== 'undefined' ? coachEngineElo : current.elo;
+    const persona = custom ? PERSONAS[0] : current;
+    tag.firstChild.textContent = persona.initial;
+    tag.firstChild.dataset.opponent = persona.id;
+    tag.lastChild.textContent = custom ? `Opponent · ${level}` : !current.elo ? `Coach · ${level}` : `${current.name} · ${current.elo}`;
+    tag.setAttribute('title', custom || !current.elo ? 'Calibrated engine opponent' : `${current.name}: ${current.style}`);
   }
 
   function choose(id) {
@@ -169,6 +190,9 @@
     const slider = document.getElementById('coach-strength');
     // After app.js has read the new level, whichever listener runs first.
     if (slider) slider.addEventListener('input', () => setTimeout(render, 0));
+    // Adaptive play changes the level without an input event.
+    const value = document.getElementById('coach-strength-value');
+    if (value && typeof MutationObserver !== 'undefined') new MutationObserver(() => setTimeout(render, 0)).observe(value, { childList: true, characterData: true, subtree: true });
     const auto = document.getElementById('coach-auto-elo');
     if (auto) auto.addEventListener('change', () => {
       if (auto.checked && selected().elo) { try { localStorage.setItem(KEY, 'coach'); } catch (e) { /* noop */ } }

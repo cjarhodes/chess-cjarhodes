@@ -2992,3 +2992,5 @@ input[type=range].strength-slider::-moz-range-thumb {
 .endgame-row.active { border-color: var(--accent); background: var(--accent-soft); }
 .endgame-name { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text); }
 .endgame-meta { font-size: var(--text-xs); color: var(--text-3); }
+.opponent-tag { display: inline-flex; align-items: center; gap: 0.35rem; margin-right: 0.35rem; font-size: var(--text-xs); color: var(--text-2); font-weight: var(--weight-medium); }
+.opponent-avatar.opponent-avatar-sm { width: 18px; height: 18px; font-size: var(--text-xs); }
