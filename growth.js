@@ -91,8 +91,17 @@ function emptyGrowthState() {
     repertoire: { ids: [], updatedAt: 0, focusKey: null, focusUpdatedAt: 0, observed: [], repairs: [], comparisons: [] },
     openingTransfers: [],
     learningTransfers: [],
-    library: { records: {} }
+    library: { records: {} },
+    puzzles: null
   };
+}
+
+// Puzzle progress rides along in this synced JSON as a compact copy
+// (PuzzleCore.compactState); puzzles.js keeps the full history locally.
+function normalizeGrowthPuzzles(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (typeof PuzzleCore === 'undefined') return value;
+  return PuzzleCore.compactState(value);
 }
 
 function normalizeGrowthState(value) {
@@ -165,7 +174,8 @@ function normalizeGrowthState(value) {
       records: value.library && value.library.records && typeof value.library.records === 'object'
         ? value.library.records
         : {}
-    }
+    },
+    puzzles: normalizeGrowthPuzzles(value.puzzles)
   };
 }
 
@@ -263,7 +273,8 @@ function trainingBackupKeys(ownerId = growthOwnerId()) {
     coachMemoryKey(LIFETIME_KEY),
     coachMemoryKey(COACH_STATE_KEY),
     coachMemoryKey(COACH_PRACTICE_STATE_KEY),
-    coachMemoryKey(COACH_PRACTICE_RETURN_KEY)
+    coachMemoryKey(COACH_PRACTICE_RETURN_KEY),
+    ...(typeof GameArchive !== 'undefined' ? [GameArchive.storageKeyFor(ownerId)] : [])
   ];
 }
 
@@ -277,6 +288,9 @@ function readTrainingBackup() {
     const raw = localStorage.getItem(key);
     if (raw === null) return;
     try { data[key] = JSON.parse(raw); } catch (e) { /* skip malformed local values */ }
+    // Export the archive in its current { v: 1, games } form, whatever
+    // format this browser still has stored.
+    if (typeof GameArchive !== 'undefined' && key === GameArchive.storageKeyFor(growthOwnerId())) data[key] = { v: 1, games: GameArchive.load() };
   });
   return {
     schema: 'chess-coach-training-backup',
@@ -364,6 +378,18 @@ function mergeImportedTrainingData(payload) {
     current.entries = current.entries.slice(-INSIGHTS_MAX_ENTRIES);
     values[coachMemoryKey(INSIGHTS_KEY)] = current;
   }
+  if (typeof GameArchive !== 'undefined') {
+    // Older backups may hold the archive as a bare array of games.
+    const archiveKeys = Object.keys(data).filter(key => key === GameArchive.KEY || key.startsWith(GameArchive.KEY + ':'));
+    archiveKeys.forEach(key => { if (Array.isArray(data[key])) data[key] = { v: 1, games: data[key] }; });
+    const archive = incoming(GameArchive.storageKeyFor(ownerId), GameArchive.KEY, 1);
+    if (archive) {
+      if (!Array.isArray(archive.games)) throw new Error('The game archive is incomplete. Nothing was imported.');
+      let current = null;
+      try { current = JSON.parse(localStorage.getItem(GameArchive.storageKeyFor(ownerId))); } catch (e) { current = null; }
+      values[GameArchive.storageKeyFor(ownerId)] = GameArchive.merge(current, archive);
+    }
+  }
   const lifetime = incoming(coachMemoryKey(LIFETIME_KEY), LIFETIME_KEY);
   if (lifetime) {
     const current = loadLifetime();
@@ -399,6 +425,7 @@ function mergeImportedTrainingData(payload) {
   hydrateGrowthUI();
   if (typeof renderAccountCheckpoint === 'function') renderAccountCheckpoint();
   if (typeof renderInsights === 'function') renderInsights();
+  if (typeof GameArchive !== 'undefined') GameArchive.render();
   return Object.keys(values).length;
 }
 
@@ -479,6 +506,9 @@ function mergeGrowthStates(localValue, remoteValue) {
   });
   merged.openingTransfers = normalizeOpeningTransferRecords([...local.openingTransfers, ...remote.openingTransfers]);
   merged.learningTransfers = normalizeLearningTransferRecords([...local.learningTransfers, ...remote.learningTransfers]);
+  merged.puzzles = local.puzzles && remote.puzzles && typeof PuzzleCore !== 'undefined'
+    ? PuzzleCore.mergeStates(local.puzzles, remote.puzzles)
+    : (local.puzzles || remote.puzzles || null);
   merged.updatedAt = Math.max(local.updatedAt, remote.updatedAt);
   return normalizeGrowthState(merged);
 }
@@ -486,7 +516,7 @@ function mergeGrowthStates(localValue, remoteValue) {
 function adoptAnonymousGrowthState(ownerId) {
   if (!ownerId) return;
   const anonymous = loadGrowthState(null);
-  const hasData = anonymous.learningTransfers.length || anonymous.openingTransfers.length || anonymous.profile.onboarded || anonymous.repertoire.ids.length || anonymous.repertoire.observed.length || anonymous.repertoire.repairs.length || Object.keys(anonymous.library.records).length;
+  const hasData = (anonymous.puzzles && anonymous.puzzles.history && anonymous.puzzles.history.length) || anonymous.learningTransfers.length || anonymous.openingTransfers.length || anonymous.profile.onboarded || anonymous.repertoire.ids.length || anonymous.repertoire.observed.length || anonymous.repertoire.repairs.length || Object.keys(anonymous.library.records).length;
   if (!hasData) return;
   const merged = mergeGrowthStates(loadGrowthState(ownerId), anonymous);
   const saved = saveGrowthState(merged, ownerId, { skipSync: true, preserveTimestamp: true });

@@ -3581,6 +3581,14 @@ const engineClient = {
       return;
     }
     if (!this.current) return;
+    if (this.current.orphan) {
+      if (msg.startsWith('bestmove ')) {
+        clearTimeout(this.current.timeoutId);
+        this.current = null;
+        this._runNext();
+      }
+      return;
+    }
     if (msg.startsWith('info ')) {
       const parsed = parseInfo(msg);
       if (!parsed) return;
@@ -3633,7 +3641,11 @@ const engineClient = {
       task.timeoutId = setTimeout(() => {
         task.timeoutId = null;
         if (this.current === task) {
-          this.current = null;
+          // UCI replies are untagged, so the stopped search's late info and
+          // bestmove must not be read as the next task's answer. Hold the
+          // slot until that bestmove arrives; restart the worker if it never
+          // does.
+          this.current = { orphan: true, timeoutId: setTimeout(() => this._restart(), 5000) };
           try { this.worker.postMessage('stop'); } catch (_) {}
         } else {
           this.queue = this.queue.filter(t => t !== task);
@@ -3667,6 +3679,19 @@ const engineClient = {
     this.worker.postMessage('setoption name MultiPV value ' + (this.current.multipv || 1));
     this.worker.postMessage('position fen ' + this.current.fen);
     this.worker.postMessage('go depth ' + this.current.depth);
+  },
+
+  // A stopped search that never answered: replace the worker but keep the
+  // queued tasks, which run once the new worker is ready.
+  _restart() {
+    if (!this.current || !this.current.orphan) return;
+    this.current = null;
+    this.status = 'idle';
+    if (this.worker) {
+      try { this.worker.terminate(); } catch (e) {}
+    }
+    this.worker = null;
+    if (this.queue.length) this.init().catch(err => this.failAll(err));
   },
 
   cancel(message) {
@@ -3968,10 +3993,15 @@ async function classifyMove(fenBefore, userUciMove, fenAfter) {
   const whyBetter = movePurposeText(fenBefore, bestUci, userUciMove, bestLine, afterInfo);
   const explanation = coachExplanationContext(fenBefore, userUciMove, bestUci, fenAfter, afterInfo);
 
+  // Display-only Great/Brilliant flag (move-flair.js); tiers are unchanged.
+  const flair = rank === 1 && typeof MoveFlair !== 'undefined'
+    ? MoveFlair.moveFlair(Chess, fenBefore, userUciMove, lines)
+    : null;
   return {
     tier: cls.tier,
     label: cls.label,
     emoji: cls.emoji,
+    flair,
     loss: rank === 1 ? 0 : Math.round(loss),
     rank,
     bestUci,
@@ -4371,8 +4401,9 @@ function renderCoachReviewEvidence(review) {
 function renderCoachReview(review) {
   if (!review) { $('#coach-review').hide(); return; }
   const $badge = $('#coach-classification');
-  $badge.text(review.emoji + ' ' + review.label);
-  $badge.attr('class', 'coach-classification coach-class-' + review.tier);
+  const flair = review.flair === 'brilliant' || review.flair === 'great' ? review.flair : null;
+  $badge.text(flair === 'brilliant' ? '!! Brilliant' : flair === 'great' ? '! Great move' : review.emoji + ' ' + review.label);
+  $badge.attr('class', 'coach-classification coach-class-' + (flair || review.tier));
   $('#coach-loss').text(review.loss > 0 ? '−' + (review.loss / 100).toFixed(2) : '0.00');
   $('#coach-user-move').text(review.userSan || '—');
   $('#coach-best-move').text(review.bestSan || '—');
@@ -4611,14 +4642,24 @@ async function coachOpponentRespond() {
     // loss distribution. Lower settings favor modest slips while preserving
     // detected mates, without unsupported Elo commands.
     const opts = coachStrengthOpts(coachEngineElo);
-    const result = await engineClient.evaluate(fen, opts.depth, {
+    // A chosen opponent personality plays its Library book lines first
+    // (opponents.js); the calibrated engine takes over once off book.
+    const bookMove = typeof OpponentPersonas !== 'undefined' ? OpponentPersonas.coachBookMove() : null;
+    const result = bookMove ? null : await engineClient.evaluate(fen, opts.depth, {
       skill: opts.skill,
       multipv: opts.multipv
     });
-    const bestmove = chooseCalibratedOpponentMove(result, opts);
+    const bestmove = bookMove || chooseCalibratedOpponentMove(result, opts);
     if (generation !== coachGameGeneration || coachGame !== gameRef || !coachMode ||
         !coachGameActive || coachIsUserTurn() || coachGame.fen() !== fen) return;
-    if (!bestmove) { setCoachStatus('Your move.'); return; }
+    if (!bestmove) {
+      // The game is not over, so an empty answer means the engine failed
+      // (for example its 30 s safety timeout). It is still the opponent's
+      // turn: say so and offer a retry rather than claiming it is the user's.
+      updateCoachControlsState();
+      showCoachRetryStatus('The opponent did not answer — retry or take back.');
+      return;
+    }
     setTimeout(() => {
       try {
         if (generation !== coachGameGeneration || coachGame !== gameRef || !coachMode || !coachGameActive) return;
@@ -5262,6 +5303,7 @@ function coachingTakeaway(reviews, phases) {
 
 function showPostGameSummary(endMsg) {
   coachLastEndMsg = endMsg;
+  if (typeof GameArchive !== 'undefined') GameArchive.record(endMsg);
   // Status-line pulse handed the baton to the overlay — remove it so reopens don't pulse again.
   $('#coach-status').removeClass('status-ended');
   // Refresh the "Open review" button visibility now that we have an end message.
@@ -5274,7 +5316,8 @@ function showPostGameSummary(endMsg) {
   const sideName = coachUserColor() === 'white' ? 'White' : 'Black';
   const subtitleParts = [];
   if (sideName) subtitleParts.push(`You played ${sideName}`);
-  if (elo) subtitleParts.push(`vs Opponent ${elo}`);
+  const personaName = typeof OpponentPersonas !== 'undefined' ? OpponentPersonas.displayName() : null;
+  if (elo) subtitleParts.push(personaName ? `vs ${personaName} (${elo})` : `vs Opponent ${elo}`);
   if (subtitleParts.length) {
     $('#summary-subtitle').text(subtitleParts.join(' · ')).show();
   } else {
@@ -5590,6 +5633,10 @@ function updateURL() {
   const params = new URLSearchParams();
   if (appView === 'coach') {
     params.set('view', 'coach');
+  } else if (appView === 'puzzles') {
+    params.set('view', 'puzzles');
+    const mode = window.PuzzlesView && window.PuzzlesView.urlMode();
+    if (mode) params.set('mode', mode);
   } else {
     // Preserve an intentional switch to the Library when no opening has been
     // selected. Opening links remain compact and continue to imply Library.
@@ -6555,8 +6602,20 @@ function createCoachBoard(position, orientation) {
 // ─────────────────────────────────────────────
 // COACH VIEW SWITCHING
 // ─────────────────────────────────────────────
+// Top navigation: Library | Coach | Puzzles. Exactly one tab is selected and
+// focusable; the others stay reachable with the arrow keys.
+const APP_VIEWS = ['library', 'coach', 'puzzles'];
+function setNavSelection(view) {
+  APP_VIEWS.forEach(name => {
+    const active = name === view;
+    $('#nav-' + name).toggleClass('active', active).attr({ 'aria-selected': active ? 'true' : 'false', tabindex: active ? '0' : '-1' });
+  });
+}
+
 function switchView(view) {
+  if (!APP_VIEWS.includes(view)) view = 'coach';
   const wasCoachMode = coachMode;
+  const wasPuzzles = appView === 'puzzles';
   if (wasCoachMode && view !== 'coach') {
     // Leaving Coach must stop any pending engine reply and clear a transient
     // analysis line before the library view takes over.
@@ -6569,16 +6628,25 @@ function switchView(view) {
     }
     invalidateCoachAsyncWork('Coach view changed.');
   }
+  if (wasPuzzles && view !== 'puzzles' && window.PuzzlesView) window.PuzzlesView.hide();
   appView = view;
   coachMode = (view === 'coach');
   const $app = $('.app');
   const $coach = $('#coach-view');
+  const $puzzles = $('#puzzles-view');
+  setNavSelection(view);
+  if (view === 'puzzles') {
+    $app.hide().attr('aria-hidden', 'true');
+    $coach.hide().attr('aria-hidden', 'true');
+    $puzzles.show().css('display', 'grid').attr('aria-hidden', 'false');
+    if (window.PuzzlesView) window.PuzzlesView.show();
+    updateURL();
+    return;
+  }
+  $puzzles.hide().attr('aria-hidden', 'true');
   if (view === 'coach') {
     $app.hide().attr('aria-hidden', 'true');
     $coach.show().css('display', 'grid').attr('aria-hidden', 'false');
-    $('#nav-library').removeClass('active').attr('aria-selected', 'false');
-    $('#nav-library').attr('tabindex', '-1');
-    $('#nav-coach').addClass('active').attr({ 'aria-selected': 'true', tabindex: '0' });
     // Pre-warm Stockfish in the background so the first New Game starts faster.
     // Errors here are swallowed; the real load gate is inside startCoachGame.
     if (engineClient.status === 'idle') { engineClient.init().catch(() => {}); }
@@ -6630,9 +6698,6 @@ function switchView(view) {
   } else {
     $coach.hide().attr('aria-hidden', 'true');
     $app.show().attr('aria-hidden', 'false');
-    $('#nav-coach').removeClass('active').attr('aria-selected', 'false');
-    $('#nav-coach').attr('tabindex', '-1');
-    $('#nav-library').addClass('active').attr({ 'aria-selected': 'true', tabindex: '0' });
     // If library board exists, kick it into life via a resize so it redraws correctly
     if (board) setTimeout(() => board.resize(), 0);
     scheduleLibraryBoardFit();
@@ -7219,9 +7284,12 @@ function updateMoveList() {
   const cursor = coachReviewCursor === null ? total : coachReviewCursor;
   // Map ply → classification tier for coloring blunders/mistakes in the list.
   const tierByPly = {};
+  const flairByPly = {};
   for (const r of coachReviewLog) {
-    if (r && r.ply) tierByPly[r.ply] = r.tier;
+    if (r && r.ply) { tierByPly[r.ply] = r.tier; flairByPly[r.ply] = r.flair || ''; }
   }
+  const glyph = ply => flairByPly[ply] === 'brilliant' ? '<span class="ply-flair brilliant" aria-label="brilliant">!!</span>'
+    : flairByPly[ply] === 'great' ? '<span class="ply-flair great" aria-label="great move">!</span>' : '';
   const pairs = Math.ceil(sans.length / 2);
   let html = '';
   for (let i = 0; i < pairs; i++) {
@@ -7238,9 +7306,9 @@ function updateMoveList() {
     if (['blunder', 'mistake', 'inaccuracy'].includes(wTier)) wClasses.push(wTier);
     if (['blunder', 'mistake', 'inaccuracy'].includes(bTier)) bClasses.push(bTier);
     html += `<span class="num">${i + 1}.</span>`;
-    html += `<span class="${wClasses.join(' ')}" data-ply="${wPly}">${escapeHtml(wSan)}</span>`;
+    html += `<span class="${wClasses.join(' ')}" data-ply="${wPly}">${escapeHtml(wSan)}${glyph(wPly)}</span>`;
     if (bSan) {
-      html += `<span class="${bClasses.join(' ')}" data-ply="${bPly}">${escapeHtml(bSan)}</span>`;
+      html += `<span class="${bClasses.join(' ')}" data-ply="${bPly}">${escapeHtml(bSan)}${glyph(bPly)}</span>`;
     } else {
       html += `<span class="ply-empty">…</span>`;
     }
@@ -7787,6 +7855,14 @@ function updateControls() {
 function renderMoveList() {
   if (!currentOpening) return;
   const moves = activeMoves();
+  // A quiz asks for recall first: moves not reached yet stay hidden, keeping
+  // their slots so the length of the line is still visible.
+  const chip = (idx, cls) => {
+    const hidden = quizMode && idx > currentMoveIdx;
+    return hidden
+      ? `<button class="move-chip quiz-hidden" data-idx="${idx}" aria-label="Move hidden until you play it" disabled>…</button>`
+      : `<button class="move-chip ${cls}" data-idx="${idx}">${escapeHtml(moves[idx])}</button>`;
+  };
   let html = '';
   for (let i = 0; i < moves.length; i += 2) {
     const moveNum = Math.floor(i / 2) + 1;
@@ -7794,11 +7870,11 @@ function renderMoveList() {
     html += `<span class="move-num">${moveNum}.</span>`;
     // White move
     const wClass = i === currentMoveIdx ? 'current' : (i < currentMoveIdx ? 'played' : '');
-    html += `<button class="move-chip ${wClass}" data-idx="${i}">${escapeHtml(moves[i])}</button>`;
+    html += chip(i, wClass);
     // Black move (if exists)
     if (i + 1 < moves.length) {
       const bClass = (i + 1) === currentMoveIdx ? 'current' : (i + 1 < currentMoveIdx ? 'played' : '');
-      html += `<button class="move-chip ${bClass}" data-idx="${i + 1}">${escapeHtml(moves[i + 1])}</button>`;
+      html += chip(i + 1, bClass);
     }
     html += `</div>`;
   }
@@ -7923,6 +7999,8 @@ function setMode(mode) {
       $('#opening-content').show();
       updateControls();
       createBoard(game.fen(), false, boardFlipped ? 'black' : 'white');
+      // Reveal the whole line again after a quiz.
+      renderMoveList();
     }
     renderExplanation(currentMoveIdx);
     clearFeedback();
@@ -8201,11 +8279,18 @@ $(function () {
   // ─── Header nav (Library / Coach) ───────
   $('#nav-library').on('click', () => switchView('library'));
   $('#nav-coach').on('click', () => switchView('coach'));
+  $('#nav-puzzles').on('click', () => switchView('puzzles'));
   $('.top-nav-btn').on('keydown', function(event) {
     const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
     if (!keys.includes(event.key)) return;
     event.preventDefault();
-    const nextView = (event.key === 'ArrowLeft' || event.key === 'Home') ? 'library' : 'coach';
+    const current = APP_VIEWS.indexOf(String(this.id).replace(/^nav-/, ''));
+    let index = current < 0 ? 1 : current;
+    if (event.key === 'Home') index = 0;
+    else if (event.key === 'End') index = APP_VIEWS.length - 1;
+    else if (event.key === 'ArrowLeft') index = Math.max(0, index - 1);
+    else index = Math.min(APP_VIEWS.length - 1, index + 1);
+    const nextView = APP_VIEWS[index];
     switchView(nextView);
     $('#nav-' + nextView).trigger('focus');
   });
@@ -8842,12 +8927,29 @@ $(function () {
       return;
     }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
+    // Puzzles handles its own shortcuts (puzzles.js).
+    if (appView === 'puzzles') return;
 
     // In coach view, only handle the flip shortcut; everything else is scoped to library
+    // Coach: F flips; arrows step through the game like the nav buttons,
+    // Home goes to the first position and End back to live.
     if (coachMode) {
+      const usable = id => { const $b = $(id); return $b.length && $b.is(':visible') && !$b.prop('disabled'); };
       if (e.key.toLowerCase() === 'f') {
         e.preventDefault();
         $('#btn-coach-flip').trigger('click');
+      } else if (e.key === 'ArrowLeft' && usable('#btn-coach-prev')) {
+        e.preventDefault();
+        $('#btn-coach-prev').trigger('click');
+      } else if (e.key === 'ArrowRight' && usable('#btn-coach-next')) {
+        e.preventDefault();
+        $('#btn-coach-next').trigger('click');
+      } else if (e.key === 'Home' && usable('#btn-coach-prev') && coachGame && coachGame.history().length) {
+        e.preventDefault();
+        coachGotoPly(0);
+      } else if (e.key === 'End' && usable('#btn-coach-live')) {
+        e.preventDefault();
+        $('#btn-coach-live').trigger('click');
       }
       return;
     }
@@ -9005,6 +9107,9 @@ $(function () {
   const initial = readURL();
   if (initial.view === 'coach') {
     switchView('coach');
+  } else if (initial.view === 'puzzles') {
+    if (window.PuzzlesView) window.PuzzlesView.setInitialMode(initial.mode);
+    switchView('puzzles');
   } else if (initial.opening) {
     const op = OPENINGS.find(o => o.id === initial.opening);
     if (op) {

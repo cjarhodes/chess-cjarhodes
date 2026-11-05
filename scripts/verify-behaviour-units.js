@@ -384,6 +384,81 @@ async page => {
     return problems;
   });
 
+  await check('a timed-out search hands over only after its late bestmove', () => page.evaluate(async () => {
+    const problems = [];
+    // Start from no worker at all, so the fake one below is used.
+    engineClient.failAll(createAbortError('test reset'));
+    const RealWorker = window.Worker;
+    const realSetTimeout = window.setTimeout;
+    const timers = [];
+    // Capture the engine's safety timers so the test can fire them at once.
+    window.setTimeout = (fn, ms, ...rest) => {
+      if (ms === 30000 || ms === 5000) { timers.push({ fn, ms }); return -1; }
+      return realSetTimeout(fn, ms, ...rest);
+    };
+    const workers = [];
+    window.Worker = function FakeWorker() {
+      workers.push(this);
+      this.posted = [];
+      this.postMessage = message => this.posted.push(message);
+      this.terminate = () => { this.terminated = true; };
+    };
+    const tick = () => new Promise(resolve => realSetTimeout(resolve, 0));
+    const fire = ms => { const i = timers.findIndex(t => t.ms === ms); if (i < 0) return false; timers.splice(i, 1)[0].fn(); return true; };
+    const goes = w => w.posted.filter(m => m.startsWith('go depth')).length;
+    const handshake = async w => { w.onmessage({ data: 'uciok' }); w.onmessage({ data: 'readyok' }); await tick(); };
+    try {
+      const fen = '8/8/8/8/8/8/8/K6k w - - 0 1';
+      const a = engineClient.evaluate(fen, 4);
+      const b = engineClient.evaluate(fen, 5);
+      await handshake(workers[0]);
+      if (goes(workers[0]) !== 1) problems.push('the first search did not start alone');
+      if (!fire(30000)) problems.push('no safety timer for the first search');
+      const first = await a;
+      if (first.bestmove !== null) problems.push('a timed-out search should resolve empty');
+      if (goes(workers[0]) !== 1) problems.push('the next search started before the stopped one answered');
+      workers[0].onmessage({ data: 'info depth 3 score cp 10 pv a1a2' });
+      workers[0].onmessage({ data: 'bestmove a1a2' });
+      await tick();
+      if (goes(workers[0]) !== 2) problems.push('the next search did not start after the late bestmove');
+      let settled = null;
+      b.then(r => { settled = r; });
+      await tick();
+      if (settled) problems.push('the late bestmove was read as the next search\'s answer');
+      workers[0].onmessage({ data: 'info depth 5 score cp 20 pv a1b1' });
+      workers[0].onmessage({ data: 'bestmove a1b1' });
+      const second = await b;
+      if (second.bestmove !== 'a1b1') problems.push('the next search got ' + second.bestmove + ', not its own answer');
+
+      // A stopped search that never answers: the worker is replaced and the
+      // queued search still runs.
+      timers.length = 0;
+      const c = engineClient.evaluate(fen, 4);
+      const d = engineClient.evaluate(fen, 6);
+      await tick();
+      // The first captured timer is c's, which is the running search.
+      if (!fire(30000)) problems.push('no safety timer for the running search');
+      await c;
+      if (!fire(5000)) problems.push('no restart timer for a silent stopped search');
+      await tick();
+      if (!workers[0].terminated) problems.push('a silent worker was not replaced');
+      if (workers.length !== 2) problems.push('no new worker was started for the queued search');
+      else {
+        await handshake(workers[1]);
+        if (goes(workers[1]) !== 1) problems.push('the queued search did not run on the new worker');
+        workers[1].onmessage({ data: 'info depth 6 score cp 5 pv a1a2' });
+        workers[1].onmessage({ data: 'bestmove a1a2' });
+        const last = await d;
+        if (last.bestmove !== 'a1a2') problems.push('the queued search did not resolve on the new worker');
+      }
+    } finally {
+      window.Worker = RealWorker;
+      window.setTimeout = realSetTimeout;
+      engineClient.failAll(createAbortError('test reset'));
+    }
+    return problems;
+  }));
+
   // ── Opponent failures are recoverable ──
   await check('a failed opponent move offers a working retry', async () => {
     const problems = [];
@@ -396,6 +471,25 @@ async page => {
       await page.evaluate(() => { window.chooseCalibratedOpponentMove = window.__realChoose; });
       await page.locator('#btn-coach-retry-opponent').click();
       await page.waitForFunction(n => coachGame.history().length >= n + 2 && !coachThinking, plies, { timeout: 60000 });
+    } finally {
+      await page.evaluate(() => { if (window.__realChoose) window.chooseCalibratedOpponentMove = window.__realChoose; });
+    }
+    return problems;
+  });
+
+  await check('an empty engine reply keeps the opponent on move and offers a retry', async () => {
+    const problems = [];
+    await page.evaluate(() => { window.__realChoose = window.chooseCalibratedOpponentMove; window.chooseCalibratedOpponentMove = () => null; });
+    try {
+      const plies = await page.evaluate(() => coachGame.history().length);
+      await playMove(await page.evaluate(() => coachGame.moves()[0]));
+      await page.waitForFunction(() => document.getElementById('btn-coach-retry-opponent'), null, { timeout: 60000 });
+      const status = await page.locator('#coach-status').textContent();
+      if (!/did not answer/.test(status)) problems.push('status should say the opponent did not answer: ' + status);
+      if (await page.evaluate(() => coachIsUserTurn())) problems.push('it should still be the opponent\'s turn');
+      await page.evaluate(() => { window.chooseCalibratedOpponentMove = window.__realChoose; });
+      await page.locator('#btn-coach-retry-opponent').click();
+      await page.waitForFunction(n => coachGame.history().length >= n + 2 && !coachThinking && coachIsUserTurn(), plies, { timeout: 60000 });
     } finally {
       await page.evaluate(() => { if (window.__realChoose) window.chooseCalibratedOpponentMove = window.__realChoose; });
     }
@@ -544,6 +638,397 @@ async page => {
     await page.waitForFunction(() => typeof applyBoardTheme === 'function');
     const migrated = await page.evaluate(() => [document.documentElement.dataset.theme || 'auto', document.documentElement.dataset.boardTheme]);
     if (migrated[0] !== 'auto' || migrated[1] !== 'walnut') problems.push('retired Ivory or Match device did not apply: ' + migrated.join('/'));
+    return problems;
+  });
+
+  await check('board overlay shows quality badges, best-move arrows and an evaluation bar', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=coach');
+    await page.evaluate(() => { localStorage.removeItem('ui:board-feedback'); });
+    await page.goto(base + '/?view=coach');
+    await page.waitForFunction(() => typeof CoachOverlay !== 'undefined' && !!coachBoard);
+    // Review fixtures stand in for the engine: 1.e4 (best) e5 2.Qh5 (mistake, Nc3 preferred) Nc6.
+    const state = async () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => {
+      const svg = document.querySelector('#coachBoard-wrap .board-overlay');
+      const bar = document.querySelector('#coachBoard-wrap .board-eval-bar');
+      resolve({ arrows: svg ? svg.querySelectorAll('.board-arrow').length : 0, badges: svg ? Array.from(svg.querySelectorAll('.board-badge')).map(g => g.getAttribute('class')) : [],
+        bar: !!(bar && !bar.hidden), barLabel: bar ? bar.getAttribute('aria-label') : '', fill: bar ? bar.firstChild.style.height : '' });
+    }))));
+    await page.evaluate(() => {
+      coachGame = new Chess();
+      ['e4', 'e5', 'Qh5', 'Nc6'].forEach(m => coachGame.move(m));
+      const fens = []; const g = new Chess(); fens.push(g.fen()); ['e4', 'e5', 'Qh5', 'Nc6'].forEach(m => { g.move(m); fens.push(g.fen()); });
+      coachReviewLog = [
+        { ply: 1, userUci: 'e2e4', bestUci: 'e2e4', tier: 'best', fenBefore: fens[0], fenAfter: fens[1], evalAfter: { cp: -30, mate: null }, localGameId: coachLocalGameId },
+        { ply: 3, userUci: 'd1h5', bestUci: 'b1c3', tier: 'mistake', fenBefore: fens[2], fenAfter: fens[3], evalAfter: { cp: 140, mate: null }, localGameId: coachLocalGameId }
+      ];
+      coachReviewCursor = null;
+      coachBoard.position(coachGame.fen(), false);
+      CoachOverlay.refresh();
+    });
+    let s = await state();
+    if (s.arrows !== 0) problems.push('a best-move arrow was drawn on a position after the opponent replied');
+    if (!s.badges.some(c => c.includes('mistake'))) problems.push('the badge did not stay on the queen after the reply: ' + s.badges.join(','));
+    if (!s.bar || !/-1\.4/.test(s.barLabel) || !/stale|before the last move/.test(s.barLabel)) problems.push('eval bar missing, wrong sign, or not marked as from before the last move: ' + s.barLabel);
+    await page.evaluate(() => { coachReviewCursor = 3; coachBoard.position(coachFenAtPly(3), false); CoachOverlay.refresh(); });
+    s = await state();
+    if (s.arrows !== 1 || !s.badges.some(c => c.includes('mistake'))) problems.push('the reviewed mistake did not show its arrow and badge: ' + JSON.stringify(s));
+    if (parseFloat(s.fill) >= 50) problems.push('White is worse but the white part of the bar is ' + s.fill);
+    await page.evaluate(() => { coachReviewCursor = 1; coachBoard.position(coachFenAtPly(1), false); CoachOverlay.refresh(); });
+    s = await state();
+    if (s.arrows !== 0 || !s.badges.some(c => c.includes('best'))) problems.push('a best move should show a badge and no arrow: ' + JSON.stringify(s));
+    await page.evaluate(() => { coachReviewLog[0].flair = 'great'; CoachOverlay.refresh(); updateMoveList(); renderCoachReview(Object.assign({}, coachReviewLog[0], { label: 'Best move', emoji: '★' })); });
+    s = await state();
+    if (!s.badges.some(c => c.includes('great'))) problems.push('a great move did not get its own badge');
+    const listed = await page.evaluate(() => [document.querySelector('#movelist .ply[data-ply="1"] .ply-flair.great') !== null, document.getElementById('coach-classification').textContent]);
+    if (!listed[0]) problems.push('the move list did not mark the great move');
+    if (!/Great move/.test(listed[1])) problems.push('the review badge did not say Great move: ' + listed[1]);
+    await page.evaluate(() => { coachPracticeSession = { completed: false }; CoachOverlay.refresh(); });
+    s = await state();
+    if (s.arrows || s.badges.length || s.bar) problems.push('the overlay leaked information into a drill');
+    await page.evaluate(() => { coachPracticeSession = null; document.getElementById('group-board').open = true; });
+    await page.locator('#board-feedback-toggle').uncheck();
+    s = await state();
+    if (s.arrows || s.badges.length || s.bar) problems.push('turning board feedback off did not clear it');
+    await page.reload();
+    await page.waitForFunction(() => typeof CoachOverlay !== 'undefined');
+    if (await page.locator('#board-feedback-toggle').isChecked()) problems.push('the board feedback setting did not survive reload');
+    await page.evaluate(() => localStorage.removeItem('ui:board-feedback'));
+    return problems;
+  });
+
+  await check('? opens the shortcut sheet for the current view and arrow keys step through a Coach game', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=coach');
+    await page.waitForFunction(() => typeof ShortcutSheet !== 'undefined' && !!coachBoard);
+    await page.locator('body').click({ position: { x: 5, y: 300 } });
+    await page.keyboard.press('?');
+    const sheet = page.locator('#shortcut-sheet');
+    if (!(await sheet.isVisible())) problems.push('? did not open the sheet');
+    else {
+      if (!(await sheet.textContent()).includes('Coach')) problems.push('the sheet did not list Coach shortcuts');
+      if (await page.evaluate(() => document.activeElement.id) !== 'btn-shortcut-close') problems.push('focus did not move into the sheet');
+      await page.keyboard.press('Escape');
+      if (await sheet.isVisible()) problems.push('Escape did not close the sheet');
+    }
+    await page.locator('#nav-puzzles').click();
+    await page.locator('#btn-shortcuts').click();
+    if (!(await sheet.textContent()).includes('Hint')) problems.push('the header button did not show Puzzles shortcuts');
+    await page.locator('#btn-shortcut-close').click();
+    if (await page.evaluate(() => document.activeElement.id) !== 'btn-shortcuts') problems.push('closing did not return focus to the header button');
+    await page.locator('#nav-coach').click();
+    await page.locator('#coach-keyboard-move').evaluate(el => { el.open = true; });
+    await page.locator('#coach-keyboard-move-input').focus();
+    await page.keyboard.press('?');
+    await page.locator('#coach-keyboard-move-input').fill('');
+    if (await sheet.isVisible()) problems.push('? inside a form field opened the sheet');
+    await page.evaluate(() => {
+      coachGame = new Chess(); ['e4', 'e5', 'Nf3', 'Nc6'].forEach(m => coachGame.move(m));
+      coachGameActive = false; coachReviewCursor = null;
+      coachBoard.position(coachGame.fen(), false); updateCoachControlsState();
+      document.activeElement.blur();
+    });
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowLeft');
+    if (await page.evaluate(() => coachReviewCursor) !== 2) problems.push('ArrowLeft did not step back through the game: ' + await page.evaluate(() => coachReviewCursor));
+    await page.keyboard.press('ArrowRight');
+    if (await page.evaluate(() => coachReviewCursor) !== 3) problems.push('ArrowRight did not step forward');
+    await page.keyboard.press('Home');
+    if (await page.evaluate(() => coachReviewCursor) !== 0) problems.push('Home did not go to the first position');
+    await page.keyboard.press('End');
+    if (await page.evaluate(() => coachReviewCursor) !== null) problems.push('End did not return to the live position');
+    return problems;
+  });
+
+  await check('Explore analysis shows engine lines, plays a line, loads FEN/PGN and stays out of quizzes', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=library&mode=explore');
+    await page.evaluate(() => { localStorage.removeItem('ui:explore-engine'); });
+    await page.goto(base + '/?view=library&mode=explore');
+    const analysed = () => page.waitForFunction(() => { const s = ExploreAnalysis._state(); return s.result && exploreGame && s.result.fen === exploreGame.fen() && document.querySelectorAll('.explore-engine-line').length > 0; }, null, { timeout: 45000 });
+    await analysed();
+    const first = await page.evaluate(() => ({ lines: document.querySelectorAll('.explore-engine-line').length, arrows: document.querySelectorAll('#board-wrap .board-arrow.best').length, bar: !!document.querySelector('#board-wrap .board-eval-bar:not([hidden])') }));
+    if (first.lines < 2 || first.arrows !== 1 || !first.bar) problems.push('the start position did not show lines, an arrow and a bar: ' + JSON.stringify(first));
+    const fits = await page.evaluate(() => { const bar = document.querySelector('#board-wrap .board-eval-bar').getBoundingClientRect(); const area = document.querySelector('#library-view .board-area').getBoundingClientRect(); return bar.left >= area.left; });
+    if (!fits) problems.push('the eval bar is clipped by the board area');
+    await page.locator('.explore-engine-line').first().click();
+    if (await page.evaluate(() => exploreGame.history().length) !== 1) problems.push('clicking a line did not play its first move');
+    await analysed();
+    await page.locator('.explore-load summary').click();
+    await page.locator('#explore-load-input').fill('8/8/8/8/8/5k2/6q1/7K w - - 0 1');
+    await page.locator('#explore-load-form button').click();
+    if (await page.evaluate(() => exploreGame.fen()) !== '8/8/8/8/8/5k2/6q1/7K w - - 0 1') problems.push('a FEN did not load');
+    await page.locator('#explore-load-input').fill('1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7#');
+    await page.locator('#explore-load-form button').click();
+    await page.waitForTimeout(400);
+    const mated = await page.evaluate(() => ({ moves: exploreGame.history().length, status: document.getElementById('explore-engine-status').textContent, arrows: document.querySelectorAll('#board-wrap .board-arrow').length }));
+    if (mated.moves !== 7 || !/Checkmate/.test(mated.status) || mated.arrows) problems.push('a mating PGN did not load as checkmate without arrows: ' + JSON.stringify(mated));
+    await page.locator('#explore-load-input').fill('not chess');
+    await page.locator('#explore-load-form button').click();
+    if (!/not a FEN or PGN/.test(await page.locator('#explore-load-status').textContent())) problems.push('invalid input was not explained');
+    await page.locator('#explore-engine-toggle').uncheck();
+    await page.waitForTimeout(400);
+    const off = await page.evaluate(() => ({ lines: document.querySelectorAll('.explore-engine-line').length, bar: !!document.querySelector('#board-wrap .board-eval-bar:not([hidden])') }));
+    if (off.lines || off.bar) problems.push('turning the engine off left analysis on screen');
+    await page.locator('#explore-engine-toggle').check();
+    await page.locator('#explore-load-input').fill('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3');
+    await page.locator('#explore-load-form button').click();
+    await page.waitForFunction(() => engineClient.current && engineClient.current.multipv === 3, null, { timeout: 15000 }).catch(() => {});
+    await page.locator('#nav-coach').click();
+    await page.waitForTimeout(150);
+    if (await page.evaluate(() => !!(engineClient.current && engineClient.current.multipv === 3))) problems.push('leaving Explore kept its engine search running ahead of Coach');
+    await page.locator('#nav-library').click();
+    await page.evaluate(() => { const op = document.querySelector('.opening-btn[data-id="italian"]'); op.click(); });
+    await page.locator('#btn-quiz').click();
+    await page.waitForTimeout(500);
+    const quiz = await page.evaluate(() => ({ arrows: document.querySelectorAll('#board-wrap .board-arrow').length, bar: !!document.querySelector('#board-wrap .board-eval-bar:not([hidden])') }));
+    if (quiz.arrows || quiz.bar) problems.push('engine analysis leaked into a quiz');
+    return problems;
+  });
+
+  await check('finished games are archived and reopen in a viewer that leaves the live game alone', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=coach');
+    await page.evaluate(() => { localStorage.clear(); });
+    await page.goto(base + '/?view=coach');
+    await page.waitForFunction(() => typeof GameArchive !== 'undefined' && !!coachBoard);
+    // A finished game with review fixtures standing in for the engine.
+    await page.evaluate(() => {
+      coachStartFen = new Chess().fen();
+      coachLocalGameId = 'fixture-archive-game';
+      coachGame = new Chess();
+      const fens = [coachGame.fen()];
+      ['f3', 'e5', 'g4', 'Qh4#'].forEach(m => { coachGame.move(m); fens.push(coachGame.fen()); });
+      coachUserSide = 'white';
+      coachReviewLog = [
+        { ply: 1, userUci: 'f2f3', userSan: 'f3', bestUci: 'e2e4', bestSan: 'e4', tier: 'inaccuracy', fenBefore: fens[0], evalAfter: { cp: 20 }, localGameId: coachLocalGameId },
+        { ply: 3, userUci: 'g2g4', userSan: 'g4', bestUci: 'b1c3', bestSan: 'Nc3', tier: 'blunder', fenBefore: fens[2], evalAfter: { mate: 1 }, localGameId: coachLocalGameId }
+      ];
+      coachStats = { moves: 2, best: 0, excellent: 0, good: 0, inaccuracy: 1, mistake: 0, blunder: 1 };
+      GameArchive.record('Checkmate — Black wins.');
+      GameArchive.record('Checkmate — Black wins.');
+    });
+    const stored = await page.evaluate(() => GameArchive.load());
+    if (stored.length !== 1) problems.push('reopening a summary duplicated the game: ' + stored.length);
+    else if (stored[0].reviews.length !== 2 || stored[0].reviews[1].cp >= -9000) problems.push('the archive lost reviews or the mate evaluation sign: ' + JSON.stringify(stored[0].reviews));
+    const liveFen = await page.evaluate(() => coachGame.fen());
+    await page.locator('#tab-progress').click();
+    const row = page.locator('.game-archive-open').first();
+    if (!/Lost/.test(await row.textContent())) problems.push('a checkmate loss was not listed as Lost: ' + await row.textContent());
+    await row.click();
+    await page.locator('#game-viewer').waitFor({ state: 'visible' });
+    await page.keyboard.press('Home');
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(150);
+    const at3 = await page.evaluate(() => ({ cursor: GameArchive._viewer().cursor, note: document.getElementById('game-viewer-note').textContent, arrows: document.querySelectorAll('#archiveBoard-wrap .board-arrow').length }));
+    if (at3.cursor !== 3 || !/Blunder/.test(at3.note) || !/Nc3/.test(at3.note) || at3.arrows !== 1) problems.push('the viewer did not show the blunder with the engine move: ' + JSON.stringify(at3));
+    // Retry the blunder: the game move is refused, a weak move is graded by
+    // the engine, and the engine's choice is accepted.
+    await page.locator('#btn-game-viewer-retry').click();
+    const retry = (move) => page.evaluate(m => { const i = document.getElementById('gv-retry-input'); i.value = m; document.getElementById('gv-retry-form').requestSubmit(); }, move);
+    await retry('g4');
+    if (!/what you played/.test(await page.locator('#game-viewer-note').textContent())) problems.push('retrying the game move was not called out');
+    await retry('Kf2');
+    await page.waitForFunction(() => /not it|also strong/.test(document.getElementById('game-viewer-note').textContent), null, { timeout: 45000 });
+    if (!/not it/.test(await page.locator('#game-viewer-note').textContent())) problems.push('a weak king move was accepted on retry');
+    await retry('Nc3');
+    if (!/engine's choice/.test(await page.locator('#game-viewer-note').textContent()) || await page.evaluate(() => !GameArchive._viewer().retry.solved)) problems.push('the engine move was not accepted on retry');
+    await page.locator('#btn-gv-retry-done').click();
+    if (await page.evaluate(() => GameArchive._viewer().retry || GameArchive._viewer().cursor !== 3)) problems.push('leaving the retry did not return to the game position');
+    await page.locator('#game-viewer-moves .ply[data-ply="1"]').click();
+    if (await page.evaluate(() => GameArchive._viewer().cursor) !== 1) problems.push('clicking a move did not jump to it');
+    if (await page.evaluate(() => coachGame.fen()) !== liveFen || await page.evaluate(() => coachReviewCursor) !== null) problems.push('the viewer changed the live Coach game');
+    await page.keyboard.press('Escape');
+    if (await page.locator('#game-viewer').isVisible()) problems.push('Escape did not close the viewer');
+    if (await page.evaluate(() => (document.activeElement.className || '').includes('game-archive-open')) !== true) problems.push('focus did not return to the archive row');
+    // A retry ends when you jump elsewhere; focus stays in the dialog; a
+    // later retry offers Show answer again.
+    await row.click();
+    await page.locator('#game-viewer-moves .ply[data-ply="3"]').click();
+    await page.locator('#btn-game-viewer-retry').click();
+    await page.locator('#game-viewer-moves .ply[data-ply="1"]').click();
+    const jumped = await page.evaluate(() => ({ retry: !!GameArchive._viewer().retry, cursor: GameArchive._viewer().cursor }));
+    if (jumped.retry || jumped.cursor !== 1) problems.push('jumping to another move did not end the retry: ' + JSON.stringify(jumped));
+    await page.locator('#game-viewer-moves .ply[data-ply="3"]').click();
+    await page.locator('#btn-game-viewer-retry').click();
+    await page.locator('#gv-retry-input').fill('Nc3');
+    await page.keyboard.press('Enter');
+    if (!(await page.evaluate(() => document.getElementById('game-viewer').contains(document.activeElement) && document.activeElement.offsetParent !== null))) problems.push('focus left the dialog after solving a typed retry');
+    await page.keyboard.press('Escape');
+    await row.click();
+    await page.locator('#game-viewer-moves .ply[data-ply="3"]').click();
+    await page.locator('#btn-game-viewer-retry').click();
+    if (!(await page.locator('#btn-gv-retry-answer').isVisible())) problems.push('Show answer stayed hidden on a later retry');
+    await page.locator('#btn-gv-retry-done').click();
+    if (!(await page.evaluate(() => document.getElementById('game-viewer').contains(document.activeElement) && document.activeElement.offsetParent !== null))) problems.push('focus left the dialog after Back to the game');
+    await page.keyboard.press('Escape');
+
+    // Training backups carry the archive; importing twice does not duplicate it.
+    const restored = await page.evaluate(() => {
+      const backup = readTrainingBackup();
+      const exported = Object.keys(backup.data).some(key => key.startsWith('coach:archive:v1'));
+      localStorage.removeItem('coach:archive:v1');
+      mergeImportedTrainingData(backup);
+      mergeImportedTrainingData(backup);
+      return { exported, games: GameArchive.load().length, reviews: GameArchive.load()[0] && GameArchive.load()[0].reviews.length };
+    });
+    if (!restored.exported || restored.games !== 1 || restored.reviews !== 2) problems.push('the archive did not round-trip through a training backup: ' + JSON.stringify(restored));
+    // An archive still stored in the first (bare array) format exports and imports.
+    const legacy = await page.evaluate(() => {
+      const games = GameArchive.load();
+      localStorage.setItem('coach:archive:v1', JSON.stringify(games));
+      const backup = readTrainingBackup();
+      localStorage.removeItem('coach:archive:v1');
+      let error = null;
+      try { mergeImportedTrainingData(backup); } catch (e) { error = e.message; }
+      const old = JSON.parse(JSON.stringify(backup)); old.data['coach:archive:v1'] = games;
+      localStorage.removeItem('coach:archive:v1');
+      try { mergeImportedTrainingData(old); } catch (e) { error = error || e.message; }
+      return { error, games: GameArchive.load().length };
+    });
+    if (legacy.error || legacy.games !== 1) problems.push('a legacy-format archive broke the backup: ' + JSON.stringify(legacy));
+    await page.locator('#tab-game').click();
+    await page.locator('#tab-progress').click();
+    await row.click();
+    await page.locator('#btn-game-viewer-delete').click();
+    await page.locator('#btn-game-viewer-delete').click();
+    if ((await page.evaluate(() => GameArchive.load().length)) !== 0) problems.push('delete (confirmed) did not remove the game');
+    await page.evaluate(() => localStorage.setItem('coach:archive:v1', JSON.stringify({ v: 1, games: [{ id: 'x' }, null, { id: 'ok', pgn: '1. e4', at: 5, reviews: [{ ply: 1, tier: 'nonsense' }] }] })));
+    const cleaned = await page.evaluate(() => GameArchive.load());
+    if (cleaned.length !== 1 || cleaned[0].reviews.length !== 0) problems.push('malformed archive rows were kept');
+    await page.evaluate(() => localStorage.removeItem('coach:archive:v1'));
+    return problems;
+  });
+
+  await check('opponent personalities set the level and play their book openings', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=coach');
+    await page.evaluate(() => { localStorage.clear(); });
+    await page.goto(base + '/?view=coach');
+    await page.waitForFunction(() => typeof OpponentPersonas !== 'undefined' && !!coachBoard);
+    await page.evaluate(() => { document.getElementById('coach-game-options').open = true; });
+    const oneRow = await page.evaluate(() => new Set(Array.from(document.querySelectorAll('.opponent-card')).map(b => Math.round(b.getBoundingClientRect().top))).size === 1);
+    if (!oneRow) problems.push('the opponent avatars wrap onto a second row');
+    await page.locator('.opponent-card[data-opponent="rosa"]').click();
+    const chosen = await page.evaluate(() => ({ elo: coachEngineElo, auto: document.getElementById('coach-auto-elo').checked, pressed: document.querySelector('.opponent-card[data-opponent="rosa"]').getAttribute('aria-pressed'), current: document.getElementById('opponent-current').textContent }));
+    if (chosen.elo !== 800 || chosen.auto || chosen.pressed !== 'true' || !/Rosa/.test(chosen.current)) problems.push('choosing Rosa did not set her level: ' + JSON.stringify(chosen));
+    if (!/Rosa · 800/.test(await page.locator('#opponent-tag').textContent())) problems.push('the opponent is not named above the board');
+    await page.locator('.side-toggle button[data-side="black"]').click();
+    await page.evaluate(() => { window.__opponentSearches = 0; const orig = engineClient.evaluate; engineClient.evaluate = function(fen, depth, opts) { if (opts && opts.multipv && opts.skill !== undefined) window.__opponentSearches++; return orig.apply(this, arguments); }; });
+    await page.locator('#btn-coach-newgame').click();
+    await page.waitForFunction(() => coachGameActive && !coachThinking && coachIsUserTurn(), null, { timeout: 60000 });
+    const opened = await page.evaluate(() => ({ first: coachGame.history()[0], searches: window.__opponentSearches }));
+    if (!['e4', 'd4'].includes(opened.first) || opened.searches !== 0) problems.push('Rosa did not open from her book without an engine search: ' + JSON.stringify(opened));
+    await page.evaluate(() => { document.getElementById('coach-game-options').open = true; });
+    await page.locator('#coach-strength').evaluate(el => { el.value = '1500'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+    if (await page.evaluate(() => OpponentPersonas.coachBookMove()) !== null) problems.push('a custom level still used the persona book');
+    if (!/Custom level/.test(await page.locator('#opponent-current').textContent())) problems.push('a custom level was not shown as custom');
+    await page.locator('.opponent-card[data-opponent="coach"]').click();
+    if (!(await page.locator('#coach-auto-elo').isChecked())) problems.push('choosing Coach did not turn adaptive level back on');
+    return problems;
+  });
+
+  await check('Progress offers puzzles that train the current focus', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=coach');
+    await page.waitForFunction(() => typeof PuzzleCore !== 'undefined' && typeof INSIGHT_TAG_META !== 'undefined');
+    const unknown = await page.evaluate(() => Object.keys(PuzzleCore.INSIGHT_GROUPS).filter(tag => !INSIGHT_TAG_META[tag]));
+    if (unknown.length) problems.push('puzzle mapping names tags Coach does not have: ' + unknown.join(', '));
+    // Stand in for review evidence: a focus on forks.
+    await page.evaluate(() => {
+      window.__realRecommendation = progressRecommendation;
+      progressRecommendation = entries => Object.assign(window.__realRecommendation(entries), { focusTag: 'fork_risk' });
+      document.getElementById('progress-next-title').textContent = 'Fork awareness';
+    });
+    await page.locator('#tab-progress').click();
+    const btn = page.locator('#btn-progress-puzzles');
+    await btn.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+    if (!(await btn.isVisible()) || !/fork/i.test(await btn.textContent())) problems.push('no fork puzzle action for a fork focus');
+    else {
+      await btn.click();
+      await page.waitForFunction(() => { const d = PuzzlesView._debug(); return appView === 'puzzles' && d.session && d.session.phase === 'solving'; }, null, { timeout: 20000 });
+      const state = await page.evaluate(() => ({ theme: document.getElementById('puzzle-theme').value, fork: PuzzlesView._debug().session.puzzle.themes.includes('fork') }));
+      if (state.theme !== 'fork' || !state.fork) problems.push('the action did not open fork puzzles: ' + JSON.stringify(state));
+    }
+    await page.evaluate(() => {
+      progressRecommendation = entries => Object.assign(window.__realRecommendation(entries), { focusTag: 'candidate_moves' });
+      document.getElementById('progress-next-title').textContent = 'Candidate moves';
+    });
+    await page.waitForTimeout(100);
+    if (!(await page.evaluate(() => document.getElementById('btn-progress-puzzles').hidden))) problems.push('a focus without a puzzle theme still offered puzzles');
+    await page.evaluate(() => { progressRecommendation = window.__realRecommendation; localStorage.removeItem('ui:puzzle-theme'); });
+    return problems;
+  });
+
+  await check('the activity calendar counts training across Coach, drills, puzzles and games', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=coach');
+    await page.evaluate(() => { localStorage.clear(); });
+    await page.goto(base + '/?view=coach');
+    await page.waitForFunction(() => typeof TrainingActivity !== 'undefined' && typeof PuzzleCore !== 'undefined');
+    await page.locator('#tab-progress').click();
+    if (!/will appear here/.test(await page.locator('#activity-summary').textContent())) problems.push('an empty calendar did not explain itself');
+    await page.evaluate(() => {
+      const day = 86400000, now = Date.now();
+      let s = PuzzleCore.emptyState();
+      [0, 1, 2].forEach(d => { s = PuzzleCore.recordAttempt(s, { id: 'act' + d, rating: 1200, themes: ['fork'] }, { win: true }, now - d * day).state; });
+      localStorage.setItem('chess_puzzles_v1', JSON.stringify(s));
+    });
+    await page.locator('#tab-game').click();
+    await page.locator('#tab-progress').click();
+    const state = await page.evaluate(() => ({ summary: document.getElementById('activity-summary').textContent, streak: document.getElementById('activity-streak').textContent, cells: document.querySelectorAll('#activity-calendar .activity-cell').length, active: document.querySelectorAll('#activity-calendar .activity-cell.level-1').length, label: document.getElementById('activity-calendar').getAttribute('aria-label') }));
+    if (state.cells !== 84) problems.push('the calendar should show 84 days, showed ' + state.cells);
+    if (state.active < 3 || !/3 puzzles/.test(state.summary) || !/3-day streak/.test(state.streak)) problems.push('puzzle activity was not counted: ' + JSON.stringify(state));
+    if (!/Training calendar/.test(state.label || '')) problems.push('the calendar has no text alternative');
+    await page.evaluate(() => localStorage.removeItem('chess_puzzles_v1'));
+    return problems;
+  });
+
+  await check('engine work regressions: mate shows as a win and leaving Explore never stalls Coach', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=coach');
+    await page.waitForFunction(() => typeof CoachOverlay !== 'undefined' && !!coachBoard);
+    // A mating move stores evalAfter { mate: 0 } (the side to move is mated).
+    const mate = await page.evaluate(() => {
+      coachGame = new Chess(); ['e4', 'e5', 'Bc4', 'Nc6', 'Qh5', 'Nf6', 'Qxf7#'].forEach(m => coachGame.move(m));
+      const before = new Chess(); ['e4', 'e5', 'Bc4', 'Nc6', 'Qh5', 'Nf6'].forEach(m => before.move(m));
+      coachReviewLog = [{ ply: 7, userUci: 'h5f7', bestUci: 'h5f7', tier: 'best', fenBefore: before.fen(), evalAfter: { mate: 0, pv: [] }, localGameId: coachLocalGameId }];
+      coachReviewCursor = null; return CoachOverlay.spec().eval;
+    });
+    if (!mate || !(mate.mate > 0)) problems.push('a mate delivered by White did not read as White winning: ' + JSON.stringify(mate));
+    // Start an Explore search, leave for Coach, and ask the engine for a Coach
+    // search in the same tick: it must complete promptly.
+    await page.goto(base + '/?view=library&mode=explore');
+    await page.waitForFunction(() => ExploreAnalysis._state().result, null, { timeout: 45000 });
+    await page.locator('.explore-engine-line').first().click();
+    await page.waitForFunction(() => engineClient.current && engineClient.current.multipv === 3, null, { timeout: 15000 });
+    const ms = await page.evaluate(() => {
+      const t0 = Date.now();
+      switchView('coach');
+      return engineClient.evaluate(new Chess().fen(), 6).then(r => (r && r.bestmove ? Date.now() - t0 : -1));
+    });
+    if (ms < 0 || ms > 8000) problems.push('a Coach search after leaving Explore took ' + ms + ' ms (or returned nothing)');
+    return problems;
+  });
+
+  await check('Library quiz hides the moves you have not reached', async () => {
+    const problems = [];
+    await page.goto(base + '/?opening=italian&mode=quiz');
+    await page.waitForFunction(() => quizMode && document.querySelectorAll('#move-list .move-chip').length > 4);
+    const shown = () => page.evaluate(() => Array.from(document.querySelectorAll('#move-list .move-chip')).filter(c => !c.classList.contains('quiz-hidden')).map(c => c.textContent));
+    let visible = await shown();
+    if (visible.length !== 0) problems.push('the quiz showed moves before any were played: ' + visible.join(' '));
+    await page.locator('#library-keyboard-move').evaluate(e => { e.open = true; });
+    await page.locator('#library-keyboard-move-input').fill('e4');
+    await page.locator('#library-keyboard-move-form button').click();
+    await page.waitForFunction(() => game.history().length >= 2, null, { timeout: 5000 });
+    await page.waitForTimeout(200);
+    visible = await shown();
+    if (visible.join(' ') !== 'e4 e5') problems.push('after 1.e4 e5 the quiz should show exactly those moves: ' + visible.join(' '));
+    await page.locator('#btn-study').click();
+    if ((await shown()).length !== await page.locator('#move-list .move-chip').count()) problems.push('Study mode did not show the whole line');
     return problems;
   });
 
