@@ -162,8 +162,10 @@ assert(core.squareColor('a1') === 'dark' && core.squareColor('h1') === 'light' &
   const compact = Core.compactState(big);
   const bytes = JSON.stringify(compact).length;
   assert(compact.history.length === 120 && Object.keys(compact.daily).length === 60, 'compact copy is bounded');
-  assert(bytes < 30000, `compact puzzle copy is ${bytes} bytes; keep it well under the 128 KB profile cap`);
+  assert(bytes < 25000, `compact puzzle copy is ${bytes} bytes; keep it well under the 128 KB profile cap`);
   assert(Math.round(compact.rating) === Math.round(big.rating), 'compact copy keeps the rating');
+  const crowded = Core.compactState(Core.recordAttempt(Core.emptyState(), { id: 'c', rating: 1500, themes: ['advantage', 'crushing', 'endgame', 'long', 'master', 'middlegame', 'pin', 'short', 'skewer'] }, { win: true }, now).state);
+  assert(crowded.history[0].themes.includes('pin') && crowded.history[0].themes.includes('skewer') && !crowded.history[0].themes.includes('crushing'), 'compact copy keeps skill themes over length and result tags');
   const growth = context.loadGrowthState();
   growth.puzzles = compact;
   assert(context.saveGrowthState(growth).ok, 'growth state with puzzles saves');

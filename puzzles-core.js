@@ -226,7 +226,9 @@
   function compactState(value, limit) {
     const state = normalizeState(value);
     state.history = state.history.slice(-(limit || 120)).map(row => Object.assign({}, row, {
-      ms: 0, ratingAfter: Math.round(row.ratingAfter), themes: row.themes.slice(0, 6)
+      // Keep the skill themes the stats use; length and result tags sort
+      // first alphabetically and would otherwise crowd them out.
+      ms: 0, ratingAfter: Math.round(row.ratingAfter), themes: row.themes.filter(t => !DESCRIPTIVE.has(t)).slice(0, 6)
     }));
     state.rush.runs = state.rush.runs.slice(-10);
     state.vision.runs = state.vision.runs.slice(-10);
