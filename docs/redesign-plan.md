@@ -8,6 +8,15 @@ Blend look on the existing layout.
 Phase 2 done: no validator pattern-matches the app's source any more; see
 the *Phase 2 outcome* in [behaviour-checklist.md](behaviour-checklist.md).
 
+November 2026 additions (outside the phases, on the current layout): a
+Puzzles destination, an on-board overlay (`board-overlay.js`: arrows,
+quality badges, eval bar) that Phase 5 can keep using on cm-chessboard
+because it reads square positions from the rendered board, Explore as an
+analysis board, a game archive with retries, opponent personas, endgame
+practice and an activity calendar. Each lives in its own module beside
+`app.js` rather than inside it, which is the direction Phase 4 asks for.
+The Library quiz now hides unplayed moves (one of the §1 problems).
+
 The goal is an app that is pleasant to use and cheap to change: a new
 colour, a new panel, or a new training mode should be a small, local edit
 instead of a hunt through an 8,000-line file.
