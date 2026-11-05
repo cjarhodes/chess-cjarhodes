@@ -547,6 +547,56 @@ async page => {
     return problems;
   });
 
+  await check('board overlay shows quality badges, best-move arrows and an evaluation bar', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=coach');
+    await page.evaluate(() => { localStorage.removeItem('ui:board-feedback'); });
+    await page.goto(base + '/?view=coach');
+    await page.waitForFunction(() => typeof CoachOverlay !== 'undefined' && !!coachBoard);
+    // Review fixtures stand in for the engine: 1.e4 (best) e5 2.Qh5 (mistake, Nc3 preferred) Nc6.
+    const state = async () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => {
+      const svg = document.querySelector('#coachBoard-wrap .board-overlay');
+      const bar = document.querySelector('#coachBoard-wrap .board-eval-bar');
+      resolve({ arrows: svg ? svg.querySelectorAll('.board-arrow').length : 0, badges: svg ? Array.from(svg.querySelectorAll('.board-badge')).map(g => g.getAttribute('class')) : [],
+        bar: !!(bar && !bar.hidden), barLabel: bar ? bar.getAttribute('aria-label') : '', fill: bar ? bar.firstChild.style.height : '' });
+    }))));
+    await page.evaluate(() => {
+      coachGame = new Chess();
+      ['e4', 'e5', 'Qh5', 'Nc6'].forEach(m => coachGame.move(m));
+      const fens = []; const g = new Chess(); fens.push(g.fen()); ['e4', 'e5', 'Qh5', 'Nc6'].forEach(m => { g.move(m); fens.push(g.fen()); });
+      coachReviewLog = [
+        { ply: 1, userUci: 'e2e4', bestUci: 'e2e4', tier: 'best', fenBefore: fens[0], fenAfter: fens[1], evalAfter: { cp: -30, mate: null }, localGameId: coachLocalGameId },
+        { ply: 3, userUci: 'd1h5', bestUci: 'b1c3', tier: 'mistake', fenBefore: fens[2], fenAfter: fens[3], evalAfter: { cp: 140, mate: null }, localGameId: coachLocalGameId }
+      ];
+      coachReviewCursor = null;
+      coachBoard.position(coachGame.fen(), false);
+      CoachOverlay.refresh();
+    });
+    let s = await state();
+    if (s.arrows !== 0) problems.push('a best-move arrow was drawn on a position after the opponent replied');
+    if (!s.badges.some(c => c.includes('mistake'))) problems.push('the badge did not stay on the queen after the reply: ' + s.badges.join(','));
+    if (!s.bar || !/-1\.4/.test(s.barLabel) || !/stale|before the last move/.test(s.barLabel)) problems.push('eval bar missing, wrong sign, or not marked as from before the last move: ' + s.barLabel);
+    await page.evaluate(() => { coachReviewCursor = 3; coachBoard.position(coachFenAtPly(3), false); CoachOverlay.refresh(); });
+    s = await state();
+    if (s.arrows !== 1 || !s.badges.some(c => c.includes('mistake'))) problems.push('the reviewed mistake did not show its arrow and badge: ' + JSON.stringify(s));
+    if (parseFloat(s.fill) >= 50) problems.push('White is worse but the white part of the bar is ' + s.fill);
+    await page.evaluate(() => { coachReviewCursor = 1; coachBoard.position(coachFenAtPly(1), false); CoachOverlay.refresh(); });
+    s = await state();
+    if (s.arrows !== 0 || !s.badges.some(c => c.includes('best'))) problems.push('a best move should show a badge and no arrow: ' + JSON.stringify(s));
+    await page.evaluate(() => { coachPracticeSession = { completed: false }; CoachOverlay.refresh(); });
+    s = await state();
+    if (s.arrows || s.badges.length || s.bar) problems.push('the overlay leaked information into a drill');
+    await page.evaluate(() => { coachPracticeSession = null; document.getElementById('group-board').open = true; });
+    await page.locator('#board-feedback-toggle').uncheck();
+    s = await state();
+    if (s.arrows || s.badges.length || s.bar) problems.push('turning board feedback off did not clear it');
+    await page.reload();
+    await page.waitForFunction(() => typeof CoachOverlay !== 'undefined');
+    if (await page.locator('#board-feedback-toggle').isChecked()) problems.push('the board feedback setting did not survive reload');
+    await page.evaluate(() => localStorage.removeItem('ui:board-feedback'));
+    return problems;
+  });
+
   if (pageErrors.length) failures.push('page errors: ' + pageErrors.join(' | '));
   if (failures.length) throw new Error(failures.join('\n'));
   return { passed: passed.length, checks: passed };

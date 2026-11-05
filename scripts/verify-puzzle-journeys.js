@@ -107,6 +107,7 @@ async browserPage => {
     assert(await page.locator('#puzzleBoard .hint-square').count() === 1, 'the first hint marks the piece');
     await page.locator('#btn-puzzle-hint').click();
     assert(await page.locator('#puzzleBoard .hint-square').count() === 2, 'the second hint marks the target square');
+    assert(await page.locator('#puzzleBoard-wrap .board-arrow.hint').waitFor({ timeout: 3000 }).then(() => true, () => false), 'the second hint draws an arrow');
     after = await info();
     assert(after.outcome === 'loss' && after.rating < before.rating, 'a hint counts as a miss');
     await page.locator('#btn-puzzle-solution').click();

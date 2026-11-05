@@ -58,6 +58,16 @@ fully local-only; optionally signing in with Supabase makes games,
 mistakes, practice attempts, and trends durable across devices and
 browsers. Leaving `coach-config.js` blank keeps Coach local-only.
 
+The Coach board shows its feedback on the board as well as in the panel:
+a move-quality badge on the square your reviewed move landed on (it stays
+there after the reply while your piece does), a green arrow for the engine's
+choice when stepping back to a move that wasn't among its best, the next move
+of a **Show why** line, and an evaluation bar beside the board (dimmed when it
+is from before the latest move). Drills hide all of it. **Appearance &
+sounds → Arrows, move badges and evaluation bar** turns it off
+(`ui:board-feedback`). `board-overlay.js` draws on any chessboard.js board;
+`coach-overlay.js` decides what Coach shows.
+
 Move reviews start with a short explanation. **Show why** steps through the
 recommended line on the main board without changing the live game; **Back to
 game** restores the actual position. Engine details remain expandable.

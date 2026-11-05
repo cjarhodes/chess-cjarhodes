@@ -138,6 +138,7 @@
       onSnapEnd: () => { if (session && board) board.position(session.game.fen(), false); }
     });
     if (typeof observeBoardLastMove === 'function') observeBoardLastMove(BOARD_ID);
+    setArrows(null);
     describeBoard();
   }
   function setLastMove(move) {
@@ -157,6 +158,9 @@
   function markSquares(cls, squares) {
     document.querySelectorAll(`#${BOARD_ID} .${cls}`).forEach(el => el.classList.remove(cls));
     (squares || []).forEach(sq => { const el = squareEl(sq); if (el) el.classList.add(cls); });
+  }
+  function setArrows(arrows) {
+    if (window.BoardOverlay) window.BoardOverlay.set(BOARD_ID, 'puzzleBoard-wrap', arrows && arrows.length ? { arrows } : null);
   }
   function clearTap() {
     tapFrom = null;
@@ -261,6 +265,7 @@
     const options = opts || {};
     clearTap();
     markSquares('hint-square', []);
+    setArrows(null);
     const result = Core.checkSolverMove(Chess, session.puzzle, session.ply, uci);
     if (result.reason === 'illegal' || result.reason === 'not-solver-turn') {
       if (board && !options.fromDrop) board.position(session.game.fen(), false);
@@ -368,6 +373,7 @@
     session.hintLevel = Math.min(2, session.hintLevel + 1);
     const squares = session.hintLevel === 1 ? [expected.slice(0, 2)] : [expected.slice(0, 2), expected.slice(2, 4)];
     markSquares('hint-square', squares);
+    if (session.hintLevel === 2) setArrows([{ from: expected.slice(0, 2), to: expected.slice(2, 4), kind: 'hint' }]);
     const piece = session.game.get(expected.slice(0, 2));
     const names = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
     setStatus(session.hintLevel === 1 ? `Hint: move your ${piece ? names[piece.type] : 'piece'} on ${expected.slice(0, 2)}.` : `Hint: ${expected.slice(0, 2)} to ${expected.slice(2, 4)}.`);
@@ -381,6 +387,7 @@
     session.phase = 'revealing';
     session.busy = true;
     markSquares('hint-square', []);
+    setArrows(null);
     updateControls();
     const step = () => {
       if (!session) return;
