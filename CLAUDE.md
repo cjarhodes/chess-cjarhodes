@@ -3,8 +3,8 @@
 Static single-page chess training app served at https://chess.cjarhodes.com.
 
 ## Stack
-- Static `index.html` + `styles.css` + `app.js` (no build step or package manager); opening content data (move lists, explanations, key ideas, variations) lives in `openings.js`, loaded before `app.js`; `growth.js` adds the training layer
-- Desktop-first UI: three-column rails, board sized from viewport height (`--board-size`), Coach right rail tabbed (Game / Practice / Progress), Coach left rail groups collapsible. Below 1024px a desktop notice overlays the page; there is no mobile layout by design
+- Static `index.html` + `styles.css` + `app.js` (no build step or package manager); opening content data (move lists, explanations, key ideas, variations) lives in `openings.js`, loaded before `app.js`; `growth.js` adds the training layer; the Puzzles view is `puzzles-core.js` (pure logic) + `puzzles.js` (view) + lazily loaded `puzzle-data.js` (Lichess CC0 puzzles, regenerate with `scripts/build-puzzle-data.py`, never hand-edit)
+- Desktop-first UI: three-column rails, board sized from viewport height (`--board-size`), top nav Library / Coach / Puzzles, Coach right rail tabbed (Game / Practice / Progress), Coach left rail groups collapsible. Below 1024px a desktop notice overlays the page; there is no mobile layout by design
 - Client-side only — chessboard.js, chess.js, jQuery, Supabase JS, and Stockfish are vendored locally
 - Design system: colours, type, space and board themes are tokens in `styles/tokens.css` (spec: `docs/design-spec.md`, gallery: `docs/design-system/`). `styles.css` uses tokens only, which `scripts/validate-design-tokens.js` enforces; `scripts/check-contrast.js` checks WCAG contrast for both themes. Light/dark follows the device unless Settings overrides it (`ui:theme`, applied before paint by `theme-init.js`). Fonts are self-hosted woff2 in `fonts/` (OFL) because the CSP blocks font CDNs
 - Lichess Opening Explorer API for Explore mode (user supplies their own Lichess Personal Access Token, kept in sessionStorage only)

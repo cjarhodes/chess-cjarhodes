@@ -5590,6 +5590,10 @@ function updateURL() {
   const params = new URLSearchParams();
   if (appView === 'coach') {
     params.set('view', 'coach');
+  } else if (appView === 'puzzles') {
+    params.set('view', 'puzzles');
+    const mode = window.PuzzlesView && window.PuzzlesView.urlMode();
+    if (mode) params.set('mode', mode);
   } else {
     // Preserve an intentional switch to the Library when no opening has been
     // selected. Opening links remain compact and continue to imply Library.
@@ -6555,8 +6559,20 @@ function createCoachBoard(position, orientation) {
 // ─────────────────────────────────────────────
 // COACH VIEW SWITCHING
 // ─────────────────────────────────────────────
+// Top navigation: Library | Coach | Puzzles. Exactly one tab is selected and
+// focusable; the others stay reachable with the arrow keys.
+const APP_VIEWS = ['library', 'coach', 'puzzles'];
+function setNavSelection(view) {
+  APP_VIEWS.forEach(name => {
+    const active = name === view;
+    $('#nav-' + name).toggleClass('active', active).attr({ 'aria-selected': active ? 'true' : 'false', tabindex: active ? '0' : '-1' });
+  });
+}
+
 function switchView(view) {
+  if (!APP_VIEWS.includes(view)) view = 'coach';
   const wasCoachMode = coachMode;
+  const wasPuzzles = appView === 'puzzles';
   if (wasCoachMode && view !== 'coach') {
     // Leaving Coach must stop any pending engine reply and clear a transient
     // analysis line before the library view takes over.
@@ -6569,16 +6585,25 @@ function switchView(view) {
     }
     invalidateCoachAsyncWork('Coach view changed.');
   }
+  if (wasPuzzles && view !== 'puzzles' && window.PuzzlesView) window.PuzzlesView.hide();
   appView = view;
   coachMode = (view === 'coach');
   const $app = $('.app');
   const $coach = $('#coach-view');
+  const $puzzles = $('#puzzles-view');
+  setNavSelection(view);
+  if (view === 'puzzles') {
+    $app.hide().attr('aria-hidden', 'true');
+    $coach.hide().attr('aria-hidden', 'true');
+    $puzzles.show().css('display', 'grid').attr('aria-hidden', 'false');
+    if (window.PuzzlesView) window.PuzzlesView.show();
+    updateURL();
+    return;
+  }
+  $puzzles.hide().attr('aria-hidden', 'true');
   if (view === 'coach') {
     $app.hide().attr('aria-hidden', 'true');
     $coach.show().css('display', 'grid').attr('aria-hidden', 'false');
-    $('#nav-library').removeClass('active').attr('aria-selected', 'false');
-    $('#nav-library').attr('tabindex', '-1');
-    $('#nav-coach').addClass('active').attr({ 'aria-selected': 'true', tabindex: '0' });
     // Pre-warm Stockfish in the background so the first New Game starts faster.
     // Errors here are swallowed; the real load gate is inside startCoachGame.
     if (engineClient.status === 'idle') { engineClient.init().catch(() => {}); }
@@ -6630,9 +6655,6 @@ function switchView(view) {
   } else {
     $coach.hide().attr('aria-hidden', 'true');
     $app.show().attr('aria-hidden', 'false');
-    $('#nav-coach').removeClass('active').attr('aria-selected', 'false');
-    $('#nav-coach').attr('tabindex', '-1');
-    $('#nav-library').addClass('active').attr({ 'aria-selected': 'true', tabindex: '0' });
     // If library board exists, kick it into life via a resize so it redraws correctly
     if (board) setTimeout(() => board.resize(), 0);
     scheduleLibraryBoardFit();
@@ -8201,11 +8223,18 @@ $(function () {
   // ─── Header nav (Library / Coach) ───────
   $('#nav-library').on('click', () => switchView('library'));
   $('#nav-coach').on('click', () => switchView('coach'));
+  $('#nav-puzzles').on('click', () => switchView('puzzles'));
   $('.top-nav-btn').on('keydown', function(event) {
     const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
     if (!keys.includes(event.key)) return;
     event.preventDefault();
-    const nextView = (event.key === 'ArrowLeft' || event.key === 'Home') ? 'library' : 'coach';
+    const current = APP_VIEWS.indexOf(String(this.id).replace(/^nav-/, ''));
+    let index = current < 0 ? 1 : current;
+    if (event.key === 'Home') index = 0;
+    else if (event.key === 'End') index = APP_VIEWS.length - 1;
+    else if (event.key === 'ArrowLeft') index = Math.max(0, index - 1);
+    else index = Math.min(APP_VIEWS.length - 1, index + 1);
+    const nextView = APP_VIEWS[index];
     switchView(nextView);
     $('#nav-' + nextView).trigger('focus');
   });
@@ -8842,6 +8871,8 @@ $(function () {
       return;
     }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
+    // Puzzles handles its own shortcuts (puzzles.js).
+    if (appView === 'puzzles') return;
 
     // In coach view, only handle the flip shortcut; everything else is scoped to library
     if (coachMode) {
@@ -9005,6 +9036,9 @@ $(function () {
   const initial = readURL();
   if (initial.view === 'coach') {
     switchView('coach');
+  } else if (initial.view === 'puzzles') {
+    if (window.PuzzlesView) window.PuzzlesView.setInitialMode(initial.mode);
+    switchView('puzzles');
   } else if (initial.opening) {
     const op = OPENINGS.find(o => o.id === initial.opening);
     if (op) {

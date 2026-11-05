@@ -24,6 +24,7 @@
   <div class="top-nav" role="tablist" aria-label="Application sections">
     <button class="top-nav-btn" id="nav-library" role="tab" aria-selected="false" aria-controls="library-view" tabindex="-1">Library</button>
     <button class="top-nav-btn active" id="nav-coach" role="tab" aria-selected="true" aria-controls="coach-view" tabindex="0">Coach</button>
+    <button class="top-nav-btn" id="nav-puzzles" role="tab" aria-selected="false" aria-controls="puzzles-view" tabindex="-1">Puzzles</button>
   </div>
 </header>
 
@@ -742,6 +743,149 @@
   </aside>
 </section>
 
+<section class="puzzles-view" id="puzzles-view" role="tabpanel" aria-labelledby="nav-puzzles" aria-hidden="true" style="display:none;">
+  <aside class="puzzles-rail">
+    <div class="coach-hero">
+      <div class="title">Puzzles</div>
+      <div class="tagline">Spot the tactic, then prove it</div>
+    </div>
+    <div class="puzzle-modes" role="group" aria-label="Puzzle modes">
+      <button type="button" class="puzzle-mode active" id="puzzle-mode-rated" data-mode="rated" aria-pressed="true">
+        <span class="puzzle-mode-name">Rated puzzles</span><span class="puzzle-mode-detail">Positions near your rating</span>
+      </button>
+      <button type="button" class="puzzle-mode" id="puzzle-mode-daily" data-mode="daily" aria-pressed="false">
+        <span class="puzzle-mode-name">Daily puzzle</span><span class="puzzle-mode-detail" id="puzzle-daily-detail">One new puzzle each day</span>
+      </button>
+      <button type="button" class="puzzle-mode" id="puzzle-mode-rush" data-mode="rush" aria-pressed="false">
+        <span class="puzzle-mode-name">Puzzle Rush</span><span class="puzzle-mode-detail">Solve as many as you can</span>
+      </button>
+      <button type="button" class="puzzle-mode" id="puzzle-mode-vision" data-mode="vision" aria-pressed="false">
+        <span class="puzzle-mode-name">Vision</span><span class="puzzle-mode-detail">Name squares at speed</span>
+      </button>
+    </div>
+    <div class="puzzle-rating-card" aria-labelledby="puzzle-rating-label">
+      <div class="puzzle-rating-head">
+        <span class="section-label" id="puzzle-rating-label">Puzzle rating</span>
+        <span class="puzzle-rating-provisional" id="puzzle-rating-provisional">Provisional</span>
+      </div>
+      <div class="puzzle-rating-value"><span id="puzzle-rating-value">1200</span><span class="puzzle-rating-delta" id="puzzle-rating-delta"></span></div>
+      <div class="puzzle-rating-spark" id="puzzle-rating-spark" aria-hidden="true"></div>
+      <div class="puzzle-today" id="puzzle-today">No puzzles yet today.</div>
+    </div>
+    <div class="field-group">
+      <label class="section-label" for="puzzle-theme">Theme</label>
+      <select id="puzzle-theme" class="puzzle-select"></select>
+      <p class="puzzle-hint-note">Choosing a theme keeps puzzles rated. Hints and the solution count as a miss.</p>
+    </div>
+  </aside>
+
+  <main class="puzzles-board-area">
+    <div class="coach-turn-header">
+      <div id="puzzle-phase" class="coach-phase-label">Puzzles</div>
+      <div id="puzzle-status" class="coach-status" role="status" aria-live="polite">Loading puzzles…</div>
+    </div>
+    <div class="puzzle-rush-bar" id="puzzle-rush-bar" hidden>
+      <span class="puzzle-rush-clock" id="puzzle-rush-clock" aria-label="Time left">3:00</span>
+      <span class="puzzle-rush-score"><span id="puzzle-rush-score">0</span> solved</span>
+      <span class="puzzle-rush-strikes" id="puzzle-rush-strikes" aria-label="Mistakes"></span>
+    </div>
+    <div class="puzzle-vision-prompt" id="puzzle-vision-prompt" aria-live="assertive" hidden></div>
+    <div id="puzzleBoard-wrap" class="puzzle-board-wrap" role="group" aria-label="Puzzle board">
+      <div id="puzzleBoard" tabindex="-1" role="img" aria-label="Puzzle position"></div>
+      <div class="puzzle-board-flash" id="puzzle-board-flash" aria-hidden="true"></div>
+    </div>
+    <details class="keyboard-move" id="puzzle-keyboard-move">
+      <summary>Keyboard move</summary>
+      <form class="keyboard-move-form" id="puzzle-keyboard-move-form">
+        <label class="sr-only" for="puzzle-keyboard-move-input">Enter a move in SAN or coordinate notation</label>
+        <input id="puzzle-keyboard-move-input" autocomplete="off" spellcheck="false" placeholder="Qxf7 or d1f7" />
+        <button type="submit" class="ctrl-btn">Play move</button>
+      </form>
+      <div class="keyboard-move-status" id="puzzle-keyboard-move-status" aria-live="polite"></div>
+    </details>
+    <div class="board-controls puzzle-controls">
+      <button type="button" class="ctrl-btn" id="btn-puzzle-hint" title="Hint (H)" disabled>💡 Hint</button>
+      <button type="button" class="ctrl-btn" id="btn-puzzle-solution" title="Show the solution (S)" disabled>► Solution</button>
+      <button type="button" class="ctrl-btn" id="btn-puzzle-retry" title="Try this puzzle again, unrated (R)" disabled>↺ Retry</button>
+      <button type="button" class="ctrl-btn flip" id="btn-puzzle-flip" title="Flip board (F)">⇅</button>
+    </div>
+  </main>
+
+  <aside class="puzzles-panel">
+    <div class="puzzle-panel" id="puzzle-panel-rated" role="region" aria-label="Puzzle">
+      <section class="coach-panel-section puzzle-card" aria-labelledby="puzzle-card-title">
+        <div class="puzzle-card-meta">
+          <span class="section-label" id="puzzle-card-kind">Rated puzzle</span>
+          <span class="puzzle-card-rating" id="puzzle-card-rating"></span>
+        </div>
+        <h2 class="puzzle-card-title" id="puzzle-card-title">Find the best move</h2>
+        <p class="puzzle-card-prompt" id="puzzle-card-prompt"></p>
+        <div class="puzzle-feedback" id="puzzle-feedback" role="status" aria-live="polite" hidden></div>
+        <div class="puzzle-themes" id="puzzle-themes" hidden></div>
+        <div class="puzzle-card-actions">
+          <button type="button" class="ctrl-btn primary" id="btn-puzzle-next">Next puzzle</button>
+          <a class="puzzle-source" id="puzzle-source" href="#" target="_blank" rel="noopener noreferrer" hidden>View on Lichess ↗</a>
+        </div>
+      </section>
+      <section class="coach-panel-section" id="puzzle-themes-section" aria-labelledby="puzzle-themes-heading">
+        <h3 class="section-label" id="puzzle-themes-heading">Strengths and weaknesses</h3>
+        <div id="puzzle-theme-stats" class="puzzle-theme-stats"></div>
+      </section>
+      <section class="coach-panel-section" aria-labelledby="puzzle-history-heading">
+        <div class="puzzle-history-head">
+          <h3 class="section-label" id="puzzle-history-heading">Recent puzzles</h3>
+          <span class="puzzle-streak" id="puzzle-streak"></span>
+        </div>
+        <ol class="puzzle-history" id="puzzle-history" aria-label="Recent puzzles, newest first"></ol>
+      </section>
+    </div>
+
+    <div class="puzzle-panel" id="puzzle-panel-rush" role="region" aria-label="Puzzle Rush" hidden>
+      <section class="coach-panel-section puzzle-card" aria-labelledby="puzzle-rush-title">
+        <span class="section-label">Puzzle Rush</span>
+        <h2 class="puzzle-card-title" id="puzzle-rush-title">How far can you climb?</h2>
+        <p class="puzzle-card-prompt" id="puzzle-rush-intro">Puzzles start easy and get harder with every solve. Three mistakes end the run. Rush does not change your puzzle rating.</p>
+        <div class="puzzle-rush-modes" role="radiogroup" aria-label="Rush length">
+          <label class="puzzle-rush-choice"><input type="radio" name="puzzle-rush-mode" value="three" checked> <span>3 minutes</span><span class="puzzle-rush-best" data-best="three"></span></label>
+          <label class="puzzle-rush-choice"><input type="radio" name="puzzle-rush-mode" value="five"> <span>5 minutes</span><span class="puzzle-rush-best" data-best="five"></span></label>
+          <label class="puzzle-rush-choice"><input type="radio" name="puzzle-rush-mode" value="survival"> <span>Survival</span><span class="puzzle-rush-best" data-best="survival"></span></label>
+        </div>
+        <div class="puzzle-rush-result" id="puzzle-rush-result" role="status" aria-live="polite" hidden></div>
+        <div class="puzzle-card-actions">
+          <button type="button" class="ctrl-btn primary" id="btn-puzzle-rush-start">Start Rush</button>
+          <button type="button" class="ctrl-btn" id="btn-puzzle-rush-stop" hidden>End run</button>
+        </div>
+      </section>
+      <section class="coach-panel-section" id="puzzle-rush-review-section" hidden aria-labelledby="puzzle-rush-review-heading">
+        <h3 class="section-label" id="puzzle-rush-review-heading">This run</h3>
+        <ol class="puzzle-history" id="puzzle-rush-review"></ol>
+      </section>
+    </div>
+
+    <div class="puzzle-panel" id="puzzle-panel-vision" role="region" aria-label="Vision trainer" hidden>
+      <section class="coach-panel-section puzzle-card" aria-labelledby="puzzle-vision-title">
+        <span class="section-label">Vision</span>
+        <h2 class="puzzle-card-title" id="puzzle-vision-title">Know every square</h2>
+        <p class="puzzle-card-prompt">Click the named square as fast as you can for 30 seconds. Coordinates are hidden. Fast square names make calculation and notation easier.</p>
+        <div class="field-group">
+          <span class="section-label" id="puzzle-vision-side-label">Board side</span>
+          <div class="puzzle-side-toggle" id="puzzle-vision-side" role="group" aria-labelledby="puzzle-vision-side-label">
+            <button type="button" class="active" data-side="white" aria-pressed="true">White</button>
+            <button type="button" data-side="black" aria-pressed="false">Black</button>
+            <button type="button" data-side="random" aria-pressed="false">Random</button>
+          </div>
+          <label class="toggle-label"><input type="checkbox" id="puzzle-vision-pieces"> Show the starting position</label>
+        </div>
+        <div class="puzzle-vision-best" id="puzzle-vision-best"></div>
+        <div class="puzzle-rush-result" id="puzzle-vision-result" role="status" aria-live="polite" hidden></div>
+        <div class="puzzle-card-actions">
+          <button type="button" class="ctrl-btn primary" id="btn-puzzle-vision-start">Start 30 seconds</button>
+        </div>
+      </section>
+    </div>
+  </aside>
+</section>
+
 <!-- Post-game summary overlay -->
 <div class="summary-overlay" id="summary-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="summary-title" aria-hidden="true">
   <div class="summary-card" tabindex="-1">
@@ -847,5 +991,7 @@
 <script src="account-continuity.js"></script>
 <script src="opening-transfer.js"></script>
 <script src="learning-transfer.js"></script>
+<script src="puzzles-core.js"></script>
+<script src="puzzles.js"></script>
 </body>
 </html>
