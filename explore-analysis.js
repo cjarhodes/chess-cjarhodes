@@ -114,18 +114,20 @@
     window.BoardOverlay.set('myBoard', 'board-wrap', spec);
   }
 
-  // Leaving Explore should free the shared engine for Coach at once. Cancel
-  // only when our search is the sole engine work: cancel() rejects every
-  // queued search, and Coach's must never be lost.
+  // Leaving Explore should free the shared engine for Coach at once. Send
+  // UCI "stop" so our search ends with its best result so far and the engine
+  // moves straight on to whatever Coach has queued. Never cancel(): it tears
+  // the worker down, and a Coach search whose evaluate() is still between
+  // init() and its queue push would then wait for the 30 s safety timeout.
   let running = null;
   function releaseEngine() {
     if (!running || typeof engineClient === 'undefined') return;
     const current = engineClient.current;
-    if (current && current.fen === running.fen && current.depth === DEPTH && current.multipv === LINES && !engineClient.queue.length) {
+    if (current && current.fen === running.fen && current.depth === DEPTH && current.multipv === LINES && engineClient.worker) {
       token++;
       lastFen = null;
       running = null;
-      engineClient.cancel('Explore analysis is no longer needed.');
+      try { engineClient.worker.postMessage('stop'); } catch (e) { /* worker already gone */ }
     }
   }
 

@@ -236,6 +236,9 @@
     const daily = {};
     days.forEach(day => { daily[day] = state.daily[day]; });
     state.daily = daily;
+    // Keep the synced copy well inside the 128 KB profile row whatever the
+    // other training data needs.
+    while (state.history.length > 30 && JSON.stringify(state).length > 24000) state.history = state.history.slice(10);
     return state;
   }
 

@@ -27,6 +27,8 @@
     const info = review.evalAfter;
     const userWhite = String(review.fenBefore || '').split(' ')[1] === 'w';
     const sign = userWhite ? -1 : 1;
+    // mate 0: the side to move is already mated, i.e. the user delivered it.
+    if (info.mate === 0) return { cp: 0, mate: userWhite ? 1 : -1 };
     if (info.mate !== null && info.mate !== undefined) return { cp: 0, mate: sign * info.mate };
     return { cp: sign * (info.cp || 0), mate: null };
   }

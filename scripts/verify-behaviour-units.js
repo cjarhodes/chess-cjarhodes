@@ -830,6 +830,33 @@ async page => {
     return problems;
   });
 
+  await check('engine work regressions: mate shows as a win and leaving Explore never stalls Coach', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=coach');
+    await page.waitForFunction(() => typeof CoachOverlay !== 'undefined' && !!coachBoard);
+    // A mating move stores evalAfter { mate: 0 } (the side to move is mated).
+    const mate = await page.evaluate(() => {
+      coachGame = new Chess(); ['e4', 'e5', 'Bc4', 'Nc6', 'Qh5', 'Nf6', 'Qxf7#'].forEach(m => coachGame.move(m));
+      const before = new Chess(); ['e4', 'e5', 'Bc4', 'Nc6', 'Qh5', 'Nf6'].forEach(m => before.move(m));
+      coachReviewLog = [{ ply: 7, userUci: 'h5f7', bestUci: 'h5f7', tier: 'best', fenBefore: before.fen(), evalAfter: { mate: 0, pv: [] }, localGameId: coachLocalGameId }];
+      coachReviewCursor = null; return CoachOverlay.spec().eval;
+    });
+    if (!mate || !(mate.mate > 0)) problems.push('a mate delivered by White did not read as White winning: ' + JSON.stringify(mate));
+    // Start an Explore search, leave for Coach, and ask the engine for a Coach
+    // search in the same tick: it must complete promptly.
+    await page.goto(base + '/?view=library&mode=explore');
+    await page.waitForFunction(() => ExploreAnalysis._state().result, null, { timeout: 45000 });
+    await page.locator('.explore-engine-line').first().click();
+    await page.waitForFunction(() => engineClient.current && engineClient.current.multipv === 3, null, { timeout: 15000 });
+    const ms = await page.evaluate(() => {
+      const t0 = Date.now();
+      switchView('coach');
+      return engineClient.evaluate(new Chess().fen(), 6).then(r => (r && r.bestmove ? Date.now() - t0 : -1));
+    });
+    if (ms < 0 || ms > 8000) problems.push('a Coach search after leaving Explore took ' + ms + ' ms (or returned nothing)');
+    return problems;
+  });
+
   if (pageErrors.length) failures.push('page errors: ' + pageErrors.join(' | '));
   if (failures.length) throw new Error(failures.join('\n'));
   return { passed: passed.length, checks: passed };

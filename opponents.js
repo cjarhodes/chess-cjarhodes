@@ -32,14 +32,30 @@
 
   function byId(id) { return PERSONAS.find(p => p.id === id) || PERSONAS[0]; }
 
-  function lines(openingIds) {
+  // Which side each line belongs to. A persona only plays a line from the
+  // side that owns it, so it never walks into the losing half of a trap.
+  // Traps and gambits are listed by the side that springs them; other lines
+  // follow their Library category.
+  const LINE_SIDE = {
+    'scholars-mate': 'w', 'legal-trap': 'w', 'fried-liver': 'w', 'kings-gambit': 'w', 'evans-gambit': 'w',
+    'fools-mate': 'b', 'elephant-trap': 'b', 'stafford-gambit': 'b', 'blackburne-shilling': 'b', 'budapest-gambit': 'b',
+    slav: 'b', 'sicilian-dragon': 'b', 'sicilian-schev': 'b'
+  };
+  function lineSide(id, opening) {
+    if (LINE_SIDE[id]) return LINE_SIDE[id];
+    return opening && opening.category === 'black' ? 'b' : 'w';
+  }
+
+  function lines(openingIds, side) {
     const all = typeof OPENINGS !== 'undefined' ? OPENINGS : [];
     const out = [];
     openingIds.forEach(id => {
       const opening = all.find(o => o.id === id);
       if (!opening) return;
-      out.push(opening.moves);
-      (opening.variations || []).forEach(v => { if (Array.isArray(v.moves)) out.push(v.moves); });
+      if (!side || lineSide(id, opening) === side) out.push(opening.moves);
+      (opening.variations || []).forEach(v => {
+        if (Array.isArray(v.moves) && (!side || lineSide(v.id, opening) === side)) out.push(v.moves);
+      });
     });
     return out;
   }
@@ -50,8 +66,9 @@
     if (!persona || !persona.openings.length) return null;
     if (String(startFen || START).split(' ').slice(0, 4).join(' ') !== START.split(' ').slice(0, 4).join(' ')) return null;
     const played = (history || []).map(san => san.replace(/[+#?!]+$/, ''));
+    const side = played.length % 2 === 0 ? 'w' : 'b';
     const next = new Map();
-    lines(persona.openings).forEach(line => {
+    lines(persona.openings, side).forEach(line => {
       if (line.length <= played.length) return;
       for (let i = 0; i < played.length; i++) if (line[i].replace(/[+#?!]+$/, '') !== played[i]) return;
       const san = line[played.length];
@@ -167,7 +184,7 @@
     return p.name;
   }
 
-  const api = { PERSONAS, byId, bookMove, coachBookMove, selected, choose, displayName, render };
+  const api = { PERSONAS, LINE_SIDE, lineSide, byId, bookMove, coachBookMove, selected, choose, displayName, render };
   root.OpponentPersonas = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof document !== 'undefined') {

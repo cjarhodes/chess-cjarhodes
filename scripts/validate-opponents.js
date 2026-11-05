@@ -62,6 +62,20 @@ assert(first === 'e2e4' || first === 'f2f3', 'Pip opens from its repertoire, got
 assert(P.bookMove(pip, undefined, ['f3', 'e5', 'g4']) === 'd8h4', 'Pip finds the Fool’s mate as Black');
 assert(P.bookMove(P.byId('coach'), undefined, []) === null, 'Coach has no book');
 
+// Personas only play the side of a line that owns it, never a trap's victim.
+const pipWhiteFirsts = new Set();
+for (let i = 0; i < 200; i++) pipWhiteFirsts.add(P.bookMove(pip, undefined, [], () => i / 200));
+assert(!pipWhiteFirsts.has('f2f3'), 'Pip as White opened with the losing half of the Fool’s mate');
+assert(P.bookMove(pip, undefined, ['f3', 'e5']) === null, 'Pip as White followed the Fool’s mate into g4??');
+assert(P.bookMove(pip, undefined, ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'd6', 'Nc3', 'Bg4', 'Nxe5']) === null, 'Pip as Black took the Legal trap bait');
+assert(P.bookMove(rosa, undefined, ['d4', 'd5', 'c4', 'e6', 'Nc3', 'Nf6', 'Bg5', 'Nbd7', 'cxd5', 'exd5']) === null, 'Rosa as White walked into the Elephant trap');
+assert(P.bookMove(rosa, undefined, ['d4', 'd5', 'c4', 'e6', 'Nc3', 'Nf6', 'Bg5', 'Nbd7', 'cxd5', 'exd5', 'Nxd5']) === 'f6d5', 'Rosa as Black springs the Elephant trap');
+// Every persona line resolves to a side, and every listed opening is playable from one side.
+P.PERSONAS.forEach(p => p.openings.forEach(id => {
+  const o = context.OPENINGS.find(x => x.id === id);
+  assert(['w', 'b'].includes(P.lineSide(id, o)), `${id} has no side`);
+}));
+
 if (failures.length) {
   console.error(`Opponent validation failed (${failures.length} of ${checks}):`);
   failures.slice(0, 20).forEach(f => console.error(' - ' + f));

@@ -274,6 +274,7 @@
     if (!result.ok) { wrongMove(result.uci, options); return false; }
     const move = Core.applyUci(session.game, result.uci);
     session.ply++;
+    session.hintLevel = 0;
     // After a drag, onSnapEnd redraws castling, en passant and promotion.
     if (!options.fromDrop) board.position(session.game.fen(), !!options.animate);
     setLastMove(move);
@@ -325,6 +326,7 @@
     flash('good');
     if (session.source === 'rush') { rushResult(true); return; }
     if (!session.outcome) decide(true);
+    if (session.source === 'daily' || session.source === 'daily-retry') markSolvedDaily();
     const note = alternative ? ' A different mate than the original game, and just as good.' : '';
     setPhase(session.outcome === 'win' ? 'Solved' : 'Completed');
     setStatus((session.outcome === 'win' ? 'Solved!' : 'Completed. Next time, first try.') + note);
@@ -417,7 +419,8 @@
   }
 
   function nextPuzzle() {
-    if (!puzzles) return;
+    // Rush and Vision own the board while they are open.
+    if (!puzzles || mode === 'rush' || mode === 'vision') return;
     if (mode === 'daily') { setMode('rated'); return; }
     const state = loadState();
     const pick = Core.selectPuzzle(puzzles, { target: state.rating, group: themeGroup, exclude: Core.recentIds(state) });
@@ -702,7 +705,6 @@
         if (note) { const span = document.createElement('span'); span.textContent = ' — ' + note; row.appendChild(span); }
         themes.appendChild(row);
       });
-      if (session.source === 'daily' || session.source === 'daily-retry') markSolvedDaily();
     }
     source.hidden = !done;
     source.href = `https://lichess.org/training/${encodeURIComponent(p.id)}`;
@@ -930,7 +932,7 @@
     else if (k === 's') click('btn-puzzle-solution');
     else if (k === 'r') click('btn-puzzle-retry');
     else if (k === 'f') click('btn-puzzle-flip');
-    else if (k === 'n' || (k === 'enter' && session && session.phase === 'solved' && mode !== 'rush' && e.target === document.body)) click('btn-puzzle-next');
+    else if ((k === 'n' || (k === 'enter' && session && session.phase === 'solved' && e.target === document.body)) && mode !== 'rush' && mode !== 'vision') click('btn-puzzle-next');
   }
 
   // ── Wiring ────────────────────────────────────

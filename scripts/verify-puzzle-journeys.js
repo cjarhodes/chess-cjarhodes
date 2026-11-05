@@ -114,6 +114,16 @@ async browserPage => {
     await page.waitForFunction(() => PuzzlesView._debug().session.phase === 'solved', null, { timeout: 20000 });
     assert((await info()).ply === after.moves.length && (await info()).history === after.history, 'the solution plays every move without another record');
 
+    // ── Hints start over on each new move ──
+    const longId = await page.evaluate(() => { const p = PuzzleCore.selectPuzzle(PUZZLE_DATA.map(PuzzleCore.parsePuzzle).filter(x => x.moves.length >= 6), { target: 1500 }); return p.id; });
+    await page.evaluate(id => PuzzlesView._start(id), longId); await ready();
+    await page.locator('#btn-puzzle-hint').click();
+    const firstMove = (await info()).moves[1];
+    await type(firstMove);
+    await ready();
+    await page.locator('#btn-puzzle-hint').click();
+    assert(await page.locator('#puzzleBoard .hint-square').count() === 1, 'the first hint on a new move marks only the piece');
+
     // ── Replay from history is unrated ──
     const ratingBeforeReplay = (await info()).rating;
     await page.locator('#puzzle-history .puzzle-history-item').last().click(); await ready();
@@ -146,6 +156,14 @@ async browserPage => {
     assert(mergedState.history.some(row => row.id === 'from-other-browser') && mergedState.rating > reloaded.rating, 'a synced copy from another browser merges into local puzzle progress');
 
     // ── Daily puzzle ──
+    // Showing the daily solution is not solving it.
+    await page.evaluate(() => { const s = PuzzlesView._debug().state; s.daily = {}; localStorage.setItem('chess_puzzles_v1', JSON.stringify(s)); const g = loadGrowthState(); if (g.puzzles) { g.puzzles.daily = {}; saveGrowthState(g, undefined, { skipSync: true }); } });
+    await page.locator('#puzzle-mode-daily').click(); await ready();
+    await page.locator('#btn-puzzle-solution').click();
+    await page.waitForFunction(() => PuzzlesView._debug().session.phase === 'solved', null, { timeout: 20000 });
+    assert(await page.evaluate(() => { const d = PuzzlesView._debug().state.daily[PuzzleCore.dayKey()]; return d && !d.solved && !d.firstTry; }), 'viewing the daily solution does not count as solving it');
+    await page.evaluate(() => { const s = PuzzlesView._debug().state; s.daily = {}; localStorage.setItem('chess_puzzles_v1', JSON.stringify(s)); const g = loadGrowthState(); if (g.puzzles) { g.puzzles.daily = {}; saveGrowthState(g, undefined, { skipSync: true }); } });
+    await page.locator('#puzzle-mode-rated').click(); await ready();
     await page.locator('#puzzle-mode-daily').click(); await ready();
     const daily = await info();
     assert(daily.source === 'daily' && (await page.evaluate(() => location.search)).includes('mode=daily'), 'the daily puzzle opens with its own URL');
@@ -161,6 +179,9 @@ async browserPage => {
     await page.locator('#btn-puzzle-rush-start').click(); await ready();
     assert(await page.locator('#puzzle-rush-bar').isVisible() && await fits(), 'the Rush clock shows and the board still fits');
     const rushRating = (await info()).rating;
+    await page.locator('body').click({ position: { x: 5, y: 400 } });
+    await page.keyboard.press('n');
+    assert((await info()).source === 'rush' && (await info()).rush, 'N during Rush does not start a rated puzzle');
     for (let n = 0; n < 2; n++) {
       const { id, moves } = await info();
       for (let i = 1; i < moves.length; i += 2) { await ready(); await type(moves[i]); }

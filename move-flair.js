@@ -44,7 +44,8 @@
     const pBest = winProb(best);
     if (pBest === null || pBest < 0.5) return null; // must keep a sound position
 
-    const moved = VALUE[move.promotion || move.piece] || 0;
+    // A promoting pawn is not a sacrificed queen: value the piece that moved.
+    const moved = VALUE[move.piece] || 0;
     const taken = move.captured ? VALUE[move.captured] : 0;
     // A sacrifice: a minor piece or more left where it can be won, not just
     // a trade, while the engine still rates the position at least level.

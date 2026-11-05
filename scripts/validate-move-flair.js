@@ -44,6 +44,11 @@ expect(moveFlair(Chess, recapture, 'e4d5', lines(['e4d5', 60], ['b1c3', -200])),
 const inCheck = '4k3/8/8/8/8/8/3q4/4K3 w - - 0 1';
 expect(moveFlair(Chess, inCheck, 'e1d2', lines(['e1d2', 900], ['e1f1', -900])), null, 'a forced capture while in check');
 
+// Promoting a pawn that the opponent can then take is not a queen sacrifice.
+const promotion = '3r2k1/4P3/8/8/8/8/6PP/4R1K1 w - - 0 1';
+expect(moveFlair(Chess, promotion, 'e7d8q', lines(['e7d8q', 520], ['e7e8q', 300])), null, 'a capturing promotion');
+expect(moveFlair(Chess, '4r1k1/3P4/8/8/8/8/6PP/4R1K1 w - - 0 1', 'd7d8q', lines(['d7d8q', 520], ['g1f2', 500])), null, 'a promotion the rook can take');
+
 expect(Math.round(winProb({ cp: 0 }) * 100), 50, 'level is 50%');
 expect(winProb({ mate: 3 }), 1, 'mate for the mover');
 expect(winProb({ mate: -2 }), 0, 'mate against the mover');
