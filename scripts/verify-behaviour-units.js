@@ -882,6 +882,25 @@ async page => {
     return problems;
   });
 
+  await check('Library quiz hides the moves you have not reached', async () => {
+    const problems = [];
+    await page.goto(base + '/?opening=italian&mode=quiz');
+    await page.waitForFunction(() => quizMode && document.querySelectorAll('#move-list .move-chip').length > 4);
+    const shown = () => page.evaluate(() => Array.from(document.querySelectorAll('#move-list .move-chip')).filter(c => !c.classList.contains('quiz-hidden')).map(c => c.textContent));
+    let visible = await shown();
+    if (visible.length !== 0) problems.push('the quiz showed moves before any were played: ' + visible.join(' '));
+    await page.locator('#library-keyboard-move').evaluate(e => { e.open = true; });
+    await page.locator('#library-keyboard-move-input').fill('e4');
+    await page.locator('#library-keyboard-move-form button').click();
+    await page.waitForFunction(() => game.history().length >= 2, null, { timeout: 5000 });
+    await page.waitForTimeout(200);
+    visible = await shown();
+    if (visible.join(' ') !== 'e4 e5') problems.push('after 1.e4 e5 the quiz should show exactly those moves: ' + visible.join(' '));
+    await page.locator('#btn-study').click();
+    if ((await shown()).length !== await page.locator('#move-list .move-chip').count()) problems.push('Study mode did not show the whole line');
+    return problems;
+  });
+
   if (pageErrors.length) failures.push('page errors: ' + pageErrors.join(' | '));
   if (failures.length) throw new Error(failures.join('\n'));
   return { passed: passed.length, checks: passed };

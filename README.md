@@ -11,7 +11,7 @@ with vendored copies of every third-party library.
 lines plus attached variations, e.g. the Italian Game links to the Evans
 Gambit, Fried Liver Attack, and Blackburne Shilling as sub-lines). Each
 line has move-by-move explanations and key ideas. A quiz mode tests
-recall of the moves, tracked with a lightweight SM-2 spaced-repetition
+recall of the moves (moves you have not reached yet stay hidden), tracked with a lightweight SM-2 spaced-repetition
 scheduler (`localStorage` key `chess_sr_v1`) that surfaces lines as
 new/learning/due/mastered.
 

@@ -7823,6 +7823,14 @@ function updateControls() {
 function renderMoveList() {
   if (!currentOpening) return;
   const moves = activeMoves();
+  // A quiz asks for recall first: moves not reached yet stay hidden, keeping
+  // their slots so the length of the line is still visible.
+  const chip = (idx, cls) => {
+    const hidden = quizMode && idx > currentMoveIdx;
+    return hidden
+      ? `<button class="move-chip quiz-hidden" data-idx="${idx}" aria-label="Move hidden until you play it" disabled>…</button>`
+      : `<button class="move-chip ${cls}" data-idx="${idx}">${escapeHtml(moves[idx])}</button>`;
+  };
   let html = '';
   for (let i = 0; i < moves.length; i += 2) {
     const moveNum = Math.floor(i / 2) + 1;
@@ -7830,11 +7838,11 @@ function renderMoveList() {
     html += `<span class="move-num">${moveNum}.</span>`;
     // White move
     const wClass = i === currentMoveIdx ? 'current' : (i < currentMoveIdx ? 'played' : '');
-    html += `<button class="move-chip ${wClass}" data-idx="${i}">${escapeHtml(moves[i])}</button>`;
+    html += chip(i, wClass);
     // Black move (if exists)
     if (i + 1 < moves.length) {
       const bClass = (i + 1) === currentMoveIdx ? 'current' : (i + 1 < currentMoveIdx ? 'played' : '');
-      html += `<button class="move-chip ${bClass}" data-idx="${i + 1}">${escapeHtml(moves[i + 1])}</button>`;
+      html += chip(i + 1, bClass);
     }
     html += `</div>`;
   }
@@ -7959,6 +7967,8 @@ function setMode(mode) {
       $('#opening-content').show();
       updateControls();
       createBoard(game.fen(), false, boardFlipped ? 'black' : 'white');
+      // Reveal the whole line again after a quiz.
+      renderMoveList();
     }
     renderExplanation(currentMoveIdx);
     clearFeedback();

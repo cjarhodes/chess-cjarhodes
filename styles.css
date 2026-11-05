@@ -2969,3 +2969,4 @@ input[type=range].strength-slider::-moz-range-thumb {
 .puzzle-solution-line[hidden] { display: none; }
 #btn-puzzle-review { align-self: flex-start; }
 #btn-puzzle-review[hidden] { display: none; }
+.move-chip.quiz-hidden { color: var(--text-3); border-style: dashed; cursor: default; min-width: 2.4em; }
