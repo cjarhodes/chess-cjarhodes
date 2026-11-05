@@ -130,6 +130,19 @@ async browserPage => {
     const reloaded = await info();
     assert(Math.round(reloaded.rating) === Math.round(saved.rating) && reloaded.history === saved.history, 'rating and history survive a reload');
     assert(await page.locator('#puzzle-theme').inputValue() === 'fork', 'the theme choice survives a reload');
+    // ── Account sync copy: progress rides in the synced growth state, and a
+    // copy from another browser (or a backup import) merges in on load ──
+    const synced = await page.evaluate(() => loadGrowthState().puzzles);
+    assert(synced && synced.history.length === reloaded.history && Math.round(synced.rating) === Math.round(reloaded.rating), 'puzzle progress is copied into the synced training profile');
+    await page.evaluate(() => {
+      const growth = loadGrowthState();
+      const remote = PuzzleCore.recordAttempt(growth.puzzles, { id: 'from-other-browser', rating: 2400, themes: ['fork'] }, { win: true }, Date.now() + 1000).state;
+      growth.puzzles = PuzzleCore.compactState(remote);
+      saveGrowthState(growth, undefined, { skipSync: true });
+    });
+    await page.reload(); await ready();
+    const mergedState = await page.evaluate(() => PuzzlesView._debug().state);
+    assert(mergedState.history.some(row => row.id === 'from-other-browser') && mergedState.rating > reloaded.rating, 'a synced copy from another browser merges into local puzzle progress');
 
     // ── Daily puzzle ──
     await page.locator('#puzzle-mode-daily').click(); await ready();
@@ -137,7 +150,7 @@ async browserPage => {
     assert(daily.source === 'daily' && (await page.evaluate(() => location.search)).includes('mode=daily'), 'the daily puzzle opens with its own URL');
     await solveWith(type);
     assert(await page.evaluate(() => { const d = PuzzlesView._debug().state.daily; const k = PuzzleCore.dayKey(); return d[k] && d[k].solved && d[k].firstTry; }), 'the daily result is stored');
-    assert((await info()).rating === reloaded.rating, 'the daily puzzle is unrated');
+    assert((await info()).rating === mergedState.rating, 'the daily puzzle is unrated');
     await page.locator('#puzzle-mode-daily').click(); await ready();
     assert((await info()).id === daily.id && (await info()).source === 'daily-retry', 'reopening the daily puzzle is a retry of the same puzzle');
     assert((await page.locator('#puzzle-daily-detail').textContent()).includes('Solved'), 'the daily mode shows today is solved');

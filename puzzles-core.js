@@ -221,6 +221,22 @@
   // Merge two copies of the same player's puzzle state (another browser, or
   // an imported backup). Attempts are unioned by id+time; the rating comes
   // from whichever copy rated a puzzle most recently.
+  // A bounded copy for syncing inside the account's training profile, which
+  // the database caps at 128 KB alongside everything else.
+  function compactState(value, limit) {
+    const state = normalizeState(value);
+    state.history = state.history.slice(-(limit || 120)).map(row => Object.assign({}, row, {
+      ms: 0, ratingAfter: Math.round(row.ratingAfter), themes: row.themes.slice(0, 6)
+    }));
+    state.rush.runs = state.rush.runs.slice(-10);
+    state.vision.runs = state.vision.runs.slice(-10);
+    const days = Object.keys(state.daily).sort().slice(-60);
+    const daily = {};
+    days.forEach(day => { daily[day] = state.daily[day]; });
+    state.daily = daily;
+    return state;
+  }
+
   function mergeStates(a, b) {
     const left = normalizeState(a), right = normalizeState(b);
     const newer = right.lastRatedAt > left.lastRatedAt ? right : left;
@@ -485,7 +501,7 @@
 
   const api = {
     STATE_VERSION, START_RATING, THEMES, THEME_GROUPS, RUSH_MODES,
-    themeLabel, themeNote, parsePuzzle, emptyState, normalizeState, mergeStates,
+    themeLabel, themeNote, parsePuzzle, emptyState, normalizeState, mergeStates, compactState,
     currentDeviation, glickoUpdate, recordAttempt, isProvisional,
     puzzleMatchesGroup, selectPuzzle, recentIds, dailyPuzzle, dayKey, hashString, mulberry32,
     checkSolverMove, normalizeUci, applyUci, rushTarget, rushPuzzle,

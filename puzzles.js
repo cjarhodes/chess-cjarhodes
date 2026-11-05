@@ -34,18 +34,34 @@
     const owner = ownerId();
     return owner ? `${STORAGE_KEY}:${owner}` : STORAGE_KEY;
   }
+  // The full history lives under this browser's key. A compact copy goes
+  // into the growth state, which syncs to the account and is in backups, and
+  // is merged back in on load (another browser, or an imported backup).
+  function syncedCopy() {
+    if (typeof loadGrowthState !== 'function') return null;
+    try { return loadGrowthState().puzzles; } catch (e) { return null; }
+  }
   function loadState() {
-    try { return Core.normalizeState(JSON.parse(localStorage.getItem(storageKey()))); }
-    catch (e) { return Core.emptyState(); }
+    let local;
+    try { local = Core.normalizeState(JSON.parse(localStorage.getItem(storageKey()))); }
+    catch (e) { local = Core.emptyState(); }
+    const synced = syncedCopy();
+    return synced ? Core.mergeStates(local, synced) : local;
   }
   function saveState(state) {
+    const normalized = Core.normalizeState(state);
     try {
-      localStorage.setItem(storageKey(), JSON.stringify(Core.normalizeState(state)));
-      return true;
+      localStorage.setItem(storageKey(), JSON.stringify(normalized));
     } catch (e) {
       setStatus('Puzzle progress could not be saved in this browser. Free some storage to keep your rating.');
       return false;
     }
+    if (typeof loadGrowthState === 'function' && typeof saveGrowthState === 'function') {
+      const growth = loadGrowthState();
+      growth.puzzles = Core.compactState(normalized);
+      saveGrowthState(growth);
+    }
+    return true;
   }
 
   // ── Timers ────────────────────────────────────

@@ -143,6 +143,40 @@ for (let i = 0; i < 200; i++) {
 }
 assert(core.squareColor('a1') === 'dark' && core.squareColor('h1') === 'light' && core.squareColor('e4') === 'light', 'square colours');
 
+// ── Account sync through the growth state ────
+{
+  const fs = require('fs'), vm = require('vm');
+  const root = path.join(__dirname, '..');
+  const store = new Map(), chain = new Proxy({}, { get: () => () => chain });
+  const context = { Chess, window: {}, $: () => chain, console,
+    localStorage: { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, v), removeItem: k => store.delete(k) },
+    activePracticeOwnerId: () => null, coachMemoryOwnerId: () => 'anon:test', currentInsightEntries: () => [] };
+  vm.createContext(context);
+  const withCore = fs.readFileSync(path.join(root, 'puzzles-core.js'), 'utf8').replace(/typeof window !== 'undefined' \? window : globalThis/, 'this');
+  vm.runInContext(fs.readFileSync(path.join(root, 'openings.js'), 'utf8') + '\n' + fs.readFileSync(path.join(root, 'growth.js'), 'utf8') +
+    '\n' + withCore + '\nqueueGrowthRemoteSync = () => {};', context);
+  const Core = context.PuzzleCore;
+  let big = Core.emptyState();
+  for (let i = 0; i < 400; i++) big = Core.recordAttempt(big, { id: 'z' + i, rating: 1400, themes: ['fork', 'pin', 'middlegame', 'short', 'master', 'advantage', 'crushing'] }, { win: i % 3 !== 0, ms: 12345 }, now + i * 1000).state;
+  for (let d = 0; d < 120; d++) big.daily['2026-' + String(1 + Math.floor(d / 28)).padStart(2, '0') + '-' + String(1 + d % 28).padStart(2, '0')] = { id: 'x', solved: true, firstTry: true };
+  const compact = Core.compactState(big);
+  const bytes = JSON.stringify(compact).length;
+  assert(compact.history.length === 120 && Object.keys(compact.daily).length === 60, 'compact copy is bounded');
+  assert(bytes < 30000, `compact puzzle copy is ${bytes} bytes; keep it well under the 128 KB profile cap`);
+  assert(Math.round(compact.rating) === Math.round(big.rating), 'compact copy keeps the rating');
+  const growth = context.loadGrowthState();
+  growth.puzzles = compact;
+  assert(context.saveGrowthState(growth).ok, 'growth state with puzzles saves');
+  const loaded = context.loadGrowthState();
+  assert(loaded.puzzles && loaded.puzzles.history.length === 120, 'puzzles survive a growth round trip');
+  const remote = JSON.parse(JSON.stringify(loaded));
+  remote.puzzles = Core.compactState(Core.recordAttempt(compact, { id: 'remote', rating: 1800, themes: ['fork'] }, { win: true }, now + 999999).state);
+  const merged = context.mergeGrowthStates(loaded, remote);
+  assert(merged.puzzles.history.some(r => r.id === 'remote') && merged.puzzles.rating === remote.puzzles.rating, 'growth merge combines puzzle progress from another browser');
+  assert(context.mergeGrowthStates(loaded, { v: loaded.v }).puzzles.history.length === 120, 'a remote copy without puzzles keeps local puzzles');
+  assert(context.normalizeGrowthState(Object.assign({}, loaded, { puzzles: [1, 2] })).puzzles === null, 'malformed puzzle data is dropped');
+}
+
 if (failures.length) {
   console.error(`Puzzle validation failed (${failures.length} of ${checks} checks):`);
   failures.slice(0, 40).forEach(f => console.error(' - ' + f));

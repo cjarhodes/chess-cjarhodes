@@ -91,8 +91,17 @@ function emptyGrowthState() {
     repertoire: { ids: [], updatedAt: 0, focusKey: null, focusUpdatedAt: 0, observed: [], repairs: [], comparisons: [] },
     openingTransfers: [],
     learningTransfers: [],
-    library: { records: {} }
+    library: { records: {} },
+    puzzles: null
   };
+}
+
+// Puzzle progress rides along in this synced JSON as a compact copy
+// (PuzzleCore.compactState); puzzles.js keeps the full history locally.
+function normalizeGrowthPuzzles(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (typeof PuzzleCore === 'undefined') return value;
+  return PuzzleCore.compactState(value);
 }
 
 function normalizeGrowthState(value) {
@@ -165,7 +174,8 @@ function normalizeGrowthState(value) {
       records: value.library && value.library.records && typeof value.library.records === 'object'
         ? value.library.records
         : {}
-    }
+    },
+    puzzles: normalizeGrowthPuzzles(value.puzzles)
   };
 }
 
@@ -479,6 +489,9 @@ function mergeGrowthStates(localValue, remoteValue) {
   });
   merged.openingTransfers = normalizeOpeningTransferRecords([...local.openingTransfers, ...remote.openingTransfers]);
   merged.learningTransfers = normalizeLearningTransferRecords([...local.learningTransfers, ...remote.learningTransfers]);
+  merged.puzzles = local.puzzles && remote.puzzles && typeof PuzzleCore !== 'undefined'
+    ? PuzzleCore.mergeStates(local.puzzles, remote.puzzles)
+    : (local.puzzles || remote.puzzles || null);
   merged.updatedAt = Math.max(local.updatedAt, remote.updatedAt);
   return normalizeGrowthState(merged);
 }
@@ -486,7 +499,7 @@ function mergeGrowthStates(localValue, remoteValue) {
 function adoptAnonymousGrowthState(ownerId) {
   if (!ownerId) return;
   const anonymous = loadGrowthState(null);
-  const hasData = anonymous.learningTransfers.length || anonymous.openingTransfers.length || anonymous.profile.onboarded || anonymous.repertoire.ids.length || anonymous.repertoire.observed.length || anonymous.repertoire.repairs.length || Object.keys(anonymous.library.records).length;
+  const hasData = (anonymous.puzzles && anonymous.puzzles.history && anonymous.puzzles.history.length) || anonymous.learningTransfers.length || anonymous.openingTransfers.length || anonymous.profile.onboarded || anonymous.repertoire.ids.length || anonymous.repertoire.observed.length || anonymous.repertoire.repairs.length || Object.keys(anonymous.library.records).length;
   if (!hasData) return;
   const merged = mergeGrowthStates(loadGrowthState(ownerId), anonymous);
   const saved = saveGrowthState(merged, ownerId, { skipSync: true, preserveTimestamp: true });
