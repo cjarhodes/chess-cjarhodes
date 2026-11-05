@@ -114,8 +114,24 @@
     window.BoardOverlay.set('myBoard', 'board-wrap', spec);
   }
 
+  // Leaving Explore should free the shared engine for Coach at once. Cancel
+  // only when our search is the sole engine work: cancel() rejects every
+  // queued search, and Coach's must never be lost.
+  let running = null;
+  function releaseEngine() {
+    if (!running || typeof engineClient === 'undefined') return;
+    const current = engineClient.current;
+    if (current && current.fen === running.fen && current.depth === DEPTH && current.multipv === LINES && !engineClient.queue.length) {
+      token++;
+      lastFen = null;
+      running = null;
+      engineClient.cancel('Explore analysis is no longer needed.');
+    }
+  }
+
   function analyse() {
     pending = null;
+    if (!active()) releaseEngine();
     if (!enabled() || !active() || typeof engineClient === 'undefined') { render(); return; }
     const fen = exploreGame.fen();
     if (fen === lastFen && result && result.fen === fen) { render(); return; }
@@ -123,12 +139,15 @@
     const mine = ++token;
     render();
     if (new Chess(fen).game_over()) return;
+    running = { fen };
     engineClient.evaluate(fen, DEPTH, { multipv: LINES }).then(res => {
+      if (running && running.fen === fen) running = null;
       if (mine !== token) return;
       const lines = (res.lines || []).filter(line => line && line.pv && line.pv.length);
       result = { fen, lines, depth: lines.length ? Math.max(...lines.map(line => line.depth || 0)) : DEPTH };
       render();
     }).catch(() => {
+      if (running && running.fen === fen) running = null;
       if (mine !== token) return;
       lastFen = null;
       const status = document.getElementById('explore-engine-status');
@@ -211,6 +230,9 @@
     if (boardEl && typeof MutationObserver !== 'undefined') new MutationObserver(schedule).observe(boardEl, { childList: true, subtree: true });
     const content = document.getElementById('explore-content');
     if (content && typeof MutationObserver !== 'undefined') new MutationObserver(schedule).observe(content, { attributes: true, attributeFilter: ['style'] });
+    // Switching to Coach or Puzzles hides the Library view: release at once.
+    const library = document.getElementById('library-view');
+    if (library && typeof MutationObserver !== 'undefined') new MutationObserver(() => { if (!active()) releaseEngine(); }).observe(library, { attributes: true, attributeFilter: ['style', 'aria-hidden'] });
     schedule();
   }
 

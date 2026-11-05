@@ -677,6 +677,13 @@ async page => {
     const off = await page.evaluate(() => ({ lines: document.querySelectorAll('.explore-engine-line').length, bar: !!document.querySelector('#board-wrap .board-eval-bar:not([hidden])') }));
     if (off.lines || off.bar) problems.push('turning the engine off left analysis on screen');
     await page.locator('#explore-engine-toggle').check();
+    await page.locator('#explore-load-input').fill('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3');
+    await page.locator('#explore-load-form button').click();
+    await page.waitForFunction(() => engineClient.current && engineClient.current.multipv === 3, null, { timeout: 15000 }).catch(() => {});
+    await page.locator('#nav-coach').click();
+    await page.waitForTimeout(150);
+    if (await page.evaluate(() => !!(engineClient.current && engineClient.current.multipv === 3))) problems.push('leaving Explore kept its engine search running ahead of Coach');
+    await page.locator('#nav-library').click();
     await page.evaluate(() => { const op = document.querySelector('.opening-btn[data-id="italian"]'); op.click(); });
     await page.locator('#btn-quiz').click();
     await page.waitForTimeout(500);
