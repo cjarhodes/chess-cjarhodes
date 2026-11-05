@@ -774,6 +774,38 @@ async page => {
     return problems;
   });
 
+  await check('Progress offers puzzles that train the current focus', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=coach');
+    await page.waitForFunction(() => typeof PuzzleCore !== 'undefined' && typeof INSIGHT_TAG_META !== 'undefined');
+    const unknown = await page.evaluate(() => Object.keys(PuzzleCore.INSIGHT_GROUPS).filter(tag => !INSIGHT_TAG_META[tag]));
+    if (unknown.length) problems.push('puzzle mapping names tags Coach does not have: ' + unknown.join(', '));
+    // Stand in for review evidence: a focus on forks.
+    await page.evaluate(() => {
+      window.__realRecommendation = progressRecommendation;
+      progressRecommendation = entries => Object.assign(window.__realRecommendation(entries), { focusTag: 'fork_risk' });
+      document.getElementById('progress-next-title').textContent = 'Fork awareness';
+    });
+    await page.locator('#tab-progress').click();
+    const btn = page.locator('#btn-progress-puzzles');
+    await btn.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+    if (!(await btn.isVisible()) || !/fork/i.test(await btn.textContent())) problems.push('no fork puzzle action for a fork focus');
+    else {
+      await btn.click();
+      await page.waitForFunction(() => { const d = PuzzlesView._debug(); return appView === 'puzzles' && d.session && d.session.phase === 'solving'; }, null, { timeout: 20000 });
+      const state = await page.evaluate(() => ({ theme: document.getElementById('puzzle-theme').value, fork: PuzzlesView._debug().session.puzzle.themes.includes('fork') }));
+      if (state.theme !== 'fork' || !state.fork) problems.push('the action did not open fork puzzles: ' + JSON.stringify(state));
+    }
+    await page.evaluate(() => {
+      progressRecommendation = entries => Object.assign(window.__realRecommendation(entries), { focusTag: 'candidate_moves' });
+      document.getElementById('progress-next-title').textContent = 'Candidate moves';
+    });
+    await page.waitForTimeout(100);
+    if (!(await page.evaluate(() => document.getElementById('btn-progress-puzzles').hidden))) problems.push('a focus without a puzzle theme still offered puzzles');
+    await page.evaluate(() => { progressRecommendation = window.__realRecommendation; localStorage.removeItem('ui:puzzle-theme'); });
+    return problems;
+  });
+
   if (pageErrors.length) failures.push('page errors: ' + pageErrors.join(' | '));
   if (failures.length) throw new Error(failures.join('\n'));
   return { passed: passed.length, checks: passed };

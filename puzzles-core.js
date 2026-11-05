@@ -451,6 +451,26 @@
     return { attempts: rows.length, overall, strengths, weaknesses };
   }
 
+  // Coach insight tags (app.js INSIGHT_TAG_META) → the puzzle theme that
+  // trains the same skill. Tags without a clear tactical twin map to none.
+  const INSIGHT_GROUPS = {
+    missed_mate: 'mate', missed_check: 'mate', back_rank: 'mate',
+    missed_capture: 'hanging', missed_recapture: 'hanging', hung_material: 'hanging', piece_left_en_prise: 'hanging',
+    missed_promotion: 'pawns', pawn_structure: 'pawns',
+    allowed_mate: 'quiet', allowed_forcing: 'quiet',
+    fork_risk: 'fork', pin_pressure: 'pin-skewer', unsafe_trade: 'defender',
+    premature_queen: 'opening', development: 'opening', opening_principles: 'opening',
+    king_safety: 'attack', time_to_castle: 'attack',
+    endgame_technique: 'endgame'
+  };
+  function groupForInsightTag(tag) {
+    return INSIGHT_GROUPS[tag] || null;
+  }
+  function groupLabel(id) {
+    const group = THEME_GROUPS.find(row => row.id === id);
+    return group ? group.label : '';
+  }
+
   function groupForTheme(theme) {
     const group = THEME_GROUPS.find(row => row.keys.includes(theme));
     return group ? group.id : 'all';
@@ -507,7 +527,7 @@
     currentDeviation, glickoUpdate, recordAttempt, isProvisional,
     puzzleMatchesGroup, selectPuzzle, recentIds, dailyPuzzle, dayKey, hashString, mulberry32,
     checkSolverMove, normalizeUci, applyUci, rushTarget, rushPuzzle,
-    themeStats, groupForTheme, currentStreak, todaySummary, randomSquare, squareColor, recordRun
+    themeStats, groupForTheme, groupForInsightTag, groupLabel, INSIGHT_GROUPS, currentStreak, todaySummary, randomSquare, squareColor, recordRun
   };
   root.PuzzleCore = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

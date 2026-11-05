@@ -134,6 +134,12 @@ assert(core.groupForTheme('pin') === 'pin-skewer', 'weak theme should map to a p
 assert(core.currentStreak(statsState) === 0, 'streak should end on a miss');
 assert(core.themeLabel('discoveredAttack') === 'Discovered attack' && core.themeLabel('someNewTheme') === 'Some new theme', 'theme labels');
 
+// ── Coach insight tags → puzzle themes ─────────
+// (That every mapped tag exists in Coach is checked in the browser, by
+// verify-behaviour-units.js, against the running app.)
+Object.values(core.INSIGHT_GROUPS).forEach(group => assert(core.THEME_GROUPS.some(g => g.id === group), `insight tag maps to unknown theme group ${group}`));
+assert(core.groupForInsightTag('fork_risk') === 'fork' && core.groupForInsightTag('candidate_moves') === null, 'insight tag lookup');
+
 // ── Vision ────────────────────────────────────
 let prev = null;
 for (let i = 0; i < 200; i++) {

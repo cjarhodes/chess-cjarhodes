@@ -1030,7 +1030,46 @@
     clearTap();
   }
 
+  // Open rated puzzles on one theme, from anywhere in the app.
+  function openGroup(group) {
+    setTheme(group);
+    if (visible) { setMode('rated'); nextPuzzle(); return; }
+    initialMode = 'rated';
+    mode = 'rated';
+    session = null;
+    if (typeof switchView === 'function') switchView('puzzles');
+  }
+
+  // Progress → "Work on next": offer matching puzzles for the focus.
+  function bindProgressLink() {
+    const next = document.getElementById('btn-progress-next');
+    const title = document.getElementById('progress-next-title');
+    if (!next || !title || document.getElementById('btn-progress-puzzles')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ctrl-btn';
+    btn.id = 'btn-progress-puzzles';
+    btn.hidden = true;
+    next.insertAdjacentElement('afterend', btn);
+    const update = () => {
+      let tag = null;
+      try {
+        if (typeof progressRecommendation === 'function' && typeof currentInsightEntries === 'function') tag = progressRecommendation(currentInsightEntries()).focusTag;
+      } catch (e) { tag = null; }
+      const group = Core.groupForInsightTag(tag);
+      btn.hidden = !group;
+      if (group) {
+        btn.dataset.group = group;
+        btn.textContent = `Solve ${Core.groupLabel(group).toLowerCase()} puzzles`;
+      }
+    };
+    btn.addEventListener('click', () => { if (btn.dataset.group) openGroup(btn.dataset.group); });
+    if (typeof MutationObserver !== 'undefined') new MutationObserver(update).observe(title, { childList: true, characterData: true, subtree: true });
+    update();
+  }
+
   window.PuzzlesView = {
+    openGroup,
     show,
     hide,
     urlMode: () => (mode === 'rated' ? null : mode),
@@ -1040,6 +1079,7 @@
     _start: id => { const p = puzzles && puzzles.find(row => row.id === id); if (p) startPuzzle(p, { rated: true, source: 'rated' }); return !!p; }
   };
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
-  else bind();
+  const boot = () => { bind(); bindProgressLink(); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
 })();
