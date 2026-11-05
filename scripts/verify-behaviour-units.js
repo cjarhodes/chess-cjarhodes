@@ -749,6 +749,28 @@ async page => {
     await page.keyboard.press('Escape');
     if (await page.locator('#game-viewer').isVisible()) problems.push('Escape did not close the viewer');
     if (await page.evaluate(() => (document.activeElement.className || '').includes('game-archive-open')) !== true) problems.push('focus did not return to the archive row');
+    // A retry ends when you jump elsewhere; focus stays in the dialog; a
+    // later retry offers Show answer again.
+    await row.click();
+    await page.locator('#game-viewer-moves .ply[data-ply="3"]').click();
+    await page.locator('#btn-game-viewer-retry').click();
+    await page.locator('#game-viewer-moves .ply[data-ply="1"]').click();
+    const jumped = await page.evaluate(() => ({ retry: !!GameArchive._viewer().retry, cursor: GameArchive._viewer().cursor }));
+    if (jumped.retry || jumped.cursor !== 1) problems.push('jumping to another move did not end the retry: ' + JSON.stringify(jumped));
+    await page.locator('#game-viewer-moves .ply[data-ply="3"]').click();
+    await page.locator('#btn-game-viewer-retry').click();
+    await page.locator('#gv-retry-input').fill('Nc3');
+    await page.keyboard.press('Enter');
+    if (!(await page.evaluate(() => document.getElementById('game-viewer').contains(document.activeElement) && document.activeElement.offsetParent !== null))) problems.push('focus left the dialog after solving a typed retry');
+    await page.keyboard.press('Escape');
+    await row.click();
+    await page.locator('#game-viewer-moves .ply[data-ply="3"]').click();
+    await page.locator('#btn-game-viewer-retry').click();
+    if (!(await page.locator('#btn-gv-retry-answer').isVisible())) problems.push('Show answer stayed hidden on a later retry');
+    await page.locator('#btn-gv-retry-done').click();
+    if (!(await page.evaluate(() => document.getElementById('game-viewer').contains(document.activeElement) && document.activeElement.offsetParent !== null))) problems.push('focus left the dialog after Back to the game');
+    await page.keyboard.press('Escape');
+
     // Training backups carry the archive; importing twice does not duplicate it.
     const restored = await page.evaluate(() => {
       const backup = readTrainingBackup();
@@ -759,6 +781,20 @@ async page => {
       return { exported, games: GameArchive.load().length, reviews: GameArchive.load()[0] && GameArchive.load()[0].reviews.length };
     });
     if (!restored.exported || restored.games !== 1 || restored.reviews !== 2) problems.push('the archive did not round-trip through a training backup: ' + JSON.stringify(restored));
+    // An archive still stored in the first (bare array) format exports and imports.
+    const legacy = await page.evaluate(() => {
+      const games = GameArchive.load();
+      localStorage.setItem('coach:archive:v1', JSON.stringify(games));
+      const backup = readTrainingBackup();
+      localStorage.removeItem('coach:archive:v1');
+      let error = null;
+      try { mergeImportedTrainingData(backup); } catch (e) { error = e.message; }
+      const old = JSON.parse(JSON.stringify(backup)); old.data['coach:archive:v1'] = games;
+      localStorage.removeItem('coach:archive:v1');
+      try { mergeImportedTrainingData(old); } catch (e) { error = error || e.message; }
+      return { error, games: GameArchive.load().length };
+    });
+    if (legacy.error || legacy.games !== 1) problems.push('a legacy-format archive broke the backup: ' + JSON.stringify(legacy));
     await page.locator('#tab-game').click();
     await page.locator('#tab-progress').click();
     await row.click();

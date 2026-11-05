@@ -32,6 +32,8 @@ const kp = E.byId('kp-k');
 expect(result(kp, new Chess('4Q3/3K4/5k2/8/8/8/8/8 b - - 0 1'), 5), null, 'a fresh queen is judged after the reply');
 expect(result(kp, new Chess('4Q3/3K4/8/5k2/8/8/8/8 w - - 0 1'), 5), 'win', 'a queen that survives the reply wins');
 expect(result(kp, new Chess('8/3K4/8/5k2/8/8/8/8 w - - 0 1'), 5), 'fail', 'losing the pawn fails');
+expect(result(kp, new Chess('4R3/3K4/8/5k2/8/8/8/8 w - - 0 1'), 5), 'win', 'an underpromotion to a rook that survives also wins');
+expect(result(kp, new Chess('4R3/3K4/5k2/8/8/8/8/8 b - - 0 1'), 5), null, 'a new rook is judged after the reply');
 const kpLine = after(kp.fen, ['Kd6', 'Kd8', 'e6', 'Ke8', 'e7', 'Kf7', 'Kd7', 'Kf6', 'e8=Q', 'Kf5']);
 expect(result(kp, kpLine, 5), 'win', 'the textbook key-square win is accepted');
 const lucena = E.byId('lucena');

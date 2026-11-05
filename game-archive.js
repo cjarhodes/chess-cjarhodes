@@ -381,7 +381,7 @@
           btn.appendChild(g);
         }
       }
-      btn.addEventListener('click', () => { viewer.cursor = ply; show(); });
+      btn.addEventListener('click', () => jumpTo(ply));
       host.appendChild(btn);
     });
   }
@@ -424,8 +424,7 @@
     });
     svg.addEventListener('click', e => {
       const rect = svg.getBoundingClientRect();
-      viewer.cursor = Math.max(0, Math.min(n, Math.round((e.clientX - rect.left) / rect.width * n)));
-      show();
+      jumpTo(Math.max(0, Math.min(n, Math.round((e.clientX - rect.left) / rect.width * n))));
     });
     host.appendChild(svg);
   }
@@ -435,6 +434,23 @@
   // it rates within half a pawn of the best.
   const RETRY_MARGIN = 50;
   function setNote(text) { document.getElementById('game-viewer-note').textContent = text; }
+
+  // Any jump in the game ends a retry first, so the board and labels agree.
+  function jumpTo(ply) {
+    if (!viewer) return;
+    if (viewer.retry) endRetry();
+    viewer.cursor = ply;
+    show();
+  }
+
+  // Keep keyboard focus inside the dialog when the focused control hides.
+  function keepFocus(preferred) {
+    const active = document.activeElement;
+    const el = document.getElementById('game-viewer');
+    if (active && el && el.contains(active) && active.offsetParent !== null) return;
+    const target = [preferred, 'btn-game-viewer-retry', 'btn-game-viewer-close'].map(id => id && document.getElementById(id)).find(b => b && !b.hidden && b.offsetParent !== null);
+    if (target) target.focus();
+  }
 
   function startRetry() {
     if (!viewer) return;
@@ -463,6 +479,7 @@
     document.getElementById('btn-game-viewer-retry').hidden = true;
     document.getElementById('gv-retry-form').hidden = false;
     document.getElementById('gv-retry-actions').hidden = false;
+    document.getElementById('btn-gv-retry-answer').hidden = false;
     const side = turn === 'w' ? 'White' : 'Black';
     setNote(`You played ${review.userSan || review.userUci} here. Find a better move for ${side}.`);
     document.getElementById('gv-retry-input').focus();
@@ -496,6 +513,7 @@
       setNote(text);
       document.getElementById('gv-retry-form').hidden = true;
       document.getElementById('btn-gv-retry-answer').hidden = true;
+      keepFocus('btn-gv-retry-done');
       if (typeof playSound === 'function' && typeof soundForMove === 'function') playSound(soundForMove(move, game));
     };
     if (uci === retry.review.bestUci || game.in_checkmate()) {
@@ -538,6 +556,7 @@
     document.getElementById('btn-gv-retry-answer').hidden = false;
     viewer.cursor = ply;
     show();
+    keepFocus('btn-game-viewer-retry');
   }
 
   function copyPgn() {

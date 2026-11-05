@@ -239,6 +239,13 @@ async browserPage => {
     const won = await page.evaluate(() => ({ outcome: PuzzlesView._debug().session.outcome, best: JSON.parse(localStorage.getItem('chess_endgames_v1') || '{}')['kq-k'], shown: document.querySelectorAll('#puzzleBoard .piece-417db').length, want: PuzzlesView._debug().session.game.board().flat().filter(Boolean).length }));
     assert(won.outcome === 'win' && won.best >= 1 && won.best <= 10, 'the queen drill is won within its limit and sets a best: ' + JSON.stringify(won));
     assert(won.shown === won.want, 'the board shows exactly the pieces in the game after fast engine replies: ' + JSON.stringify(won));
+    // An engine failure takes the move back instead of leaving the engine to move.
+    await page.locator('#btn-puzzle-retry').click(); await egReady();
+    await page.evaluate(() => { window.__egEval = engineClient.evaluate; engineClient.evaluate = () => Promise.reject(new Error('engine down')); });
+    await type('h1h5'); await egReady();
+    const rolled = await page.evaluate(() => { const s = PuzzlesView._debug().session; return { turn: s.game.turn(), moves: s.userMoves, phase: s.phase, status: document.getElementById('puzzle-status').textContent }; });
+    await page.evaluate(() => { engineClient.evaluate = window.__egEval; });
+    assert(rolled.turn === 'w' && rolled.moves === 0 && rolled.phase === 'solving' && /taken back/.test(rolled.status), 'an engine failure takes the endgame move back: ' + JSON.stringify(rolled));
     await page.locator('#btn-puzzle-retry').click(); await egReady();
     await type('h1e4'); await egReady();
     const lost = await page.evaluate(() => ({ outcome: PuzzlesView._debug().session.outcome, status: document.getElementById('puzzle-status').textContent }));

@@ -288,6 +288,9 @@ function readTrainingBackup() {
     const raw = localStorage.getItem(key);
     if (raw === null) return;
     try { data[key] = JSON.parse(raw); } catch (e) { /* skip malformed local values */ }
+    // Export the archive in its current { v: 1, games } form, whatever
+    // format this browser still has stored.
+    if (typeof GameArchive !== 'undefined' && key === GameArchive.storageKeyFor(growthOwnerId())) data[key] = { v: 1, games: GameArchive.load() };
   });
   return {
     schema: 'chess-coach-training-backup',
@@ -376,6 +379,9 @@ function mergeImportedTrainingData(payload) {
     values[coachMemoryKey(INSIGHTS_KEY)] = current;
   }
   if (typeof GameArchive !== 'undefined') {
+    // Older backups may hold the archive as a bare array of games.
+    const archiveKeys = Object.keys(data).filter(key => key === GameArchive.KEY || key.startsWith(GameArchive.KEY + ':'));
+    archiveKeys.forEach(key => { if (Array.isArray(data[key])) data[key] = { v: 1, games: data[key] }; });
     const archive = incoming(GameArchive.storageKeyFor(ownerId), GameArchive.KEY, 1);
     if (archive) {
       if (!Array.isArray(archive.games)) throw new Error('The game archive is incomplete. Nothing was imported.');

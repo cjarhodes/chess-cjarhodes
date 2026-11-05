@@ -426,7 +426,7 @@
     // Rush, Vision and Endgames own the board while they are open.
     if (!puzzles || mode === 'rush' || mode === 'vision' || mode === 'endgames') return;
     if (session && session.source === 'review') {
-      const queue = Core.missedQueue(loadState()).filter(id => id !== session.puzzle.id);
+      const queue = loadedMissed().filter(id => id !== session.puzzle.id);
       if (queue.length) { startReview(queue[0]); return; }
     }
     nextRated();
@@ -450,8 +450,14 @@
     return true;
   }
 
+  // Missed puzzles that this puzzle set can actually open.
+  function loadedMissed() {
+    const ids = puzzles ? new Set(puzzles.map(p => p.id)) : new Set();
+    return Core.missedQueue(loadState()).filter(id => ids.has(id));
+  }
+
   function reviewMissed() {
-    const queue = Core.missedQueue(loadState()).filter(id => puzzles && puzzles.some(p => p.id === id));
+    const queue = loadedMissed();
     if (queue.length) startReview(queue[0]);
   }
 
@@ -757,7 +763,7 @@
     engineClient.evaluate(session.game.fen(), EG_DEPTH).then(settle).then(res => {
       if (mine !== egToken || session !== current) return;
       const reply = res && res.bestmove ? Core.applyUci(current.game, res.bestmove) : null;
-      if (!reply) { current.busy = false; setStatus('The engine did not reply. Try again.'); updateControls(); return; }
+      if (!reply) { egRollback(current, 'The engine did not reply, so your move was taken back. Play it again.'); return; }
       board.position(current.game.fen());
       setLastMove(reply);
       moveSound(reply, current.game);
@@ -770,11 +776,23 @@
       updateControls();
     }).catch(() => {
       if (mine !== egToken || session !== current) return;
-      current.busy = false;
-      setStatus('The engine stopped. Make your move again or try again.');
-      updateControls();
+      egRollback(current, 'The engine stopped, so your move was taken back. Play it again.');
     });
     return true;
+  }
+
+  // Take back the player's last move when the engine cannot answer it, so
+  // the drill is never left with the engine to move and no reply coming.
+  function egRollback(current, message) {
+    if (current.game.turn() !== current.solver && current.game.undo()) current.userMoves = Math.max(0, current.userMoves - 1);
+    current.busy = false;
+    current.phase = 'solving';
+    if (board && session === current) {
+      board.position(current.game.fen(), false);
+      const history = current.game.history({ verbose: true });
+      setLastMove(history.length ? history[history.length - 1] : null);
+    }
+    if (session === current) { setStatus(message); updateControls(); }
   }
 
   function endgameHint() {
@@ -901,7 +919,7 @@
     source.hidden = !done;
     source.href = `https://lichess.org/training/${encodeURIComponent(p.id)}`;
     next.textContent = session.source === 'daily' || session.source === 'daily-retry' ? 'Continue to rated puzzles'
-      : session.source === 'review' ? (Core.missedQueue(loadState()).some(id => id !== p.id) ? 'Next missed puzzle' : 'Back to rated puzzles')
+      : session.source === 'review' ? (loadedMissed().some(id => id !== p.id) ? 'Next missed puzzle' : 'Back to rated puzzles')
       : (done || decided ? 'Next puzzle' : 'Skip');
     next.classList.toggle('primary', done || decided);
   }
@@ -1037,7 +1055,7 @@
   function renderHistory() {
     const review = document.getElementById('btn-puzzle-review');
     if (review) {
-      const n = Core.missedQueue(loadState()).length;
+      const n = puzzles ? loadedMissed().length : Core.missedQueue(loadState()).length;
       review.hidden = !n;
       review.textContent = `Review ${n} missed puzzle${n === 1 ? '' : 's'}`;
     }
@@ -1249,7 +1267,7 @@
   function hide() {
     visible = false;
     egToken++;
-    if (session && session.kind === 'endgame' && session.busy) { session.busy = false; session.phase = 'solved'; }
+    if (session && session.kind === 'endgame' && session.busy && session.phase === 'solving') egRollback(session, 'Your last move was taken back when you left. Play it again.');
     if (rush) endRush('Run ended when you left Puzzles.');
     if (vision) endVision(true);
     clearTap();

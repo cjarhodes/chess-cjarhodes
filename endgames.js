@@ -43,14 +43,15 @@
     // Say so before the draw rule, which a bare king position also triggers.
     const before = count(start, me) - count(start, me, 'p');
     const now = count(game, me) - count(game, me, 'p');
-    const queens = count(game, me, 'q') - count(start, me, 'q');
+    // New pieces can only come from promotion (to a queen or any other).
+    const promoted = now - before;
     if (drill.goal === 'promote') {
-      // Judge promotion once the opponent has replied, so a queen that is
-      // simply captured does not count.
-      if (game.turn() === me && queens > 0) return { result: 'win', reason: `Promoted safely in ${userMoves} move${userMoves === 1 ? '' : 's'}.` };
-      if (count(game, me, 'p') + Math.max(0, queens) < count(start, me, 'p')) return { result: 'fail', reason: 'The pawn was lost.' };
+      // Judge promotion once the opponent has replied, so a new piece that
+      // is simply captured does not count.
+      if (game.turn() === me && promoted > 0) return { result: 'win', reason: `Promoted safely in ${userMoves} move${userMoves === 1 ? '' : 's'}.` };
+      if (count(game, me, 'p') + Math.max(0, promoted) < count(start, me, 'p')) return { result: 'fail', reason: 'The pawn was lost.' };
     }
-    if (now < before && queens <= 0) return { result: 'fail', reason: 'You lost a piece.' };
+    if (now < before) return { result: 'fail', reason: 'You lost a piece.' };
     if (game.in_draw()) return { result: 'fail', reason: 'The position is a draw.' };
     if (game.turn() === me && userMoves >= drill.limit) return { result: 'fail', reason: `Out of moves: the goal is ${drill.limit}.` };
     return null;
