@@ -352,6 +352,7 @@
       const rec = Core.recordAttempt(loadState(), session.puzzle, { win, rated: session.rated, hinted: session.hinted, ms }, Date.now());
       saveState(rec.state);
       session.delta = rec.attempt.delta;
+      if (session.source === 'review') session.reviewWin = win;
     }
     renderRail();
     renderHistory();
@@ -415,17 +416,40 @@
 
   function retryPuzzle() {
     if (!session) return;
-    startPuzzle(session.puzzle, { rated: false, source: session.source === 'daily' ? 'daily-retry' : 'replay' });
+    startPuzzle(session.puzzle, { rated: false, source: session.source === 'daily' ? 'daily-retry' : session.source === 'review' ? 'review' : 'replay' });
   }
 
   function nextPuzzle() {
     // Rush and Vision own the board while they are open.
+    if (!puzzles || mode === 'rush' || mode === 'vision') return;
+    if (session && session.source === 'review') {
+      const queue = Core.missedQueue(loadState()).filter(id => id !== session.puzzle.id);
+      if (queue.length) { startReview(queue[0]); return; }
+    }
+    nextRated();
+  }
+
+  // A rated puzzle near the player's rating, on the chosen theme.
+  function nextRated() {
     if (!puzzles || mode === 'rush' || mode === 'vision') return;
     if (mode === 'daily') { setMode('rated'); return; }
     const state = loadState();
     const pick = Core.selectPuzzle(puzzles, { target: state.rating, group: themeGroup, exclude: Core.recentIds(state) });
     if (!pick) { setStatus('No puzzles match this theme. Choose another theme.'); return; }
     startPuzzle(pick, { rated: true, source: 'rated' });
+  }
+
+  function startReview(id) {
+    const puzzle = puzzles && puzzles.find(p => p.id === id);
+    if (!puzzle) return false;
+    if (mode !== 'rated') setMode('rated', { keepSession: true });
+    startPuzzle(puzzle, { rated: false, source: 'review' });
+    return true;
+  }
+
+  function reviewMissed() {
+    const queue = Core.missedQueue(loadState()).filter(id => puzzles && puzzles.some(p => p.id === id));
+    if (queue.length) startReview(queue[0]);
   }
 
   function replayPuzzle(id) {
@@ -669,7 +693,7 @@
     if (!session || session.source === 'rush') return;
     const p = session.puzzle;
     const side = session.solver === 'w' ? 'White' : 'Black';
-    const labels = { rated: 'Rated puzzle', daily: 'Daily puzzle · ' + Core.dayKey(), replay: 'Replay · unrated', 'daily-retry': 'Daily puzzle · retry' };
+    const labels = { rated: 'Rated puzzle', daily: 'Daily puzzle · ' + Core.dayKey(), replay: 'Replay · unrated', review: 'Missed puzzle review · unrated', 'daily-retry': 'Daily puzzle · retry' };
     kind.textContent = labels[session.source] || 'Puzzle';
     const done = session.phase === 'solved';
     const decided = !!session.outcome;
@@ -678,12 +702,17 @@
     title.textContent = done ? (session.outcome === 'win' ? 'Solved' : session.revealed ? 'Solution shown' : 'Completed with help') : `${side} to move`;
     // Say nothing about the motif or length while solving: that is the puzzle.
     prompt.textContent = done ? '' : decided ? 'Finish the line to see the idea behind it.' : 'Find the best move. Some puzzles need more than one move.';
-    if (session.outcome && session.source !== 'replay' && session.source !== 'daily-retry') {
+    if (session.outcome && !['replay', 'review', 'daily-retry'].includes(session.source)) {
       feedback.hidden = false;
       const delta = session.delta || 0;
       if (session.source === 'daily') feedback.textContent = session.outcome === 'win' ? 'Daily puzzle solved first try.' : 'Daily puzzle missed on the first try. Finish it to keep the habit.';
       else feedback.textContent = session.outcome === 'win' ? `Correct first try. Rating ${delta >= 0 ? '+' : ''}${delta}.` : `Rating ${delta}. ${session.hinted && !session.revealed ? 'A hint counts as a miss.' : session.revealed ? 'Viewing the solution counts as a miss.' : 'Finish the puzzle to see the idea.'}`;
       feedback.className = 'puzzle-feedback ' + (session.outcome === 'win' ? 'good' : 'bad');
+    } else if (session.source === 'review') {
+      feedback.hidden = !done;
+      const left = Core.missedQueue(loadState()).length;
+      feedback.textContent = session.reviewWin ? `Solved first time — off your review list. ${left ? left + ' left.' : 'Review list cleared.'}` : `Still on your review list. ${left} left.`;
+      feedback.className = 'puzzle-feedback ' + (session.reviewWin ? 'good' : '');
     } else if (session.source === 'replay' || session.source === 'daily-retry') {
       feedback.hidden = !done;
       feedback.textContent = 'Replay finished. Replays do not change your rating.';
@@ -706,9 +735,20 @@
         themes.appendChild(row);
       });
     }
+    let line = document.getElementById('puzzle-solution-line');
+    if (!line) {
+      line = document.createElement('p');
+      line.id = 'puzzle-solution-line';
+      line.className = 'puzzle-solution-line';
+      themes.insertAdjacentElement('beforebegin', line);
+    }
+    line.hidden = !done;
+    line.textContent = done ? 'Solution: ' + Core.solutionSan(Chess, p) : '';
     source.hidden = !done;
     source.href = `https://lichess.org/training/${encodeURIComponent(p.id)}`;
-    next.textContent = session.source === 'daily' || session.source === 'daily-retry' ? 'Continue to rated puzzles' : (done || decided ? 'Next puzzle' : 'Skip');
+    next.textContent = session.source === 'daily' || session.source === 'daily-retry' ? 'Continue to rated puzzles'
+      : session.source === 'review' ? (Core.missedQueue(loadState()).some(id => id !== p.id) ? 'Next missed puzzle' : 'Back to rated puzzles')
+      : (done || decided ? 'Next puzzle' : 'Skip');
     next.classList.toggle('primary', done || decided);
   }
 
@@ -800,7 +840,7 @@
             btn.type = 'button';
             btn.className = 'movelist-copy';
             btn.textContent = 'Practise';
-            btn.addEventListener('click', () => { setTheme(group); setMode('rated'); nextPuzzle(); });
+            btn.addEventListener('click', () => { setTheme(group); setMode('rated'); nextRated(); });
             item.appendChild(btn);
           }
         }
@@ -841,6 +881,12 @@
   }
 
   function renderHistory() {
+    const review = document.getElementById('btn-puzzle-review');
+    if (review) {
+      const n = Core.missedQueue(loadState()).length;
+      review.hidden = !n;
+      review.textContent = `Review ${n} missed puzzle${n === 1 ? '' : 's'}`;
+    }
     const list = document.getElementById('puzzle-history');
     list.textContent = '';
     const rows = loadState().history.filter(row => row.rated).slice(-18).reverse();
@@ -953,10 +999,11 @@
     select.addEventListener('change', () => {
       setTheme(select.value);
       if (mode !== 'rated') setMode('rated');
-      else if (!session || session.phase === 'solved' || session.outcome || session.ply <= 1) nextPuzzle();
+      else if (!session || session.source === 'review' || session.phase === 'solved' || session.outcome || session.ply <= 1) nextRated();
     });
     document.querySelectorAll('.puzzle-mode').forEach(btn => btn.addEventListener('click', () => setMode(btn.getAttribute('data-mode'))));
     document.getElementById('btn-puzzle-next').addEventListener('click', nextPuzzle);
+    document.getElementById('btn-puzzle-review').addEventListener('click', reviewMissed);
     document.getElementById('btn-puzzle-hint').addEventListener('click', showHint);
     document.getElementById('btn-puzzle-solution').addEventListener('click', showSolution);
     document.getElementById('btn-puzzle-retry').addEventListener('click', retryPuzzle);
@@ -1035,7 +1082,7 @@
   // Open rated puzzles on one theme, from anywhere in the app.
   function openGroup(group) {
     setTheme(group);
-    if (visible) { setMode('rated'); nextPuzzle(); return; }
+    if (visible) { setMode('rated'); nextRated(); return; }
     initialMode = 'rated';
     mode = 'rated';
     session = null;
@@ -1073,6 +1120,7 @@
   window.PuzzlesView = {
     openGroup,
     history: () => loadState().history,
+    missed: () => Core.missedQueue(loadState()),
     show,
     hide,
     urlMode: () => (mode === 'rated' ? null : mode),

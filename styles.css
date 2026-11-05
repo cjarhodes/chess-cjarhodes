@@ -2965,3 +2965,7 @@ input[type=range].strength-slider::-moz-range-thumb {
 .gv-retry-form { display: flex; gap: 0.4rem; }
 .gv-retry-form input { flex: 1; min-width: 0; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--text); font-family: var(--family-mono); font-size: var(--text-sm); padding: 0.4rem 0.5rem; }
 .gv-retry-actions { display: flex; gap: 0.4rem; }
+.puzzle-solution-line { font-family: var(--family-mono); font-size: var(--text-sm); color: var(--text); line-height: 1.5; }
+.puzzle-solution-line[hidden] { display: none; }
+#btn-puzzle-review { align-self: flex-start; }
+#btn-puzzle-review[hidden] { display: none; }

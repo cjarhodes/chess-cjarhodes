@@ -140,6 +140,24 @@ assert(core.themeLabel('discoveredAttack') === 'Discovered attack' && core.theme
 Object.values(core.INSIGHT_GROUPS).forEach(group => assert(core.THEME_GROUPS.some(g => g.id === group), `insight tag maps to unknown theme group ${group}`));
 assert(core.groupForInsightTag('fork_risk') === 'fork' && core.groupForInsightTag('candidate_moves') === null, 'insight tag lookup');
 
+// ── Missed-puzzle review and solution line ─────
+{
+  let m = core.emptyState();
+  const p = id => ({ id, rating: 1200, themes: ['fork'] });
+  m = core.recordAttempt(m, p('a'), { win: false }, now).state;
+  m = core.recordAttempt(m, p('b'), { win: false }, now + 1).state;
+  m = core.recordAttempt(m, p('c'), { win: true }, now + 2).state;
+  assert(JSON.stringify(core.missedQueue(m)) === JSON.stringify(['b', 'a']), 'missed queue lists misses newest first');
+  m = core.recordAttempt(m, p('a'), { win: true, rated: false }, now + 3).state;
+  assert(JSON.stringify(core.missedQueue(m)) === JSON.stringify(['b']), 'a solved replay leaves the review list');
+  m = core.recordAttempt(m, p('c'), { win: false, rated: false }, now + 4).state;
+  assert(core.missedQueue(m)[0] === 'c', 'a later miss puts a puzzle back on the list');
+  const sample = puzzles.find(x => x.moves.length >= 4);
+  const line = core.solutionSan(Chess, sample);
+  assert(line.split(' ').filter(t => !/^\d+\.(…)?$/.test(t)).length === sample.moves.length - 1, 'solution line has every move after the set-up');
+  assert(/^\d+\.(…)? /.test(line), 'solution line starts with a move number: ' + line);
+}
+
 // ── Vision ────────────────────────────────────
 let prev = null;
 for (let i = 0; i < 200; i++) {

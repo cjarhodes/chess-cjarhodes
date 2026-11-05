@@ -479,6 +479,31 @@
     return group ? group.id : 'all';
   }
 
+  // Puzzles to review: those whose latest recorded attempt (rated, replay,
+  // review or daily; Rush runs are not recorded) was a miss. Solving one
+  // first time on a replay takes it off the list.
+  function missedQueue(state, limit) {
+    const latest = new Map();
+    normalizeState(state).history.forEach(row => { latest.set(row.id, row); });
+    return Array.from(latest.values()).filter(row => !row.win).sort((a, b) => b.at - a.at)
+      .slice(0, limit || 50).map(row => row.id);
+  }
+
+  // The solution as numbered SAN, from the solver's first move.
+  function solutionSan(ChessCtor, puzzle) {
+    const board = new ChessCtor(puzzle.fen);
+    if (!applyUci(board, puzzle.moves[0])) return '';
+    const parts = [];
+    for (let i = 1; i < puzzle.moves.length; i++) {
+      const number = board.fen().split(' ')[5];
+      const white = board.turn() === 'w';
+      const move = applyUci(board, puzzle.moves[i]);
+      if (!move) break;
+      parts.push((white ? number + '. ' : (i === 1 ? number + '… ' : '')) + move.san);
+    }
+    return parts.join(' ');
+  }
+
   // Current run of consecutive first-try solves among rated attempts.
   function currentStreak(state) {
     const rows = normalizeState(state).history.filter(row => row.rated);
@@ -530,7 +555,7 @@
     currentDeviation, glickoUpdate, recordAttempt, isProvisional,
     puzzleMatchesGroup, selectPuzzle, recentIds, dailyPuzzle, dayKey, hashString, mulberry32,
     checkSolverMove, normalizeUci, applyUci, rushTarget, rushPuzzle,
-    themeStats, groupForTheme, groupForInsightTag, groupLabel, INSIGHT_GROUPS, currentStreak, todaySummary, randomSquare, squareColor, recordRun
+    themeStats, groupForTheme, groupForInsightTag, missedQueue, solutionSan, groupLabel, INSIGHT_GROUPS, currentStreak, todaySummary, randomSquare, squareColor, recordRun
   };
   root.PuzzleCore = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

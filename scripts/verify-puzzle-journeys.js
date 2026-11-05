@@ -131,6 +131,17 @@ async browserPage => {
     await solveWith(type);
     assert((await info()).rating === ratingBeforeReplay, 'a replay does not change the rating');
 
+    // ── Missed puzzles come back for review until solved ──
+    const missedBefore = await page.evaluate(() => PuzzlesView.missed().length);
+    assert(missedBefore >= 1 && await page.locator('#btn-puzzle-review').isVisible(), 'missed puzzles are offered for review');
+    const reviewRating = (await info()).rating;
+    await page.locator('#btn-puzzle-review').click(); await ready();
+    assert((await info()).source === 'review', 'the review replays a missed puzzle');
+    await solveWith(type);
+    assert(await page.evaluate(n => PuzzlesView.missed().length === n - 1, missedBefore), 'solving a reviewed puzzle takes it off the list');
+    assert((await info()).rating === reviewRating, 'reviews are unrated');
+    assert(/^Solution: \d+(\.|…) /.test(await page.locator('#puzzle-solution-line').textContent()), 'the solution line is shown after solving');
+
     // ── Theme filter selects matching puzzles ──
     await page.locator('#puzzle-theme').selectOption('fork'); await ready();
     assert(await page.evaluate(() => PuzzlesView._debug().session.puzzle.themes.includes('fork')), 'the theme filter picks a fork');
