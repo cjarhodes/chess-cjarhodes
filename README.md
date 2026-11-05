@@ -45,6 +45,13 @@ Logic lives in `puzzles-core.js` (tested in Node by
 `puzzles.js` owns the view; `scripts/verify-puzzle-journeys.js` drives it in
 the browser.
 
+**Explore** doubles as an analysis board: Stockfish's top three lines
+(depth 14) for the position on the board, an evaluation bar and a best-move
+arrow, with a click on any line playing its first move. **Load a FEN or PGN**
+sets up any position or game (Undo steps back through a PGN). It works
+without a Lichess token and can be switched off (`ui:explore-engine`);
+quizzes never show it (`explore-analysis.js`).
+
 **Explore** — Browse the Lichess Opening Explorer's master/lichess
 game databases from any position. Requires the user's own Lichess
 Personal Access Token, which is kept in `sessionStorage` only (never

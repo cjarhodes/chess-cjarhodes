@@ -646,6 +646,45 @@ async page => {
     return problems;
   });
 
+  await check('Explore analysis shows engine lines, plays a line, loads FEN/PGN and stays out of quizzes', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=library&mode=explore');
+    await page.evaluate(() => { localStorage.removeItem('ui:explore-engine'); });
+    await page.goto(base + '/?view=library&mode=explore');
+    const analysed = () => page.waitForFunction(() => { const s = ExploreAnalysis._state(); return s.result && exploreGame && s.result.fen === exploreGame.fen() && document.querySelectorAll('.explore-engine-line').length > 0; }, null, { timeout: 45000 });
+    await analysed();
+    const first = await page.evaluate(() => ({ lines: document.querySelectorAll('.explore-engine-line').length, arrows: document.querySelectorAll('#board-wrap .board-arrow.best').length, bar: !!document.querySelector('#board-wrap .board-eval-bar:not([hidden])') }));
+    if (first.lines < 2 || first.arrows !== 1 || !first.bar) problems.push('the start position did not show lines, an arrow and a bar: ' + JSON.stringify(first));
+    const fits = await page.evaluate(() => { const bar = document.querySelector('#board-wrap .board-eval-bar').getBoundingClientRect(); const area = document.querySelector('#library-view .board-area').getBoundingClientRect(); return bar.left >= area.left; });
+    if (!fits) problems.push('the eval bar is clipped by the board area');
+    await page.locator('.explore-engine-line').first().click();
+    if (await page.evaluate(() => exploreGame.history().length) !== 1) problems.push('clicking a line did not play its first move');
+    await analysed();
+    await page.locator('.explore-load summary').click();
+    await page.locator('#explore-load-input').fill('8/8/8/8/8/5k2/6q1/7K w - - 0 1');
+    await page.locator('#explore-load-form button').click();
+    if (await page.evaluate(() => exploreGame.fen()) !== '8/8/8/8/8/5k2/6q1/7K w - - 0 1') problems.push('a FEN did not load');
+    await page.locator('#explore-load-input').fill('1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7#');
+    await page.locator('#explore-load-form button').click();
+    await page.waitForTimeout(400);
+    const mated = await page.evaluate(() => ({ moves: exploreGame.history().length, status: document.getElementById('explore-engine-status').textContent, arrows: document.querySelectorAll('#board-wrap .board-arrow').length }));
+    if (mated.moves !== 7 || !/Checkmate/.test(mated.status) || mated.arrows) problems.push('a mating PGN did not load as checkmate without arrows: ' + JSON.stringify(mated));
+    await page.locator('#explore-load-input').fill('not chess');
+    await page.locator('#explore-load-form button').click();
+    if (!/not a FEN or PGN/.test(await page.locator('#explore-load-status').textContent())) problems.push('invalid input was not explained');
+    await page.locator('#explore-engine-toggle').uncheck();
+    await page.waitForTimeout(400);
+    const off = await page.evaluate(() => ({ lines: document.querySelectorAll('.explore-engine-line').length, bar: !!document.querySelector('#board-wrap .board-eval-bar:not([hidden])') }));
+    if (off.lines || off.bar) problems.push('turning the engine off left analysis on screen');
+    await page.locator('#explore-engine-toggle').check();
+    await page.evaluate(() => { const op = document.querySelector('.opening-btn[data-id="italian"]'); op.click(); });
+    await page.locator('#btn-quiz').click();
+    await page.waitForTimeout(500);
+    const quiz = await page.evaluate(() => ({ arrows: document.querySelectorAll('#board-wrap .board-arrow').length, bar: !!document.querySelector('#board-wrap .board-eval-bar:not([hidden])') }));
+    if (quiz.arrows || quiz.bar) problems.push('engine analysis leaked into a quiz');
+    return problems;
+  });
+
   if (pageErrors.length) failures.push('page errors: ' + pageErrors.join(' | '));
   if (failures.length) throw new Error(failures.join('\n'));
   return { passed: passed.length, checks: passed };
