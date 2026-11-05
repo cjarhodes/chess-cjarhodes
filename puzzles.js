@@ -262,6 +262,7 @@
   // Returns true when the move was accepted.
   function submitMove(uci, opts) {
     if (!canMove()) return false;
+    if (session.kind === 'endgame') return endgameMove(uci, opts || {});
     const options = opts || {};
     clearTap();
     markSquares('hint-square', []);
@@ -369,6 +370,7 @@
 
   function showHint() {
     if (!canMove()) return;
+    if (session.kind === 'endgame') { endgameHint(); return; }
     const expected = session.puzzle.moves[session.ply];
     if (!expected) return;
     session.hinted = true;
@@ -416,12 +418,13 @@
 
   function retryPuzzle() {
     if (!session) return;
+    if (session.kind === 'endgame') { startEndgame(session.drill); return; }
     startPuzzle(session.puzzle, { rated: false, source: session.source === 'daily' ? 'daily-retry' : session.source === 'review' ? 'review' : 'replay' });
   }
 
   function nextPuzzle() {
-    // Rush and Vision own the board while they are open.
-    if (!puzzles || mode === 'rush' || mode === 'vision') return;
+    // Rush, Vision and Endgames own the board while they are open.
+    if (!puzzles || mode === 'rush' || mode === 'vision' || mode === 'endgames') return;
     if (session && session.source === 'review') {
       const queue = Core.missedQueue(loadState()).filter(id => id !== session.puzzle.id);
       if (queue.length) { startReview(queue[0]); return; }
@@ -431,7 +434,7 @@
 
   // A rated puzzle near the player's rating, on the chosen theme.
   function nextRated() {
-    if (!puzzles || mode === 'rush' || mode === 'vision') return;
+    if (!puzzles || mode === 'rush' || mode === 'vision' || mode === 'endgames') return;
     if (mode === 'daily') { setMode('rated'); return; }
     const state = loadState();
     const pick = Core.selectPuzzle(puzzles, { target: state.rating, group: themeGroup, exclude: Core.recentIds(state) });
@@ -666,6 +669,157 @@
     document.getElementById('puzzle-vision-best').textContent = parts.length ? 'Best: ' + parts.join(' · ') : '';
   }
 
+  // ── Endgame practice (endgames.js) ────────────
+  const EG_KEY = 'chess_endgames_v1';
+  const EG_DEPTH = 14;
+  let egToken = 0;
+  function egBest() {
+    try { const v = JSON.parse(localStorage.getItem(EG_KEY)); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch (e) { return {}; }
+  }
+  function saveEgBest(id, moves) {
+    const best = egBest();
+    const isBest = !best[id] || moves < best[id];
+    if (isBest) best[id] = moves;
+    try { localStorage.setItem(EG_KEY, JSON.stringify(best)); } catch (e) { /* this page only */ }
+    return isBest;
+  }
+  function goalText(drill) {
+    return drill.goal === 'mate' ? `Checkmate within ${drill.limit} moves` : `Promote safely within ${drill.limit} moves`;
+  }
+
+  function startEndgame(drill) {
+    if (!drill) return;
+    cancelPending();
+    egToken++;
+    orientation = 'white';
+    session = { kind: 'endgame', drill, game: new Chess(drill.fen), solver: EndgameDrills.userColor(drill), phase: 'solving', busy: false, userMoves: 0, hinted: false, outcome: null };
+    createBoard(drill.fen);
+    setLastMove(null);
+    const kb = document.getElementById('puzzle-keyboard-move-status');
+    if (kb) kb.textContent = '';
+    egReport('');
+    setPhase(drill.title);
+    setStatus(`${goalText(drill)}. ${drill.tip}`);
+    renderEndgames();
+    updateControls();
+  }
+
+  function egReport(text) {
+    const el = document.getElementById('endgame-result');
+    if (el) { el.hidden = !text; el.textContent = text || ''; }
+  }
+
+  function egFinish(verdict) {
+    session.phase = 'solved';
+    session.busy = false;
+    session.outcome = verdict.result;
+    let text = verdict.reason;
+    if (verdict.result === 'win') {
+      chime('solved');
+      flash('good');
+      if (session.hinted) text += ' Hints were used, so this does not set a best.';
+      else if (saveEgBest(session.drill.id, session.userMoves)) text += ' A new best!';
+    } else {
+      chime('wrong');
+      flash('bad');
+      text += ' Try again to take another run at it.';
+    }
+    setPhase(verdict.result === 'win' ? 'Done' : 'Not this time');
+    setStatus(text);
+    egReport(text);
+    renderEndgames();
+    updateControls();
+  }
+
+  function endgameMove(uci, options) {
+    const normalized = Core.normalizeUci(session.game, uci);
+    if (!normalized) { if (board && !options.fromDrop) board.position(session.game.fen(), false); return false; }
+    const move = Core.applyUci(session.game, normalized);
+    session.userMoves++;
+    clearTap();
+    setArrows(null);
+    if (!options.fromDrop) board.position(session.game.fen(), !!options.animate);
+    setLastMove(move);
+    moveSound(move, session.game);
+    describeBoard();
+    const verdict = EndgameDrills.judge(Chess, session.drill, session.game, session.userMoves);
+    if (verdict) { egFinish(verdict); return true; }
+    session.busy = true;
+    updateControls();
+    setStatus('Engine thinking…');
+    const mine = ++egToken;
+    const current = session;
+    const movedAt = Date.now();
+    // Let the player's move finish animating: the engine can answer these
+    // positions in milliseconds, and overlapping chessboard.js animations
+    // leave a ghost piece behind.
+    const settle = res => new Promise(resolve => setTimeout(() => resolve(res), Math.max(0, 350 - (Date.now() - movedAt))));
+    engineClient.evaluate(session.game.fen(), EG_DEPTH).then(settle).then(res => {
+      if (mine !== egToken || session !== current) return;
+      const reply = res && res.bestmove ? Core.applyUci(current.game, res.bestmove) : null;
+      if (!reply) { current.busy = false; setStatus('The engine did not reply. Try again.'); updateControls(); return; }
+      board.position(current.game.fen());
+      setLastMove(reply);
+      moveSound(reply, current.game);
+      describeBoard();
+      const after = EndgameDrills.judge(Chess, current.drill, current.game, current.userMoves);
+      if (after) { egFinish(after); return; }
+      current.busy = false;
+      const left = current.drill.limit - current.userMoves;
+      setStatus(`Your move. ${left} move${left === 1 ? '' : 's'} left.`);
+      updateControls();
+    }).catch(() => {
+      if (mine !== egToken || session !== current) return;
+      current.busy = false;
+      setStatus('The engine stopped. Make your move again or try again.');
+      updateControls();
+    });
+    return true;
+  }
+
+  function endgameHint() {
+    const current = session;
+    current.hinted = true;
+    current.busy = true;
+    updateControls();
+    setStatus('Looking for the best move…');
+    const mine = ++egToken;
+    engineClient.evaluate(current.game.fen(), EG_DEPTH).then(res => {
+      if (mine !== egToken || session !== current) return;
+      current.busy = false;
+      const uci = res && res.bestmove;
+      if (uci) setArrows([{ from: uci.slice(0, 2), to: uci.slice(2, 4), kind: 'hint' }]);
+      setStatus(uci ? 'The arrow shows the engine’s move. Hints mean this run will not set a best.' : 'No hint available.');
+      updateControls();
+    }).catch(() => { if (session === current) { current.busy = false; updateControls(); } });
+  }
+
+  function renderEndgames() {
+    const list = document.getElementById('endgame-list');
+    if (!list) return;
+    const best = egBest();
+    list.textContent = '';
+    EndgameDrills.DRILLS.forEach(drill => {
+      const li = document.createElement('li');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      const active = session && session.kind === 'endgame' && session.drill.id === drill.id;
+      btn.className = 'endgame-row' + (active ? ' active' : '');
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      btn.dataset.drill = drill.id;
+      const name = document.createElement('span');
+      name.className = 'endgame-name';
+      name.textContent = drill.title;
+      const meta = document.createElement('span');
+      meta.className = 'endgame-meta';
+      meta.textContent = goalText(drill) + (best[drill.id] ? ` · best ${best[drill.id]}` : '');
+      btn.append(name, meta);
+      btn.addEventListener('click', () => { egReport(''); startEndgame(drill); });
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+  }
+
   // The Rush clock and Vision prompt take height from the board.
   function syncBars() {
     const bar = mode === 'rush' ? !!(rush || lastRush) : mode === 'vision' ? !!vision : false;
@@ -690,7 +844,7 @@
     const themes = document.getElementById('puzzle-themes');
     const source = document.getElementById('puzzle-source');
     const next = document.getElementById('btn-puzzle-next');
-    if (!session || session.source === 'rush') return;
+    if (!session || session.source === 'rush' || session.kind === 'endgame') return;
     const p = session.puzzle;
     const side = session.solver === 'w' ? 'White' : 'Black';
     const labels = { rated: 'Rated puzzle', daily: 'Daily puzzle · ' + Core.dayKey(), replay: 'Replay · unrated', review: 'Missed puzzle review · unrated', 'daily-retry': 'Daily puzzle · retry' };
@@ -904,6 +1058,14 @@
     const solving = canMove();
     const inPuzzle = !!session && mode !== 'vision';
     const rushing = !!rush;
+    if (session && session.kind === 'endgame') {
+      document.getElementById('btn-puzzle-hint').disabled = !solving;
+      document.getElementById('btn-puzzle-solution').disabled = true;
+      document.getElementById('btn-puzzle-retry').disabled = false;
+      document.getElementById('btn-puzzle-flip').disabled = false;
+      document.getElementById('puzzle-keyboard-move-input').disabled = !solving;
+      return;
+    }
     document.getElementById('btn-puzzle-hint').disabled = !solving || rushing;
     document.getElementById('btn-puzzle-solution').disabled = !inPuzzle || rushing || !session || session.phase === 'solved' || session.phase === 'revealing';
     document.getElementById('btn-puzzle-retry').disabled = !inPuzzle || rushing || !session || session.phase !== 'solved';
@@ -922,20 +1084,32 @@
     const options = opts || {};
     if (rush && next !== 'rush') endRush('Run ended.');
     if (vision && next !== 'vision') endVision(true);
+    if (mode === 'endgames' && next !== 'endgames' && session && session.kind === 'endgame') { egToken++; session = null; }
     mode = next;
     document.querySelectorAll('.puzzle-mode').forEach(btn => {
       const active = btn.getAttribute('data-mode') === mode;
       btn.classList.toggle('active', active);
       btn.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
-    const panel = mode === 'rush' ? 'rush' : mode === 'vision' ? 'vision' : 'rated';
+    const panel = mode === 'rush' ? 'rush' : mode === 'vision' ? 'vision' : mode === 'endgames' ? 'endgames' : 'rated';
     document.querySelectorAll('.puzzle-panel').forEach(el => { el.hidden = el.id !== 'puzzle-panel-' + panel; });
     syncBars();
     document.getElementById('puzzle-keyboard-move').hidden = mode === 'vision';
     document.getElementById('puzzles-view').classList.toggle('vision-active', mode === 'vision');
     if (typeof updateURL === 'function' && visible) updateURL();
     if (!puzzles || options.keepSession) { updateControls(); return; }
-    if (mode === 'vision') {
+    if (mode === 'endgames') {
+      if (!session || session.kind !== 'endgame') {
+        cancelPending();
+        session = null;
+        orientation = 'white';
+        createBoard(EndgameDrills.DRILLS[0].fen, { static: true });
+        setLastMove(null);
+        setPhase('Endgame practice');
+        setStatus('Choose an endgame on the right and play it out against the engine.');
+      }
+      renderEndgames();
+    } else if (mode === 'vision') {
       cancelPending();
       prepareVisionBoard();
       setPhase('Vision');
@@ -1074,6 +1248,8 @@
 
   function hide() {
     visible = false;
+    egToken++;
+    if (session && session.kind === 'endgame' && session.busy) { session.busy = false; session.phase = 'solved'; }
     if (rush) endRush('Run ended when you left Puzzles.');
     if (vision) endVision(true);
     clearTap();
@@ -1124,7 +1300,7 @@
     show,
     hide,
     urlMode: () => (mode === 'rated' ? null : mode),
-    setInitialMode: m => { if (['rated', 'daily', 'rush', 'vision'].includes(m)) { initialMode = m; mode = m; } },
+    setInitialMode: m => { if (['rated', 'daily', 'rush', 'vision', 'endgames'].includes(m)) { initialMode = m; mode = m; } },
     // Exposed for tests and the console.
     _debug: () => ({ mode, session, rush, vision, puzzles: puzzles ? puzzles.length : 0, state: loadState() }),
     _start: id => { const p = puzzles && puzzles.find(row => row.id === id); if (p) startPuzzle(p, { rated: true, source: 'rated' }); return !!p; }

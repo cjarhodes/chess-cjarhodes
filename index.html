@@ -764,6 +764,9 @@
       <button type="button" class="puzzle-mode" id="puzzle-mode-vision" data-mode="vision" aria-pressed="false">
         <span class="puzzle-mode-name">Vision</span><span class="puzzle-mode-detail">Name squares at speed</span>
       </button>
+      <button type="button" class="puzzle-mode" id="puzzle-mode-endgames" data-mode="endgames" aria-pressed="false">
+        <span class="puzzle-mode-name">Endgame practice</span><span class="puzzle-mode-detail">Win it against the engine</span>
+      </button>
     </div>
     <div class="puzzle-rating-card" aria-labelledby="puzzle-rating-label">
       <div class="puzzle-rating-head">
@@ -862,6 +865,16 @@
       <section class="coach-panel-section" id="puzzle-rush-review-section" hidden aria-labelledby="puzzle-rush-review-heading">
         <h3 class="section-label" id="puzzle-rush-review-heading">This run</h3>
         <ol class="puzzle-history" id="puzzle-rush-review"></ol>
+      </section>
+    </div>
+
+    <div class="puzzle-panel" id="puzzle-panel-endgames" role="region" aria-label="Endgame practice" hidden>
+      <section class="coach-panel-section puzzle-card" aria-labelledby="endgame-title">
+        <span class="section-label">Endgame practice</span>
+        <h2 class="puzzle-card-title" id="endgame-title">Convert the win</h2>
+        <p class="puzzle-card-prompt">Play these won endgames against full-strength Stockfish. Reach the goal within the move limit without losing material or stalemating. Hints show the engine's move but a hinted run does not set a best.</p>
+        <div class="puzzle-feedback" id="endgame-result" role="status" aria-live="polite" hidden></div>
+        <ol class="endgame-list" id="endgame-list" aria-label="Endgames"></ol>
       </section>
     </div>
 
@@ -1000,6 +1013,7 @@
 <script src="coach-overlay.js"></script>
 <script src="explore-analysis.js"></script>
 <script src="game-archive.js"></script>
+<script src="endgames.js"></script>
 <script src="puzzles-core.js"></script>
 <script src="puzzles.js"></script>
 <script src="shortcuts.js"></script>

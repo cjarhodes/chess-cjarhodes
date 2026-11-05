@@ -221,6 +221,31 @@ async browserPage => {
     await page.waitForFunction(() => !PuzzlesView._debug().vision);
     assert(await page.evaluate(() => PuzzlesView._debug().state.vision.best.black === 5), 'the Vision best is saved');
 
+    // ── Endgame practice: win, hint, and a thrown-away queen ──
+    await page.locator('#puzzle-mode-endgames').click();
+    await page.waitForFunction(() => document.querySelectorAll('.endgame-row').length === 5);
+    assert((await page.evaluate(() => location.search)).includes('mode=endgames'), 'endgame practice has its own URL');
+    const egReady = () => page.waitForFunction(() => { const s = PuzzlesView._debug().session; return s && s.kind === 'endgame' && (s.phase === 'solved' || !s.busy); }, null, { timeout: 30000 });
+    await page.locator('.endgame-row[data-drill="kq-k"]').click(); await egReady();
+    await page.locator('#btn-puzzle-hint').click(); await egReady();
+    assert(await page.locator('#puzzleBoard-wrap .board-arrow.hint').waitFor({ timeout: 3000 }).then(() => true, () => false), 'an endgame hint draws the engine move');
+    await page.locator('#btn-puzzle-retry').click(); await egReady();
+    for (let i = 0; i < 12; i++) {
+      if (await page.evaluate(() => PuzzlesView._debug().session.phase === 'solved')) break;
+      const uci = await page.evaluate(() => engineClient.evaluate(PuzzlesView._debug().session.game.fen(), 16).then(r => r.bestmove));
+      await type(uci); await egReady();
+    }
+    await page.waitForTimeout(500); // let the last move's animation finish
+    const won = await page.evaluate(() => ({ outcome: PuzzlesView._debug().session.outcome, best: JSON.parse(localStorage.getItem('chess_endgames_v1') || '{}')['kq-k'], shown: document.querySelectorAll('#puzzleBoard .piece-417db').length, want: PuzzlesView._debug().session.game.board().flat().filter(Boolean).length }));
+    assert(won.outcome === 'win' && won.best >= 1 && won.best <= 10, 'the queen drill is won within its limit and sets a best: ' + JSON.stringify(won));
+    assert(won.shown === won.want, 'the board shows exactly the pieces in the game after fast engine replies: ' + JSON.stringify(won));
+    await page.locator('#btn-puzzle-retry').click(); await egReady();
+    await type('h1e4'); await egReady();
+    const lost = await page.evaluate(() => ({ outcome: PuzzlesView._debug().session.outcome, status: document.getElementById('puzzle-status').textContent }));
+    assert(lost.outcome === 'fail' && /lost a piece/.test(lost.status), 'hanging the queen fails the drill: ' + JSON.stringify(lost));
+    await page.locator('#puzzle-mode-rated').click(); await ready();
+    assert((await info()).source === 'rated', 'leaving endgame practice returns to rated puzzles');
+
     // ── Leaving Puzzles keeps Coach intact ──
     await page.locator('#nav-coach').click();
     assert(await page.locator('#coach-view').isVisible() && await page.locator('#puzzles-view').isHidden(), 'Coach returns');

@@ -2970,3 +2970,23 @@ input[type=range].strength-slider::-moz-range-thumb {
 #btn-puzzle-review { align-self: flex-start; }
 #btn-puzzle-review[hidden] { display: none; }
 .move-chip.quiz-hidden { color: var(--text-3); border-style: dashed; cursor: default; min-width: 2.4em; }
+
+/* ── ENDGAME PRACTICE (endgames.js, puzzles.js) ── */
+.endgame-list { list-style: none; display: flex; flex-direction: column; gap: 0.35rem; }
+.endgame-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-family: var(--family-ui);
+  cursor: pointer;
+}
+.endgame-row:hover { border-color: var(--text-3); }
+.endgame-row.active { border-color: var(--accent); background: var(--accent-soft); }
+.endgame-name { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text); }
+.endgame-meta { font-size: var(--text-xs); color: var(--text-3); }
