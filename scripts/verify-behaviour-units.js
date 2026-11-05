@@ -749,11 +749,23 @@ async page => {
     await page.keyboard.press('Escape');
     if (await page.locator('#game-viewer').isVisible()) problems.push('Escape did not close the viewer');
     if (await page.evaluate(() => (document.activeElement.className || '').includes('game-archive-open')) !== true) problems.push('focus did not return to the archive row');
+    // Training backups carry the archive; importing twice does not duplicate it.
+    const restored = await page.evaluate(() => {
+      const backup = readTrainingBackup();
+      const exported = Object.keys(backup.data).some(key => key.startsWith('coach:archive:v1'));
+      localStorage.removeItem('coach:archive:v1');
+      mergeImportedTrainingData(backup);
+      mergeImportedTrainingData(backup);
+      return { exported, games: GameArchive.load().length, reviews: GameArchive.load()[0] && GameArchive.load()[0].reviews.length };
+    });
+    if (!restored.exported || restored.games !== 1 || restored.reviews !== 2) problems.push('the archive did not round-trip through a training backup: ' + JSON.stringify(restored));
+    await page.locator('#tab-game').click();
+    await page.locator('#tab-progress').click();
     await row.click();
     await page.locator('#btn-game-viewer-delete').click();
     await page.locator('#btn-game-viewer-delete').click();
     if ((await page.evaluate(() => GameArchive.load().length)) !== 0) problems.push('delete (confirmed) did not remove the game');
-    await page.evaluate(() => localStorage.setItem('coach:archive:v1', JSON.stringify([{ id: 'x' }, null, { id: 'ok', pgn: '1. e4', at: 5, reviews: [{ ply: 1, tier: 'nonsense' }] }])));
+    await page.evaluate(() => localStorage.setItem('coach:archive:v1', JSON.stringify({ v: 1, games: [{ id: 'x' }, null, { id: 'ok', pgn: '1. e4', at: 5, reviews: [{ ply: 1, tier: 'nonsense' }] }] })));
     const cleaned = await page.evaluate(() => GameArchive.load());
     if (cleaned.length !== 1 || cleaned[0].reviews.length !== 0) problems.push('malformed archive rows were kept');
     await page.evaluate(() => localStorage.removeItem('coach:archive:v1'));

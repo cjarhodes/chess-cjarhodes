@@ -157,7 +157,9 @@ its badge, and mistakes show the engine's choice as an arrow. On an inaccuracy, 
 **Retry this move** lets you play the position again (on the board or typed):
 the engine's choice is accepted, and so is any of its top three moves it rates
 within half a pawn of it; **Show answer** draws the engine's move. Copy the PGN
-or delete the game there. The live game is never touched (`game-archive.js`).
+or delete the game there. The archive is included in training
+backups (Training data → Export), and importing merges games by id. The live
+game is never touched (`game-archive.js`).
 
 PGN import reviews all selected-side moves in the valid games in a batch,
 with progress and cancellation. A completed batch contributes to Insights

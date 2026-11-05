@@ -273,7 +273,8 @@ function trainingBackupKeys(ownerId = growthOwnerId()) {
     coachMemoryKey(LIFETIME_KEY),
     coachMemoryKey(COACH_STATE_KEY),
     coachMemoryKey(COACH_PRACTICE_STATE_KEY),
-    coachMemoryKey(COACH_PRACTICE_RETURN_KEY)
+    coachMemoryKey(COACH_PRACTICE_RETURN_KEY),
+    ...(typeof GameArchive !== 'undefined' ? [GameArchive.storageKeyFor(ownerId)] : [])
   ];
 }
 
@@ -374,6 +375,15 @@ function mergeImportedTrainingData(payload) {
     current.entries = current.entries.slice(-INSIGHTS_MAX_ENTRIES);
     values[coachMemoryKey(INSIGHTS_KEY)] = current;
   }
+  if (typeof GameArchive !== 'undefined') {
+    const archive = incoming(GameArchive.storageKeyFor(ownerId), GameArchive.KEY, 1);
+    if (archive) {
+      if (!Array.isArray(archive.games)) throw new Error('The game archive is incomplete. Nothing was imported.');
+      let current = null;
+      try { current = JSON.parse(localStorage.getItem(GameArchive.storageKeyFor(ownerId))); } catch (e) { current = null; }
+      values[GameArchive.storageKeyFor(ownerId)] = GameArchive.merge(current, archive);
+    }
+  }
   const lifetime = incoming(coachMemoryKey(LIFETIME_KEY), LIFETIME_KEY);
   if (lifetime) {
     const current = loadLifetime();
@@ -409,6 +419,7 @@ function mergeImportedTrainingData(payload) {
   hydrateGrowthUI();
   if (typeof renderAccountCheckpoint === 'function') renderAccountCheckpoint();
   if (typeof renderInsights === 'function') renderInsights();
+  if (typeof GameArchive !== 'undefined') GameArchive.render();
   return Object.keys(values).length;
 }
 

@@ -11,7 +11,8 @@
   let viewer = null;     // { game, plies: [fen...], moves, cursor, board, returnFocus }
 
   function ownerId() { return typeof activePracticeOwnerId === 'function' ? activePracticeOwnerId() : null; }
-  function storageKey() { const owner = ownerId(); return owner ? `${KEY}:${owner}` : KEY; }
+  function storageKeyFor(owner) { return owner ? `${KEY}:${owner}` : KEY; }
+  function storageKey() { return storageKeyFor(ownerId()); }
 
   function normalize(list) {
     return (Array.isArray(list) ? list : []).filter(row => row && typeof row.id === 'string' && typeof row.pgn === 'string' && Number.isFinite(row.at))
@@ -28,11 +29,26 @@
       }))
       .sort((a, b) => b.at - a.at).slice(0, LIMIT);
   }
+  // Stored as { v: 1, games } so training backups can carry it; a bare
+  // array (the first format) is still read.
+  function gamesOf(value) {
+    if (Array.isArray(value)) return value;
+    return value && value.v === 1 && Array.isArray(value.games) ? value.games : [];
+  }
   function load() {
-    try { return normalize(JSON.parse(localStorage.getItem(storageKey()))); } catch (e) { return []; }
+    try { return normalize(gamesOf(JSON.parse(localStorage.getItem(storageKey())))); } catch (e) { return []; }
   }
   function save(list) {
-    try { localStorage.setItem(storageKey(), JSON.stringify(normalize(list))); return true; } catch (e) { return false; }
+    try { localStorage.setItem(storageKey(), JSON.stringify({ v: 1, games: normalize(list) })); return true; } catch (e) { return false; }
+  }
+  // Backup import: union by game id, keeping the copy with more reviews.
+  function merge(current, incoming) {
+    const byId = new Map();
+    normalize(gamesOf(current)).concat(normalize(gamesOf(incoming))).forEach(game => {
+      const existing = byId.get(game.id);
+      if (!existing || game.reviews.length > existing.reviews.length) byId.set(game.id, game);
+    });
+    return { v: 1, games: normalize(Array.from(byId.values())) };
   }
 
   // White-perspective centipawns after the user's move (engine scores are
@@ -532,7 +548,7 @@
     navigator.clipboard.writeText(viewer.game.pgn).then(() => done('Copied ✓'), () => done('Copy unavailable'));
   }
 
-  window.GameArchive = { record, load, open, close, render, remove, _viewer: () => viewer };
+  window.GameArchive = { KEY, record, load, open, close, render, remove, merge, storageKeyFor, _viewer: () => viewer };
   const init = () => { render(); const tab = document.getElementById('tab-progress'); if (tab) tab.addEventListener('click', render); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
