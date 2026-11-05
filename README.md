@@ -84,6 +84,15 @@ that leaves a minor piece or more en prise while staying best. These are
 display flags on top of the tiers, so accuracy and insights are unchanged
 (`move-flair.js`, tested by `scripts/validate-move-flair.js`).
 
+**Opponents** (Game setup): besides the adaptive Coach, six personalities
+from Pip (400, early queen raids) to Ines (2400, universal). Each is a level
+on the calibrated strength slider plus an opening repertoire from the
+Library: while the game follows one of its lines, it plays the book move;
+off book, the calibrated engine plays as usual. Choosing one is the same as
+setting the slider (adapting turns off); moving the slider makes it a custom
+level; choosing Coach turns adapting back on (`opponents.js`, tested by
+`scripts/validate-opponents.js`).
+
 Move reviews start with a short explanation. **Show why** steps through the
 recommended line on the main board without changing the live game; **Back to
 game** restores the actual position. Engine details remain expandable.

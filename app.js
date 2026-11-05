@@ -4617,11 +4617,14 @@ async function coachOpponentRespond() {
     // loss distribution. Lower settings favor modest slips while preserving
     // detected mates, without unsupported Elo commands.
     const opts = coachStrengthOpts(coachEngineElo);
-    const result = await engineClient.evaluate(fen, opts.depth, {
+    // A chosen opponent personality plays its Library book lines first
+    // (opponents.js); the calibrated engine takes over once off book.
+    const bookMove = typeof OpponentPersonas !== 'undefined' ? OpponentPersonas.coachBookMove() : null;
+    const result = bookMove ? null : await engineClient.evaluate(fen, opts.depth, {
       skill: opts.skill,
       multipv: opts.multipv
     });
-    const bestmove = chooseCalibratedOpponentMove(result, opts);
+    const bestmove = bookMove || chooseCalibratedOpponentMove(result, opts);
     if (generation !== coachGameGeneration || coachGame !== gameRef || !coachMode ||
         !coachGameActive || coachIsUserTurn() || coachGame.fen() !== fen) return;
     if (!bestmove) { setCoachStatus('Your move.'); return; }
@@ -5281,7 +5284,8 @@ function showPostGameSummary(endMsg) {
   const sideName = coachUserColor() === 'white' ? 'White' : 'Black';
   const subtitleParts = [];
   if (sideName) subtitleParts.push(`You played ${sideName}`);
-  if (elo) subtitleParts.push(`vs Opponent ${elo}`);
+  const personaName = typeof OpponentPersonas !== 'undefined' ? OpponentPersonas.displayName() : null;
+  if (elo) subtitleParts.push(personaName ? `vs ${personaName} (${elo})` : `vs Opponent ${elo}`);
   if (subtitleParts.length) {
     $('#summary-subtitle').text(subtitleParts.join(' · ')).show();
   } else {

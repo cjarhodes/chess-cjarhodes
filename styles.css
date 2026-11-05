@@ -2908,3 +2908,41 @@ input[type=range].strength-slider::-moz-range-thumb {
 .ply.tier-blunder .gv-glyph { color: var(--mq-blunder); }
 .game-viewer-actions { display: flex; gap: 0.5rem; }
 .game-viewer-overlay :is(button):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* ── OPPONENT PERSONALITIES (opponents.js) ── */
+.opponent-section { display: flex; flex-direction: column; gap: 0.45rem; }
+.opponent-picker { display: flex; flex-wrap: wrap; gap: 0.2rem; }
+.opponent-card {
+  padding: 1px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-pill);
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+}
+.opponent-card:hover { border-color: var(--line); }
+.opponent-card.active { border-color: var(--accent); }
+.opponent-card:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.opponent-avatar {
+  width: 25px;
+  height: 25px;
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--family-display);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+  color: var(--paper-0);
+  background: var(--moss-700);
+}
+.opponent-avatar[data-opponent="coach"] { background: var(--moss-700); }
+.opponent-avatar[data-opponent="pip"] { background: var(--brass-700); }
+.opponent-avatar[data-opponent="rosa"] { background: var(--red-600); }
+.opponent-avatar[data-opponent="theo"] { background: var(--green-600); }
+.opponent-avatar[data-opponent="mira"] { background: var(--iris-500); }
+.opponent-avatar[data-opponent="kasimir"] { background: var(--paper-700); }
+.opponent-avatar[data-opponent="ines"] { background: var(--moss-900); }
+.opponent-current { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text); }
+.opponent-about { font-size: var(--text-xs); color: var(--text-2); line-height: 1.45; min-height: 2.9em; }

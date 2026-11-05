@@ -747,6 +747,33 @@ async page => {
     return problems;
   });
 
+  await check('opponent personalities set the level and play their book openings', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=coach');
+    await page.evaluate(() => { localStorage.clear(); });
+    await page.goto(base + '/?view=coach');
+    await page.waitForFunction(() => typeof OpponentPersonas !== 'undefined' && !!coachBoard);
+    await page.evaluate(() => { document.getElementById('coach-game-options').open = true; });
+    const oneRow = await page.evaluate(() => new Set(Array.from(document.querySelectorAll('.opponent-card')).map(b => Math.round(b.getBoundingClientRect().top))).size === 1);
+    if (!oneRow) problems.push('the opponent avatars wrap onto a second row');
+    await page.locator('.opponent-card[data-opponent="rosa"]').click();
+    const chosen = await page.evaluate(() => ({ elo: coachEngineElo, auto: document.getElementById('coach-auto-elo').checked, pressed: document.querySelector('.opponent-card[data-opponent="rosa"]').getAttribute('aria-pressed'), current: document.getElementById('opponent-current').textContent }));
+    if (chosen.elo !== 800 || chosen.auto || chosen.pressed !== 'true' || !/Rosa/.test(chosen.current)) problems.push('choosing Rosa did not set her level: ' + JSON.stringify(chosen));
+    await page.locator('.side-toggle button[data-side="black"]').click();
+    await page.evaluate(() => { window.__opponentSearches = 0; const orig = engineClient.evaluate; engineClient.evaluate = function(fen, depth, opts) { if (opts && opts.multipv && opts.skill !== undefined) window.__opponentSearches++; return orig.apply(this, arguments); }; });
+    await page.locator('#btn-coach-newgame').click();
+    await page.waitForFunction(() => coachGameActive && !coachThinking && coachIsUserTurn(), null, { timeout: 60000 });
+    const opened = await page.evaluate(() => ({ first: coachGame.history()[0], searches: window.__opponentSearches }));
+    if (!['e4', 'd4'].includes(opened.first) || opened.searches !== 0) problems.push('Rosa did not open from her book without an engine search: ' + JSON.stringify(opened));
+    await page.evaluate(() => { document.getElementById('coach-game-options').open = true; });
+    await page.locator('#coach-strength').evaluate(el => { el.value = '1500'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+    if (await page.evaluate(() => OpponentPersonas.coachBookMove()) !== null) problems.push('a custom level still used the persona book');
+    if (!/Custom level/.test(await page.locator('#opponent-current').textContent())) problems.push('a custom level was not shown as custom');
+    await page.locator('.opponent-card[data-opponent="coach"]').click();
+    if (!(await page.locator('#coach-auto-elo').isChecked())) problems.push('choosing Coach did not turn adaptive level back on');
+    return problems;
+  });
+
   if (pageErrors.length) failures.push('page errors: ' + pageErrors.join(' | '));
   if (failures.length) throw new Error(failures.join('\n'));
   return { passed: passed.length, checks: passed };
