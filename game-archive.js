@@ -167,6 +167,14 @@
             '<div class="game-viewer-stats" id="game-viewer-stats"></div>' +
             '<div class="game-viewer-chart" id="game-viewer-chart"></div>' +
             '<div class="game-viewer-note" id="game-viewer-note" role="status" aria-live="polite"></div>' +
+            '<div class="game-viewer-retry" id="game-viewer-retry" hidden>' +
+              '<button type="button" class="ctrl-btn primary" id="btn-game-viewer-retry">Retry this move</button>' +
+              '<form class="gv-retry-form" id="gv-retry-form" hidden><label class="sr-only" for="gv-retry-input">Your move</label>' +
+              '<input id="gv-retry-input" autocomplete="off" spellcheck="false" placeholder="Type a move, or play it on the board">' +
+              '<button type="submit" class="ctrl-btn">Play</button></form>' +
+              '<div class="gv-retry-actions" id="gv-retry-actions" hidden><button type="button" class="ctrl-btn" id="btn-gv-retry-answer">Show answer</button>' +
+              '<button type="button" class="ctrl-btn" id="btn-gv-retry-done">Back to the game</button></div>' +
+            '</div>' +
             '<div class="game-viewer-moves" id="game-viewer-moves" aria-label="Moves"></div>' +
             '<div class="game-viewer-actions"><button type="button" class="ctrl-btn" id="btn-game-viewer-pgn">Copy PGN</button>' +
             '<button type="button" class="ctrl-btn" id="btn-game-viewer-delete">Delete game</button></div>' +
@@ -178,6 +186,19 @@
     el.querySelector('#btn-game-viewer-close').addEventListener('click', close);
     el.querySelectorAll('.game-viewer-nav [data-step]').forEach(btn => btn.addEventListener('click', () => step(btn.getAttribute('data-step'))));
     el.querySelector('#btn-game-viewer-pgn').addEventListener('click', copyPgn);
+    el.querySelector('#btn-game-viewer-retry').addEventListener('click', startRetry);
+    el.querySelector('#btn-gv-retry-answer').addEventListener('click', revealRetry);
+    el.querySelector('#btn-gv-retry-done').addEventListener('click', endRetry);
+    el.querySelector('#gv-retry-form').addEventListener('submit', e => {
+      e.preventDefault();
+      if (!viewer || !viewer.retry) return;
+      const input = el.querySelector('#gv-retry-input');
+      const game = new Chess(viewer.retry.fen);
+      const move = typeof resolveAccessibleMove === 'function' ? resolveAccessibleMove(game, input.value) : null;
+      if (!move) { setNote('That move is not legal here. Try SAN such as Nf3 or coordinates such as g1f3.'); return; }
+      input.value = '';
+      gradeRetry(move.from + move.to + (move.promotion || ''), true);
+    });
     el.querySelector('#btn-game-viewer-delete').addEventListener('click', () => {
       if (!viewer) return;
       const btn = el.querySelector('#btn-game-viewer-delete');
@@ -189,6 +210,7 @@
     el.addEventListener('keydown', e => {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); return; }
       if (e.target.tagName === 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) return;
+      if (viewer && viewer.retry && e.target.tagName === 'INPUT') return;
       const map = { ArrowLeft: 'prev', ArrowRight: 'next', Home: 'start', End: 'end' };
       if (map[e.key]) { e.preventDefault(); e.stopPropagation(); step(map[e.key]); }
       if (e.key.toLowerCase() === 'f' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); e.stopPropagation(); step('flip'); }
@@ -230,6 +252,7 @@
   function close() {
     const el = document.getElementById('game-viewer');
     if (!el || el.hidden) return;
+    if (viewer) viewer.retry = null;
     el.hidden = true;
     if (window.BoardOverlay) window.BoardOverlay.clear('archiveBoard');
     const back = viewer && viewer.returnFocus;
@@ -240,6 +263,7 @@
 
   function step(kind) {
     if (!viewer) return;
+    if (viewer.retry) endRetry();
     const last = viewer.fens.length - 1;
     if (kind === 'flip') { viewer.orientation = viewer.orientation === 'white' ? 'black' : 'white'; viewer.board.orientation(viewer.orientation); show(); return; }
     viewer.cursor = kind === 'start' ? 0 : kind === 'end' ? last : kind === 'prev' ? Math.max(0, viewer.cursor - 1) : Math.min(last, viewer.cursor + 1);
@@ -274,6 +298,12 @@
     if (evalRow) spec.eval = { cp: Math.abs(evalRow.cp) >= 9000 ? 0 : evalRow.cp, mate: Math.abs(evalRow.cp) >= 9000 ? (evalRow.cp > 0 ? 1 : -1) * Math.max(1, 10000 - Math.abs(evalRow.cp)) : null, orientation: viewer.orientation, stale: evalRow.ply !== ply };
     if (window.BoardOverlay) window.BoardOverlay.set('archiveBoard', 'archiveBoard-wrap', spec);
     document.getElementById('game-viewer-note').textContent = note;
+    const retryable = review && move && ['inaccuracy', 'mistake', 'blunder'].includes(review.tier) && !!review.bestUci;
+    const retryBox = document.getElementById('game-viewer-retry');
+    retryBox.hidden = !retryable;
+    document.getElementById('btn-game-viewer-retry').hidden = !retryable;
+    document.getElementById('gv-retry-form').hidden = true;
+    document.getElementById('gv-retry-actions').hidden = true;
     document.getElementById('game-viewer-ply').textContent = ply ? `Move ${Math.ceil(ply / 2)}${ply % 2 ? '' : '…'} · ${ply}/${viewer.fens.length - 1}` : `Start · 0/${viewer.fens.length - 1}`;
     document.getElementById('archiveBoard').setAttribute('aria-label', `Position after ${ply} of ${viewer.fens.length - 1} moves. ${note}`);
     document.querySelectorAll('#game-viewer-moves .ply').forEach(el => el.classList.toggle('current', Number(el.dataset.ply) === ply));
@@ -382,6 +412,116 @@
       show();
     });
     host.appendChild(svg);
+  }
+
+  // ── Retry a reviewed mistake ─────────────────────
+  // The engine's choice counts, and so does any of its top three moves that
+  // it rates within half a pawn of the best.
+  const RETRY_MARGIN = 50;
+  function setNote(text) { document.getElementById('game-viewer-note').textContent = text; }
+
+  function startRetry() {
+    if (!viewer) return;
+    const ply = viewer.cursor;
+    const review = reviewAt(ply);
+    if (!review || !review.bestUci) return;
+    const fen = viewer.fens[ply - 1];
+    const turn = fen.split(' ')[1];
+    viewer.retry = { ply, fen, review, turn, lines: null, solved: false, tries: 0 };
+    viewer.board.destroy();
+    viewer.board = Chessboard('archiveBoard', {
+      position: fen, orientation: viewer.orientation, draggable: true,
+      pieceTheme: typeof localPieceTheme === 'function' ? localPieceTheme : 'vendor/pieces/cburnett/{piece}.svg',
+      onDragStart: (source, piece) => !!(viewer && viewer.retry && !viewer.retry.solved && !viewer.retry.busy && piece[0] === viewer.retry.turn),
+      onDrop: (source, target) => {
+        if (!viewer || !viewer.retry || source === target) return 'snapback';
+        const game = new Chess(viewer.retry.fen);
+        const move = game.move({ from: source, to: target, promotion: 'q' });
+        if (!move) return 'snapback';
+        gradeRetry(move.from + move.to + (move.promotion || ''), false);
+        return 'snapback';
+      }
+    });
+    if (typeof setBoardLastMove === 'function') setBoardLastMove('archiveBoard', ply > 1 ? viewer.moves[ply - 2] : null);
+    if (window.BoardOverlay) window.BoardOverlay.set('archiveBoard', 'archiveBoard-wrap', null);
+    document.getElementById('btn-game-viewer-retry').hidden = true;
+    document.getElementById('gv-retry-form').hidden = false;
+    document.getElementById('gv-retry-actions').hidden = false;
+    const side = turn === 'w' ? 'White' : 'Black';
+    setNote(`You played ${review.userSan || review.userUci} here. Find a better move for ${side}.`);
+    document.getElementById('gv-retry-input').focus();
+  }
+
+  function retryLines(retry) {
+    if (retry.lines) return Promise.resolve(retry.lines);
+    if (typeof engineClient === 'undefined') return Promise.resolve([]);
+    return engineClient.evaluate(retry.fen, 12, { multipv: 3 })
+      .then(res => { retry.lines = (res.lines || []).filter(l => l && l.pv && l.pv.length); return retry.lines; })
+      .catch(() => []);
+  }
+
+  function score(line) {
+    if (line.mate !== null && line.mate !== undefined) return line.mate > 0 ? 100000 - line.mate : -100000 - line.mate;
+    return line.cp || 0;
+  }
+
+  function gradeRetry(uci, typed) {
+    const retry = viewer && viewer.retry;
+    if (!retry || retry.solved || retry.busy) return;
+    retry.tries++;
+    const game = new Chess(retry.fen);
+    const move = game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || 'q' });
+    if (!move) return;
+    const accept = text => {
+      retry.solved = true;
+      viewer.board.position(game.fen(), !typed);
+      if (typeof setBoardLastMove === 'function') setBoardLastMove('archiveBoard', move);
+      if (window.BoardOverlay) window.BoardOverlay.set('archiveBoard', 'archiveBoard-wrap', { badges: [{ square: move.to, tier: 'best' }], arrows: [] });
+      setNote(text);
+      document.getElementById('gv-retry-form').hidden = true;
+      document.getElementById('btn-gv-retry-answer').hidden = true;
+      if (typeof playSound === 'function' && typeof soundForMove === 'function') playSound(soundForMove(move, game));
+    };
+    if (uci === retry.review.bestUci || game.in_checkmate()) {
+      accept(`${move.san} is the engine's choice. ${retry.tries === 1 ? 'Found it first time.' : 'Found it.'}`);
+      return;
+    }
+    if (uci === retry.review.userUci) {
+      setNote(`${move.san} is what you played in the game. Look again.`);
+      return;
+    }
+    retry.busy = true;
+    setNote(`Checking ${move.san}…`);
+    retryLines(retry).then(lines => {
+      retry.busy = false;
+      if (!viewer || viewer.retry !== retry) return;
+      const best = lines[0];
+      const mine = lines.find(l => l.pv[0] === uci);
+      if (best && mine && score(mine) >= score(best) - RETRY_MARGIN) {
+        accept(`${move.san} is also strong: the engine rates it within half a pawn of ${retry.review.bestSan || 'its first choice'}.`);
+      } else {
+        setNote(`${move.san} is not it. Try again, or show the answer.`);
+      }
+    });
+  }
+
+  function revealRetry() {
+    const retry = viewer && viewer.retry;
+    if (!retry) return;
+    const best = retry.review.bestUci;
+    if (window.BoardOverlay) window.BoardOverlay.set('archiveBoard', 'archiveBoard-wrap', { arrows: [{ from: best.slice(0, 2), to: best.slice(2, 4), kind: 'best' }], badges: [] });
+    setNote(`The engine's choice was ${retry.review.bestSan || best}.`);
+  }
+
+  function endRetry() {
+    if (!viewer || !viewer.retry) return;
+    const ply = viewer.retry.ply;
+    viewer.retry = null;
+    viewer.board.destroy();
+    viewer.board = Chessboard('archiveBoard', { position: viewer.fens[ply], orientation: viewer.orientation, draggable: false, pieceTheme: typeof localPieceTheme === 'function' ? localPieceTheme : 'vendor/pieces/cburnett/{piece}.svg' });
+    document.getElementById('btn-gv-retry-answer').hidden = false;
+    viewer.cursor = ply;
+    show();
   }
 
   function copyPgn() {

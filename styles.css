@@ -2958,3 +2958,10 @@ input[type=range].strength-slider::-moz-range-thumb {
 .activity-cell.level-4 { background: var(--success); box-shadow: none; }
 .activity-cell.level-future { background: none; box-shadow: none; }
 .activity-summary { font-size: var(--text-xs); color: var(--text-3); line-height: 1.5; }
+.game-viewer-retry { display: flex; flex-direction: column; gap: 0.5rem; }
+.game-viewer-retry[hidden], .gv-retry-form[hidden], .gv-retry-actions[hidden] { display: none; }
+.game-viewer-retry .ctrl-btn[hidden] { display: none; }
+.game-viewer-retry > .ctrl-btn { align-self: flex-start; }
+.gv-retry-form { display: flex; gap: 0.4rem; }
+.gv-retry-form input { flex: 1; min-width: 0; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--text); font-family: var(--family-mono); font-size: var(--text-sm); padding: 0.4rem 0.5rem; }
+.gv-retry-actions { display: flex; gap: 0.4rem; }

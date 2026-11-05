@@ -730,6 +730,19 @@ async page => {
     await page.waitForTimeout(150);
     const at3 = await page.evaluate(() => ({ cursor: GameArchive._viewer().cursor, note: document.getElementById('game-viewer-note').textContent, arrows: document.querySelectorAll('#archiveBoard-wrap .board-arrow').length }));
     if (at3.cursor !== 3 || !/Blunder/.test(at3.note) || !/Nc3/.test(at3.note) || at3.arrows !== 1) problems.push('the viewer did not show the blunder with the engine move: ' + JSON.stringify(at3));
+    // Retry the blunder: the game move is refused, a weak move is graded by
+    // the engine, and the engine's choice is accepted.
+    await page.locator('#btn-game-viewer-retry').click();
+    const retry = (move) => page.evaluate(m => { const i = document.getElementById('gv-retry-input'); i.value = m; document.getElementById('gv-retry-form').requestSubmit(); }, move);
+    await retry('g4');
+    if (!/what you played/.test(await page.locator('#game-viewer-note').textContent())) problems.push('retrying the game move was not called out');
+    await retry('Kf2');
+    await page.waitForFunction(() => /not it|also strong/.test(document.getElementById('game-viewer-note').textContent), null, { timeout: 45000 });
+    if (!/not it/.test(await page.locator('#game-viewer-note').textContent())) problems.push('a weak king move was accepted on retry');
+    await retry('Nc3');
+    if (!/engine's choice/.test(await page.locator('#game-viewer-note').textContent()) || await page.evaluate(() => !GameArchive._viewer().retry.solved)) problems.push('the engine move was not accepted on retry');
+    await page.locator('#btn-gv-retry-done').click();
+    if (await page.evaluate(() => GameArchive._viewer().retry || GameArchive._viewer().cursor !== 3)) problems.push('leaving the retry did not return to the game position');
     await page.locator('#game-viewer-moves .ply[data-ply="1"]').click();
     if (await page.evaluate(() => GameArchive._viewer().cursor) !== 1) problems.push('clicking a move did not jump to it');
     if (await page.evaluate(() => coachGame.fen()) !== liveFen || await page.evaluate(() => coachReviewCursor) !== null) problems.push('the viewer changed the live Coach game');

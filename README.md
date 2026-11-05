@@ -153,7 +153,10 @@ changes by `scripts/validate-activity.js`).
 browser with their move-by-move review (`coach:archive:v1`, scoped to the
 account). Opening one shows a viewer with its own board: step with the arrow
 keys or by clicking a move or the evaluation graph; each reviewed move shows
-its badge, and mistakes show the engine's choice as an arrow. Copy the PGN
+its badge, and mistakes show the engine's choice as an arrow. On an inaccuracy, mistake or blunder,
+**Retry this move** lets you play the position again (on the board or typed):
+the engine's choice is accepted, and so is any of its top three moves it rates
+within half a pawn of it; **Show answer** draws the engine's move. Copy the PGN
 or delete the game there. The live game is never touched (`game-archive.js`).
 
 PGN import reviews all selected-side moves in the valid games in a batch,
