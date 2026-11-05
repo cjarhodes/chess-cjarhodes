@@ -130,6 +130,13 @@ History keeps up to 300 reviews, and imported games use their review dates.
 See [the useful progress audit](docs/useful-progress-loop.md) for workflows,
 measurements, and remaining evidence limits.
 
+**Game archive** (Progress) keeps the latest 40 finished Coach games in this
+browser with their move-by-move review (`coach:archive:v1`, scoped to the
+account). Opening one shows a viewer with its own board: step with the arrow
+keys or by clicking a move or the evaluation graph; each reviewed move shows
+its badge, and mistakes show the engine's choice as an arrow. Copy the PGN
+or delete the game there. The live game is never touched (`game-archive.js`).
+
 PGN import reviews all selected-side moves in the valid games in a batch,
 with progress and cancellation. A completed batch contributes to Insights
 and repertoire evidence; the final game's review is shown in Coach. Cancelling

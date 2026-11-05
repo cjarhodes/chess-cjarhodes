@@ -685,6 +685,61 @@ async page => {
     return problems;
   });
 
+  await check('finished games are archived and reopen in a viewer that leaves the live game alone', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=coach');
+    await page.evaluate(() => { localStorage.clear(); });
+    await page.goto(base + '/?view=coach');
+    await page.waitForFunction(() => typeof GameArchive !== 'undefined' && !!coachBoard);
+    // A finished game with review fixtures standing in for the engine.
+    await page.evaluate(() => {
+      coachStartFen = new Chess().fen();
+      coachLocalGameId = 'fixture-archive-game';
+      coachGame = new Chess();
+      const fens = [coachGame.fen()];
+      ['f3', 'e5', 'g4', 'Qh4#'].forEach(m => { coachGame.move(m); fens.push(coachGame.fen()); });
+      coachUserSide = 'white';
+      coachReviewLog = [
+        { ply: 1, userUci: 'f2f3', userSan: 'f3', bestUci: 'e2e4', bestSan: 'e4', tier: 'inaccuracy', fenBefore: fens[0], evalAfter: { cp: 20 }, localGameId: coachLocalGameId },
+        { ply: 3, userUci: 'g2g4', userSan: 'g4', bestUci: 'b1c3', bestSan: 'Nc3', tier: 'blunder', fenBefore: fens[2], evalAfter: { mate: 1 }, localGameId: coachLocalGameId }
+      ];
+      coachStats = { moves: 2, best: 0, excellent: 0, good: 0, inaccuracy: 1, mistake: 0, blunder: 1 };
+      GameArchive.record('Checkmate — Black wins.');
+      GameArchive.record('Checkmate — Black wins.');
+    });
+    const stored = await page.evaluate(() => GameArchive.load());
+    if (stored.length !== 1) problems.push('reopening a summary duplicated the game: ' + stored.length);
+    else if (stored[0].reviews.length !== 2 || stored[0].reviews[1].cp >= -9000) problems.push('the archive lost reviews or the mate evaluation sign: ' + JSON.stringify(stored[0].reviews));
+    const liveFen = await page.evaluate(() => coachGame.fen());
+    await page.locator('#tab-progress').click();
+    const row = page.locator('.game-archive-open').first();
+    if (!/Lost/.test(await row.textContent())) problems.push('a checkmate loss was not listed as Lost: ' + await row.textContent());
+    await row.click();
+    await page.locator('#game-viewer').waitFor({ state: 'visible' });
+    await page.keyboard.press('Home');
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(150);
+    const at3 = await page.evaluate(() => ({ cursor: GameArchive._viewer().cursor, note: document.getElementById('game-viewer-note').textContent, arrows: document.querySelectorAll('#archiveBoard-wrap .board-arrow').length }));
+    if (at3.cursor !== 3 || !/Blunder/.test(at3.note) || !/Nc3/.test(at3.note) || at3.arrows !== 1) problems.push('the viewer did not show the blunder with the engine move: ' + JSON.stringify(at3));
+    await page.locator('#game-viewer-moves .ply[data-ply="1"]').click();
+    if (await page.evaluate(() => GameArchive._viewer().cursor) !== 1) problems.push('clicking a move did not jump to it');
+    if (await page.evaluate(() => coachGame.fen()) !== liveFen || await page.evaluate(() => coachReviewCursor) !== null) problems.push('the viewer changed the live Coach game');
+    await page.keyboard.press('Escape');
+    if (await page.locator('#game-viewer').isVisible()) problems.push('Escape did not close the viewer');
+    if (await page.evaluate(() => (document.activeElement.className || '').includes('game-archive-open')) !== true) problems.push('focus did not return to the archive row');
+    await row.click();
+    await page.locator('#btn-game-viewer-delete').click();
+    await page.locator('#btn-game-viewer-delete').click();
+    if ((await page.evaluate(() => GameArchive.load().length)) !== 0) problems.push('delete (confirmed) did not remove the game');
+    await page.evaluate(() => localStorage.setItem('coach:archive:v1', JSON.stringify([{ id: 'x' }, null, { id: 'ok', pgn: '1. e4', at: 5, reviews: [{ ply: 1, tier: 'nonsense' }] }])));
+    const cleaned = await page.evaluate(() => GameArchive.load());
+    if (cleaned.length !== 1 || cleaned[0].reviews.length !== 0) problems.push('malformed archive rows were kept');
+    await page.evaluate(() => localStorage.removeItem('coach:archive:v1'));
+    return problems;
+  });
+
   if (pageErrors.length) failures.push('page errors: ' + pageErrors.join(' | '));
   if (failures.length) throw new Error(failures.join('\n'));
   return { passed: passed.length, checks: passed };

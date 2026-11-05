@@ -5268,6 +5268,7 @@ function coachingTakeaway(reviews, phases) {
 
 function showPostGameSummary(endMsg) {
   coachLastEndMsg = endMsg;
+  if (typeof GameArchive !== 'undefined') GameArchive.record(endMsg);
   // Status-line pulse handed the baton to the overlay — remove it so reopens don't pulse again.
   $('#coach-status').removeClass('status-ended');
   // Refresh the "Open review" button visibility now that we have an end message.
