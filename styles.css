@@ -2732,3 +2732,49 @@ input[type=range].strength-slider::-moz-range-thumb {
 }
 .board-eval-label.at-bottom { top: auto; bottom: 4px; }
 .board-eval-label.on-white { color: var(--eval-black); }
+
+/* ── KEYBOARD SHORTCUT SHEET (shortcuts.js) ── */
+.header-help {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-3);
+  font-family: var(--family-ui);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+.header-help:hover { color: var(--text); border-color: var(--text-3); }
+.header-help:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.shortcut-overlay { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: var(--scrim); }
+.shortcut-overlay[hidden] { display: none; }
+.shortcut-card {
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  padding: 1.25rem 1.4rem 1.4rem;
+}
+.shortcut-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
+.shortcut-head h2 { font-family: var(--family-display); font-size: var(--text-lg); font-weight: var(--weight-semibold); color: var(--text); }
+.shortcut-body h3 { font-size: var(--text-xs); color: var(--text-3); font-weight: var(--weight-medium); margin: 0.9rem 0 0.4rem; }
+.shortcut-list { display: grid; grid-template-columns: auto 1fr; gap: 0.45rem 1rem; align-items: center; }
+.shortcut-list dt { display: flex; gap: 0.25rem; }
+.shortcut-list dd { font-size: var(--text-sm); color: var(--text-2); }
+.shortcut-list kbd {
+  min-width: 1.8em;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: var(--family-mono);
+  font-size: var(--text-xs);
+  text-align: center;
+}

@@ -597,6 +597,49 @@ async page => {
     return problems;
   });
 
+  await check('? opens the shortcut sheet for the current view and arrow keys step through a Coach game', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=coach');
+    await page.waitForFunction(() => typeof ShortcutSheet !== 'undefined' && !!coachBoard);
+    await page.locator('body').click({ position: { x: 5, y: 300 } });
+    await page.keyboard.press('?');
+    const sheet = page.locator('#shortcut-sheet');
+    if (!(await sheet.isVisible())) problems.push('? did not open the sheet');
+    else {
+      if (!(await sheet.textContent()).includes('Coach')) problems.push('the sheet did not list Coach shortcuts');
+      if (await page.evaluate(() => document.activeElement.id) !== 'btn-shortcut-close') problems.push('focus did not move into the sheet');
+      await page.keyboard.press('Escape');
+      if (await sheet.isVisible()) problems.push('Escape did not close the sheet');
+    }
+    await page.locator('#nav-puzzles').click();
+    await page.locator('#btn-shortcuts').click();
+    if (!(await sheet.textContent()).includes('Hint')) problems.push('the header button did not show Puzzles shortcuts');
+    await page.locator('#btn-shortcut-close').click();
+    if (await page.evaluate(() => document.activeElement.id) !== 'btn-shortcuts') problems.push('closing did not return focus to the header button');
+    await page.locator('#nav-coach').click();
+    await page.locator('#coach-keyboard-move').evaluate(el => { el.open = true; });
+    await page.locator('#coach-keyboard-move-input').focus();
+    await page.keyboard.press('?');
+    await page.locator('#coach-keyboard-move-input').fill('');
+    if (await sheet.isVisible()) problems.push('? inside a form field opened the sheet');
+    await page.evaluate(() => {
+      coachGame = new Chess(); ['e4', 'e5', 'Nf3', 'Nc6'].forEach(m => coachGame.move(m));
+      coachGameActive = false; coachReviewCursor = null;
+      coachBoard.position(coachGame.fen(), false); updateCoachControlsState();
+      document.activeElement.blur();
+    });
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowLeft');
+    if (await page.evaluate(() => coachReviewCursor) !== 2) problems.push('ArrowLeft did not step back through the game: ' + await page.evaluate(() => coachReviewCursor));
+    await page.keyboard.press('ArrowRight');
+    if (await page.evaluate(() => coachReviewCursor) !== 3) problems.push('ArrowRight did not step forward');
+    await page.keyboard.press('Home');
+    if (await page.evaluate(() => coachReviewCursor) !== 0) problems.push('Home did not go to the first position');
+    await page.keyboard.press('End');
+    if (await page.evaluate(() => coachReviewCursor) !== null) problems.push('End did not return to the live position');
+    return problems;
+  });
+
   if (pageErrors.length) failures.push('page errors: ' + pageErrors.join(' | '));
   if (failures.length) throw new Error(failures.join('\n'));
   return { passed: passed.length, checks: passed };

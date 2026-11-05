@@ -8875,10 +8875,25 @@ $(function () {
     if (appView === 'puzzles') return;
 
     // In coach view, only handle the flip shortcut; everything else is scoped to library
+    // Coach: F flips; arrows step through the game like the nav buttons,
+    // Home goes to the first position and End back to live.
     if (coachMode) {
+      const usable = id => { const $b = $(id); return $b.length && $b.is(':visible') && !$b.prop('disabled'); };
       if (e.key.toLowerCase() === 'f') {
         e.preventDefault();
         $('#btn-coach-flip').trigger('click');
+      } else if (e.key === 'ArrowLeft' && usable('#btn-coach-prev')) {
+        e.preventDefault();
+        $('#btn-coach-prev').trigger('click');
+      } else if (e.key === 'ArrowRight' && usable('#btn-coach-next')) {
+        e.preventDefault();
+        $('#btn-coach-next').trigger('click');
+      } else if (e.key === 'Home' && usable('#btn-coach-prev') && coachGame && coachGame.history().length) {
+        e.preventDefault();
+        coachGotoPly(0);
+      } else if (e.key === 'End' && usable('#btn-coach-live')) {
+        e.preventDefault();
+        $('#btn-coach-live').trigger('click');
       }
       return;
     }
