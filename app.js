@@ -3581,6 +3581,14 @@ const engineClient = {
       return;
     }
     if (!this.current) return;
+    if (this.current.orphan) {
+      if (msg.startsWith('bestmove ')) {
+        clearTimeout(this.current.timeoutId);
+        this.current = null;
+        this._runNext();
+      }
+      return;
+    }
     if (msg.startsWith('info ')) {
       const parsed = parseInfo(msg);
       if (!parsed) return;
@@ -3633,7 +3641,11 @@ const engineClient = {
       task.timeoutId = setTimeout(() => {
         task.timeoutId = null;
         if (this.current === task) {
-          this.current = null;
+          // UCI replies are untagged, so the stopped search's late info and
+          // bestmove must not be read as the next task's answer. Hold the
+          // slot until that bestmove arrives; restart the worker if it never
+          // does.
+          this.current = { orphan: true, timeoutId: setTimeout(() => this._restart(), 5000) };
           try { this.worker.postMessage('stop'); } catch (_) {}
         } else {
           this.queue = this.queue.filter(t => t !== task);
@@ -3667,6 +3679,19 @@ const engineClient = {
     this.worker.postMessage('setoption name MultiPV value ' + (this.current.multipv || 1));
     this.worker.postMessage('position fen ' + this.current.fen);
     this.worker.postMessage('go depth ' + this.current.depth);
+  },
+
+  // A stopped search that never answered: replace the worker but keep the
+  // queued tasks, which run once the new worker is ready.
+  _restart() {
+    if (!this.current || !this.current.orphan) return;
+    this.current = null;
+    this.status = 'idle';
+    if (this.worker) {
+      try { this.worker.terminate(); } catch (e) {}
+    }
+    this.worker = null;
+    if (this.queue.length) this.init().catch(err => this.failAll(err));
   },
 
   cancel(message) {
@@ -4627,7 +4652,14 @@ async function coachOpponentRespond() {
     const bestmove = bookMove || chooseCalibratedOpponentMove(result, opts);
     if (generation !== coachGameGeneration || coachGame !== gameRef || !coachMode ||
         !coachGameActive || coachIsUserTurn() || coachGame.fen() !== fen) return;
-    if (!bestmove) { setCoachStatus('Your move.'); return; }
+    if (!bestmove) {
+      // The game is not over, so an empty answer means the engine failed
+      // (for example its 30 s safety timeout). It is still the opponent's
+      // turn: say so and offer a retry rather than claiming it is the user's.
+      updateCoachControlsState();
+      showCoachRetryStatus('The opponent did not answer — retry or take back.');
+      return;
+    }
     setTimeout(() => {
       try {
         if (generation !== coachGameGeneration || coachGame !== gameRef || !coachMode || !coachGameActive) return;

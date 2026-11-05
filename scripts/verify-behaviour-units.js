@@ -384,6 +384,81 @@ async page => {
     return problems;
   });
 
+  await check('a timed-out search hands over only after its late bestmove', () => page.evaluate(async () => {
+    const problems = [];
+    // Start from no worker at all, so the fake one below is used.
+    engineClient.failAll(createAbortError('test reset'));
+    const RealWorker = window.Worker;
+    const realSetTimeout = window.setTimeout;
+    const timers = [];
+    // Capture the engine's safety timers so the test can fire them at once.
+    window.setTimeout = (fn, ms, ...rest) => {
+      if (ms === 30000 || ms === 5000) { timers.push({ fn, ms }); return -1; }
+      return realSetTimeout(fn, ms, ...rest);
+    };
+    const workers = [];
+    window.Worker = function FakeWorker() {
+      workers.push(this);
+      this.posted = [];
+      this.postMessage = message => this.posted.push(message);
+      this.terminate = () => { this.terminated = true; };
+    };
+    const tick = () => new Promise(resolve => realSetTimeout(resolve, 0));
+    const fire = ms => { const i = timers.findIndex(t => t.ms === ms); if (i < 0) return false; timers.splice(i, 1)[0].fn(); return true; };
+    const goes = w => w.posted.filter(m => m.startsWith('go depth')).length;
+    const handshake = async w => { w.onmessage({ data: 'uciok' }); w.onmessage({ data: 'readyok' }); await tick(); };
+    try {
+      const fen = '8/8/8/8/8/8/8/K6k w - - 0 1';
+      const a = engineClient.evaluate(fen, 4);
+      const b = engineClient.evaluate(fen, 5);
+      await handshake(workers[0]);
+      if (goes(workers[0]) !== 1) problems.push('the first search did not start alone');
+      if (!fire(30000)) problems.push('no safety timer for the first search');
+      const first = await a;
+      if (first.bestmove !== null) problems.push('a timed-out search should resolve empty');
+      if (goes(workers[0]) !== 1) problems.push('the next search started before the stopped one answered');
+      workers[0].onmessage({ data: 'info depth 3 score cp 10 pv a1a2' });
+      workers[0].onmessage({ data: 'bestmove a1a2' });
+      await tick();
+      if (goes(workers[0]) !== 2) problems.push('the next search did not start after the late bestmove');
+      let settled = null;
+      b.then(r => { settled = r; });
+      await tick();
+      if (settled) problems.push('the late bestmove was read as the next search\'s answer');
+      workers[0].onmessage({ data: 'info depth 5 score cp 20 pv a1b1' });
+      workers[0].onmessage({ data: 'bestmove a1b1' });
+      const second = await b;
+      if (second.bestmove !== 'a1b1') problems.push('the next search got ' + second.bestmove + ', not its own answer');
+
+      // A stopped search that never answers: the worker is replaced and the
+      // queued search still runs.
+      timers.length = 0;
+      const c = engineClient.evaluate(fen, 4);
+      const d = engineClient.evaluate(fen, 6);
+      await tick();
+      // The first captured timer is c's, which is the running search.
+      if (!fire(30000)) problems.push('no safety timer for the running search');
+      await c;
+      if (!fire(5000)) problems.push('no restart timer for a silent stopped search');
+      await tick();
+      if (!workers[0].terminated) problems.push('a silent worker was not replaced');
+      if (workers.length !== 2) problems.push('no new worker was started for the queued search');
+      else {
+        await handshake(workers[1]);
+        if (goes(workers[1]) !== 1) problems.push('the queued search did not run on the new worker');
+        workers[1].onmessage({ data: 'info depth 6 score cp 5 pv a1a2' });
+        workers[1].onmessage({ data: 'bestmove a1a2' });
+        const last = await d;
+        if (last.bestmove !== 'a1a2') problems.push('the queued search did not resolve on the new worker');
+      }
+    } finally {
+      window.Worker = RealWorker;
+      window.setTimeout = realSetTimeout;
+      engineClient.failAll(createAbortError('test reset'));
+    }
+    return problems;
+  }));
+
   // ── Opponent failures are recoverable ──
   await check('a failed opponent move offers a working retry', async () => {
     const problems = [];
@@ -396,6 +471,25 @@ async page => {
       await page.evaluate(() => { window.chooseCalibratedOpponentMove = window.__realChoose; });
       await page.locator('#btn-coach-retry-opponent').click();
       await page.waitForFunction(n => coachGame.history().length >= n + 2 && !coachThinking, plies, { timeout: 60000 });
+    } finally {
+      await page.evaluate(() => { if (window.__realChoose) window.chooseCalibratedOpponentMove = window.__realChoose; });
+    }
+    return problems;
+  });
+
+  await check('an empty engine reply keeps the opponent on move and offers a retry', async () => {
+    const problems = [];
+    await page.evaluate(() => { window.__realChoose = window.chooseCalibratedOpponentMove; window.chooseCalibratedOpponentMove = () => null; });
+    try {
+      const plies = await page.evaluate(() => coachGame.history().length);
+      await playMove(await page.evaluate(() => coachGame.moves()[0]));
+      await page.waitForFunction(() => document.getElementById('btn-coach-retry-opponent'), null, { timeout: 60000 });
+      const status = await page.locator('#coach-status').textContent();
+      if (!/did not answer/.test(status)) problems.push('status should say the opponent did not answer: ' + status);
+      if (await page.evaluate(() => coachIsUserTurn())) problems.push('it should still be the opponent\'s turn');
+      await page.evaluate(() => { window.chooseCalibratedOpponentMove = window.__realChoose; });
+      await page.locator('#btn-coach-retry-opponent').click();
+      await page.waitForFunction(n => coachGame.history().length >= n + 2 && !coachThinking && coachIsUserTurn(), plies, { timeout: 60000 });
     } finally {
       await page.evaluate(() => { if (window.__realChoose) window.chooseCalibratedOpponentMove = window.__realChoose; });
     }
