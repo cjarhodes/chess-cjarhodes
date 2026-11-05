@@ -806,6 +806,30 @@ async page => {
     return problems;
   });
 
+  await check('the activity calendar counts training across Coach, drills, puzzles and games', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=coach');
+    await page.evaluate(() => { localStorage.clear(); });
+    await page.goto(base + '/?view=coach');
+    await page.waitForFunction(() => typeof TrainingActivity !== 'undefined' && typeof PuzzleCore !== 'undefined');
+    await page.locator('#tab-progress').click();
+    if (!/will appear here/.test(await page.locator('#activity-summary').textContent())) problems.push('an empty calendar did not explain itself');
+    await page.evaluate(() => {
+      const day = 86400000, now = Date.now();
+      let s = PuzzleCore.emptyState();
+      [0, 1, 2].forEach(d => { s = PuzzleCore.recordAttempt(s, { id: 'act' + d, rating: 1200, themes: ['fork'] }, { win: true }, now - d * day).state; });
+      localStorage.setItem('chess_puzzles_v1', JSON.stringify(s));
+    });
+    await page.locator('#tab-game').click();
+    await page.locator('#tab-progress').click();
+    const state = await page.evaluate(() => ({ summary: document.getElementById('activity-summary').textContent, streak: document.getElementById('activity-streak').textContent, cells: document.querySelectorAll('#activity-calendar .activity-cell').length, active: document.querySelectorAll('#activity-calendar .activity-cell.level-1').length, label: document.getElementById('activity-calendar').getAttribute('aria-label') }));
+    if (state.cells !== 84) problems.push('the calendar should show 84 days, showed ' + state.cells);
+    if (state.active < 3 || !/3 puzzles/.test(state.summary) || !/3-day streak/.test(state.streak)) problems.push('puzzle activity was not counted: ' + JSON.stringify(state));
+    if (!/Training calendar/.test(state.label || '')) problems.push('the calendar has no text alternative');
+    await page.evaluate(() => localStorage.removeItem('chess_puzzles_v1'));
+    return problems;
+  });
+
   if (pageErrors.length) failures.push('page errors: ' + pageErrors.join(' | '));
   if (failures.length) throw new Error(failures.join('\n'));
   return { passed: passed.length, checks: passed };

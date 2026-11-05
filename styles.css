@@ -2946,3 +2946,15 @@ input[type=range].strength-slider::-moz-range-thumb {
 .opponent-avatar[data-opponent="ines"] { background: var(--moss-900); }
 .opponent-current { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text); }
 .opponent-about { font-size: var(--text-xs); color: var(--text-2); line-height: 1.45; min-height: 2.9em; }
+
+/* ── ACTIVITY CALENDAR (activity.js) ── */
+.activity-head { display: flex; justify-content: space-between; align-items: baseline; }
+.activity-streak { font-size: var(--text-xs); color: var(--accent-text); font-weight: var(--weight-medium); }
+.activity-calendar { display: grid; grid-template-columns: repeat(12, 18px); grid-template-rows: repeat(7, 18px); gap: 3px; }
+.activity-cell { border-radius: 3px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
+.activity-cell.level-1 { background: color-mix(in srgb, var(--success) 30%, var(--surface-2)); box-shadow: none; }
+.activity-cell.level-2 { background: color-mix(in srgb, var(--success) 55%, var(--surface-2)); box-shadow: none; }
+.activity-cell.level-3 { background: color-mix(in srgb, var(--success) 78%, var(--surface-2)); box-shadow: none; }
+.activity-cell.level-4 { background: var(--success); box-shadow: none; }
+.activity-cell.level-future { background: none; box-shadow: none; }
+.activity-summary { font-size: var(--text-xs); color: var(--text-3); line-height: 1.5; }

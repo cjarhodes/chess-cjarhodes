@@ -143,6 +143,12 @@ History keeps up to 300 reviews, and imported games use their review dates.
 See [the useful progress audit](docs/useful-progress-loop.md) for workflows,
 measurements, and remaining evidence limits.
 
+**Activity** (Progress) shows twelve weeks of training days, combining
+reviewed moves, drill attempts, puzzles and finished games, with how many
+of the last 14 days had any and the current streak. It counts activity, not
+improvement (`activity.js`, tested across time zones and daylight-saving
+changes by `scripts/validate-activity.js`).
+
 **Game archive** (Progress) keeps the latest 40 finished Coach games in this
 browser with their move-by-move review (`coach:archive:v1`, scoped to the
 account). Opening one shows a viewer with its own board: step with the arrow

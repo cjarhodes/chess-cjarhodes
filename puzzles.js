@@ -1070,6 +1070,7 @@
 
   window.PuzzlesView = {
     openGroup,
+    history: () => loadState().history,
     show,
     hide,
     urlMode: () => (mode === 'rated' ? null : mode),
