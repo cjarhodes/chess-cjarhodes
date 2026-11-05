@@ -71,6 +71,12 @@ sounds → Arrows, move badges and evaluation bar** turns it off
 (`ui:board-feedback`). `board-overlay.js` draws on any chessboard.js board;
 `coach-overlay.js` decides what Coach shows.
 
+Engine-first moves can also earn **Great (!)**, the only good move with a
+clear gap to the second-best line, or **Brilliant (!!)**, a sound sacrifice
+that leaves a minor piece or more en prise while staying best. These are
+display flags on top of the tiers, so accuracy and insights are unchanged
+(`move-flair.js`, tested by `scripts/validate-move-flair.js`).
+
 Move reviews start with a short explanation. **Show why** steps through the
 recommended line on the main board without changing the live game; **Back to
 game** restores the actual position. Engine details remain expandable.

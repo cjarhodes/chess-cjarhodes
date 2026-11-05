@@ -583,6 +583,12 @@ async page => {
     await page.evaluate(() => { coachReviewCursor = 1; coachBoard.position(coachFenAtPly(1), false); CoachOverlay.refresh(); });
     s = await state();
     if (s.arrows !== 0 || !s.badges.some(c => c.includes('best'))) problems.push('a best move should show a badge and no arrow: ' + JSON.stringify(s));
+    await page.evaluate(() => { coachReviewLog[0].flair = 'great'; CoachOverlay.refresh(); updateMoveList(); renderCoachReview(Object.assign({}, coachReviewLog[0], { label: 'Best move', emoji: '★' })); });
+    s = await state();
+    if (!s.badges.some(c => c.includes('great'))) problems.push('a great move did not get its own badge');
+    const listed = await page.evaluate(() => [document.querySelector('#movelist .ply[data-ply="1"] .ply-flair.great') !== null, document.getElementById('coach-classification').textContent]);
+    if (!listed[0]) problems.push('the move list did not mark the great move');
+    if (!/Great move/.test(listed[1])) problems.push('the review badge did not say Great move: ' + listed[1]);
     await page.evaluate(() => { coachPracticeSession = { completed: false }; CoachOverlay.refresh(); });
     s = await state();
     if (s.arrows || s.badges.length || s.bar) problems.push('the overlay leaked information into a drill');

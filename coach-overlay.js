@@ -56,7 +56,7 @@
     const out = { arrows: [], badges: [] };
     const review = reviewForPly(shown);
     if (review && review.userUci && review.tier && review.tier !== 'unknown') {
-      out.badges.push({ square: review.userUci.slice(2, 4), tier: review.tier });
+      out.badges.push({ square: review.userUci.slice(2, 4), tier: review.flair || review.tier });
       // The engine's choice only makes sense on the position it was found in.
       if (ARROW_TIERS.has(review.tier) && review.bestUci && review.bestUci !== review.userUci) {
         out.arrows.push({ from: review.bestUci.slice(0, 2), to: review.bestUci.slice(2, 4), kind: 'best' });
@@ -71,7 +71,7 @@
         const position = fen ? new Chess(fen) : null;
         const piece = position && position.get(square);
         const userColor = String(previous.fenBefore || '').split(' ')[1];
-        if (piece && piece.color === userColor) out.badges.push({ square, tier: previous.tier });
+        if (piece && piece.color === userColor) out.badges.push({ square, tier: previous.flair || previous.tier });
       }
     }
     const evalReview = latestEvalAtOrBefore(shown);

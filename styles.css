@@ -2778,3 +2778,8 @@ input[type=range].strength-slider::-moz-range-thumb {
   font-size: var(--text-xs);
   text-align: center;
 }
+
+/* Great (!) and Brilliant (!!) moves (move-flair.js) */
+.coach-class-great,
+.coach-class-brilliant { background: color-mix(in srgb, var(--mq-brilliant) 16%, var(--surface)); color: var(--text); border-color: color-mix(in srgb, var(--mq-brilliant) 55%, transparent); }
+.ply-flair { margin-left: 0.15em; font-weight: var(--weight-bold); color: var(--mq-brilliant); }

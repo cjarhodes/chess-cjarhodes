@@ -3968,10 +3968,15 @@ async function classifyMove(fenBefore, userUciMove, fenAfter) {
   const whyBetter = movePurposeText(fenBefore, bestUci, userUciMove, bestLine, afterInfo);
   const explanation = coachExplanationContext(fenBefore, userUciMove, bestUci, fenAfter, afterInfo);
 
+  // Display-only Great/Brilliant flag (move-flair.js); tiers are unchanged.
+  const flair = rank === 1 && typeof MoveFlair !== 'undefined'
+    ? MoveFlair.moveFlair(Chess, fenBefore, userUciMove, lines)
+    : null;
   return {
     tier: cls.tier,
     label: cls.label,
     emoji: cls.emoji,
+    flair,
     loss: rank === 1 ? 0 : Math.round(loss),
     rank,
     bestUci,
@@ -4371,8 +4376,9 @@ function renderCoachReviewEvidence(review) {
 function renderCoachReview(review) {
   if (!review) { $('#coach-review').hide(); return; }
   const $badge = $('#coach-classification');
-  $badge.text(review.emoji + ' ' + review.label);
-  $badge.attr('class', 'coach-classification coach-class-' + review.tier);
+  const flair = review.flair === 'brilliant' || review.flair === 'great' ? review.flair : null;
+  $badge.text(flair === 'brilliant' ? '!! Brilliant' : flair === 'great' ? '! Great move' : review.emoji + ' ' + review.label);
+  $badge.attr('class', 'coach-classification coach-class-' + (flair || review.tier));
   $('#coach-loss').text(review.loss > 0 ? '−' + (review.loss / 100).toFixed(2) : '0.00');
   $('#coach-user-move').text(review.userSan || '—');
   $('#coach-best-move').text(review.bestSan || '—');
@@ -7241,9 +7247,12 @@ function updateMoveList() {
   const cursor = coachReviewCursor === null ? total : coachReviewCursor;
   // Map ply → classification tier for coloring blunders/mistakes in the list.
   const tierByPly = {};
+  const flairByPly = {};
   for (const r of coachReviewLog) {
-    if (r && r.ply) tierByPly[r.ply] = r.tier;
+    if (r && r.ply) { tierByPly[r.ply] = r.tier; flairByPly[r.ply] = r.flair || ''; }
   }
+  const glyph = ply => flairByPly[ply] === 'brilliant' ? '<span class="ply-flair brilliant" aria-label="brilliant">!!</span>'
+    : flairByPly[ply] === 'great' ? '<span class="ply-flair great" aria-label="great move">!</span>' : '';
   const pairs = Math.ceil(sans.length / 2);
   let html = '';
   for (let i = 0; i < pairs; i++) {
@@ -7260,9 +7269,9 @@ function updateMoveList() {
     if (['blunder', 'mistake', 'inaccuracy'].includes(wTier)) wClasses.push(wTier);
     if (['blunder', 'mistake', 'inaccuracy'].includes(bTier)) bClasses.push(bTier);
     html += `<span class="num">${i + 1}.</span>`;
-    html += `<span class="${wClasses.join(' ')}" data-ply="${wPly}">${escapeHtml(wSan)}</span>`;
+    html += `<span class="${wClasses.join(' ')}" data-ply="${wPly}">${escapeHtml(wSan)}${glyph(wPly)}</span>`;
     if (bSan) {
-      html += `<span class="${bClasses.join(' ')}" data-ply="${bPly}">${escapeHtml(bSan)}</span>`;
+      html += `<span class="${bClasses.join(' ')}" data-ply="${bPly}">${escapeHtml(bSan)}${glyph(bPly)}</span>`;
     } else {
       html += `<span class="ply-empty">…</span>`;
     }
