@@ -2936,6 +2936,8 @@ input[type=range].strength-slider::-moz-range-thumb {
   line-height: 1;
   color: var(--paper-0);
   background: var(--moss-700);
+  /* A hairline ring keeps the darkest avatars visible on the dark theme. */
+  box-shadow: 0 0 0 1px var(--line);
 }
 .opponent-avatar[data-opponent="coach"] { background: var(--moss-700); }
 .opponent-avatar[data-opponent="pip"] { background: var(--brass-700); }
