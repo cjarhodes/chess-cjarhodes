@@ -7,8 +7,10 @@ async browserPage => {
  const fresh=async()=>{if(page)await page.context().close();const c=await browser.newContext();contexts.push(c);page=await c.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(base);await page.locator('#btn-coach-next-action').waitFor();};
  const frame=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
  const play=async move=>{await page.locator('#coach-keyboard-move').evaluate(e=>e.open=true);await page.locator('#coach-keyboard-move-input').fill(move);await page.locator('#coach-keyboard-move-form button').click();};
- const settle=()=>page.waitForFunction(()=>coachGameActive&&!coachThinking&&coachIsUserTurn(),null,{timeout:60000});
- const practiceReady=()=>page.waitForFunction(()=>coachPracticeSession&&!coachPracticeSession.grading&&!coachPracticeSession.pendingMove&&(coachPracticeSession.completed||coachPracticeSession.analysisReady),null,{timeout:60000});
+ // On a timeout, report what the app and engine were doing so a CI failure names its cause.
+ const diagnose=async(label,wait)=>{try{return await wait;}catch(e){let state='';try{state=JSON.stringify(await page.evaluate(()=>({url:location.href,view:typeof appView!=='undefined'?appView:null,active:coachGameActive,thinking:coachThinking,userTurn:coachIsUserTurn(),moves:coachGame?coachGame.history():null,status:(document.getElementById('coach-status')||{}).textContent,practice:coachPracticeSession?{grading:coachPracticeSession.grading,pending:!!coachPracticeSession.pendingMove,ready:coachPracticeSession.analysisReady,done:coachPracticeSession.completed}:null,engine:{status:engineClient.status,current:engineClient.current?{depth:engineClient.current.depth,multipv:engineClient.current.multipv,fen:engineClient.current.fen}:null,queued:engineClient.queue.length,worker:!!engineClient.worker}})));}catch(_){state='(state unavailable)';}throw Error(label+' timed out: '+state+' :: '+e.message.split('\n')[0]);}};
+ const settle=()=>diagnose('settle',page.waitForFunction(()=>coachGameActive&&!coachThinking&&coachIsUserTurn(),null,{timeout:60000}));
+ const practiceReady=()=>diagnose('practiceReady',page.waitForFunction(()=>coachPracticeSession&&!coachPracticeSession.grading&&!coachPracticeSession.pendingMove&&(coachPracticeSession.completed||coachPracticeSession.analysisReady),null,{timeout:60000}));
  const gameState=()=>page.evaluate(()=>({id:coachLocalGameId,pgn:coachGame.pgn(),stats:JSON.stringify(coachStats),flipped:coachBoardFlipped}));
  const exact=async state=>assert(JSON.stringify(await gameState())===JSON.stringify(state),'game identity, PGN, stats and orientation remain exact');
  const capture=async(name,workspace)=>{
@@ -30,7 +32,7 @@ async browserPage => {
  try{
   await fresh();await page.locator('#btn-coach-next-action').click();await play('e4');await settle();await play('f3');await settle();
   const live=await gameState();
-  await page.locator('#btn-coach-showwhy').click();await page.waitForFunction(()=>!!coachReviewAnalysis,null,{timeout:60000});
+  await page.locator('#btn-coach-showwhy').click();await diagnose('show why',page.waitForFunction(()=>!!coachReviewAnalysis,null,{timeout:60000}));
   await page.locator('#nav-library').click();await page.locator('.opening-btn[data-id=italian]').click();await page.locator('#btn-next').click();await page.locator('#btn-next').click();
   await page.locator('#library-keyboard-move').evaluate(e=>e.open=true);await capture('study','library');
   const libraryPly=await page.evaluate(()=>currentMoveIdx);
@@ -71,9 +73,9 @@ async browserPage => {
   // A real opponent reply must continue behind a retained review cursor.
   await fresh();await page.locator('#btn-coach-next-action').click();const replyGameId=await page.evaluate(()=>coachLocalGameId);
   await page.evaluate(()=>{window.cohesionReplyEvaluate=engineClient.evaluate;window.cohesionReplyHeld=false;const gate=new Promise(r=>window.cohesionReleaseReply=r);engineClient.evaluate=async function(fen,depth,opts){const result=await cohesionReplyEvaluate.call(this,fen,depth,opts);if(opts&&opts.multipv>=10){cohesionReplyHeld=true;await gate;}return result;};});
-  await play('e4');await page.waitForFunction(()=>cohesionReplyHeld,null,{timeout:60000});await page.locator('#btn-coach-prev').click();
+  await play('e4');await diagnose('held reply',page.waitForFunction(()=>cohesionReplyHeld,null,{timeout:60000}));await page.locator('#btn-coach-prev').click();
   await page.locator('#nav-library').click();await page.locator('#nav-coach').click();await page.evaluate(()=>cohesionReleaseReply());
-  await page.waitForFunction(()=>coachGame.history().length===2,null,{timeout:60000});
+  await diagnose('released reply',page.waitForFunction(()=>coachGame.history().length===2,null,{timeout:60000}));
   assert(await page.evaluate(id=>coachLocalGameId===id&&coachStats.moves===1&&coachReviewLog.length===1&&coachReviewCursor===0&&Chessboard.objToFen(coachBoard.position())===coachFenAtPly(0).split(' ')[0],replyGameId),'opponent replies once while the selected review position stays intact');
   await capture('review-reply','coach');await page.locator('#btn-coach-live').click();
   assert(await page.evaluate(()=>coachIsUserTurn()&&document.getElementById('coach-view').dataset.uiState==='user-turn'),'returning Live reaches a playable game after the resumed reply');
