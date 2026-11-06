@@ -482,7 +482,9 @@ async page => {
     await page.evaluate(() => { window.__realChoose = window.chooseCalibratedOpponentMove; window.chooseCalibratedOpponentMove = () => null; });
     try {
       const plies = await page.evaluate(() => coachGame.history().length);
-      await playMove(await page.evaluate(() => coachGame.moves()[0]));
+      // A sound developing move: later checks share this game, so it must
+      // not drift into a lost position.
+      await playMove(await page.evaluate(() => { const legal = coachGame.moves(); return ['d4', 'd3', 'e3', 'Nc3', 'Nf3', 'c3', 'Be2', 'O-O'].find(m => legal.includes(m)) || legal[0]; }));
       await page.waitForFunction(() => document.getElementById('btn-coach-retry-opponent'), null, { timeout: 60000 });
       const status = await page.locator('#coach-status').textContent();
       if (!/did not answer/.test(status)) problems.push('status should say the opponent did not answer: ' + status);
@@ -1196,6 +1198,68 @@ async page => {
     if (summary !== '3 lines reviewed, 2 first try. 1 comes back in ten minutes.') problems.push('session summary: ' + summary);
     if (await page.locator('#btn-rep-start').textContent() !== 'Nothing due' || !await page.locator('#btn-rep-start').isDisabled()) problems.push('with every line reviewed, nothing should be due');
     if (!await page.evaluate(() => trainingBackupKeys().includes(PuzzlesView.repertoireKey()))) problems.push('repertoire records should be in training backups');
+    return problems;
+  });
+
+  await check('Coach clocks charge the side to move, pause, survive a reload and end the game on time', async () => {
+    const problems = [];
+    // The clock's only boundary is its time source: advance performance.now.
+    const fakeTime = () => page.evaluate(() => { const real = performance.now.bind(performance); window.__offset = 0; performance.now = () => real() + window.__offset; });
+    const advance = ms => page.evaluate(ms => { window.__offset += ms; }, ms);
+    const clock = () => page.evaluate(() => CoachClock._state());
+    const play = async m => { await page.locator('#coach-keyboard-move').evaluate(e => { e.open = true; }); await page.locator('#coach-keyboard-move-input').fill(m); await page.locator('#coach-keyboard-move-form button').click(); };
+    const settled = n => page.waitForFunction(n => coachGameActive && !coachThinking && coachIsUserTurn() && coachGame.history().length === n, n, { timeout: 60000 });
+    await page.goto(base + '/?view=coach');
+    await page.evaluate(() => { localStorage.clear(); });
+    await page.goto(base + '/?view=coach');
+    await fakeTime();
+    await page.locator('#btn-coach-newgame').click();
+    await page.waitForFunction(() => coachGameActive);
+    await page.waitForTimeout(300);
+    if (await clock() !== null || await page.locator('#coach-clock-bottom').isVisible()) problems.push('games are untimed by default');
+    // Choosing a control before the first move times the game on the board.
+    await page.locator('#coach-game-options').evaluate(el => { el.open = true; });
+    await page.locator('#coach-clock-control').selectOption('3+2');
+    await page.waitForFunction(() => CoachClock._state() && CoachClock._state().running === 'w');
+    await advance(5000);
+    await play('e4');
+    await settled(2);
+    let s = await clock();
+    if (Math.abs(s.ms.w - 177000) > 400) problems.push('White should have about 3:00 − 5 s + 2 s: ' + s.ms.w);
+    // Black is charged only for its own search (Coach's grading pauses the
+    // clocks), then gets the increment.
+    if (s.ms.b < 179000 || s.ms.b > 182000) problems.push('Black should have its time plus the increment, less its own search: ' + s.ms.b);
+    if (await page.locator('#coach-clock-bottom').textContent() !== '2:57' || !(await page.locator('#coach-clock-bottom').getAttribute('class')).includes('running')) problems.push('the bottom clock should show White\'s running time');
+    // Leaving Coach pauses the clock.
+    await page.locator('#nav-library').click();
+    await page.waitForTimeout(250);
+    const away = (await clock()).ms.w;
+    await advance(60000);
+    await page.waitForTimeout(250);
+    if ((await clock()).ms.w !== away) problems.push('the clock should not run while Coach is not on screen');
+    await page.locator('#nav-coach').click();
+    // A reload keeps the game's clock.
+    const beforeReload = (await clock()).ms.w;
+    await page.reload();
+    await fakeTime();
+    await page.waitForFunction(() => CoachClock._state());
+    const after = await clock();
+    if (Math.abs(after.ms.w - beforeReload) > 1500 || after.control !== '3+2') problems.push('a reload should keep the clock: ' + JSON.stringify({ beforeReload, after: after.ms.w }));
+    // Mid-game, a new choice waits for the next game.
+    await page.locator('#coach-game-options').evaluate(el => { el.open = true; });
+    await page.locator('#coach-clock-control').selectOption('10+0');
+    if (!/next game/.test(await page.locator('#coach-clock-note').textContent()) || (await clock()).control !== '3+2') problems.push('changing the control mid-game should apply to the next game');
+    // Running out on your move loses, and the result is recorded like a resignation.
+    await advance(200000);
+    await page.waitForFunction(() => !coachGameActive, null, { timeout: 5000 });
+    const end = await page.evaluate(() => ({ msg: coachLastEndMsg, result: remoteGameResult(coachLastEndMsg), clock: CoachClock._state() }));
+    if (end.msg !== 'Time — Black wins.' || end.result !== '0-1' || end.clock.flagged !== 'w') problems.push('a flag should lose on time: ' + JSON.stringify(end));
+    if (!(await page.locator('#coach-clock-bottom').getAttribute('class')).includes('flagged')) problems.push('the flagged clock should show it');
+    await page.waitForFunction(() => GameArchive.load().length === 1, null, { timeout: 5000 }).catch(() => problems.push('the timed-out game should be archived'));
+    // The next game uses the newly chosen control.
+    await page.locator('#btn-summary-newgame').waitFor({ timeout: 10000 });
+    await page.locator('#btn-summary-newgame').click();
+    await page.waitForFunction(() => coachGameActive && CoachClock._state() && CoachClock._state().control === '10+0', null, { timeout: 5000 }).catch(() => problems.push('the next game should use 10+0'));
     return problems;
   });
 

@@ -3042,5 +3042,34 @@ input[type=range].strength-slider::-moz-range-thumb {
 .rep-row { display: flex; flex-direction: column; gap: 0.1rem; padding: 0.5rem 0.7rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
 .rep-name { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text); }
 .rep-meta { font-size: var(--text-xs); color: var(--text-3); }
+/* ── COACH CLOCKS (coach-clock.js) ── */
+.coach-clock {
+  margin-left: auto;
+  padding: 0.12rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-2);
+  font-family: var(--family-mono);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+.coach-clock[hidden] { display: none; }
+.coach-clock.running { border-color: var(--accent); background: var(--accent-soft); color: var(--text); font-weight: var(--weight-semibold); }
+.coach-clock.low.running, .coach-clock.flagged { border-color: var(--danger); color: var(--danger); }
+.coach-clock-setup { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.6rem; }
+.coach-clock-select {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: var(--family-ui);
+  font-size: var(--text-xs);
+}
+.coach-clock-note { font-size: var(--text-xs); color: var(--text-3); line-height: 1.4; }
+.coach-clock-note:empty { display: none; }
 .opponent-tag { display: inline-flex; align-items: center; gap: 0.35rem; margin-right: 0.35rem; font-size: var(--text-xs); color: var(--text-2); font-weight: var(--weight-medium); }
 .opponent-avatar.opponent-avatar-sm { width: 18px; height: 18px; font-size: var(--text-xs); }

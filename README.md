@@ -117,6 +117,18 @@ setting the slider (adapting turns off); moving the slider makes it a custom
 level; choosing Coach turns adapting back on (`opponents.js`, tested by
 `scripts/validate-opponents.js`).
 
+**Time control** (Game setup): untimed by default, or 3+2, 5+0, 10+0 or
+15+10. Each side's clock sits on its bar beside the board. The side to move
+is charged, and each completed move earns the increment. Clocks pause while
+Coach grades your move, during Show why and while Coach is off screen, so
+the opponent is charged only for its own search. Running out loses, or draws
+when the winner has only a bare king or a king and one minor piece. Either
+way the result is recorded like a resignation, and a reload keeps the game's
+clock. Choosing a control before the first move times the current game;
+otherwise it applies to the next one. Practice drills and opening exercises
+are never timed (`clock-core.js`, `coach-clock.js`, tested by
+`scripts/validate-clock.js`).
+
 Move reviews start with a short explanation. **Show why** steps through the
 recommended line on the main board without changing the live game; **Back to
 game** restores the actual position. Engine details remain expandable.

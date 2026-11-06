@@ -2916,6 +2916,10 @@ function remoteGameResult(endReason) {
   if (endReason && endReason.includes('Resigned')) {
     return coachUserColor() === 'white' ? '0-1' : '1-0';
   }
+  // Clock results (coach-clock.js): "Time — White wins." or a draw when the
+  // winner had nothing left to mate with.
+  if (endReason && /^Time — (White|Black) wins\./.test(endReason)) return endReason.includes('White wins') ? '1-0' : '0-1';
+  if (endReason && endReason.startsWith('Draw: time ran out')) return '1/2-1/2';
   return '*';
 }
 
@@ -4795,6 +4799,27 @@ function scheduleSummaryReveal(msg, delayMs) {
     coachSummaryTimer = null;
     showPostGameSummary(msg);
   }, delayMs);
+}
+
+// Ends the live game for a reason the board does not show (resignation, or
+// a flag from coach-clock.js): the same bookkeeping as a game over.
+function coachFinishGame(msg, revealDelay) {
+  if (!coachGameActive) return false;
+  CoachController.setPhase('ended');
+  candidateRequestId++;
+  threatRequestId++;
+  clearPremove();
+  coachGameActive = false;
+  coachEndedAt = Date.now();
+  setCoachStatus(msg);
+  updateCoachControlsState();
+  coachLastEndMsg = msg;
+  saveCoachState();
+  coachSync.saveGame(msg).catch(handleCoachDbError);
+  rollGameIntoLifetime();
+  if (typeof recordRatedCoachResult === 'function') recordRatedCoachResult(msg);
+  scheduleSummaryReveal(msg, revealDelay);
+  return true;
 }
 
 function coachHandleGameOver() {
@@ -8505,24 +8530,10 @@ $(function () {
 
   $('#btn-coach-resign').on('click', function() {
     if (!coachGameActive) return;
-    CoachController.setPhase('ended');
-    candidateRequestId++;
-    threatRequestId++;
-    clearPremove();
-    coachGameActive = false;
-    coachEndedAt = Date.now();
     const loser = coachUserColor() === 'white' ? 'White' : 'Black';
     const winner = loser === 'White' ? 'Black' : 'White';
-    const msg = `Resigned — ${winner} wins.`;
-    setCoachStatus(msg);
-    updateCoachControlsState();
-    coachLastEndMsg = msg;
-    saveCoachState();
-    coachSync.saveGame(msg).catch(handleCoachDbError);
-    rollGameIntoLifetime();
-    if (typeof recordRatedCoachResult === 'function') recordRatedCoachResult(msg);
     // User-initiated — keep it snappy but still buffer with a small beat + animation.
-    scheduleSummaryReveal(msg, 350);
+    coachFinishGame(`Resigned — ${winner} wins.`, 350);
   });
 
   // Coach: flip board
