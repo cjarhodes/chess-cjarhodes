@@ -258,8 +258,9 @@ reloading every insight per move each failed the right check.
   failure (share link is tested).
 - Explorer database switching, Undo/Reset, and its stale-response guard
   (needs a stubbed Lichess API).
-- The pure-logic validators (`validate-practice-logic`, `-difficulty`,
-  `-review-teaching`, and the other `B` validators) still extract functions
-  from `app.js` by name to run them in Node. They test behaviour, but they
-  break if a function is renamed. Phase 4 moves that logic into modules they
-  can import.
+- The older pure-logic validators (`validate-practice-logic`, `-difficulty`,
+  `-review-teaching`, and the other `B` validators) still pick functions out
+  of the app source by name (now via `scripts/lib/app-source.js`, so moving a
+  function between files no longer breaks them; renaming one still does).
+  Since Phase 4a, `scripts/validate-core.js` tests `src/core/` by loading each
+  file whole; the remaining validators can migrate to that style file by file.

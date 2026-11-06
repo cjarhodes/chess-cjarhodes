@@ -46,7 +46,7 @@ const scriptSrc = (csp.match(/(?:^|;\s*)script-src\s+([^;]+)/) || [])[1] || '';
 if (scriptSrc.includes("'unsafe-inline'")) {
   fail('script-src must not allow unsafe-inline');
 }
-if (/upload\.wikimedia\.org/.test(csp) || /upload\.wikimedia\.org/.test(read('app.js'))) {
+if (/upload\.wikimedia\.org/.test(csp) || /upload\.wikimedia\.org/.test(require('./lib/app-source').appSource())) {
   fail('piece rendering must not depend on Wikimedia at runtime');
 }
 

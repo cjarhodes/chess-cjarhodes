@@ -16,7 +16,9 @@ const path = require('path');
 const vm = require('vm');
 const REPO = path.resolve(__dirname, '..');
 const { Chess } = require(path.join(REPO, 'vendor/chess.js/chess-0.10.3.min.js'));
-const app = fs.readFileSync(process.env.APP_FILE || path.join(REPO, 'app.js'), 'utf8');
+// APP_FILE compares an older single-file app.js; by default read the app's
+// scripts in load order (the selector now lives in src/core/opponent.js).
+const app = process.env.APP_FILE ? fs.readFileSync(process.env.APP_FILE, 'utf8') : require('./lib/app-source').appSource();
 const openingsSrc = fs.readFileSync(path.join(REPO, 'openings.js'), 'utf8');
 
 const REF_DEPTH = parseInt(process.env.REF_DEPTH || '12', 10);

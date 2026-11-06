@@ -4,7 +4,7 @@ const {Chess}=require('../vendor/chess.js/chess-0.10.3.min.js');
 const root=path.resolve(__dirname,'..');
 const openings=fs.readFileSync(path.join(root,'openings.js'),'utf8');
 const growth=fs.readFileSync(path.join(root,'growth.js'),'utf8');
-const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
+const app=require('./lib/app-source').appSource();
 const context={Chess,window:{},$:()=>{},uciFromMove:m=>m.from+m.to+(m.promotion||'')};
 vm.createContext(context);vm.runInContext(openings+'\n'+growth+'\nthis.openings=OPENINGS;',context);
 let checks=0;const failures=[];

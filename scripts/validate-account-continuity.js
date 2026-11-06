@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const fs=require('fs'),path=require('path'),vm=require('vm');
 const {Chess}=require('../vendor/chess.js/chess-0.10.3.min.js');
-const root=path.resolve(__dirname,'..'),app=fs.readFileSync(path.join(root,'app.js'),'utf8');
+const root=path.resolve(__dirname,'..'),app=require('./lib/app-source').appSource();
 let owner='account-a',checks=0,writes=0,failAt=0,blockFrom=0,gameSerial=0;
 const storage=new Map(),session=new Map();
 const assert=(ok,message)=>{checks++;if(!ok)throw Error(message);};
