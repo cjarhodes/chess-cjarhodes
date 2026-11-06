@@ -108,12 +108,15 @@
     } catch (e) { /* the archive must never break the game summary */ }
   }
 
-  // Imported games (game-import.js) arrive fully reviewed.
+  // Imported games (game-import.js) arrive fully reviewed. Returns 'saved',
+  // 'storage' when the browser refused the write, or 'outside' when the game
+  // is older than every imported game the archive keeps.
   function add(entry) {
     const list = load();
     const ok = save([entry].concat(list.filter(row => row.id !== entry.id)));
     render();
-    return ok && load().some(row => row.id === entry.id);
+    if (!ok) return 'storage';
+    return load().some(row => row.id === entry.id) ? 'saved' : 'outside';
   }
   function has(id) { return load().some(row => row.id === id); }
 
@@ -165,7 +168,8 @@
       const li = document.createElement('li');
       li.className = 'game-archive-row';
       const result = outcome(row);
-      const moves = Math.ceil((row.pgn.match(/\d+\./g) || []).length);
+      // Count move numbers in the movetext only: headers such as [Date] hold digits too.
+      const moves = (row.pgn.replace(/\[[^\]]*\]/g, '').match(/\d+\./g) || []).length;
       const main = document.createElement('button');
       main.type = 'button';
       main.className = 'game-archive-open';

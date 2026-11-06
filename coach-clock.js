@@ -51,14 +51,27 @@
     }
   }
 
+  // The opponent is only charged while its reply is actually being worked
+  // on: not while Coach shows "did not answer — retry" or an engine error.
+  function opponentStalled(turn) {
+    const userTurn = typeof coachUserColor === 'function' && coachUserColor()[0] === turn;
+    if (userTurn || !coachGameActive) return false;
+    const phase = typeof CoachController !== 'undefined' ? CoachController.phase : 'opponentThinking';
+    return phase !== 'opponentThinking' || !!document.getElementById('btn-coach-retry-opponent');
+  }
+
   function tick() {
-    if (!eligible()) { gameId = null; state = null; render(); return; }
+    if (!eligible()) {
+      // Leaving for a drill: keep the game's clock exactly as it stands.
+      if (state) persist(true);
+      gameId = null; state = null; render(); return;
+    }
     const id = typeof coachLocalGameId !== 'undefined' ? coachLocalGameId : null;
-    if (id !== gameId) startFor(id);
+    if (id !== gameId) { startFor(id); refreshNote(); }
     if (!state) { render(); return; }
     // Coach grading the user's move is not the opponent's thinking time.
     const paused = (typeof appView !== 'undefined' && appView !== 'coach') || (typeof coachReviewAnalysis !== 'undefined' && !!coachReviewAnalysis) ||
-      (typeof coachThinking !== 'undefined' && coachThinking) || document.hidden;
+      (typeof coachThinking !== 'undefined' && coachThinking) || document.hidden || opponentStalled(coachGame.turn());
     const plies = coachGame.history().length;
     const moved = plies !== state.plies;
     const wasFlagged = state.flagged;
@@ -93,9 +106,11 @@
     const top = document.getElementById('captured-top');
     const bottom = document.getElementById('captured-bottom');
     if (!top || !bottom) return;
-    const flipped = typeof coachBoardFlipped !== 'undefined' && coachBoardFlipped;
-    face('coach-clock-top', top, flipped ? 'w' : 'b');
-    face('coach-clock-bottom', bottom, flipped ? 'b' : 'w');
+    // Like the captured-pieces bars: the user's clock below, whatever the
+    // board's orientation.
+    const user = typeof coachUserColor === 'function' && coachUserColor() === 'black' ? 'b' : 'w';
+    face('coach-clock-top', top, user === 'w' ? 'b' : 'w');
+    face('coach-clock-bottom', bottom, user);
   }
 
   function build() {
@@ -110,11 +125,7 @@
     C.CONTROLS.forEach(c => { const o = document.createElement('option'); o.value = c.id; o.textContent = c.label; select.appendChild(o); });
     select.value = pref();
     toggle.insertAdjacentElement('afterend', wrap);
-    const note = () => {
-      const fresh = typeof coachGame !== 'undefined' && coachGame && coachGameActive && coachGame.history().length === 0;
-      document.getElementById('coach-clock-note').textContent = !C.timed(select.value) ? '' :
-        (fresh || !coachGameActive ? 'Clocks pause during Show why and when you leave Coach.' : 'Starts with your next game. Clocks pause during Show why and when you leave Coach.');
-    };
+    const note = refreshNote;
     select.addEventListener('change', () => {
       try { localStorage.setItem(PREF, select.value); } catch (e) { /* this page only */ }
       // Before the first move, the choice applies to the game on the board.
@@ -128,6 +139,23 @@
     note();
     setInterval(tick, TICK_MS);
   }
+
+  // "Starts with your next game" only while the game on the board was
+  // started under another control.
+  function refreshNote() {
+    const select = document.getElementById('coach-clock-control');
+    const el = document.getElementById('coach-clock-note');
+    if (!select || !el) return;
+    const fresh = typeof coachGame !== 'undefined' && coachGame && coachGameActive && coachGame.history().length === 0;
+    const current = state ? state.control : 'none';
+    const pending = !fresh && coachGameActive && select.value !== current;
+    el.textContent = !C.timed(select.value) ? (pending ? 'The game on the board keeps its clock; the next game is untimed.' : '') :
+      (pending ? 'Starts with your next game. ' : '') + 'Clocks pause while Coach reviews your move, during Show why and when you leave Coach.';
+  }
+
+  // Closing or hiding the page: save the clock as it stands.
+  window.addEventListener('pagehide', () => persist(true));
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { tick(); persist(true); } });
 
   window.CoachClock = { _state: () => state, tick };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);

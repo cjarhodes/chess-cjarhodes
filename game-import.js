@@ -9,7 +9,9 @@
   'use strict';
   const Core = window.GameImportCore;
   const PREF = 'ui:import:v1';
-  const RETRIES = 3;
+  const RETRIES = 20;
+  const COUNTED = 'coach:import:counted:v1';   // games already in the personal repertoire
+  const SHARE = 150;                          // most Insights entries imported games may hold
   let found = [];          // games listed from the last search
   let running = null;      // { id, stop }
 
@@ -57,9 +59,12 @@
       try {
         return await classifyMove(m.fenBefore, m.uci, m.fenAfter);
       } catch (err) {
-        // Coach cancels the shared engine when its own position changes;
-        // that is not this review's failure, so try the move again.
+        // Coach cancels the shared engine whenever its own position changes
+        // (a new game, a take-back, switching view); that is not this
+        // review's failure, so wait a moment and try the move again.
+        if (running && running.stop) throw err;
         if (attempt >= RETRIES || !(typeof isAbortError === 'function' && isAbortError(err))) throw err;
+        await new Promise(resolve => setTimeout(resolve, 250));
       }
     }
   }
@@ -82,7 +87,9 @@
         const m = replay.moves[i];
         const r = await classifyWithRetry(m);
         full.push(Object.assign({}, r, { fenBefore: m.fenBefore, fenAfter: m.fenAfter, userUci: m.uci, userSan: r.userSan || m.san,
-          ply: m.ply, pairNum: Math.ceil(m.ply / 2), gameIndex: 1, localGameId: game.id, source: 'import' }));
+          // Move numbers come from the position, which matters for games
+          // that started from a set-up position.
+          ply: m.ply, pairNum: parseInt(m.fenBefore.split(' ')[5], 10) || Math.ceil(m.ply / 2), gameIndex: 1, localGameId: game.id, source: 'import' }));
         reviews.push({ ply: m.ply, tier: r.tier, flair: r.flair || null, userSan: r.userSan || m.san, bestSan: r.bestSan || '',
           bestUci: r.bestUci || '', userUci: m.uci, cp: whiteCp(r, m.fenBefore), loss: r.loss || 0 });
         if (r.tier && r.tier !== 'unknown') { tallies[r.tier] = (tallies[r.tier] || 0) + 1; scored++; }
@@ -92,10 +99,13 @@
         pgn: replay.cleanPgn, accuracy: scored ? accuracyFromTallies(tallies, scored) : null, acpl: computeACPL(reviews),
         opening: game.opening, reviews, source: game.source, opponent: game.opponent, url: game.url, speed: game.speed
       };
-      if (!window.GameArchive.add(entry)) { status('The review finished but could not be saved: this browser\'s storage is full or blocked.'); return; }
-      contribute(game, replay.cleanPgn, full);
+      const saved = window.GameArchive.add(entry);
+      if (saved === 'storage') { status('The review finished but could not be saved: this browser\'s storage is full or blocked.'); return; }
+      if (saved === 'outside') { status(`This game is older than the ${window.GameArchive.LIMIT} imported games the archive keeps, so it was not saved. Delete older imported games in Progress to make room.`); return; }
+      const counted = contribute(game, replay.cleanPgn, full);
       const unknown = reviews.length - scored;
-      status(`Reviewed ${reviews.length} of your moves${unknown ? ` (${unknown} could not be graded)` : ''}. Saved in the game archive (Progress) and counted in Insights.`);
+      status(`Reviewed ${reviews.length} of your moves${unknown ? ` (${unknown} could not be graded)` : ''}. Saved in the game archive (Progress)` +
+        (counted ? ' and counted in Insights.' : ', but Insights could not be updated in this browser.'));
       window.GameArchive.open(game.id, button && button.isConnected ? button : null);
     } catch (err) {
       status('The engine stopped before the review finished. Nothing was saved; try again.');
@@ -108,14 +118,24 @@
   // The same evidence a pasted PGN adds: graded moves go into Insights
   // (and so the practice queue), and the opening into the personal
   // repertoire. Entries are tied to this game, not to the live Coach game.
+  function countedKey() { return typeof coachMemoryKey === 'function' ? coachMemoryKey(COUNTED) : COUNTED; }
+  function countedIds() { try { const v = JSON.parse(localStorage.getItem(countedKey())); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+  const isImported = e => /^(chesscom|lichess)-/.test(String(e && e.localGameId || ''));
+
+  // Returns whether Insights were saved. Reviewing a game again (after
+  // deleting it from the archive) replaces its entries instead of adding a
+  // second set, and imported games may hold at most SHARE of the entries, so
+  // they never push the user's own Coach evidence out.
   function contribute(game, pgn, full) {
     try {
       const parsed = new Chess();
-      if (!parsed.load_pgn(pgn)) return;
-      const definition = openingDefinitionForSans(parsed.history());
-      const opening = definition.info.match ? definition.info.match.name : (game.opening || null);
-      const openingId = definition.opening ? definition.opening.id : null;
+      if (!parsed.load_pgn(pgn)) return false;
+      // Opening names only mean something from the normal start position.
+      const definition = game.startFen ? null : openingDefinitionForSans(parsed.history());
+      const opening = (definition && definition.info.match ? definition.info.match.name : game.opening) || 'Imported game';
+      const openingId = definition && definition.opening ? definition.opening.id : null;
       const state = loadInsights();
+      state.entries = state.entries.filter(e => e.localGameId !== game.id);
       full.filter(r => r.tier !== 'unknown').forEach(r => {
         const e = insightEntryFromReview(Object.assign({}, r, { opening, openingId }));
         e.gameId = null;
@@ -123,11 +143,18 @@
         e.openingId = openingId;
         state.entries.push(e);
       });
-      saveInsights(state);
-      recordImportedOpenings([parsed], game.side, full);
+      let excess = state.entries.filter(isImported).length - SHARE;
+      if (excess > 0) state.entries = state.entries.filter(e => !(isImported(e) && excess-- > 0));
+      const saved = saveInsights(state);
+      const counted = countedIds();
+      if (definition && !counted.includes(game.id)) {
+        recordImportedOpenings([parsed], game.side, full);
+        try { localStorage.setItem(countedKey(), JSON.stringify(counted.concat(game.id).slice(-200))); } catch (e) { /* counted again next time */ }
+      }
       if (typeof renderInsights === 'function') renderInsights();
       if (typeof renderCoachDailyPlan === 'function') renderCoachDailyPlan();
-    } catch (e) { /* the archived review stands even if the evidence update fails */ }
+      return saved !== false;
+    } catch (e) { return false; }
   }
 
   // ── UI ──

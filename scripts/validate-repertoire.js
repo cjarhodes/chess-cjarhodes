@@ -39,6 +39,13 @@ const sicilian = R.cardsFor(OPENINGS, ['sicilian'], sideOf);
 assert(sicilian.length && sicilian.every(c => c.side === 'b'), 'the Sicilian is drilled as Black');
 assert(R.plies(Chess, sicilian[0])[0].mine === false, 'a Black line starts with White\'s move played for you');
 assert(R.cardsFor(OPENINGS, ['italian', 'italian', 'nope'], sideOf).length === italian.length, 'duplicate and unknown ids are ignored');
+// Starring a sideline as its own opening lists it there, in either order.
+const shared = OPENINGS.find(o => o.id === 'evans-gambit');
+if (shared) {
+  const a = R.cardsFor(OPENINGS, ['italian', 'evans-gambit'], sideOf).find(c => c.id === 'evans-gambit');
+  const b = R.cardsFor(OPENINGS, ['evans-gambit', 'italian'], sideOf).find(c => c.id === 'evans-gambit');
+  assert(a && b && a.openingId === 'evans-gambit' && b.openingId === 'evans-gambit' && a.name === shared.name, 'a starred sideline is grouped under its own opening whatever the star order');
+}
 
 // ── Grading ──
 const index = R.moveIndex(Chess, italian.concat(sicilian));

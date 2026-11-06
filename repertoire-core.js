@@ -26,7 +26,9 @@
       };
       add(opening.id, opening.name, opening.moves);
       (opening.variations || []).forEach(v => {
-        if (v && v.id && sideOf(v.id, opening) === side) add(v.id, `${opening.name}: ${v.name}`, v.moves);
+        // A sideline that is also starred as an opening of its own is listed
+        // there, whatever order the stars were given in.
+        if (v && v.id && !(ids || []).includes(v.id) && sideOf(v.id, opening) === side) add(v.id, `${opening.name}: ${v.name}`, v.moves);
       });
     });
     return out;

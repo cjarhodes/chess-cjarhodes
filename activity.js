@@ -96,7 +96,9 @@
     try { if (typeof currentInsightEntries === 'function') sources.moves = currentInsightEntries().map(e => e.ts); } catch (e) { /* none */ }
     try { if (typeof loadPracticeProgress === 'function') sources.drills = loadPracticeProgress().events.map(e => e && e.at); } catch (e) { /* none */ }
     try { if (root.PuzzlesView && root.PuzzlesView.history) sources.puzzles = root.PuzzlesView.history().map(r => r.at); } catch (e) { /* none */ }
-    try { if (root.GameArchive) sources.games = root.GameArchive.load().map(g => g.at); } catch (e) { /* none */ }
+    // Games imported from Chess.com or Lichess were played elsewhere: their
+    // reviewed moves count (as moves), but not as games finished here.
+    try { if (root.GameArchive) sources.games = root.GameArchive.load().filter(g => g.source === 'coach').map(g => g.at); } catch (e) { /* none */ }
     return sources;
   }
 

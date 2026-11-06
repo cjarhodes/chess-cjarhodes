@@ -37,10 +37,17 @@ expect([s.ms.b, s.running], [176000 - 1000 + 2000, 'w'], 'Black\'s move after a 
 // Two moves between syncs (an instant reply): both movers get their increment.
 s = C.sync(s, live('w', 4), 62000);
 expect([s.ms.w, s.ms.b], [176000 + 2000, 177000 + 2000], 'both moves in one sync earn an increment each');
-// A takeback lowers the move count without refunding or charging.
-const before = s.ms;
+// A take-back restores both clocks to that position, so replaying the
+// moves cannot collect their increments twice.
+const atTwo = s.hist[2];
 s = C.sync(s, live('w', 2), 62000);
-expect([s.ms, s.plies], [before, 2], 'a takeback leaves the clocks alone');
+expect([s.ms, s.plies], [atTwo, 2], 'a take-back restores the clocks to that position');
+s = C.sync(s, live('b', 3), 62000);
+s = C.sync(s, live('w', 4), 62000);
+s = C.sync(s, live('w', 2), 62000);
+s = C.sync(s, live('b', 3), 62000);
+s = C.sync(s, live('w', 4), 62000);
+expect(s.ms, { w: atTwo.w + 2000, b: atTwo.b + 2000 }, 'replaying after a take-back earns each increment once');
 // An ended game stops both clocks.
 s = C.sync(s, { turn: 'w', plies: 2, active: false, paused: false }, 70000);
 expect(s.running, null, 'an ended game stops the clock');
@@ -52,20 +59,32 @@ f = C.sync(f, live('w', 0), 300001);
 expect([f.flagged, f.ms.w, f.running], ['w', 0, null], 'running out flags the side to move');
 f = C.sync(f, live('b', 1), 300500);
 expect([f.flagged, f.ms.w], ['w', 0], 'a flagged clock stays flagged, with no increment');
+// Taking back after a flag restores the position's clocks and lifts it.
+let g = C.create('5+0', 0);
+g = C.sync(g, live('w', 0), 0);
+g = C.sync(g, live('b', 1), 1000);
+g = C.sync(g, live('w', 2), 2000);
+g = C.sync(g, live('w', 2), 400000);
+expect(g.flagged, 'w', 'White flags on move two');
+g = C.sync(g, live('w', 0), 400100);
+expect([g.flagged, g.ms.w, g.running], [null, 300000, 'w'], 'a take-back to the start lifts the flag and restores the clock');
 expect(C.flagResult(Chess, new Chess().fen(), 'w'), 'Time — Black wins.', 'losing on time with material left on the board is a loss');
 expect(C.flagResult(Chess, '8/8/8/4k3/8/8/8/4K2Q w - - 0 1', 'b'), 'Time — White wins.', 'the opponent flags against a queen');
 expect(C.flagResult(Chess, '8/8/8/4k3/8/8/2Q5/4K1N1 w - - 0 1', 'w'), 'Draw: time ran out with insufficient material.', 'a bare king cannot win on time');
-expect(C.flagResult(Chess, '8/8/8/4kn2/8/8/2Q5/4K3 w - - 0 1', 'w'), 'Draw: time ran out with insufficient material.', 'king and knight cannot win on time');
+expect(C.flagResult(Chess, '8/8/8/4kn2/8/8/8/4K3 w - - 0 1', 'w'), 'Draw: time ran out with insufficient material.', 'king and knight against a bare king cannot win on time');
+expect(C.flagResult(Chess, '8/8/8/4kn2/8/8/2Q5/4K3 w - - 0 1', 'w'), 'Time — Black wins.', 'king and knight against more material can still mate (FIDE 6.9), so it wins');
 expect(C.flagResult(Chess, '8/8/8/3pk3/8/8/2Q5/4K3 w - - 0 1', 'w'), 'Time — Black wins.', 'a pawn can still mate, so it wins on time');
 
 // Formatting.
-expect([C.format(180000), C.format(61000), C.format(10000), C.format(9400), C.format(-5)], ['3:00', '1:01', '0:10', '0:09.4', '0:00.0'], 'clock faces');
+expect([C.format(180000), C.format(61000), C.format(10900), C.format(10000), C.format(9400), C.format(-5)], ['3:00', '1:01', '0:10', '0:10', '0:09.4', '0:00.0'], 'clock faces count down without skipping 0:10');
 
 // Saved clocks load back stopped, with sane values.
 const saved = C.normalize(JSON.parse(JSON.stringify(Object.assign(C.create('10+0', 6), { running: 'w', since: 123 }))));
 expect([saved.running, saved.since, saved.plies, saved.ms.w], [null, null, 6, 600000], 'a saved clock loads stopped');
 expect(C.normalize({ v: 1, control: 'none', ms: { w: 1, b: 1 } }), null, 'an untimed save is ignored');
-expect(C.normalize({ v: 1, control: '3+2', ms: { w: 'x', b: 1e12 } }).ms, { w: 0, b: 720000 }, 'bad saved times are clamped');
+expect(C.normalize({ v: 1, control: '3+2', ms: { w: 'x', b: 1 } }), null, 'a damaged save is dropped, not read as zero time');
+expect(C.normalize({ v: 1, control: '3+2', ms: { w: 1, b: 1e12 } }).ms, { w: 1, b: 720000 }, 'out-of-range saved times are clamped');
+expect(C.normalize(JSON.parse(JSON.stringify(C.sync(C.create('3+2', 0), live('b', 1), 0)))).hist[1], { w: 182000, b: 180000 }, 'take-back history survives a save');
 
 if (failures.length) { console.error(failures.join('\n')); process.exit(1); }
 console.log(`Clock validation passed (${checks} checks).`);

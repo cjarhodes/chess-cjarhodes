@@ -864,7 +864,8 @@
     const queue = Rep.queue(cards, repLoad(), Date.now());
     repSummary('');
     if (!queue.length) { renderRepertoire(); setStatus('Nothing is due. Come back when lines are due, or star more openings.'); return; }
-    repRun = { queue, at: 0, results: [], index: Rep.moveIndex(Chess, cards) };
+    // Progress saves to the account the session started under.
+    repRun = { queue, at: 0, results: [], index: Rep.moveIndex(Chess, cards), key: repKey() };
     startRepCard();
   }
 
@@ -901,8 +902,13 @@
     moveSound(move, session.game);
     describeBoard();
     session.busy = false;
-    setStatus('Your move.');
+    setStatus(`${move.san}. Your move.`);
     updateControls();
+    // Typed moves keep the move field focused through the opponent's reply.
+    if (session.typed) {
+      const input = document.getElementById('puzzle-keyboard-move-input');
+      if (input && document.getElementById('puzzle-keyboard-move').open) input.focus({ preventScroll: true });
+    }
   }
 
   // Plays the line's move (the user's correct move, or the shown answer).
@@ -926,6 +932,7 @@
     if (!normalized) { if (board && !options.fromDrop) board.position(session.game.fen(), false); return false; }
     const ply = session.plies[session.ply];
     const verdict = Rep.grade(repRun.index, session.card, ply, normalized);
+    session.typed = !!options.animate;
     setArrows(null);
     if (verdict === 'ok') {
       flash('good');
@@ -936,7 +943,12 @@
     if (board && !options.fromDrop) board.position(session.game.fen(), false);
     clearTap();
     if (verdict && verdict.other) {
-      setStatus(`That is your move in ${verdict.other}. This line goes another way: try again.`);
+      // One slip into a sibling line is free; a second guess at the same
+      // move counts like a hint.
+      session.siblingTries = session.siblingTries || {};
+      session.siblingTries[session.ply] = (session.siblingTries[session.ply] || 0) + 1;
+      if (session.siblingTries[session.ply] > 1) session.hinted = true;
+      setStatus(`That is your move in ${verdict.other}. This line goes another way: try again.` + (session.hinted && session.siblingTries[session.ply] > 1 ? ' A second guess here counts as a hint.' : ''));
       return false;
     }
     session.mistakes++;
@@ -964,7 +976,9 @@
 
   function finishRepCard() {
     const clean = session.mistakes === 0 && !session.hinted;
-    repSave(Rep.review(repLoad(), session.card.id, clean, Date.now()));
+    let stored = null;
+    try { stored = JSON.parse(localStorage.getItem(repRun.key)); } catch (e) { stored = null; }
+    try { localStorage.setItem(repRun.key, JSON.stringify(Rep.review(stored, session.card.id, clean, Date.now()))); } catch (e) { /* this line's result is lost */ }
     repRun.results.push({ name: session.card.name, clean });
     session.phase = 'solved';
     session.busy = true;
@@ -1002,9 +1016,13 @@
     return `in ${days} days`;
   }
 
+  let repDueTimer = null;
   function renderRepertoire() {
     const stats = document.getElementById('rep-stats');
     if (!stats) return;
+    // Re-render when the next line comes due (a ten-minute relearn, or
+    // midnight), so Start does not stay disabled on a stale count.
+    clearTimeout(repDueTimer);
     const cards = repCards();
     const state = repLoad();
     const now = Date.now();
@@ -1017,6 +1035,8 @@
     start.hidden = !cards.length;
     start.disabled = !!repRun || !ready;
     start.textContent = repRun ? 'Reviewing…' : ready ? `Review ${Math.min(ready, Rep.SESSION_LIMIT)} line${Math.min(ready, Rep.SESSION_LIMIT) === 1 ? '' : 's'}` : 'Nothing due';
+    const wait = s.nextDue ? s.nextDue - now + 500 : 0;
+    if (wait > 0 && wait < 86400000) repDueTimer = setTimeout(() => { if (visible) renderRepertoire(); }, wait);
     stats.hidden = !cards.length;
     stats.textContent = cards.length ? [`${s.total} line${s.total === 1 ? '' : 's'}`, `${s.learned} learned`, `${s.due} due`, s.fresh ? `${s.fresh} new (${s.newToday} today)` : '',
       !s.due && s.nextDue ? `next due ${whenLabel(s.nextDue)}` : ''].filter(Boolean).join(' · ') : '';
@@ -1418,7 +1438,7 @@
       if (mode !== 'rated') setMode('rated');
       else if (!session || session.source === 'review' || session.phase === 'solved' || session.outcome || session.ply <= 1) nextRated();
     });
-    document.querySelectorAll('.puzzle-mode').forEach(btn => btn.addEventListener('click', () => setMode(btn.getAttribute('data-mode'))));
+    document.querySelectorAll('.puzzle-mode').forEach(btn => btn.addEventListener('click', () => { initialMode = null; setMode(btn.getAttribute('data-mode')); }));
     document.getElementById('btn-puzzle-next').addEventListener('click', nextPuzzle);
     document.getElementById('btn-puzzle-review').addEventListener('click', reviewMissed);
     document.getElementById('btn-puzzle-hint').addEventListener('click', showHint);
@@ -1483,12 +1503,21 @@
       if (initialMode) { const m = initialMode; initialMode = null; setMode(m); }
       return;
     }
+    // The repertoire trainer needs only the Library, so it opens at once;
+    // the puzzle set keeps loading in the background.
+    if ((initialMode || mode) === 'repertoire') {
+      initialMode = null;
+      setMode('repertoire');
+      ensureData().catch(() => { /* puzzles retry when their modes open */ });
+      return;
+    }
     setStatus('Loading puzzles…');
     if (!board) { orientation = 'white'; createBoard('start', { static: true }); }
     ensureData().then(() => {
       const start = initialMode || mode;
       initialMode = null;
-      if (visible) setMode(start);
+      // A mode chosen while loading (such as the repertoire) is already open.
+      if (visible && start !== 'repertoire') setMode(start);
     }).catch(err => setStatus(err.message));
   }
 
@@ -1498,6 +1527,19 @@
     if (session && session.kind === 'endgame' && session.busy && session.phase === 'solving') egRollback(session, 'Your last move was taken back when you left. Play it again.');
     if (rush) endRush('Run ended when you left Puzzles.');
     if (vision) endVision(true);
+    // Lines already finished are saved; the one in progress stops here.
+    if (repRun || (session && session.kind === 'repertoire' && session.phase === 'solving')) {
+      cancelPending();
+      repRun = null;
+      session = null;
+      if (mode === 'repertoire') {
+        createBoard('start', { static: true });
+        setLastMove(null);
+        setPhase('My repertoire');
+        setStatus('Review stopped when you left. Finished lines are saved.');
+        renderRepertoire();
+      }
+    }
     clearTap();
   }
 

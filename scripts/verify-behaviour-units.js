@@ -1083,6 +1083,16 @@ async page => {
     if (await page.locator('#game-viewer-source').getAttribute('href') !== 'https://www.chess.com/game/live/111') problems.push('the viewer should link to the game on Chess.com');
     await page.locator('#btn-game-viewer-close').click();
     if (await page.locator('.game-import-review').textContent() !== 'Open review') problems.push('a reviewed game should offer Open review');
+    const row2 = await page.evaluate(() => { GameArchive.render(); const li = [...document.querySelectorAll('#game-archive-list .game-archive-meta')].find(el => /Opp1/.test(el.textContent)); return li ? li.textContent : ''; });
+    if (!/ 2 moves/.test(row2)) problems.push('the archive should count the game\'s two moves, not digits in its headers: ' + row2);
+    // Reviewing again after deleting it from the archive replaces, not adds.
+    await page.evaluate(() => GameArchive.remove('chesscom-aaaa-1111'));
+    await page.evaluate(() => GameImport._state().found.length || null);
+    await page.locator('.game-import-review').click();
+    await page.waitForFunction(() => { const v = document.getElementById('game-viewer'); return v && !v.hidden; }, null, { timeout: 60000 });
+    await page.locator('#btn-game-viewer-close').click();
+    const twice = await page.evaluate(() => loadInsights().entries.filter(e => e.localGameId === 'chesscom-aaaa-1111').length);
+    if (twice !== 2) problems.push('a second review should replace the game\'s Insights entries, not add more: ' + twice);
     const evidence = await page.evaluate(() => loadInsights().entries.filter(e => e.localGameId === 'chesscom-aaaa-1111').map(e => [e.ply, e.tier, e.gameId]));
     if (evidence.length !== 2 || evidence.some(e => e[2] !== null)) problems.push('both graded moves should count in Insights, tied to the imported game: ' + JSON.stringify(evidence));
     const liveAfter = await page.evaluate(() => ({ pgn: coachGame ? coachGame.pgn() : null, id: coachLocalGameId }));
@@ -1104,6 +1114,18 @@ async page => {
     if (await page.locator('.game-import-review').textContent() !== 'Review') problems.push('after stopping, the game can be reviewed again');
     if (await page.evaluate(() => JSON.parse(localStorage.getItem('ui:import:v1')).source) !== 'lichess') problems.push('the chosen site should be remembered');
 
+    // A game older than every kept imported game is reported, not blamed on storage.
+    await page.evaluate(() => {
+      const filler = Array.from({ length: GameArchive.LIMIT }, (_, i) => ({ id: 'lichess-new' + i, at: Date.now() - i, result: 'Draw.', side: 'white', elo: 1500, startFen: '', pgn: '1. e4 e5 *', reviews: [], source: 'lichess', opponent: 'X', url: 'https://lichess.org/new' + i }));
+      localStorage.setItem(GameArchive.KEY, JSON.stringify({ v: 1, games: filler }));
+    });
+    await page.locator('#game-import-sources [data-source=chesscom]').click();
+    await find('alex');
+    await page.waitForFunction(() => { const f = GameImport._state().found; return f.length === 1 && f[0].source === 'chesscom'; });
+    await page.locator('.game-import-review').click();
+    await page.waitForFunction(() => /older than the/.test(document.getElementById('game-import-status').textContent), null, { timeout: 60000 })
+      .catch(async () => problems.push('a game outside the archive cap should say so: ' + await statusText()));
+
     // Imported games have their own cap, so they never push out Coach games.
     const kept = await page.evaluate(() => {
       const base = { result: 'Draw.', side: 'white', elo: 1200, startFen: '', pgn: '1. e4 e5 *', reviews: [] };
@@ -1122,8 +1144,12 @@ async page => {
     const problems = [];
     await page.goto(base + '/?view=puzzles&mode=repertoire');
     await page.evaluate(() => { localStorage.clear(); });
+    // The trainer needs only the Library, so it opens even if the puzzle set never loads.
+    await page.route('**/puzzle-data.js', route => route.abort());
     await page.goto(base + '/?view=puzzles&mode=repertoire');
-    await page.waitForFunction(() => window.PuzzlesView && PuzzlesView._debug().mode === 'repertoire' && !document.getElementById('puzzle-panel-repertoire').hidden);
+    await page.waitForFunction(() => window.PuzzlesView && PuzzlesView._debug().mode === 'repertoire' && !document.getElementById('puzzle-panel-repertoire').hidden, null, { timeout: 10000 })
+      .catch(() => problems.push('the repertoire trainer should open without the puzzle set'));
+    await page.unroute('**/puzzle-data.js');
     if (await page.locator('#rep-empty').isHidden() || await page.locator('#btn-rep-start').isVisible()) problems.push('with nothing starred, the trainer should point to the Library');
     await page.locator('#btn-rep-library').click();
     if (await page.evaluate(() => appView) !== 'library') problems.push('Open the Library should switch to the Library');
@@ -1154,6 +1180,13 @@ async page => {
       await page.waitForFunction(id => { const d = PuzzlesView._debug(); return !d.session || d.session.card.id !== id || d.session.phase === 'solved'; }, id, { timeout: 15000 });
       return { id, notes };
     };
+    // Leaving Puzzles mid-line stops the review; finished lines stay saved.
+    await page.locator('#btn-rep-start').click();
+    await ready();
+    await page.locator('#nav-library').click();
+    await page.locator('#nav-puzzles').click();
+    await page.waitForFunction(() => !PuzzlesView._debug().repRun && /Review stopped when you left/.test(document.getElementById('puzzle-status').textContent), null, { timeout: 5000 })
+      .catch(() => problems.push('leaving Puzzles should stop the review'));
     await page.locator('#btn-rep-start').click();
     const first = await playLine(null);
     const rec = await page.evaluate(id => JSON.parse(localStorage.getItem(PuzzlesView.repertoireKey())).records[id], first.id);
@@ -1189,6 +1222,7 @@ async page => {
       }, c);
       return { kind: 'wrong', move: wrong };
     });
+    if (!/^[A-Za-z0-9+#=-]+\. Your move\.$/.test(await status()) && !/Line complete|reviewed/.test(await status())) problems.push('the opponent\'s move should be announced: ' + await status());
     const miss = third.notes.find(n => n.kind === 'wrong');
     if (!miss || !/Not this line\. It plays/.test(miss.status) || miss.mistakes !== 1) problems.push('a wrong move should show the line\'s move and count: ' + JSON.stringify(miss));
     const thirdRec = await page.evaluate(id => JSON.parse(localStorage.getItem(PuzzlesView.repertoireKey())).records[id], third.id);
@@ -1259,10 +1293,23 @@ async page => {
     if (end.msg !== 'Time — Black wins.' || end.result !== '0-1' || end.clock.flagged !== 'w') problems.push('a flag should lose on time: ' + JSON.stringify(end));
     if (!(await page.locator('#coach-clock-bottom').getAttribute('class')).includes('flagged')) problems.push('the flagged clock should show it');
     await page.waitForFunction(() => GameArchive.load().length === 1, null, { timeout: 5000 }).catch(() => problems.push('the timed-out game should be archived'));
-    // The next game uses the newly chosen control.
+    // The next game uses the newly chosen control, and a stalled opponent
+    // (the engine gave no move) is not charged while Retry waits.
     await page.locator('#btn-summary-newgame').waitFor({ timeout: 10000 });
     await page.locator('#btn-summary-newgame').click();
     await page.waitForFunction(() => coachGameActive && CoachClock._state() && CoachClock._state().control === '10+0', null, { timeout: 5000 }).catch(() => problems.push('the next game should use 10+0'));
+    await page.evaluate(() => { window.__realChoose = window.chooseCalibratedOpponentMove; window.chooseCalibratedOpponentMove = () => null; });
+    try {
+      await play('d4');
+      await page.waitForFunction(() => document.getElementById('btn-coach-retry-opponent'), null, { timeout: 60000 });
+      await page.evaluate(() => CoachClock.tick());
+      const stalled = (await clock()).ms.b;
+      await advance(120000);
+      await page.waitForTimeout(250);
+      if ((await clock()).ms.b !== stalled) problems.push('the opponent\'s clock should not run while its move failed and Retry waits');
+    } finally {
+      await page.evaluate(() => { if (window.__realChoose) window.chooseCalibratedOpponentMove = window.__realChoose; });
+    }
     return problems;
   });
 

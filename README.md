@@ -120,11 +120,13 @@ level; choosing Coach turns adapting back on (`opponents.js`, tested by
 **Time control** (Game setup): untimed by default, or 3+2, 5+0, 10+0 or
 15+10. Each side's clock sits on its bar beside the board. The side to move
 is charged, and each completed move earns the increment. Clocks pause while
-Coach grades your move, during Show why and while Coach is off screen, so
-the opponent is charged only for its own search. Running out loses, or draws
-when the winner has only a bare king or a king and one minor piece. Either
-way the result is recorded like a resignation, and a reload keeps the game's
-clock. Choosing a control before the first move times the current game;
+Coach grades your move, during Show why, while Coach is off screen and while
+a failed opponent move waits for Retry, so the opponent is charged only for
+its own search. Running out loses, or draws when no legal sequence could let
+the winner mate: a bare king, or a king and one minor piece against a bare
+king (FIDE 6.9). Either way the result is recorded like a resignation. A
+take-back restores both clocks to that position, so replayed moves never
+earn their increment twice, and a reload keeps the game's clock. Choosing a control before the first move times the current game;
 otherwise it applies to the next one. Practice drills and opening exercises
 are never timed (`clock-core.js`, `coach-clock.js`, tested by
 `scripts/validate-clock.js`).
@@ -199,7 +201,11 @@ game is never touched (`game-archive.js`).
 your moves with the same engine review as Coach, and saves the game in the
 archive with its opponent, site and a link back to it. Like a pasted PGN, a
 reviewed game counts in Insights, the practice queue and the personal
-repertoire, but the live Coach game is left alone. A review can be stopped;
+repertoire, but the live Coach game is left alone. Reviewing a game again
+replaces its Insights entries rather than adding more. Imported games hold
+at most 150 of the 300 Insights entries, so they never push out your own
+Coach evidence. They do not count as games in the Activity calendar, since
+they were played elsewhere. A review can be stopped;
 nothing is saved until it finishes (`game-import-core.js`, `game-import.js`).
 The CSP allows `https://api.chess.com` and `https://lichess.org` for this, and
 `validate-security.js` pins the full `connect-src` list.

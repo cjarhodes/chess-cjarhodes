@@ -971,10 +971,13 @@ function insightEntryFromReview(review) {
   const pairNum = review.pairNum || Math.ceil((review.ply || 1) / 2);
   const tags = review.insightTags || insightTagsForReview(review);
   review.insightTags = tags;
+  // Imported games (pasted or fetched) are not the live Coach game, so they
+  // never borrow its ids or opening.
+  const imported = review.source === 'import';
   return {
     id: review.insightId || null,
-    gameId: review.remoteGameId || coachRemoteGameId || null,
-    localGameId: review.localGameId || coachLocalGameId || null,
+    gameId: review.remoteGameId || (imported ? null : coachRemoteGameId) || null,
+    localGameId: review.localGameId || (imported ? null : coachLocalGameId) || null,
     ts: review.insightAt || Date.now(),
     tier: review.tier,
     loss: Math.round(review.loss || 0),
@@ -987,8 +990,8 @@ function insightEntryFromReview(review) {
     fenBefore: review.fenBefore || null,
     userUci: review.userUci || null,
     bestUci: review.bestUci || null,
-    opening: review.opening || currentCoachOpeningName(),
-    openingId: review.openingId || (coachOpeningTransfer ? coachOpeningTransfer.openingId : null),
+    opening: review.opening || (imported ? null : currentCoachOpeningName()),
+    openingId: review.openingId || (!imported && coachOpeningTransfer ? coachOpeningTransfer.openingId : null),
     continuation: Array.isArray(review.continuation) ? review.continuation.slice(0, 1) : null,
     lesson: review.lesson || null,
     opponentThreat: review.opponentThreat || null,
@@ -4673,6 +4676,7 @@ async function coachOpponentRespond() {
           promotion: bestmove[4] || undefined
         });
         if (!mv) throw new Error('Opponent move was not legal.');
+        if (window.CoachClock) window.CoachClock.tick();
         candidateRequestId++;
         if (!coachIsReviewing()) {
           if (!coachBoard) throw new Error('Coach board is not ready.');
@@ -4736,6 +4740,9 @@ async function coachHandleUserMove(source, target, promotion, opts) {
 
   coachThinking = true;
   CoachController.setPhase('analyzing');
+  // Stop the user's clock at the moment of the move (coach-clock.js), so a
+  // move made in time is never charged the rest of a clock tick.
+  if (window.CoachClock) window.CoachClock.tick();
   setCoachStatus('Analyzing your move…');
   updateCoachControlsState();
   try {
@@ -4815,6 +4822,9 @@ function coachFinishGame(msg, revealDelay) {
   updateCoachControlsState();
   coachLastEndMsg = msg;
   saveCoachState();
+  // A per-move update still waiting on its debounce would otherwise rewrite
+  // the saved game as unfinished after this result is saved.
+  clearQueuedRemoteCoachGameUpdate();
   coachSync.saveGame(msg).catch(handleCoachDbError);
   rollGameIntoLifetime();
   if (typeof recordRatedCoachResult === 'function') recordRatedCoachResult(msg);

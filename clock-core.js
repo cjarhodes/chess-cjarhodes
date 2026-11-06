@@ -15,14 +15,30 @@
   function control(id) { return CONTROLS.find(c => c.id === id) || CONTROLS[0]; }
   function timed(id) { return control(id).base > 0; }
 
+  // hist[n] holds both clocks as they stood when the game had n moves, so a
+  // take-back restores the clocks along with the position.
+  const HIST_LIMIT = 600;
   function create(id, plies) {
     const c = control(id);
-    return { v: 1, control: c.id, ms: { w: c.base * 1000, b: c.base * 1000 }, plies: plies || 0, running: null, since: null, flagged: null };
+    const ms = { w: c.base * 1000, b: c.base * 1000 };
+    const hist = [];
+    hist[plies || 0] = { w: ms.w, b: ms.b };
+    return { v: 1, control: c.id, ms, plies: plies || 0, running: null, since: null, flagged: null, hist };
   }
 
   // input: { turn: 'w' | 'b', plies, active, paused }
   function sync(state, input, now) {
-    const s = { v: 1, control: state.control, ms: { w: state.ms.w, b: state.ms.b }, plies: state.plies, running: state.running, since: state.since, flagged: state.flagged };
+    const s = { v: 1, control: state.control, ms: { w: state.ms.w, b: state.ms.b }, plies: state.plies, running: state.running, since: state.since, flagged: state.flagged, hist: (state.hist || []).slice() };
+    // A take-back puts both clocks back to that position, so replayed moves
+    // cannot collect the increment twice. It also lifts a flag.
+    if (input.plies < s.plies) {
+      const back = s.hist[input.plies];
+      if (back) { s.ms = { w: back.w, b: back.b }; s.flagged = null; }
+      s.hist.length = input.plies + 1;
+      s.plies = input.plies;
+      s.running = null;
+      s.since = null;
+    }
     if (s.flagged) { s.running = null; s.since = null; return s; }
     if (s.running && s.since !== null) s.ms[s.running] -= Math.max(0, now - s.since);
     const c = control(s.control);
@@ -35,6 +51,7 @@
         mover = mover === 'w' ? 'b' : 'w';
       }
     }
+    if (input.plies > s.plies && input.plies <= HIST_LIMIT) s.hist[input.plies] = { w: Math.max(0, s.ms.w), b: Math.max(0, s.ms.b) };
     s.plies = input.plies;
     ['w', 'b'].forEach(side => { if (!s.flagged && s.ms[side] <= 0) { s.flagged = side; s.ms[side] = 0; } });
     s.running = input.active && !input.paused && !s.flagged ? input.turn : null;
@@ -45,19 +62,21 @@
   function format(ms) {
     const t = Math.max(0, ms);
     if (t < 10000) return `0:0${Math.floor(t / 1000)}.${Math.floor((t % 1000) / 100)}`;
-    const total = Math.ceil(t / 1000);
+    const total = Math.floor(t / 1000);
     const m = Math.floor(total / 60), sec = total % 60;
     return `${m}:${String(sec).padStart(2, '0')}`;
   }
 
-  // Losing on time is a loss unless the winner has nothing left to mate
-  // with (a bare king, or king and one minor piece): then it is a draw.
+  // Losing on time is a loss unless no sequence of legal moves could let the
+  // winner mate (FIDE 6.9). That is the case for a bare king, and for a king
+  // and one minor piece against a bare king; with any other pieces on the
+  // loser's side a mate can still be helped along, so it counts.
   function canMate(ChessCtor, fen, side) {
     const board = new ChessCtor(fen).board();
-    const pieces = [];
-    board.forEach(row => row.forEach(sq => { if (sq && sq.color === side && sq.type !== 'k') pieces.push(sq.type); }));
-    if (!pieces.length) return false;
-    if (pieces.length === 1 && (pieces[0] === 'n' || pieces[0] === 'b')) return false;
+    const mine = [], theirs = [];
+    board.forEach(row => row.forEach(sq => { if (sq && sq.type !== 'k') (sq.color === side ? mine : theirs).push(sq.type); }));
+    if (!mine.length) return false;
+    if (mine.length === 1 && (mine[0] === 'n' || mine[0] === 'b') && !theirs.length) return false;
     return true;
   }
   function flagResult(ChessCtor, fen, flagged) {
@@ -66,11 +85,20 @@
     return `Time — ${winner === 'w' ? 'White' : 'Black'} wins.`;
   }
 
+  // A damaged save is dropped rather than read as zero time, which would
+  // flag the side to move at once.
   function normalize(value) {
     if (!value || value.v !== 1 || !timed(value.control) || !value.ms) return null;
-    const ms = side => Math.max(0, Math.min(control(value.control).base * 1000 * 4, Number(value.ms[side]) || 0));
-    return { v: 1, control: value.control, ms: { w: ms('w'), b: ms('b') }, plies: Math.max(0, Number(value.plies) || 0), running: null, since: null,
-      flagged: value.flagged === 'w' || value.flagged === 'b' ? value.flagged : null };
+    const cap = control(value.control).base * 1000 * 4;
+    const clamp = x => Math.max(0, Math.min(cap, x));
+    if (!Number.isFinite(value.ms.w) || !Number.isFinite(value.ms.b)) return null;
+    const plies = Math.max(0, Math.min(HIST_LIMIT, Math.floor(Number(value.plies) || 0)));
+    const hist = [];
+    (Array.isArray(value.hist) ? value.hist : []).slice(0, plies + 1).forEach((h, i) => {
+      if (h && Number.isFinite(h.w) && Number.isFinite(h.b)) hist[i] = { w: clamp(h.w), b: clamp(h.b) };
+    });
+    return { v: 1, control: value.control, ms: { w: clamp(value.ms.w), b: clamp(value.ms.b) }, plies, running: null, since: null,
+      flagged: value.flagged === 'w' || value.flagged === 'b' ? value.flagged : null, hist };
   }
 
   const api = { CONTROLS, control, timed, create, sync, format, canMate, flagResult, normalize };
