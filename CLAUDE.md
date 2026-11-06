@@ -12,7 +12,7 @@ Static single-page chess training app served at https://chess.cjarhodes.com.
 - Lichess Opening Explorer API for Explore mode (user supplies their own Lichess Personal Access Token, kept in sessionStorage only)
 - Optional Supabase account sync; Coach remains fully usable in local-only mode
 - Browser-only by design: no web app manifest, no service worker registration, no install prompt. Installed copies captured magic-link URLs and opened them outside the browser. `service-worker.js` stays as a kill switch for earlier installs.
-- The Supabase project is shared with OOTD (ootd.cjarhodes.com, repo `cjarhodes/Clothing`): one user list, one email template and one set of redirect URLs. OOTD's tables, function and bucket are prefixed `ootd_`/`ootd-`; its migration is mirrored in `supabase/migrations` so `db push` stays in step. Keep the email template neutral (it serves both apps) and keep both domains in Auth → Redirect URLs.
+- The Supabase project serves chess only. OOTD (ootd.cjarhodes.com) shared it briefly in November 2026 and has moved to its own sign-in and storage. Its empty `ootd_` tables, `ootd_save_wardrobe` function and `ootd-photos` bucket (from `20261105222014_ootd_accounts.sql`, kept for migration history) are left over and can be dropped with a follow-up migration. The Magic Link email template no longer needs to stay neutral.
 - Sign-in is a Supabase magic link, plus an emailed 6-digit code (`verifyOtp`) when `emailCodeEnabled` is true in `coach-config.js`. The flag stays off until the project's Magic Link email template carries `{{ .Token }}`, which needs custom SMTP, a Pro plan, or a Send Email hook. The template lives in `supabase/templates/magic_link.html`.
 
 ## Hosting
