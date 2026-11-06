@@ -3030,5 +3030,17 @@ input[type=range].strength-slider::-moz-range-thumb {
 .endgame-row.active { border-color: var(--accent); background: var(--accent-soft); }
 .endgame-name { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text); }
 .endgame-meta { font-size: var(--text-xs); color: var(--text-3); }
+
+/* ── REPERTOIRE TRAINER (puzzles.js + repertoire-core.js) ── */
+.rep-stats { font-size: var(--text-xs); color: var(--text-2); margin: 0.6rem 0; }
+.rep-stats:empty { display: none; }
+#btn-rep-start { width: 100%; }
+#btn-rep-start[hidden], .rep-empty[hidden], .rep-stats[hidden] { display: none; }
+.rep-empty { display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-start; margin-top: 0.6rem; font-size: var(--text-sm); color: var(--text-2); }
+.rep-list { list-style: none; display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.75rem; }
+.rep-list:empty { display: none; }
+.rep-row { display: flex; flex-direction: column; gap: 0.1rem; padding: 0.5rem 0.7rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+.rep-name { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text); }
+.rep-meta { font-size: var(--text-xs); color: var(--text-3); }
 .opponent-tag { display: inline-flex; align-items: center; gap: 0.35rem; margin-right: 0.35rem; font-size: var(--text-xs); color: var(--text-2); font-weight: var(--weight-medium); }
 .opponent-avatar.opponent-avatar-sm { width: 18px; height: 18px; font-size: var(--text-xs); }

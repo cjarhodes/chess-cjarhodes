@@ -780,6 +780,9 @@
       <button type="button" class="puzzle-mode" id="puzzle-mode-endgames" data-mode="endgames" aria-pressed="false">
         <span class="puzzle-mode-name">Endgame practice</span><span class="puzzle-mode-detail">Win it against the engine</span>
       </button>
+      <button type="button" class="puzzle-mode" id="puzzle-mode-repertoire" data-mode="repertoire" aria-pressed="false">
+        <span class="puzzle-mode-name">My repertoire</span><span class="puzzle-mode-detail" id="puzzle-repertoire-detail">Drill your starred openings</span>
+      </button>
     </div>
     <div class="puzzle-rating-card" aria-labelledby="puzzle-rating-label">
       <div class="puzzle-rating-head">
@@ -888,6 +891,22 @@
         <p class="puzzle-card-prompt">Play these won endgames against full-strength Stockfish. Reach the goal within the move limit without losing material or stalemating. Hints show the engine's move but a hinted run does not set a best.</p>
         <div class="puzzle-feedback" id="endgame-result" role="status" aria-live="polite" hidden></div>
         <ol class="endgame-list" id="endgame-list" aria-label="Endgames"></ol>
+      </section>
+    </div>
+
+    <div class="puzzle-panel" id="puzzle-panel-repertoire" role="region" aria-label="Repertoire trainer" hidden>
+      <section class="coach-panel-section puzzle-card" aria-labelledby="rep-title">
+        <span class="section-label">My repertoire</span>
+        <h2 class="puzzle-card-title" id="rep-title">Play your lines from memory</h2>
+        <p class="puzzle-card-prompt">Play your side of each line; the opponent's moves are played for you. A clean line comes back after 1 day, then 3, then longer. A mistake or hint brings it back in ten minutes. Up to 5 new lines a day.</p>
+        <div class="puzzle-feedback" id="rep-summary" role="status" aria-live="polite" hidden></div>
+        <p class="rep-stats" id="rep-stats"></p>
+        <button type="button" class="ctrl-btn primary" id="btn-rep-start">Start review</button>
+        <div class="rep-empty" id="rep-empty" hidden>
+          <p>Star openings in the Library with “☆ Add to my repertoire” to drill them here.</p>
+          <button type="button" class="ctrl-btn" id="btn-rep-library">Open the Library</button>
+        </div>
+        <ol class="rep-list" id="rep-list" aria-label="Openings in your repertoire"></ol>
       </section>
     </div>
 
@@ -1030,6 +1049,7 @@
 <script src="game-import.js"></script>
 <script src="endgames.js"></script>
 <script src="puzzles-core.js"></script>
+<script src="repertoire-core.js"></script>
 <script src="puzzles.js"></script>
 <script src="shortcuts.js"></script>
 <script src="activity.js"></script>

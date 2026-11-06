@@ -274,7 +274,8 @@ function trainingBackupKeys(ownerId = growthOwnerId()) {
     coachMemoryKey(COACH_STATE_KEY),
     coachMemoryKey(COACH_PRACTICE_STATE_KEY),
     coachMemoryKey(COACH_PRACTICE_RETURN_KEY),
-    ...(typeof GameArchive !== 'undefined' ? [GameArchive.storageKeyFor(ownerId)] : [])
+    ...(typeof GameArchive !== 'undefined' ? [GameArchive.storageKeyFor(ownerId)] : []),
+    ...(typeof RepertoireCore !== 'undefined' ? [RepertoireCore.storageKeyFor(ownerId)] : [])
   ];
 }
 
@@ -388,6 +389,15 @@ function mergeImportedTrainingData(payload) {
       let current = null;
       try { current = JSON.parse(localStorage.getItem(GameArchive.storageKeyFor(ownerId))); } catch (e) { current = null; }
       values[GameArchive.storageKeyFor(ownerId)] = GameArchive.merge(current, archive);
+    }
+  }
+  if (typeof RepertoireCore !== 'undefined') {
+    const drills = incoming(RepertoireCore.storageKeyFor(ownerId), RepertoireCore.KEY, 1);
+    if (drills) {
+      if (!drills.records || typeof drills.records !== 'object' || Array.isArray(drills.records)) throw new Error('Repertoire drill data is incomplete. Nothing was imported.');
+      let current = null;
+      try { current = JSON.parse(localStorage.getItem(RepertoireCore.storageKeyFor(ownerId))); } catch (e) { current = null; }
+      values[RepertoireCore.storageKeyFor(ownerId)] = RepertoireCore.mergeStates(current, drills);
     }
   }
   const lifetime = incoming(coachMemoryKey(LIFETIME_KEY), LIFETIME_KEY);

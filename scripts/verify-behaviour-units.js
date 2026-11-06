@@ -1116,6 +1116,89 @@ async page => {
     return problems;
   });
 
+  await check('repertoire trainer drills starred lines with spaced repetition', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=puzzles&mode=repertoire');
+    await page.evaluate(() => { localStorage.clear(); });
+    await page.goto(base + '/?view=puzzles&mode=repertoire');
+    await page.waitForFunction(() => window.PuzzlesView && PuzzlesView._debug().mode === 'repertoire' && !document.getElementById('puzzle-panel-repertoire').hidden);
+    if (await page.locator('#rep-empty').isHidden() || await page.locator('#btn-rep-start').isVisible()) problems.push('with nothing starred, the trainer should point to the Library');
+    await page.locator('#btn-rep-library').click();
+    if (await page.evaluate(() => appView) !== 'library') problems.push('Open the Library should switch to the Library');
+    await page.goto(base + '/?opening=italian');
+    await page.locator('#btn-repertoire-toggle').click();
+    await page.goto(base + '/?view=puzzles&mode=repertoire');
+    await page.waitForFunction(() => !document.getElementById('btn-rep-start').hidden);
+    if (await page.locator('#btn-rep-start').textContent() !== 'Review 3 lines') problems.push('three Italian lines should be ready: ' + await page.locator('#btn-rep-start').textContent());
+    const play = async move => { await page.locator('#puzzle-keyboard-move').evaluate(e => { e.open = true; }); await page.locator('#puzzle-keyboard-move-input').fill(move); await page.locator('#puzzle-keyboard-move-form button').click(); };
+    const ready = () => page.waitForFunction(() => { const x = PuzzlesView._debug().session; return x && x.kind === 'repertoire' && x.phase === 'solving' && !x.busy; }, null, { timeout: 15000 });
+    const current = () => page.evaluate(() => { const x = PuzzlesView._debug().session; return { id: x.card.id, ply: x.ply, uci: x.plies[x.ply].uci, fen: x.plies[x.ply].fenBefore, mistakes: x.mistakes }; });
+    const status = () => page.locator('#puzzle-status').textContent();
+    // Plays the current line to its end; `twist(step)` may return a move to try first.
+    const playLine = async twist => {
+      await ready();
+      const { id } = await current();
+      let notes = [];
+      for (let step = 0; step < 40; step++) {
+        await ready().catch(() => {});
+        const still = await page.evaluate(id => { const x = PuzzlesView._debug().session; return x && x.card.id === id && x.phase === 'solving'; }, id);
+        if (!still) break;
+        const c = await current();
+        const extra = twist ? await twist(step, c) : null;
+        if (extra) { await play(extra.move); await page.waitForTimeout(150); notes.push({ kind: extra.kind, status: await status(), mistakes: (await current()).mistakes }); if (extra.kind === 'wrong') { await page.waitForTimeout(1700); continue; } }
+        await play(c.uci);
+        await page.waitForTimeout(100);
+      }
+      await page.waitForFunction(id => { const d = PuzzlesView._debug(); return !d.session || d.session.card.id !== id || d.session.phase === 'solved'; }, id, { timeout: 15000 });
+      return { id, notes };
+    };
+    await page.locator('#btn-rep-start').click();
+    const first = await playLine(null);
+    const rec = await page.evaluate(id => JSON.parse(localStorage.getItem(PuzzlesView.repertoireKey())).records[id], first.id);
+    const tomorrow = await page.evaluate(() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + 1); return d.getTime(); });
+    if (!rec || rec.reps !== 1 || rec.dueAt !== tomorrow) problems.push('a clean line should be due at the next local midnight: ' + JSON.stringify(rec));
+    // Second line: first try a move from a sibling line where the lines part.
+    let siblingTried = false;
+    const second = await playLine(async (step, c) => {
+      const sibling = await page.evaluate(c => {
+        const cards = RepertoireCore.cardsFor(OPENINGS, ['italian'], OpponentPersonas.lineSide);
+        const index = RepertoireCore.moveIndex(Chess, cards);
+        const moves = index.get('w|' + c.fen.split(' ').slice(0, 4).join(' '));
+        return moves ? [...moves.keys()].find(u => u !== c.uci) || null : null;
+      }, c);
+      if (sibling && !siblingTried) { siblingTried = true; return { kind: 'sibling', move: sibling }; }
+      return null;
+    });
+    const sib = second.notes.find(n => n.kind === 'sibling');
+    if (!sib) problems.push('the Italian lines should part on one of White\'s moves');
+    else if (!/That is your move in/.test(sib.status) || sib.mistakes !== 0) problems.push('a sibling line\'s move should be named and not counted: ' + JSON.stringify(sib));
+    const secondRec = await page.evaluate(id => JSON.parse(localStorage.getItem(PuzzlesView.repertoireKey())).records[id], second.id);
+    if (!secondRec || secondRec.reps !== 1) problems.push('the sibling move should leave the line clean: ' + JSON.stringify(secondRec));
+    // Third line: one real mistake.
+    const third = await playLine(async (step, c) => {
+      if (step !== 1) return null;
+      const wrong = await page.evaluate(c => {
+        const cards = RepertoireCore.cardsFor(OPENINGS, ['italian'], OpponentPersonas.lineSide);
+        const index = RepertoireCore.moveIndex(Chess, cards);
+        const known = index.get('w|' + c.fen.split(' ').slice(0, 4).join(' ')) || new Map();
+        const g = new Chess(c.fen);
+        const m = g.moves({ verbose: true }).find(x => !known.has(x.from + x.to + (x.promotion || '')));
+        return m.from + m.to + (m.promotion || '');
+      }, c);
+      return { kind: 'wrong', move: wrong };
+    });
+    const miss = third.notes.find(n => n.kind === 'wrong');
+    if (!miss || !/Not this line\. It plays/.test(miss.status) || miss.mistakes !== 1) problems.push('a wrong move should show the line\'s move and count: ' + JSON.stringify(miss));
+    const thirdRec = await page.evaluate(id => JSON.parse(localStorage.getItem(PuzzlesView.repertoireKey())).records[id], third.id);
+    if (!thirdRec || thirdRec.lapses !== 1 || thirdRec.reps !== 0 || thirdRec.dueAt - thirdRec.lastAt !== 10 * 60 * 1000) problems.push('a line with a mistake should come back in ten minutes: ' + JSON.stringify(thirdRec));
+    await page.waitForFunction(() => !document.getElementById('rep-summary').hidden, null, { timeout: 15000 });
+    const summary = await page.locator('#rep-summary').textContent();
+    if (summary !== '3 lines reviewed, 2 first try. 1 comes back in ten minutes.') problems.push('session summary: ' + summary);
+    if (await page.locator('#btn-rep-start').textContent() !== 'Nothing due' || !await page.locator('#btn-rep-start').isDisabled()) problems.push('with every line reviewed, nothing should be due');
+    if (!await page.evaluate(() => trainingBackupKeys().includes(PuzzlesView.repertoireKey()))) problems.push('repertoire records should be in training backups');
+    return problems;
+  });
+
   await check('Library quiz hides the moves you have not reached', async () => {
     const problems = [];
     await page.goto(base + '/?opening=italian&mode=quiz');
