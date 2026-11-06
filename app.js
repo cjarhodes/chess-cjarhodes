@@ -682,6 +682,7 @@ async function coachOpponentRespond() {
           promotion: bestmove[4] || undefined
         });
         if (!mv) throw new Error('Opponent move was not legal.');
+        if (window.CoachClock) window.CoachClock.tick();
         candidateRequestId++;
         if (!coachIsReviewing()) {
           if (!coachBoard) throw new Error('Coach board is not ready.');
@@ -745,6 +746,9 @@ async function coachHandleUserMove(source, target, promotion, opts) {
 
   coachThinking = true;
   CoachController.setPhase('analyzing');
+  // Stop the user's clock at the moment of the move (coach-clock.js), so a
+  // move made in time is never charged the rest of a clock tick.
+  if (window.CoachClock) window.CoachClock.tick();
   setCoachStatus('Analyzing your move…');
   updateCoachControlsState();
   try {
@@ -808,6 +812,30 @@ function scheduleSummaryReveal(msg, delayMs) {
     coachSummaryTimer = null;
     showPostGameSummary(msg);
   }, delayMs);
+}
+
+// Ends the live game for a reason the board does not show (resignation, or
+// a flag from coach-clock.js): the same bookkeeping as a game over.
+function coachFinishGame(msg, revealDelay) {
+  if (!coachGameActive) return false;
+  CoachController.setPhase('ended');
+  candidateRequestId++;
+  threatRequestId++;
+  clearPremove();
+  coachGameActive = false;
+  coachEndedAt = Date.now();
+  setCoachStatus(msg);
+  updateCoachControlsState();
+  coachLastEndMsg = msg;
+  saveCoachState();
+  // A per-move update still waiting on its debounce would otherwise rewrite
+  // the saved game as unfinished after this result is saved.
+  clearQueuedRemoteCoachGameUpdate();
+  coachSync.saveGame(msg).catch(handleCoachDbError);
+  rollGameIntoLifetime();
+  if (typeof recordRatedCoachResult === 'function') recordRatedCoachResult(msg);
+  scheduleSummaryReveal(msg, revealDelay);
+  return true;
 }
 
 function coachHandleGameOver() {
@@ -3366,24 +3394,10 @@ $(function () {
 
   $('#btn-coach-resign').on('click', function() {
     if (!coachGameActive) return;
-    CoachController.setPhase('ended');
-    candidateRequestId++;
-    threatRequestId++;
-    clearPremove();
-    coachGameActive = false;
-    coachEndedAt = Date.now();
     const loser = coachUserColor() === 'white' ? 'White' : 'Black';
     const winner = loser === 'White' ? 'Black' : 'White';
-    const msg = `Resigned — ${winner} wins.`;
-    setCoachStatus(msg);
-    updateCoachControlsState();
-    coachLastEndMsg = msg;
-    saveCoachState();
-    coachSync.saveGame(msg).catch(handleCoachDbError);
-    rollGameIntoLifetime();
-    if (typeof recordRatedCoachResult === 'function') recordRatedCoachResult(msg);
     // User-initiated — keep it snappy but still buffer with a small beat + animation.
-    scheduleSummaryReveal(msg, 350);
+    coachFinishGame(`Resigned — ${winner} wins.`, 350);
   });
 
   // Coach: flip board

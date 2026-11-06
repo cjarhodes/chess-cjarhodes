@@ -46,6 +46,13 @@ const scriptSrc = (csp.match(/(?:^|;\s*)script-src\s+([^;]+)/) || [])[1] || '';
 if (scriptSrc.includes("'unsafe-inline'")) {
   fail('script-src must not allow unsafe-inline');
 }
+// The browser may only talk to these hosts: the Lichess opening explorer,
+// the public Chess.com and Lichess game lists (game import) and Supabase.
+const connectSrc = ((csp.match(/(?:^|;\s*)connect-src\s+([^;]+)/) || [])[1] || '').trim().split(/\s+/).sort();
+const allowedConnect = ["'self'", 'https://*.supabase.co', 'https://api.chess.com', 'https://explorer.lichess.ovh', 'https://lichess.org', 'wss://*.supabase.co'].sort();
+if (JSON.stringify(connectSrc) !== JSON.stringify(allowedConnect)) {
+  fail(`connect-src must be exactly ${allowedConnect.join(' ')}; got ${connectSrc.join(' ')}`);
+}
 if (/upload\.wikimedia\.org/.test(csp) || /upload\.wikimedia\.org/.test(require('./lib/app-source').appSource())) {
   fail('piece rendering must not depend on Wikimedia at runtime');
 }

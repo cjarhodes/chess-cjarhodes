@@ -482,7 +482,9 @@ async page => {
     await page.evaluate(() => { window.__realChoose = window.chooseCalibratedOpponentMove; window.chooseCalibratedOpponentMove = () => null; });
     try {
       const plies = await page.evaluate(() => coachGame.history().length);
-      await playMove(await page.evaluate(() => coachGame.moves()[0]));
+      // A sound developing move: later checks share this game, so it must
+      // not drift into a lost position.
+      await playMove(await page.evaluate(() => { const legal = coachGame.moves(); return ['d4', 'd3', 'e3', 'Nc3', 'Nf3', 'c3', 'Be2', 'O-O'].find(m => legal.includes(m)) || legal[0]; }));
       await page.waitForFunction(() => document.getElementById('btn-coach-retry-opponent'), null, { timeout: 60000 });
       const status = await page.locator('#coach-status').textContent();
       if (!/did not answer/.test(status)) problems.push('status should say the opponent did not answer: ' + status);
@@ -1010,6 +1012,304 @@ async page => {
       return engineClient.evaluate(new Chess().fen(), 6).then(r => (r && r.bestmove ? Date.now() - t0 : -1));
     });
     if (ms < 0 || ms > 8000) problems.push('a Coach search after leaving Explore took ' + ms + ' ms (or returned nothing)');
+    return problems;
+  });
+
+  await check('online games import, review, archive and count in Insights without touching the live game', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=coach');
+    await page.evaluate(() => { localStorage.clear(); });
+    await page.goto(base + '/?view=coach');
+    await page.waitForFunction(() => window.GameImport && document.getElementById('game-import-form'));
+    const lichessLine = JSON.stringify({ id: 'q7ZvsdUF', rated: true, variant: 'standard', speed: 'blitz', lastMoveAt: 1514505592843, status: 'draw',
+      players: { white: { user: { name: 'Lance5500' }, rating: 2389 }, black: { user: { name: 'TryingHard87' }, rating: 2498 } },
+      opening: { name: 'Semi-Slav Defense: Marshall Gambit' }, clock: { initial: 300, increment: 3 },
+      pgn: '[White "Lance5500"]\n[Black "TryingHard87"]\n[Result "1/2-1/2"]\n\n1. d4 d5 2. c4 c6 3. Nc3 e6 4. e4 Nd7 5. exd5 cxd5 6. cxd5 exd5 7. Nxd5 Nb6 8. Bb5+ Bd7 9. Qe2+ Ne7 10. Nxb6 Qxb6 1/2-1/2' });
+    await page.evaluate(line => {
+      window.__requests = [];
+      window.__mode = 'ok';
+      const month = { games: [{ url: 'https://www.chess.com/game/live/111', uuid: 'aaaa-1111', rules: 'chess', rated: true, time_class: 'rapid', time_control: '600', end_time: 1762300000,
+        white: { username: 'Alex', rating: 1210, result: 'checkmated' }, black: { username: 'Opp1', rating: 1250, result: 'win' },
+        pgn: '[White "Alex"]\n[Black "Opp1"]\n[Result "0-1"]\n\n1. f3 {[%clk 0:09:58]} 1... e5 {[%clk 0:09:57]} 2. g4 {[%clk 0:09:50]} 2... Qh4# 0-1' }] };
+      window.fetch = async (url, init) => {
+        window.__requests.push({ url: String(url), accept: init && init.headers ? init.headers.Accept : null });
+        if (window.__mode === '404') return new Response('{}', { status: 404 });
+        if (window.__mode === '429') return new Response('{}', { status: 429 });
+        if (window.__mode === 'offline') throw new TypeError('Failed to fetch');
+        if (/^https:\/\/lichess\.org\/api\/games\/user\//.test(url)) return new Response(line + '\n', { status: 200 });
+        if (/archives$/.test(url)) return new Response(JSON.stringify({ archives: ['https://api.chess.com/pub/player/alex/games/2026/10', 'https://api.chess.com/pub/player/alex/games/2026/11'] }), { status: 200 });
+        if (/2026\/11$/.test(url)) return new Response(JSON.stringify(month), { status: 200 });
+        if (/2026\/10$/.test(url)) return new Response(JSON.stringify({ games: [] }), { status: 200 });
+        return new Response('{}', { status: 500 });
+      };
+    }, lichessLine);
+    const liveBefore = await page.evaluate(() => ({ pgn: coachGame ? coachGame.pgn() : null, id: coachLocalGameId }));
+    await page.locator('#group-inbox').evaluate(el => { el.open = true; });
+    const statusText = () => page.locator('#game-import-status').textContent();
+    const find = async name => { await page.locator('#game-import-user').fill(name); await page.locator('#btn-game-import-find').click(); };
+
+    await find('a b');
+    if (!/Enter a username/.test(await statusText())) problems.push('a bad username should be refused before any request');
+    if (await page.evaluate(() => window.__requests.length)) problems.push('a bad username was sent');
+    for (const [mode, pattern] of [['404', /no player with that username/], ['429', /limiting requests/], ['offline', /Could not reach Chess\.com/]]) {
+      await page.evaluate(m => { window.__mode = m; }, mode);
+      await find('alex');
+      await page.waitForFunction(() => !document.getElementById('btn-game-import-find').disabled);
+      if (!pattern.test(await statusText())) problems.push(`${mode} should say ${pattern}: ${await statusText()}`);
+    }
+    await page.evaluate(() => { window.__mode = 'ok'; window.__requests = []; });
+    await find('alex');
+    await page.waitForFunction(() => document.querySelectorAll('#game-import-list li').length === 1);
+    const urls = await page.evaluate(() => window.__requests.map(r => r.url));
+    if (urls.join(' ') !== 'https://api.chess.com/pub/player/alex/games/archives https://api.chess.com/pub/player/alex/games/2026/11 https://api.chess.com/pub/player/alex/games/2026/10')
+      problems.push('Chess.com requests should be the archive list, then the newest months: ' + urls.join(' '));
+    const row = await page.locator('#game-import-list li').textContent();
+    if (!/Lost/.test(row) || !/White vs Opp1 \(1250\)/.test(row) || !/rapid/.test(row)) problems.push('the game row should read Lost, White vs Opp1 (1250), rapid: ' + row);
+
+    await page.locator('.game-import-review').click();
+    await page.waitForFunction(() => { const v = document.getElementById('game-viewer'); return v && !v.hidden; }, null, { timeout: 60000 });
+    const game = await page.evaluate(() => GameArchive.load().find(g => g.id === 'chesscom-aaaa-1111'));
+    if (!game) problems.push('the reviewed game was not archived');
+    else {
+      if (game.source !== 'chesscom' || game.opponent !== 'Opp1' || game.elo !== 1250 || game.side !== 'white') problems.push('archived game fields are wrong: ' + JSON.stringify({ source: game.source, opponent: game.opponent, elo: game.elo, side: game.side }));
+      if (game.reviews.map(r => r.ply).join() !== '1,3') problems.push('only the user\'s two moves should be reviewed: ' + game.reviews.map(r => r.ply).join());
+      const g4 = game.reviews.find(r => r.ply === 3);
+      if (!g4 || g4.tier !== 'blunder') problems.push('2.g4, allowing mate in one, should be a blunder: ' + JSON.stringify(g4));
+      if (!(game.accuracy >= 0 && game.accuracy < 50)) problems.push('two bad moves should give a low accuracy: ' + game.accuracy);
+      if (/clk/.test(game.pgn)) problems.push('clock comments should not be stored');
+    }
+    const sub = await page.locator('#game-viewer-sub').textContent();
+    if (!/vs Opp1 \(1250\)/.test(sub) || !/Chess\.com rapid/.test(sub)) problems.push('the viewer should name the opponent and site: ' + sub);
+    if (await page.locator('#game-viewer-source').getAttribute('href') !== 'https://www.chess.com/game/live/111') problems.push('the viewer should link to the game on Chess.com');
+    await page.locator('#btn-game-viewer-close').click();
+    if (await page.locator('.game-import-review').textContent() !== 'Open review') problems.push('a reviewed game should offer Open review');
+    const row2 = await page.evaluate(() => { GameArchive.render(); const li = [...document.querySelectorAll('#game-archive-list .game-archive-meta')].find(el => /Opp1/.test(el.textContent)); return li ? li.textContent : ''; });
+    if (!/ 2 moves/.test(row2)) problems.push('the archive should count the game\'s two moves, not digits in its headers: ' + row2);
+    // Reviewing again after deleting it from the archive replaces, not adds.
+    await page.evaluate(() => GameArchive.remove('chesscom-aaaa-1111'));
+    await page.evaluate(() => GameImport._state().found.length || null);
+    await page.locator('.game-import-review').click();
+    await page.waitForFunction(() => { const v = document.getElementById('game-viewer'); return v && !v.hidden; }, null, { timeout: 60000 });
+    await page.locator('#btn-game-viewer-close').click();
+    const twice = await page.evaluate(() => loadInsights().entries.filter(e => e.localGameId === 'chesscom-aaaa-1111').length);
+    if (twice !== 2) problems.push('a second review should replace the game\'s Insights entries, not add more: ' + twice);
+    const evidence = await page.evaluate(() => loadInsights().entries.filter(e => e.localGameId === 'chesscom-aaaa-1111').map(e => [e.ply, e.tier, e.gameId]));
+    if (evidence.length !== 2 || evidence.some(e => e[2] !== null)) problems.push('both graded moves should count in Insights, tied to the imported game: ' + JSON.stringify(evidence));
+    const liveAfter = await page.evaluate(() => ({ pgn: coachGame ? coachGame.pgn() : null, id: coachLocalGameId }));
+    if (JSON.stringify(liveAfter) !== JSON.stringify(liveBefore)) problems.push('reviewing an imported game should leave the live Coach game alone');
+
+    // Lichess: the NDJSON request, then a long review stopped part-way.
+    await page.locator('#game-import-sources [data-source=lichess]').click();
+    await page.evaluate(() => { window.__requests = []; });
+    await find('TryingHard87');
+    await page.waitForFunction(() => { const f = GameImport._state().found; return f.length === 1 && f[0].source === 'lichess'; });
+    const req = await page.evaluate(() => window.__requests[0]);
+    if (!/^https:\/\/lichess\.org\/api\/games\/user\/TryingHard87\?/.test(req.url) || req.accept !== 'application/x-ndjson') problems.push('the Lichess request should ask for NDJSON: ' + JSON.stringify(req));
+    if (!/Draw/.test(await page.locator('#game-import-list li').textContent())) problems.push('the Lichess draw should read as a draw');
+    await page.locator('.game-import-review').click();
+    await page.waitForFunction(() => /Reviewing your moves: [2-9]/.test(document.getElementById('game-import-status').textContent), null, { timeout: 60000 });
+    await page.locator('.game-import-review').click();
+    await page.waitForFunction(() => /stopped/.test(document.getElementById('game-import-status').textContent), null, { timeout: 60000 });
+    if (await page.evaluate(() => GameArchive.has('lichess-q7ZvsdUF'))) problems.push('a stopped review should not be saved');
+    if (await page.locator('.game-import-review').textContent() !== 'Review') problems.push('after stopping, the game can be reviewed again');
+    if (await page.evaluate(() => JSON.parse(localStorage.getItem('ui:import:v1')).source) !== 'lichess') problems.push('the chosen site should be remembered');
+
+    // A game older than every kept imported game is reported, not blamed on storage.
+    await page.evaluate(() => {
+      const filler = Array.from({ length: GameArchive.LIMIT }, (_, i) => ({ id: 'lichess-new' + i, at: Date.now() - i, result: 'Draw.', side: 'white', elo: 1500, startFen: '', pgn: '1. e4 e5 *', reviews: [], source: 'lichess', opponent: 'X', url: 'https://lichess.org/new' + i }));
+      localStorage.setItem(GameArchive.KEY, JSON.stringify({ v: 1, games: filler }));
+    });
+    await page.locator('#game-import-sources [data-source=chesscom]').click();
+    await find('alex');
+    await page.waitForFunction(() => { const f = GameImport._state().found; return f.length === 1 && f[0].source === 'chesscom'; });
+    await page.locator('.game-import-review').click();
+    await page.waitForFunction(() => /older than the/.test(document.getElementById('game-import-status').textContent), null, { timeout: 60000 })
+      .catch(async () => problems.push('a game outside the archive cap should say so: ' + await statusText()));
+
+    // Imported games have their own cap, so they never push out Coach games.
+    const kept = await page.evaluate(() => {
+      const base = { result: 'Draw.', side: 'white', elo: 1200, startFen: '', pgn: '1. e4 e5 *', reviews: [] };
+      const coach = [1, 2, 3].map(i => Object.assign({ id: 'coach-' + i, at: 1000 + i }, base));
+      const imported = Array.from({ length: GameArchive.LIMIT + 5 }, (_, i) => Object.assign({ id: 'lichess-x' + i, at: 5000 + i, source: 'lichess', opponent: 'X', url: 'https://lichess.org/x' + i }, base));
+      localStorage.setItem(GameArchive.KEY, JSON.stringify({ v: 1, games: coach.concat(imported) }));
+      const list = GameArchive.load();
+      return { coach: list.filter(g => g.source === 'coach').length, imported: list.filter(g => g.source === 'lichess').length, badUrl: GameArchive.merge([], [Object.assign({ id: 'z', at: 1, source: 'lichess', url: 'javascript:alert(1)' }, base)]).games[0].url };
+    });
+    if (kept.coach !== 3 || kept.imported !== await page.evaluate(() => GameArchive.LIMIT)) problems.push('archive caps should be per source: ' + JSON.stringify(kept));
+    if (kept.badUrl !== '') problems.push('only Chess.com and Lichess links are kept');
+    return problems;
+  });
+
+  await check('repertoire trainer drills starred lines with spaced repetition', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=puzzles&mode=repertoire');
+    await page.evaluate(() => { localStorage.clear(); });
+    // The trainer needs only the Library, so it opens even if the puzzle set never loads.
+    await page.route('**/puzzle-data.js', route => route.abort());
+    await page.goto(base + '/?view=puzzles&mode=repertoire');
+    await page.waitForFunction(() => window.PuzzlesView && PuzzlesView._debug().mode === 'repertoire' && !document.getElementById('puzzle-panel-repertoire').hidden, null, { timeout: 10000 })
+      .catch(() => problems.push('the repertoire trainer should open without the puzzle set'));
+    await page.unroute('**/puzzle-data.js');
+    if (await page.locator('#rep-empty').isHidden() || await page.locator('#btn-rep-start').isVisible()) problems.push('with nothing starred, the trainer should point to the Library');
+    await page.locator('#btn-rep-library').click();
+    if (await page.evaluate(() => appView) !== 'library') problems.push('Open the Library should switch to the Library');
+    await page.goto(base + '/?opening=italian');
+    await page.locator('#btn-repertoire-toggle').click();
+    await page.goto(base + '/?view=puzzles&mode=repertoire');
+    await page.waitForFunction(() => !document.getElementById('btn-rep-start').hidden);
+    if (await page.locator('#btn-rep-start').textContent() !== 'Review 3 lines') problems.push('three Italian lines should be ready: ' + await page.locator('#btn-rep-start').textContent());
+    const play = async move => { await page.locator('#puzzle-keyboard-move').evaluate(e => { e.open = true; }); await page.locator('#puzzle-keyboard-move-input').fill(move); await page.locator('#puzzle-keyboard-move-form button').click(); };
+    const ready = () => page.waitForFunction(() => { const x = PuzzlesView._debug().session; return x && x.kind === 'repertoire' && x.phase === 'solving' && !x.busy; }, null, { timeout: 15000 });
+    const current = () => page.evaluate(() => { const x = PuzzlesView._debug().session; return { id: x.card.id, ply: x.ply, uci: x.plies[x.ply].uci, fen: x.plies[x.ply].fenBefore, mistakes: x.mistakes }; });
+    const status = () => page.locator('#puzzle-status').textContent();
+    // Plays the current line to its end; `twist(step)` may return a move to try first.
+    const playLine = async twist => {
+      await ready();
+      const { id } = await current();
+      let notes = [];
+      for (let step = 0; step < 40; step++) {
+        await ready().catch(() => {});
+        const still = await page.evaluate(id => { const x = PuzzlesView._debug().session; return x && x.card.id === id && x.phase === 'solving'; }, id);
+        if (!still) break;
+        const c = await current();
+        const extra = twist ? await twist(step, c) : null;
+        if (extra) { await play(extra.move); await page.waitForTimeout(150); notes.push({ kind: extra.kind, status: await status(), mistakes: (await current()).mistakes }); if (extra.kind === 'wrong') { await page.waitForTimeout(1700); continue; } }
+        await play(c.uci);
+        await page.waitForTimeout(100);
+      }
+      await page.waitForFunction(id => { const d = PuzzlesView._debug(); return !d.session || d.session.card.id !== id || d.session.phase === 'solved'; }, id, { timeout: 15000 });
+      return { id, notes };
+    };
+    // Leaving Puzzles mid-line stops the review; finished lines stay saved.
+    await page.locator('#btn-rep-start').click();
+    await ready();
+    await page.locator('#nav-library').click();
+    await page.locator('#nav-puzzles').click();
+    await page.waitForFunction(() => !PuzzlesView._debug().repRun && /Review stopped when you left/.test(document.getElementById('puzzle-status').textContent), null, { timeout: 5000 })
+      .catch(() => problems.push('leaving Puzzles should stop the review'));
+    await page.locator('#btn-rep-start').click();
+    const first = await playLine(null);
+    const rec = await page.evaluate(id => JSON.parse(localStorage.getItem(PuzzlesView.repertoireKey())).records[id], first.id);
+    const tomorrow = await page.evaluate(() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + 1); return d.getTime(); });
+    if (!rec || rec.reps !== 1 || rec.dueAt !== tomorrow) problems.push('a clean line should be due at the next local midnight: ' + JSON.stringify(rec));
+    // Second line: first try a move from a sibling line where the lines part.
+    let siblingTried = false;
+    const second = await playLine(async (step, c) => {
+      const sibling = await page.evaluate(c => {
+        const cards = RepertoireCore.cardsFor(OPENINGS, ['italian'], OpponentPersonas.lineSide);
+        const index = RepertoireCore.moveIndex(Chess, cards);
+        const moves = index.get('w|' + c.fen.split(' ').slice(0, 4).join(' '));
+        return moves ? [...moves.keys()].find(u => u !== c.uci) || null : null;
+      }, c);
+      if (sibling && !siblingTried) { siblingTried = true; return { kind: 'sibling', move: sibling }; }
+      return null;
+    });
+    const sib = second.notes.find(n => n.kind === 'sibling');
+    if (!sib) problems.push('the Italian lines should part on one of White\'s moves');
+    else if (!/That is your move in/.test(sib.status) || sib.mistakes !== 0) problems.push('a sibling line\'s move should be named and not counted: ' + JSON.stringify(sib));
+    const secondRec = await page.evaluate(id => JSON.parse(localStorage.getItem(PuzzlesView.repertoireKey())).records[id], second.id);
+    if (!secondRec || secondRec.reps !== 1) problems.push('the sibling move should leave the line clean: ' + JSON.stringify(secondRec));
+    // Third line: one real mistake.
+    const third = await playLine(async (step, c) => {
+      if (step !== 1) return null;
+      const wrong = await page.evaluate(c => {
+        const cards = RepertoireCore.cardsFor(OPENINGS, ['italian'], OpponentPersonas.lineSide);
+        const index = RepertoireCore.moveIndex(Chess, cards);
+        const known = index.get('w|' + c.fen.split(' ').slice(0, 4).join(' ')) || new Map();
+        const g = new Chess(c.fen);
+        const m = g.moves({ verbose: true }).find(x => !known.has(x.from + x.to + (x.promotion || '')));
+        return m.from + m.to + (m.promotion || '');
+      }, c);
+      return { kind: 'wrong', move: wrong };
+    });
+    if (!/^[A-Za-z0-9+#=-]+\. Your move\.$/.test(await status()) && !/Line complete|reviewed/.test(await status())) problems.push('the opponent\'s move should be announced: ' + await status());
+    const miss = third.notes.find(n => n.kind === 'wrong');
+    if (!miss || !/Not this line\. It plays/.test(miss.status) || miss.mistakes !== 1) problems.push('a wrong move should show the line\'s move and count: ' + JSON.stringify(miss));
+    const thirdRec = await page.evaluate(id => JSON.parse(localStorage.getItem(PuzzlesView.repertoireKey())).records[id], third.id);
+    if (!thirdRec || thirdRec.lapses !== 1 || thirdRec.reps !== 0 || thirdRec.dueAt - thirdRec.lastAt !== 10 * 60 * 1000) problems.push('a line with a mistake should come back in ten minutes: ' + JSON.stringify(thirdRec));
+    await page.waitForFunction(() => !document.getElementById('rep-summary').hidden, null, { timeout: 15000 });
+    const summary = await page.locator('#rep-summary').textContent();
+    if (summary !== '3 lines reviewed, 2 first try. 1 comes back in ten minutes.') problems.push('session summary: ' + summary);
+    if (await page.locator('#btn-rep-start').textContent() !== 'Nothing due' || !await page.locator('#btn-rep-start').isDisabled()) problems.push('with every line reviewed, nothing should be due');
+    if (!await page.evaluate(() => trainingBackupKeys().includes(PuzzlesView.repertoireKey()))) problems.push('repertoire records should be in training backups');
+    return problems;
+  });
+
+  await check('Coach clocks charge the side to move, pause, survive a reload and end the game on time', async () => {
+    const problems = [];
+    // The clock's only boundary is its time source: advance performance.now.
+    const fakeTime = () => page.evaluate(() => { const real = performance.now.bind(performance); window.__offset = 0; performance.now = () => real() + window.__offset; });
+    const advance = ms => page.evaluate(ms => { window.__offset += ms; }, ms);
+    const clock = () => page.evaluate(() => CoachClock._state());
+    const play = async m => { await page.locator('#coach-keyboard-move').evaluate(e => { e.open = true; }); await page.locator('#coach-keyboard-move-input').fill(m); await page.locator('#coach-keyboard-move-form button').click(); };
+    const settled = n => page.waitForFunction(n => coachGameActive && !coachThinking && coachIsUserTurn() && coachGame.history().length === n, n, { timeout: 60000 });
+    await page.goto(base + '/?view=coach');
+    await page.evaluate(() => { localStorage.clear(); });
+    await page.goto(base + '/?view=coach');
+    await fakeTime();
+    await page.locator('#btn-coach-newgame').click();
+    await page.waitForFunction(() => coachGameActive);
+    await page.waitForTimeout(300);
+    if (await clock() !== null || await page.locator('#coach-clock-bottom').isVisible()) problems.push('games are untimed by default');
+    // Choosing a control before the first move times the game on the board.
+    await page.locator('#coach-game-options').evaluate(el => { el.open = true; });
+    await page.locator('#coach-clock-control').selectOption('3+2');
+    await page.waitForFunction(() => CoachClock._state() && CoachClock._state().running === 'w');
+    await advance(5000);
+    await play('e4');
+    await settled(2);
+    let s = await clock();
+    // Real time keeps passing on White's clock after the reply, so allow a
+    // little below 3:00 − 5 s + 2 s.
+    if (s.ms.w > 177200 || s.ms.w < 175000) problems.push('White should have about 3:00 − 5 s + 2 s: ' + s.ms.w);
+    // Black is charged only for its own search (Coach's grading pauses the
+    // clocks), then gets the increment.
+    if (s.ms.b < 179000 || s.ms.b > 182000) problems.push('Black should have its time plus the increment, less its own search: ' + s.ms.b);
+    const face = await page.evaluate(() => { CoachClock.tick(); const el = document.getElementById('coach-clock-bottom'); return { text: el.textContent, want: ClockCore.format(CoachClock._state().ms.w), running: el.classList.contains('running') }; });
+    if (face.text !== face.want || !face.running) problems.push('the bottom clock should show White\'s running time: ' + JSON.stringify(face));
+    // Leaving Coach pauses the clock.
+    await page.locator('#nav-library').click();
+    await page.waitForTimeout(250);
+    const away = (await clock()).ms.w;
+    await advance(60000);
+    await page.waitForTimeout(250);
+    if ((await clock()).ms.w !== away) problems.push('the clock should not run while Coach is not on screen');
+    await page.locator('#nav-coach').click();
+    // A reload keeps the game's clock.
+    const beforeReload = (await clock()).ms.w;
+    await page.reload();
+    await fakeTime();
+    await page.waitForFunction(() => CoachClock._state());
+    const after = await clock();
+    if (Math.abs(after.ms.w - beforeReload) > 1500 || after.control !== '3+2') problems.push('a reload should keep the clock: ' + JSON.stringify({ beforeReload, after: after.ms.w }));
+    // Mid-game, a new choice waits for the next game.
+    await page.locator('#coach-game-options').evaluate(el => { el.open = true; });
+    await page.locator('#coach-clock-control').selectOption('10+0');
+    if (!/next game/.test(await page.locator('#coach-clock-note').textContent()) || (await clock()).control !== '3+2') problems.push('changing the control mid-game should apply to the next game');
+    // Running out on your move loses, and the result is recorded like a resignation.
+    await advance(200000);
+    await page.waitForFunction(() => !coachGameActive, null, { timeout: 5000 });
+    const end = await page.evaluate(() => ({ msg: coachLastEndMsg, result: remoteGameResult(coachLastEndMsg), clock: CoachClock._state() }));
+    if (end.msg !== 'Time — Black wins.' || end.result !== '0-1' || end.clock.flagged !== 'w') problems.push('a flag should lose on time: ' + JSON.stringify(end));
+    if (!(await page.locator('#coach-clock-bottom').getAttribute('class')).includes('flagged')) problems.push('the flagged clock should show it');
+    await page.waitForFunction(() => GameArchive.load().length === 1, null, { timeout: 5000 }).catch(() => problems.push('the timed-out game should be archived'));
+    // The next game uses the newly chosen control, and a stalled opponent
+    // (the engine gave no move) is not charged while Retry waits.
+    await page.locator('#btn-summary-newgame').waitFor({ timeout: 10000 });
+    await page.locator('#btn-summary-newgame').click();
+    await page.waitForFunction(() => coachGameActive && CoachClock._state() && CoachClock._state().control === '10+0', null, { timeout: 5000 }).catch(() => problems.push('the next game should use 10+0'));
+    await page.evaluate(() => { window.__realChoose = window.chooseCalibratedOpponentMove; window.chooseCalibratedOpponentMove = () => null; });
+    try {
+      await play('d4');
+      await page.waitForFunction(() => document.getElementById('btn-coach-retry-opponent'), null, { timeout: 60000 });
+      await page.evaluate(() => CoachClock.tick());
+      const stalled = (await clock()).ms.b;
+      await advance(120000);
+      await page.waitForTimeout(250);
+      if ((await clock()).ms.b !== stalled) problems.push('the opponent\'s clock should not run while its move failed and Retry waits');
+    } finally {
+      await page.evaluate(() => { if (window.__realChoose) window.chooseCalibratedOpponentMove = window.__realChoose; });
+    }
     return problems;
   });
 

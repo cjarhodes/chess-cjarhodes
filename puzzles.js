@@ -14,7 +14,7 @@
   let loading = null;          // Promise while puzzle-data.js loads
   let board = null;
   let orientation = 'white';
-  let mode = 'rated';          // rated | daily | rush | vision
+  let mode = 'rated';          // rated | daily | rush | vision | endgames | repertoire
   let initialMode = null;
   let visible = false;
   let themeGroup = 'all';
@@ -22,6 +22,7 @@
   let rush = null;             // running Rush run
   let vision = null;           // running Vision run
   let lastRush = null;         // finished Rush run, for review
+  let repRun = null;           // repertoire review session: { queue, at, results, index }
   let tapFrom = null;
   let timers = [];
   let generation = 0;          // invalidates delayed work after a change
@@ -62,6 +63,20 @@
       saveGrowthState(growth);
     }
     return true;
+  }
+
+  // ── Repertoire storage ────────────────────────
+  // Spaced-repetition records per line, in this browser and in backups.
+  const Rep = window.RepertoireCore;
+  function repKey() { return Rep.storageKeyFor(ownerId()); }
+  function repLoad() { try { return Rep.normalizeState(JSON.parse(localStorage.getItem(repKey()))); } catch (e) { return Rep.emptyState(); } }
+  function repSave(state) {
+    try { localStorage.setItem(repKey(), JSON.stringify(Rep.normalizeState(state))); return true; } catch (e) { return false; }
+  }
+  function repCards() {
+    const ids = typeof repertoireIds === 'function' ? repertoireIds() : [];
+    const sideOf = window.OpponentPersonas ? window.OpponentPersonas.lineSide : (id, o) => (o.category === 'black' ? 'b' : 'w');
+    return Rep.cardsFor(typeof OPENINGS !== 'undefined' ? OPENINGS : [], ids, sideOf);
   }
 
   // ── Timers ────────────────────────────────────
@@ -263,6 +278,7 @@
   function submitMove(uci, opts) {
     if (!canMove()) return false;
     if (session.kind === 'endgame') return endgameMove(uci, opts || {});
+    if (session.kind === 'repertoire') return repMove(uci, opts || {});
     const options = opts || {};
     clearTap();
     markSquares('hint-square', []);
@@ -371,6 +387,7 @@
   function showHint() {
     if (!canMove()) return;
     if (session.kind === 'endgame') { endgameHint(); return; }
+    if (session.kind === 'repertoire') { repHint(); return; }
     const expected = session.puzzle.moves[session.ply];
     if (!expected) return;
     session.hinted = true;
@@ -424,7 +441,7 @@
 
   function nextPuzzle() {
     // Rush, Vision and Endgames own the board while they are open.
-    if (!puzzles || mode === 'rush' || mode === 'vision' || mode === 'endgames') return;
+    if (!puzzles || mode === 'rush' || mode === 'vision' || mode === 'endgames' || mode === 'repertoire') return;
     if (session && session.source === 'review') {
       const queue = loadedMissed().filter(id => id !== session.puzzle.id);
       if (queue.length) { startReview(queue[0]); return; }
@@ -434,7 +451,7 @@
 
   // A rated puzzle near the player's rating, on the chosen theme.
   function nextRated() {
-    if (!puzzles || mode === 'rush' || mode === 'vision' || mode === 'endgames') return;
+    if (!puzzles || mode === 'rush' || mode === 'vision' || mode === 'endgames' || mode === 'repertoire') return;
     if (mode === 'daily') { setMode('rated'); return; }
     const state = loadState();
     const pick = Core.selectPuzzle(puzzles, { target: state.rating, group: themeGroup, exclude: Core.recentIds(state) });
@@ -838,6 +855,210 @@
     });
   }
 
+  // ── Repertoire trainer ────────────────────────
+  // Play your side of each due line from memory. The opponent's moves are
+  // played for you; a wrong move shows the line's move and plays it, and the
+  // line comes back in ten minutes. Scheduling lives in repertoire-core.js.
+  function startRepSession() {
+    const cards = repCards();
+    const queue = Rep.queue(cards, repLoad(), Date.now());
+    repSummary('');
+    if (!queue.length) { renderRepertoire(); setStatus('Nothing is due. Come back when lines are due, or star more openings.'); return; }
+    // Progress saves to the account the session started under.
+    repRun = { queue, at: 0, results: [], index: Rep.moveIndex(Chess, cards), key: repKey() };
+    startRepCard();
+  }
+
+  function startRepCard() {
+    cancelPending();
+    const card = repRun.queue[repRun.at];
+    const plies = Rep.plies(Chess, card);
+    if (!plies) { repRun.at++; if (repRun.at < repRun.queue.length) startRepCard(); else endRepSession(); return; }
+    orientation = card.side === 'w' ? 'white' : 'black';
+    session = { kind: 'repertoire', card, plies, ply: 0, game: new Chess(), solver: card.side, phase: 'solving', busy: false, mistakes: 0, hinted: false };
+    createBoard('start');
+    setLastMove(null);
+    const kb = document.getElementById('puzzle-keyboard-move-status');
+    if (kb) kb.textContent = '';
+    setPhase(`Line ${repRun.at + 1} of ${repRun.queue.length} · ${card.side === 'w' ? 'White' : 'Black'}`);
+    renderRepertoire();
+    if (!plies[0].mine) {
+      session.busy = true;
+      setStatus(`${card.name}. Watch White's move.`);
+      later(repOpponent, OPPONENT_DELAY);
+    } else {
+      setStatus(`${card.name}. Your move.`);
+    }
+    updateControls();
+  }
+
+  function repOpponent() {
+    if (!session || session.kind !== 'repertoire') return;
+    const ply = session.plies[session.ply];
+    const move = Core.applyUci(session.game, ply.uci);
+    session.ply++;
+    board.position(session.game.fen());
+    setLastMove(move);
+    moveSound(move, session.game);
+    describeBoard();
+    session.busy = false;
+    setStatus(`${move.san}. Your move.`);
+    updateControls();
+    // Typed moves keep the move field focused through the opponent's reply.
+    if (session.typed) {
+      const input = document.getElementById('puzzle-keyboard-move-input');
+      if (input && document.getElementById('puzzle-keyboard-move').open) input.focus({ preventScroll: true });
+    }
+  }
+
+  // Plays the line's move (the user's correct move, or the shown answer).
+  function repAdvance(ply, animate, fromDrop) {
+    const move = Core.applyUci(session.game, ply.uci);
+    session.ply++;
+    clearTap();
+    markSquares('hint-square', []);
+    if (!fromDrop) board.position(session.game.fen(), animate);
+    setLastMove(move);
+    moveSound(move, session.game);
+    describeBoard();
+    if (session.ply >= session.plies.length) { finishRepCard(); return; }
+    session.busy = true;
+    updateControls();
+    later(repOpponent, OPPONENT_DELAY);
+  }
+
+  function repMove(uci, options) {
+    const normalized = Core.normalizeUci(session.game, uci);
+    if (!normalized) { if (board && !options.fromDrop) board.position(session.game.fen(), false); return false; }
+    const ply = session.plies[session.ply];
+    const verdict = Rep.grade(repRun.index, session.card, ply, normalized);
+    session.typed = !!options.animate;
+    setArrows(null);
+    if (verdict === 'ok') {
+      flash('good');
+      repAdvance(ply, !!options.animate, !!options.fromDrop);
+      if (session && session.phase === 'solving') setStatus('Correct.');
+      return true;
+    }
+    if (board && !options.fromDrop) board.position(session.game.fen(), false);
+    clearTap();
+    if (verdict && verdict.other) {
+      // One slip into a sibling line is free; a second guess at the same
+      // move counts like a hint.
+      session.siblingTries = session.siblingTries || {};
+      session.siblingTries[session.ply] = (session.siblingTries[session.ply] || 0) + 1;
+      if (session.siblingTries[session.ply] > 1) session.hinted = true;
+      setStatus(`That is your move in ${verdict.other}. This line goes another way: try again.` + (session.hinted && session.siblingTries[session.ply] > 1 ? ' A second guess here counts as a hint.' : ''));
+      return false;
+    }
+    session.mistakes++;
+    chime('wrong');
+    flash('bad');
+    session.busy = true;
+    updateControls();
+    setArrows([{ from: ply.uci.slice(0, 2), to: ply.uci.slice(2, 4), kind: 'hint' }]);
+    setStatus(`Not this line. It plays ${ply.san}.`);
+    const current = session;
+    later(() => {
+      if (session !== current) return;
+      setArrows(null);
+      repAdvance(ply, true, false);
+    }, 1400);
+    return false;
+  }
+
+  function repHint() {
+    const ply = session.plies[session.ply];
+    session.hinted = true;
+    setArrows([{ from: ply.uci.slice(0, 2), to: ply.uci.slice(2, 4), kind: 'hint' }]);
+    setStatus(`Hint: ${ply.san}. A hint brings this line back in ten minutes.`);
+  }
+
+  function finishRepCard() {
+    const clean = session.mistakes === 0 && !session.hinted;
+    let stored = null;
+    try { stored = JSON.parse(localStorage.getItem(repRun.key)); } catch (e) { stored = null; }
+    try { localStorage.setItem(repRun.key, JSON.stringify(Rep.review(stored, session.card.id, clean, Date.now()))); } catch (e) { /* this line's result is lost */ }
+    repRun.results.push({ name: session.card.name, clean });
+    session.phase = 'solved';
+    session.busy = true;
+    if (clean) chime('solved');
+    setStatus(clean ? 'Line complete, first try.' : 'Line complete. It comes back in ten minutes.');
+    renderRepertoire();
+    updateControls();
+    repRun.at++;
+    later(() => { if (!repRun) return; if (repRun.at < repRun.queue.length) startRepCard(); else endRepSession(); }, 1100);
+  }
+
+  function endRepSession() {
+    const results = repRun ? repRun.results : [];
+    repRun = null;
+    if (session && session.kind === 'repertoire') { session.busy = false; session.phase = 'solved'; }
+    const clean = results.filter(r => r.clean).length;
+    setPhase('Review complete');
+    const text = `${results.length} line${results.length === 1 ? '' : 's'} reviewed, ${clean} first try.` +
+      (results.length - clean ? ` ${results.length - clean} come${results.length - clean === 1 ? 's' : ''} back in ten minutes.` : '');
+    setStatus(text);
+    repSummary(text);
+    renderRepertoire();
+    updateControls();
+  }
+
+  function repSummary(text) {
+    const el = document.getElementById('rep-summary');
+    if (el) { el.hidden = !text; el.textContent = text || ''; }
+  }
+
+  function whenLabel(ts) {
+    const days = Math.round((Rep.addDays(ts, 0) - Rep.addDays(Date.now(), 0)) / 86400000);
+    if (days <= 0) return 'later today';
+    if (days === 1) return 'tomorrow';
+    return `in ${days} days`;
+  }
+
+  let repDueTimer = null;
+  function renderRepertoire() {
+    const stats = document.getElementById('rep-stats');
+    if (!stats) return;
+    // Re-render when the next line comes due (a ten-minute relearn, or
+    // midnight), so Start does not stay disabled on a stale count.
+    clearTimeout(repDueTimer);
+    const cards = repCards();
+    const state = repLoad();
+    const now = Date.now();
+    const s = Rep.stats(cards, state, now);
+    const detail = document.getElementById('puzzle-repertoire-detail');
+    if (detail) detail.textContent = s.due ? `${s.due} line${s.due === 1 ? '' : 's'} due` : 'Drill your starred openings';
+    document.getElementById('rep-empty').hidden = cards.length > 0;
+    const start = document.getElementById('btn-rep-start');
+    const ready = s.due + s.newToday;
+    start.hidden = !cards.length;
+    start.disabled = !!repRun || !ready;
+    start.textContent = repRun ? 'Reviewing…' : ready ? `Review ${Math.min(ready, Rep.SESSION_LIMIT)} line${Math.min(ready, Rep.SESSION_LIMIT) === 1 ? '' : 's'}` : 'Nothing due';
+    const wait = s.nextDue ? s.nextDue - now + 500 : 0;
+    if (wait > 0 && wait < 86400000) repDueTimer = setTimeout(() => { if (visible) renderRepertoire(); }, wait);
+    stats.hidden = !cards.length;
+    stats.textContent = cards.length ? [`${s.total} line${s.total === 1 ? '' : 's'}`, `${s.learned} learned`, `${s.due} due`, s.fresh ? `${s.fresh} new (${s.newToday} today)` : '',
+      !s.due && s.nextDue ? `next due ${whenLabel(s.nextDue)}` : ''].filter(Boolean).join(' · ') : '';
+    const list = document.getElementById('rep-list');
+    list.textContent = '';
+    const byOpening = new Map();
+    cards.forEach(c => { if (!byOpening.has(c.openingId)) byOpening.set(c.openingId, []); byOpening.get(c.openingId).push(c); });
+    byOpening.forEach(group => {
+      const li = document.createElement('li');
+      li.className = 'rep-row';
+      const name = document.createElement('span');
+      name.className = 'rep-name';
+      name.textContent = group[0].name.split(':')[0] + (group[0].side === 'w' ? ' · White' : ' · Black');
+      const meta = document.createElement('span');
+      meta.className = 'rep-meta';
+      const g = Rep.stats(group, state, now);
+      meta.textContent = `${g.total} line${g.total === 1 ? '' : 's'} · ${g.learned} learned${g.due ? ` · ${g.due} due` : ''}`;
+      li.append(name, meta);
+      list.appendChild(li);
+    });
+  }
+
   // The Rush clock and Vision prompt take height from the board.
   function syncBars() {
     const bar = mode === 'rush' ? !!(rush || lastRush) : mode === 'vision' ? !!vision : false;
@@ -862,7 +1083,7 @@
     const themes = document.getElementById('puzzle-themes');
     const source = document.getElementById('puzzle-source');
     const next = document.getElementById('btn-puzzle-next');
-    if (!session || session.source === 'rush' || session.kind === 'endgame') return;
+    if (!session || session.source === 'rush' || session.kind === 'endgame' || session.kind === 'repertoire') return;
     const p = session.puzzle;
     const side = session.solver === 'w' ? 'White' : 'Black';
     const labels = { rated: 'Rated puzzle', daily: 'Daily puzzle · ' + Core.dayKey(), replay: 'Replay · unrated', review: 'Missed puzzle review · unrated', 'daily-retry': 'Daily puzzle · retry' };
@@ -1076,6 +1297,14 @@
     const solving = canMove();
     const inPuzzle = !!session && mode !== 'vision';
     const rushing = !!rush;
+    if (session && session.kind === 'repertoire') {
+      document.getElementById('btn-puzzle-hint').disabled = !solving;
+      document.getElementById('btn-puzzle-solution').disabled = true;
+      document.getElementById('btn-puzzle-retry').disabled = true;
+      document.getElementById('btn-puzzle-flip').disabled = false;
+      document.getElementById('puzzle-keyboard-move-input').disabled = !solving;
+      return;
+    }
     if (session && session.kind === 'endgame') {
       document.getElementById('btn-puzzle-hint').disabled = !solving;
       document.getElementById('btn-puzzle-solution').disabled = true;
@@ -1103,18 +1332,34 @@
     if (rush && next !== 'rush') endRush('Run ended.');
     if (vision && next !== 'vision') endVision(true);
     if (mode === 'endgames' && next !== 'endgames' && session && session.kind === 'endgame') { egToken++; session = null; }
+    if (next !== 'repertoire' && (repRun || (session && session.kind === 'repertoire'))) { cancelPending(); repRun = null; session = null; }
     mode = next;
     document.querySelectorAll('.puzzle-mode').forEach(btn => {
       const active = btn.getAttribute('data-mode') === mode;
       btn.classList.toggle('active', active);
       btn.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
-    const panel = mode === 'rush' ? 'rush' : mode === 'vision' ? 'vision' : mode === 'endgames' ? 'endgames' : 'rated';
+    const panel = ['rush', 'vision', 'endgames', 'repertoire'].includes(mode) ? mode : 'rated';
     document.querySelectorAll('.puzzle-panel').forEach(el => { el.hidden = el.id !== 'puzzle-panel-' + panel; });
     syncBars();
     document.getElementById('puzzle-keyboard-move').hidden = mode === 'vision';
     document.getElementById('puzzles-view').classList.toggle('vision-active', mode === 'vision');
     if (typeof updateURL === 'function' && visible) updateURL();
+    // The repertoire trainer needs only the Library lines, not the puzzle set.
+    if (mode === 'repertoire') {
+      if (!session || session.kind !== 'repertoire') {
+        cancelPending();
+        session = null;
+        orientation = 'white';
+        createBoard('start', { static: true });
+        setLastMove(null);
+        setPhase('My repertoire');
+        setStatus(repCards().length ? 'Start a review to play your due lines.' : 'Star openings in the Library to build your repertoire.');
+      }
+      renderRepertoire();
+      updateControls();
+      return;
+    }
     if (!puzzles || options.keepSession) { updateControls(); return; }
     if (mode === 'endgames') {
       if (!session || session.kind !== 'endgame') {
@@ -1193,7 +1438,7 @@
       if (mode !== 'rated') setMode('rated');
       else if (!session || session.source === 'review' || session.phase === 'solved' || session.outcome || session.ply <= 1) nextRated();
     });
-    document.querySelectorAll('.puzzle-mode').forEach(btn => btn.addEventListener('click', () => setMode(btn.getAttribute('data-mode'))));
+    document.querySelectorAll('.puzzle-mode').forEach(btn => btn.addEventListener('click', () => { initialMode = null; setMode(btn.getAttribute('data-mode')); }));
     document.getElementById('btn-puzzle-next').addEventListener('click', nextPuzzle);
     document.getElementById('btn-puzzle-review').addEventListener('click', reviewMissed);
     document.getElementById('btn-puzzle-hint').addEventListener('click', showHint);
@@ -1205,6 +1450,8 @@
       orientation = board.orientation();
     });
     document.getElementById('btn-puzzle-rush-start').addEventListener('click', startRush);
+    document.getElementById('btn-rep-start').addEventListener('click', startRepSession);
+    document.getElementById('btn-rep-library').addEventListener('click', () => { if (typeof switchView === 'function') switchView('library'); });
     document.getElementById('btn-puzzle-rush-stop').addEventListener('click', () => endRush('Run ended.'));
     document.getElementById('btn-puzzle-vision-start').addEventListener('click', startVision);
     document.querySelectorAll('#puzzle-vision-side button').forEach(btn => btn.addEventListener('click', () => {
@@ -1250,9 +1497,18 @@
     renderHistory();
     renderRushBests();
     renderVisionBest();
+    renderRepertoire();
     if (board) setTimeout(() => board && board.resize(), 0);
     if (puzzles) {
       if (initialMode) { const m = initialMode; initialMode = null; setMode(m); }
+      return;
+    }
+    // The repertoire trainer needs only the Library, so it opens at once;
+    // the puzzle set keeps loading in the background.
+    if ((initialMode || mode) === 'repertoire') {
+      initialMode = null;
+      setMode('repertoire');
+      ensureData().catch(() => { /* puzzles retry when their modes open */ });
       return;
     }
     setStatus('Loading puzzles…');
@@ -1260,7 +1516,8 @@
     ensureData().then(() => {
       const start = initialMode || mode;
       initialMode = null;
-      if (visible) setMode(start);
+      // A mode chosen while loading (such as the repertoire) is already open.
+      if (visible && start !== 'repertoire') setMode(start);
     }).catch(err => setStatus(err.message));
   }
 
@@ -1270,6 +1527,19 @@
     if (session && session.kind === 'endgame' && session.busy && session.phase === 'solving') egRollback(session, 'Your last move was taken back when you left. Play it again.');
     if (rush) endRush('Run ended when you left Puzzles.');
     if (vision) endVision(true);
+    // Lines already finished are saved; the one in progress stops here.
+    if (repRun || (session && session.kind === 'repertoire' && session.phase === 'solving')) {
+      cancelPending();
+      repRun = null;
+      session = null;
+      if (mode === 'repertoire') {
+        createBoard('start', { static: true });
+        setLastMove(null);
+        setPhase('My repertoire');
+        setStatus('Review stopped when you left. Finished lines are saved.');
+        renderRepertoire();
+      }
+    }
     clearTap();
   }
 
@@ -1318,9 +1588,10 @@
     show,
     hide,
     urlMode: () => (mode === 'rated' ? null : mode),
-    setInitialMode: m => { if (['rated', 'daily', 'rush', 'vision', 'endgames'].includes(m)) { initialMode = m; mode = m; } },
+    setInitialMode: m => { if (['rated', 'daily', 'rush', 'vision', 'endgames', 'repertoire'].includes(m)) { initialMode = m; mode = m; } },
+    repertoireKey: () => repKey(),
     // Exposed for tests and the console.
-    _debug: () => ({ mode, session, rush, vision, puzzles: puzzles ? puzzles.length : 0, state: loadState() }),
+    _debug: () => ({ mode, session, rush, vision, repRun, puzzles: puzzles ? puzzles.length : 0, state: loadState() }),
     _start: id => { const p = puzzles && puzzles.find(row => row.id === id); if (p) startPuzzle(p, { rated: true, source: 'rated' }); return !!p; }
   };
 

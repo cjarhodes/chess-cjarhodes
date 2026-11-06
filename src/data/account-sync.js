@@ -430,6 +430,10 @@ function remoteGameResult(endReason) {
   if (endReason && endReason.includes('Resigned')) {
     return coachUserColor() === 'white' ? '0-1' : '1-0';
   }
+  // Clock results (coach-clock.js): "Time — White wins." or a draw when the
+  // winner had nothing left to mate with.
+  if (endReason && /^Time — (White|Black) wins\./.test(endReason)) return endReason.includes('White wins') ? '1-0' : '0-1';
+  if (endReason && endReason.startsWith('Draw: time ran out')) return '1/2-1/2';
   return '*';
 }
 

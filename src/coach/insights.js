@@ -297,10 +297,13 @@ function insightEntryFromReview(review) {
   const pairNum = review.pairNum || Math.ceil((review.ply || 1) / 2);
   const tags = review.insightTags || insightTagsForReview(review);
   review.insightTags = tags;
+  // Imported games (pasted or fetched) are not the live Coach game, so they
+  // never borrow its ids or opening.
+  const imported = review.source === 'import';
   return {
     id: review.insightId || null,
-    gameId: review.remoteGameId || coachRemoteGameId || null,
-    localGameId: review.localGameId || coachLocalGameId || null,
+    gameId: review.remoteGameId || (imported ? null : coachRemoteGameId) || null,
+    localGameId: review.localGameId || (imported ? null : coachLocalGameId) || null,
     ts: review.insightAt || Date.now(),
     tier: review.tier,
     loss: Math.round(review.loss || 0),
@@ -313,8 +316,8 @@ function insightEntryFromReview(review) {
     fenBefore: review.fenBefore || null,
     userUci: review.userUci || null,
     bestUci: review.bestUci || null,
-    opening: review.opening || currentCoachOpeningName(),
-    openingId: review.openingId || (coachOpeningTransfer ? coachOpeningTransfer.openingId : null),
+    opening: review.opening || (imported ? null : currentCoachOpeningName()),
+    openingId: review.openingId || (!imported && coachOpeningTransfer ? coachOpeningTransfer.openingId : null),
     continuation: Array.isArray(review.continuation) ? review.continuation.slice(0, 1) : null,
     lesson: review.lesson || null,
     opponentThreat: review.opponentThreat || null,
