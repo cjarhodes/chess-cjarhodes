@@ -5,7 +5,8 @@
 (function() {
   'use strict';
   const KEY = 'coach:archive:v1';
-  const LIMIT = 40;
+  const LIMIT = 40;     // per source: Coach games, and games imported from Chess.com or Lichess
+  const SOURCES = { chesscom: 'Chess.com', lichess: 'Lichess' };
   const TIERS = ['best', 'excellent', 'good', 'book', 'inaccuracy', 'mistake', 'blunder', 'unknown'];
   const GLYPH = { best: '★', excellent: '✓', good: '✓', book: '≡', inaccuracy: '?!', mistake: '?', blunder: '??' };
   let viewer = null;     // { game, plies: [fen...], moves, cursor, board, returnFocus }
@@ -25,9 +26,19 @@
           .map(r => ({ ply: r.ply, tier: r.tier, flair: r.flair === 'great' || r.flair === 'brilliant' ? r.flair : null,
             userSan: String(r.userSan || '').slice(0, 12), bestSan: String(r.bestSan || '').slice(0, 12),
             bestUci: typeof r.bestUci === 'string' ? r.bestUci.slice(0, 5) : '', userUci: typeof r.userUci === 'string' ? r.userUci.slice(0, 5) : '',
-            cp: Number.isFinite(r.cp) ? Math.max(-10000, Math.min(10000, r.cp)) : null }))
+            cp: Number.isFinite(r.cp) ? Math.max(-10000, Math.min(10000, r.cp)) : null })),
+        // Imported games name their real opponent and where they were played.
+        source: SOURCES[row.source] ? row.source : 'coach',
+        opponent: SOURCES[row.source] ? String(row.opponent || '').slice(0, 40) : '',
+        url: SOURCES[row.source] && /^https:\/\/(www\.chess\.com|lichess\.org)\//.test(String(row.url || '')) ? String(row.url).slice(0, 200) : '',
+        speed: SOURCES[row.source] ? String(row.speed || '').slice(0, 20) : ''
       }))
-      .sort((a, b) => b.at - a.at).slice(0, LIMIT);
+      .sort((a, b) => b.at - a.at)
+      .filter((counts => row => { const k = row.source === 'coach' ? 'coach' : 'imported'; counts[k] = (counts[k] || 0) + 1; return counts[k] <= LIMIT; })({}));
+  }
+  function opponentLabel(row) {
+    if (row.source === 'coach') return String(row.elo);
+    return row.elo ? `${row.opponent} (${row.elo})` : row.opponent;
   }
   // Stored as { v: 1, games } so training backups can carry it; a bare
   // array (the first format) is still read.
@@ -97,6 +108,15 @@
     } catch (e) { /* the archive must never break the game summary */ }
   }
 
+  // Imported games (game-import.js) arrive fully reviewed.
+  function add(entry) {
+    const list = load();
+    const ok = save([entry].concat(list.filter(row => row.id !== entry.id)));
+    render();
+    return ok && load().some(row => row.id === entry.id);
+  }
+  function has(id) { return load().some(row => row.id === id); }
+
   function remove(id) {
     save(load().filter(row => row.id !== id));
     render();
@@ -113,7 +133,7 @@
     section.id = 'game-archive-section';
     section.setAttribute('aria-labelledby', 'game-archive-heading');
     section.innerHTML = '<div class="game-archive-head"><h3 class="section-label" id="game-archive-heading">Game archive</h3><span class="game-archive-count" id="game-archive-count"></span></div>' +
-      '<ol class="game-archive-list" id="game-archive-list"></ol><p class="progress-method">Kept in this browser (latest ' + LIMIT + ' games). Copy a PGN to keep a game elsewhere.</p>';
+      '<ol class="game-archive-list" id="game-archive-list"></ol><p class="progress-method">Kept in this browser (latest ' + LIMIT + ' Coach games and ' + LIMIT + ' imported games). Copy a PGN to keep a game elsewhere.</p>';
     const lifetime = document.getElementById('lifetime-section');
     if (lifetime && lifetime.parentElement === panel) panel.insertBefore(section, lifetime);
     else panel.appendChild(section);
@@ -152,7 +172,7 @@
       main.innerHTML = '<span class="game-archive-result"></span><span class="game-archive-meta"></span>';
       main.firstChild.textContent = result === 'win' ? 'Won' : result === 'loss' ? 'Lost' : result === 'draw' ? 'Draw' : 'Game';
       main.firstChild.className = 'game-archive-result ' + result;
-      main.lastChild.textContent = [dateLabel(row.at), (row.side === 'white' ? 'White' : 'Black') + ' vs ' + row.elo, moves + ' moves', row.accuracy !== null ? row.accuracy + '%' : ''].filter(Boolean).join(' · ');
+      main.lastChild.textContent = [dateLabel(row.at), (row.side === 'white' ? 'White' : 'Black') + ' vs ' + opponentLabel(row), SOURCES[row.source] || '', moves + ' moves', row.accuracy !== null ? row.accuracy + '%' : ''].filter(Boolean).join(' · ');
       main.setAttribute('aria-label', `Review game: ${main.firstChild.textContent}, ${main.lastChild.textContent}`);
       main.addEventListener('click', () => open(row.id, main));
       li.appendChild(main);
@@ -193,6 +213,7 @@
             '</div>' +
             '<div class="game-viewer-moves" id="game-viewer-moves" aria-label="Moves"></div>' +
             '<div class="game-viewer-actions"><button type="button" class="ctrl-btn" id="btn-game-viewer-pgn">Copy PGN</button>' +
+            '<a class="ctrl-btn" id="game-viewer-source" target="_blank" rel="noopener noreferrer" hidden></a>' +
             '<button type="button" class="ctrl-btn" id="btn-game-viewer-delete">Delete game</button></div>' +
           '</div>' +
         '</div>' +
@@ -250,7 +271,10 @@
     viewer = { game, fens, moves, cursor: fens.length - 1, board: null, orientation: game.side, returnFocus: returnFocus || document.activeElement };
     el.hidden = false;
     document.getElementById('game-viewer-title').textContent = game.result || 'Game review';
-    document.getElementById('game-viewer-sub').textContent = [dateLabel(game.at), `You played ${game.side === 'white' ? 'White' : 'Black'} vs ${game.elo}`, game.opening].filter(Boolean).join(' · ');
+    document.getElementById('game-viewer-sub').textContent = [dateLabel(game.at), `You played ${game.side === 'white' ? 'White' : 'Black'} vs ${opponentLabel(game)}`, SOURCES[game.source] ? `${SOURCES[game.source]}${game.speed ? ' ' + game.speed : ''}` : '', game.opening].filter(Boolean).join(' · ');
+    const link = el.querySelector('#game-viewer-source');
+    link.hidden = !game.url;
+    if (game.url) { link.href = game.url; link.textContent = `Open on ${SOURCES[game.source]}`; } else link.removeAttribute('href');
     const del = el.querySelector('#btn-game-viewer-delete');
     del.dataset.confirm = '';
     del.textContent = 'Delete game';
@@ -567,7 +591,7 @@
     navigator.clipboard.writeText(viewer.game.pgn).then(() => done('Copied ✓'), () => done('Copy unavailable'));
   }
 
-  window.GameArchive = { KEY, record, load, open, close, render, remove, merge, storageKeyFor, _viewer: () => viewer };
+  window.GameArchive = { KEY, LIMIT, record, add, has, load, open, close, render, remove, merge, storageKeyFor, _viewer: () => viewer };
   const init = () => { render(); const tab = document.getElementById('tab-progress'); if (tab) tab.addEventListener('click', render); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();

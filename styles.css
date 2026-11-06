@@ -2828,6 +2828,42 @@ input[type=range].strength-slider::-moz-range-thumb {
 .explore-load-status { font-size: var(--text-xs); color: var(--text-3); }
 #library-view.has-eval-bar .board-area { padding-left: calc(1.25rem + 34px); }
 
+/* ── IMPORT GAMES BY USERNAME (game-import.js) ── */
+.game-import-title { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text); margin-bottom: 0.55rem; }
+.game-import-form { display: flex; flex-direction: column; gap: 0.45rem; }
+.game-import-sources { display: flex; gap: 0.3rem; }
+.game-import-source {
+  flex: 1 1 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text-2);
+  font-family: var(--family-ui);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.game-import-source:hover { border-color: var(--text-3); color: var(--text); }
+.game-import-source[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--text); font-weight: var(--weight-semibold); }
+.game-import .auth-row .ctrl-btn { flex: 0 0 auto; font-size: var(--text-xs); }
+.game-import-status { font-size: var(--text-xs); line-height: 1.4; color: var(--text-2); margin-top: 0.5rem; }
+.game-import-status:empty { display: none; }
+.game-import-list { list-style: none; display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.5rem; }
+.game-import-list:empty { display: none; }
+.game-import-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.5rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+.game-import-info { flex: 1 1 10rem; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; font-size: var(--text-xs); color: var(--text-2); line-height: 1.35; }
+.game-import-review { flex: 0 0 auto; margin-left: auto; font-size: var(--text-xs); padding: 0.3rem 0.55rem; }
+.game-import-note { font-size: var(--text-xs); line-height: 1.4; color: var(--text-3); margin-top: 0.55rem; }
+
 /* ── GAME ARCHIVE AND VIEWER (game-archive.js) ── */
 .game-archive[hidden] { display: none; }
 .game-archive-head { display: flex; justify-content: space-between; align-items: baseline; }
@@ -2907,6 +2943,8 @@ input[type=range].strength-slider::-moz-range-thumb {
 .ply.tier-mistake .gv-glyph { color: var(--mq-mistake); }
 .ply.tier-blunder .gv-glyph { color: var(--mq-blunder); }
 .game-viewer-actions { display: flex; gap: 0.5rem; }
+.game-viewer-actions [hidden] { display: none; }
+.game-viewer-actions a.ctrl-btn { text-decoration: none; }
 .game-viewer-overlay :is(button):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
 /* ── OPPONENT PERSONALITIES (opponents.js) ── */

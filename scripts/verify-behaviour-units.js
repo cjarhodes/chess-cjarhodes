@@ -1013,6 +1013,109 @@ async page => {
     return problems;
   });
 
+  await check('online games import, review, archive and count in Insights without touching the live game', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=coach');
+    await page.evaluate(() => { localStorage.clear(); });
+    await page.goto(base + '/?view=coach');
+    await page.waitForFunction(() => window.GameImport && document.getElementById('game-import-form'));
+    const lichessLine = JSON.stringify({ id: 'q7ZvsdUF', rated: true, variant: 'standard', speed: 'blitz', lastMoveAt: 1514505592843, status: 'draw',
+      players: { white: { user: { name: 'Lance5500' }, rating: 2389 }, black: { user: { name: 'TryingHard87' }, rating: 2498 } },
+      opening: { name: 'Semi-Slav Defense: Marshall Gambit' }, clock: { initial: 300, increment: 3 },
+      pgn: '[White "Lance5500"]\n[Black "TryingHard87"]\n[Result "1/2-1/2"]\n\n1. d4 d5 2. c4 c6 3. Nc3 e6 4. e4 Nd7 5. exd5 cxd5 6. cxd5 exd5 7. Nxd5 Nb6 8. Bb5+ Bd7 9. Qe2+ Ne7 10. Nxb6 Qxb6 1/2-1/2' });
+    await page.evaluate(line => {
+      window.__requests = [];
+      window.__mode = 'ok';
+      const month = { games: [{ url: 'https://www.chess.com/game/live/111', uuid: 'aaaa-1111', rules: 'chess', rated: true, time_class: 'rapid', time_control: '600', end_time: 1762300000,
+        white: { username: 'Alex', rating: 1210, result: 'checkmated' }, black: { username: 'Opp1', rating: 1250, result: 'win' },
+        pgn: '[White "Alex"]\n[Black "Opp1"]\n[Result "0-1"]\n\n1. f3 {[%clk 0:09:58]} 1... e5 {[%clk 0:09:57]} 2. g4 {[%clk 0:09:50]} 2... Qh4# 0-1' }] };
+      window.fetch = async (url, init) => {
+        window.__requests.push({ url: String(url), accept: init && init.headers ? init.headers.Accept : null });
+        if (window.__mode === '404') return new Response('{}', { status: 404 });
+        if (window.__mode === '429') return new Response('{}', { status: 429 });
+        if (window.__mode === 'offline') throw new TypeError('Failed to fetch');
+        if (/^https:\/\/lichess\.org\/api\/games\/user\//.test(url)) return new Response(line + '\n', { status: 200 });
+        if (/archives$/.test(url)) return new Response(JSON.stringify({ archives: ['https://api.chess.com/pub/player/alex/games/2026/10', 'https://api.chess.com/pub/player/alex/games/2026/11'] }), { status: 200 });
+        if (/2026\/11$/.test(url)) return new Response(JSON.stringify(month), { status: 200 });
+        if (/2026\/10$/.test(url)) return new Response(JSON.stringify({ games: [] }), { status: 200 });
+        return new Response('{}', { status: 500 });
+      };
+    }, lichessLine);
+    const liveBefore = await page.evaluate(() => ({ pgn: coachGame ? coachGame.pgn() : null, id: coachLocalGameId }));
+    await page.locator('#group-inbox').evaluate(el => { el.open = true; });
+    const statusText = () => page.locator('#game-import-status').textContent();
+    const find = async name => { await page.locator('#game-import-user').fill(name); await page.locator('#btn-game-import-find').click(); };
+
+    await find('a b');
+    if (!/Enter a username/.test(await statusText())) problems.push('a bad username should be refused before any request');
+    if (await page.evaluate(() => window.__requests.length)) problems.push('a bad username was sent');
+    for (const [mode, pattern] of [['404', /no player with that username/], ['429', /limiting requests/], ['offline', /Could not reach Chess\.com/]]) {
+      await page.evaluate(m => { window.__mode = m; }, mode);
+      await find('alex');
+      await page.waitForFunction(() => !document.getElementById('btn-game-import-find').disabled);
+      if (!pattern.test(await statusText())) problems.push(`${mode} should say ${pattern}: ${await statusText()}`);
+    }
+    await page.evaluate(() => { window.__mode = 'ok'; window.__requests = []; });
+    await find('alex');
+    await page.waitForFunction(() => document.querySelectorAll('#game-import-list li').length === 1);
+    const urls = await page.evaluate(() => window.__requests.map(r => r.url));
+    if (urls.join(' ') !== 'https://api.chess.com/pub/player/alex/games/archives https://api.chess.com/pub/player/alex/games/2026/11 https://api.chess.com/pub/player/alex/games/2026/10')
+      problems.push('Chess.com requests should be the archive list, then the newest months: ' + urls.join(' '));
+    const row = await page.locator('#game-import-list li').textContent();
+    if (!/Lost/.test(row) || !/White vs Opp1 \(1250\)/.test(row) || !/rapid/.test(row)) problems.push('the game row should read Lost, White vs Opp1 (1250), rapid: ' + row);
+
+    await page.locator('.game-import-review').click();
+    await page.waitForFunction(() => { const v = document.getElementById('game-viewer'); return v && !v.hidden; }, null, { timeout: 60000 });
+    const game = await page.evaluate(() => GameArchive.load().find(g => g.id === 'chesscom-aaaa-1111'));
+    if (!game) problems.push('the reviewed game was not archived');
+    else {
+      if (game.source !== 'chesscom' || game.opponent !== 'Opp1' || game.elo !== 1250 || game.side !== 'white') problems.push('archived game fields are wrong: ' + JSON.stringify({ source: game.source, opponent: game.opponent, elo: game.elo, side: game.side }));
+      if (game.reviews.map(r => r.ply).join() !== '1,3') problems.push('only the user\'s two moves should be reviewed: ' + game.reviews.map(r => r.ply).join());
+      const g4 = game.reviews.find(r => r.ply === 3);
+      if (!g4 || g4.tier !== 'blunder') problems.push('2.g4, allowing mate in one, should be a blunder: ' + JSON.stringify(g4));
+      if (!(game.accuracy >= 0 && game.accuracy < 50)) problems.push('two bad moves should give a low accuracy: ' + game.accuracy);
+      if (/clk/.test(game.pgn)) problems.push('clock comments should not be stored');
+    }
+    const sub = await page.locator('#game-viewer-sub').textContent();
+    if (!/vs Opp1 \(1250\)/.test(sub) || !/Chess\.com rapid/.test(sub)) problems.push('the viewer should name the opponent and site: ' + sub);
+    if (await page.locator('#game-viewer-source').getAttribute('href') !== 'https://www.chess.com/game/live/111') problems.push('the viewer should link to the game on Chess.com');
+    await page.locator('#btn-game-viewer-close').click();
+    if (await page.locator('.game-import-review').textContent() !== 'Open review') problems.push('a reviewed game should offer Open review');
+    const evidence = await page.evaluate(() => loadInsights().entries.filter(e => e.localGameId === 'chesscom-aaaa-1111').map(e => [e.ply, e.tier, e.gameId]));
+    if (evidence.length !== 2 || evidence.some(e => e[2] !== null)) problems.push('both graded moves should count in Insights, tied to the imported game: ' + JSON.stringify(evidence));
+    const liveAfter = await page.evaluate(() => ({ pgn: coachGame ? coachGame.pgn() : null, id: coachLocalGameId }));
+    if (JSON.stringify(liveAfter) !== JSON.stringify(liveBefore)) problems.push('reviewing an imported game should leave the live Coach game alone');
+
+    // Lichess: the NDJSON request, then a long review stopped part-way.
+    await page.locator('#game-import-sources [data-source=lichess]').click();
+    await page.evaluate(() => { window.__requests = []; });
+    await find('TryingHard87');
+    await page.waitForFunction(() => { const f = GameImport._state().found; return f.length === 1 && f[0].source === 'lichess'; });
+    const req = await page.evaluate(() => window.__requests[0]);
+    if (!/^https:\/\/lichess\.org\/api\/games\/user\/TryingHard87\?/.test(req.url) || req.accept !== 'application/x-ndjson') problems.push('the Lichess request should ask for NDJSON: ' + JSON.stringify(req));
+    if (!/Draw/.test(await page.locator('#game-import-list li').textContent())) problems.push('the Lichess draw should read as a draw');
+    await page.locator('.game-import-review').click();
+    await page.waitForFunction(() => /Reviewing your moves: [2-9]/.test(document.getElementById('game-import-status').textContent), null, { timeout: 60000 });
+    await page.locator('.game-import-review').click();
+    await page.waitForFunction(() => /stopped/.test(document.getElementById('game-import-status').textContent), null, { timeout: 60000 });
+    if (await page.evaluate(() => GameArchive.has('lichess-q7ZvsdUF'))) problems.push('a stopped review should not be saved');
+    if (await page.locator('.game-import-review').textContent() !== 'Review') problems.push('after stopping, the game can be reviewed again');
+    if (await page.evaluate(() => JSON.parse(localStorage.getItem('ui:import:v1')).source) !== 'lichess') problems.push('the chosen site should be remembered');
+
+    // Imported games have their own cap, so they never push out Coach games.
+    const kept = await page.evaluate(() => {
+      const base = { result: 'Draw.', side: 'white', elo: 1200, startFen: '', pgn: '1. e4 e5 *', reviews: [] };
+      const coach = [1, 2, 3].map(i => Object.assign({ id: 'coach-' + i, at: 1000 + i }, base));
+      const imported = Array.from({ length: GameArchive.LIMIT + 5 }, (_, i) => Object.assign({ id: 'lichess-x' + i, at: 5000 + i, source: 'lichess', opponent: 'X', url: 'https://lichess.org/x' + i }, base));
+      localStorage.setItem(GameArchive.KEY, JSON.stringify({ v: 1, games: coach.concat(imported) }));
+      const list = GameArchive.load();
+      return { coach: list.filter(g => g.source === 'coach').length, imported: list.filter(g => g.source === 'lichess').length, badUrl: GameArchive.merge([], [Object.assign({ id: 'z', at: 1, source: 'lichess', url: 'javascript:alert(1)' }, base)]).games[0].url };
+    });
+    if (kept.coach !== 3 || kept.imported !== await page.evaluate(() => GameArchive.LIMIT)) problems.push('archive caps should be per source: ' + JSON.stringify(kept));
+    if (kept.badUrl !== '') problems.push('only Chess.com and Lichess links are kept');
+    return problems;
+  });
+
   await check('Library quiz hides the moves you have not reached', async () => {
     const problems = [];
     await page.goto(base + '/?opening=italian&mode=quiz');

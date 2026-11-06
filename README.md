@@ -158,8 +158,8 @@ of the last 14 days had any and the current streak. It counts activity, not
 improvement (`activity.js`, tested across time zones and daylight-saving
 changes by `scripts/validate-activity.js`).
 
-**Game archive** (Progress) keeps the latest 40 finished Coach games in this
-browser with their move-by-move review (`coach:archive:v1`, scoped to the
+**Game archive** (Progress) keeps the latest 40 finished Coach games, and
+separately the latest 40 games imported by username, in this browser with their move-by-move review (`coach:archive:v1`, scoped to the
 account). Opening one shows a viewer with its own board: step with the arrow
 keys or by clicking a move or the evaluation graph; each reviewed move shows
 its badge, and mistakes show the engine's choice as an arrow. On an inaccuracy, mistake or blunder,
@@ -169,6 +169,17 @@ within half a pawn of it; **Show answer** draws the engine's move. Copy the PGN
 or delete the game there. The archive is included in training
 backups (Training data → Export), and importing merges games by id. The live
 game is never touched (`game-archive.js`).
+
+**Import by username** (Import games → From Chess.com or Lichess) lists your
+20 most recent standard games from the public Chess.com or Lichess game list
+(Chess.com: the last two months). Only the username is sent. **Review** grades
+your moves with the same engine review as Coach, and saves the game in the
+archive with its opponent, site and a link back to it. Like a pasted PGN, a
+reviewed game counts in Insights, the practice queue and the personal
+repertoire, but the live Coach game is left alone. A review can be stopped;
+nothing is saved until it finishes (`game-import-core.js`, `game-import.js`).
+The CSP allows `https://api.chess.com` and `https://lichess.org` for this, and
+`validate-security.js` pins the full `connect-src` list.
 
 PGN import reviews all selected-side moves in the valid games in a batch,
 with progress and cancellation. A completed batch contributes to Insights
