@@ -9,7 +9,7 @@ const vm = require('vm');
 const { Chess } = require('../vendor/chess.js/chess-0.10.3.min.js');
 
 const root = path.resolve(__dirname, '..');
-const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+const app = require('./lib/app-source').appSource();
 const errors = [];
 let assertions = 0;
 

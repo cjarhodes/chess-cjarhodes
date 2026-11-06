@@ -227,7 +227,11 @@ affects this browser's session. See [the account continuity audit](docs/account-
 
 ## Stack
 
-- `index.html` + `styles.css` + `app.js` (runtime) + `openings.js` (opening content data)
+- `index.html` + `styles.css` + `app.js` (runtime wiring, views and event handlers) + `src/`
+  (engine, opponent, classification, tactics, opening book, spaced repetition,
+  persistence, account and practice sync, insights, practice, daily plan,
+  summary, sounds and Explore, as plain scripts loaded before `app.js`)
+  + `openings.js` (opening content data)
   + `opening-transfer.js` (Library-to-game exercises and reviews)
   + `learning-transfer.js` (different-position checks and follow-up observations)
   + `account-continuity.js` (saved-session copies, offline review retries, safe backup imports)
@@ -268,7 +272,7 @@ Then open `http://127.0.0.1:4173/`.
 Run before committing any change to `app.js` or `index.html`:
 
 ```sh
-node --check app.js
+for f in app.js src/*/*.js; do node --check "$f" || exit 1; done
 for f in scripts/validate-*.js; do node "$f" || exit 1; done
 ```
 
@@ -338,7 +342,7 @@ deploy (usually live within ~30 seconds). Security headers (CSP,
 ## Workflow
 
 1. Edit `index.html`, `app.js`, or the relevant vendored/config file.
-2. Run `node --check app.js` and every `scripts/validate-*.js`
+2. Run `node --check` on `app.js` and `src/*/*.js`, and every `scripts/validate-*.js`
    validator.
 3. Run `scripts/verify-browser.sh` for the repeatable smoke coverage.
 4. For schema changes, add a Supabase migration and run a local reset

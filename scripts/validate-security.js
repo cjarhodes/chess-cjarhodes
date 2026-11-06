@@ -53,7 +53,7 @@ const allowedConnect = ["'self'", 'https://*.supabase.co', 'https://api.chess.co
 if (JSON.stringify(connectSrc) !== JSON.stringify(allowedConnect)) {
   fail(`connect-src must be exactly ${allowedConnect.join(' ')}; got ${connectSrc.join(' ')}`);
 }
-if (/upload\.wikimedia\.org/.test(csp) || /upload\.wikimedia\.org/.test(read('app.js'))) {
+if (/upload\.wikimedia\.org/.test(csp) || /upload\.wikimedia\.org/.test(require('./lib/app-source').appSource())) {
   fail('piece rendering must not depend on Wikimedia at runtime');
 }
 

@@ -7,7 +7,7 @@ const path = require('path');
 const vm = require('vm');
 
 const repo = path.resolve(__dirname, '..');
-const app = fs.readFileSync(path.join(repo, 'app.js'), 'utf8');
+const app = require('./lib/app-source').appSource();
 
 function sliceFunction(src, name) {
   const re = new RegExp('(?:^|\\n)(?:async )?function ' + name + '\\(');

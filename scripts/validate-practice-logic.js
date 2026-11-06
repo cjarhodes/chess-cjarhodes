@@ -34,8 +34,7 @@ const vm = require('vm');
 const nodeCrypto = require('crypto');
 
 const root = path.resolve(__dirname, '..');
-const appPath = path.join(root, 'app.js');
-const app = fs.readFileSync(appPath, 'utf8');
+const app = require('./lib/app-source').appSource();
 
 const errors = [];
 let assertions = 0;
