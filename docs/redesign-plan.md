@@ -9,7 +9,7 @@ Phase 2 done: no validator pattern-matches the app's source any more; see
 the *Phase 2 outcome* in [behaviour-checklist.md](behaviour-checklist.md).
 Phase 4a done: `app.js` is 4,009 lines (from 9,148); core logic lives in
 `src/` as plain scripts, with `scripts/validate-core.js` unit-testing
-`src/core/`. Phase 4b (FSRS scheduling) is next.
+`src/core/`. Phase 4b (FSRS) is deferred: see decision 3 in §6.
 
 November 2026 additions (outside the phases, on the current layout): a
 Puzzles destination, an on-board overlay (`board-overlay.js`: arrows,
@@ -443,7 +443,7 @@ long before the restructuring is finished.
 | **1. Visual direction** ✅ | Refine **D · Blend** (Paper + Club, see §6) in `docs/design-directions/`, then specify it fully at all three widths (phone, tablet, desktop): type scale, colour (dark + light), board and piece themes, move-quality colours, arrows, buttons, cards, tabs, notation table and strip, tab bar. Choose fonts that can be vendored as woff2 under the CSP. | One direction chosen; a written token spec with phone and desktop mockups |
 | **2. Safety net** ✅ | Convert source-regex validators into behaviour tests (node unit tests for logic, browser smoke for UI). Add `data-testid`s. *Done without test ids: the tests use existing element ids; Phase 6 adds `data-testid`s when it rewrites the markup.* Can run alongside Phase 1. | Validators no longer read `app.js` as text; all checks green |
 | **3. Tokens + reskin** ✅ | Introduce `styles/tokens.css` and layers with the chosen direction's values; replace every raw colour, size, radius and font; vendor the fonts; add the lint script and theme switch. The current layout gets the new look. It stays desktop-only (with the notice) because the old layout can't reflow cheaply. | Lint passes; whole app is in the new direction; light + dark both pass contrast |
-| **4. Extract the core** (4a ✅, 4b FSRS pending) | Move pure logic (engine, classification, opponent, explanations, storage, sync) into `src/core` and `src/data` as ES modules. Replace SM-2 with FSRS (see §6). | `app.js` < 5,000 lines; core has unit tests; calibration script runs unchanged. *4a used plain scripts under `src/` rather than ES modules: the app, `growth.js`, the feature modules and the browser tests share these functions as globals, so ES modules wait for the Phase 6 shell rewrite.* |
+| **4. Extract the core** (4a ✅, 4b FSRS deferred) | Move pure logic (engine, classification, opponent, explanations, storage, sync) into `src/core` and `src/data` as ES modules. Replace SM-2 with FSRS (see §6). | `app.js` < 5,000 lines; core has unit tests; calibration script runs unchanged. *4a used plain scripts under `src/` rather than ES modules: the app, `growth.js`, the feature modules and the browser tests share these functions as globals, so ES modules wait for the Phase 6 shell rewrite.* |
 | **5. One board** | Build `ui/board.js` on cm-chessboard; switch Coach and Library to it; add arrows, square marks, quality glyphs, eval bar beside board; drop jQuery. Check touch drag, tap-to-move and engine think time on a real phone. | One board implementation; Show why / candidates / hints draw on the board; works by touch |
 | **6. New shell & IA** | Responsive workspace (phone / tablet / desktop from the start), nav + tab bar, router (`?view=` URLs kept as aliases), Settings sheet; migrate destinations in order: Play (incl. review) → Train → Study → Progress. Turn on the emailed sign-in code. Remove the desktop notice and update CLAUDE.md, README, `verify-browser.sh` and `validate-accessibility.js` to match. | `app.js` gone; every view is a module under `src/views`; smoke suite runs at 375px, 1024px and 1440px |
 | **7. Polish** | Copy pass (plain language), first-visit onboarding, keyboard shortcut sheet, accessibility audit (focus order, live regions, contrast in both themes), performance pass, testing on real iOS Safari and Android Chrome. | Smoke suite + a11y validator green in both themes and at all three widths |
@@ -462,7 +462,7 @@ Recorded 2 November 2026.
 |---|---|---|
 | 1 | Board library | **cm-chessboard** (MIT), behind `ui/board.js`. Keep cburnett pieces (CC BY-SA 3.0, attribution already in `vendor/pieces/cburnett/LICENSE.txt`). |
 | 2 | In-game feedback | **Live coaching stays.** It is a game-setup choice (Live / Quiet), defaulting to Live. Quiet shows only a quality tick in the notation and saves explanations for the review. |
-| 3 | Scheduler | **FSRS** via vendored `ts-fsrs` (MIT, ESM). See migration note below. |
+| 3 | Scheduler | **FSRS** via vendored `ts-fsrs` (MIT, ESM), **deferred on 6 November 2026.** By then there were three SM-2 schedulers (Library lines, practice drills scheduled in Supabase SQL, and the repertoire trainer in PR #5), and drills need a migration on the database shared with OOTD. When revisited: one shared scheduler in `src/core/` for all three. See migration note below. |
 | 4 | Visual identity | **D · Blend: Paper + Club**, light and dark themes, following the device setting with an override in Settings. High priority (Phase 1). Spec below. |
 | 5 | Small screens | **Design for phone and tablet now.** Responsive from the new shell (Phase 6) onwards; see §3 "Phone and tablet". |
 | 6 | Navigation | **Recommended: four destinations** (Train, Play, Study, Progress) + Settings. See below. |
