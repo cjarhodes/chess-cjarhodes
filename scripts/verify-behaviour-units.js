@@ -1225,11 +1225,14 @@ async page => {
     await play('e4');
     await settled(2);
     let s = await clock();
-    if (Math.abs(s.ms.w - 177000) > 400) problems.push('White should have about 3:00 − 5 s + 2 s: ' + s.ms.w);
+    // Real time keeps passing on White's clock after the reply, so allow a
+    // little below 3:00 − 5 s + 2 s.
+    if (s.ms.w > 177200 || s.ms.w < 175000) problems.push('White should have about 3:00 − 5 s + 2 s: ' + s.ms.w);
     // Black is charged only for its own search (Coach's grading pauses the
     // clocks), then gets the increment.
     if (s.ms.b < 179000 || s.ms.b > 182000) problems.push('Black should have its time plus the increment, less its own search: ' + s.ms.b);
-    if (await page.locator('#coach-clock-bottom').textContent() !== '2:57' || !(await page.locator('#coach-clock-bottom').getAttribute('class')).includes('running')) problems.push('the bottom clock should show White\'s running time');
+    const face = await page.evaluate(() => { CoachClock.tick(); const el = document.getElementById('coach-clock-bottom'); return { text: el.textContent, want: ClockCore.format(CoachClock._state().ms.w), running: el.classList.contains('running') }; });
+    if (face.text !== face.want || !face.running) problems.push('the bottom clock should show White\'s running time: ' + JSON.stringify(face));
     // Leaving Coach pauses the clock.
     await page.locator('#nav-library').click();
     await page.waitForTimeout(250);
