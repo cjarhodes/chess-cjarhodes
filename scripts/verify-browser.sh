@@ -660,7 +660,7 @@ async page => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(250);
   assert(await page.locator('#desktop-notice').isVisible(), 'narrow viewport did not show the desktop notice');
-  const narrowBoard = await page.locator('#coachBoard .board-b72b1').boundingBox();
+  const narrowBoard = await page.locator('#coachBoard svg.cm-chessboard').boundingBox();
   assert(narrowBoard && narrowBoard.width >= 440, 'board shrank below its desktop size on a narrow viewport');
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.waitForTimeout(250);

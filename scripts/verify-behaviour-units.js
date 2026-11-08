@@ -461,14 +461,25 @@ async page => {
   // ── Board and accessibility: what a keyboard or screen-reader user relies on ──
   await check('board uses vendored pieces and keeps the last-move highlight across redraws', () => page.evaluate(async () => {
     const problems = [];
-    const pieces = [...document.querySelectorAll('#coachBoard img')];
-    if (!pieces.length || !pieces.every(img => img.getAttribute('src').includes('vendor/pieces/cburnett/'))) problems.push('pieces are not the vendored cburnett set');
-    const before = document.querySelectorAll('#coachBoard .last-move').length;
+    const pieces = [...document.querySelectorAll('#coachBoard .pieces use')];
+    const sprite = document.querySelector('#cm-chessboard-sprite svg');
+    if (!pieces.length || !pieces.every(use => /^#[wb][kqrbnp]$/.test(use.getAttribute('href')))) problems.push('pieces are not drawn from the sprite');
+    if (!sprite || !sprite.querySelector('#wk') || !/cburnett/.test(sprite.parentNode.innerHTML)) problems.push('the cburnett sprite is not loaded');
+    if (performance.getEntriesByType('resource').some(r => /upload\.wikimedia|chessboardjs/.test(r.name))) problems.push('a retired piece or board source was requested');
+    const before = document.querySelectorAll('#coachBoard .board-mark.last-move').length;
     coachBoard.position(coachGame.fen(), false);
+    const host = document.getElementById('coachBoard');
+    host.style.width = (host.clientWidth - 16) + 'px';
     coachBoard.resize();
-    await new Promise(resolve => setTimeout(resolve, 0));
-    const after = document.querySelectorAll('#coachBoard .last-move').length;
+    await new Promise(resolve => setTimeout(resolve, 50));
+    const moved = document.querySelector('#coachBoard .board-mark-cell');
+    const square = moved && document.querySelector(`#coachBoard .square[data-square="${moved.getAttribute('data-mark-square')}"]`);
+    const aligned = moved && square && Math.abs(moved.getBoundingClientRect().width - square.getBoundingClientRect().width) < 0.5;
+    host.style.width = '';
+    coachBoard.resize();
+    const after = document.querySelectorAll('#coachBoard .board-mark.last-move').length;
     if (before !== 2 || after !== 2) problems.push(`last-move squares before/after redraw: ${before}/${after}`);
+    if (!aligned) problems.push('the last-move mark did not follow the squares through a resize');
     return problems;
   }));
 
@@ -652,9 +663,10 @@ async page => {
     });
     if (!started) return ['analysis did not start from a completed review'];
     const before = await page.evaluate(() => ({ pgn: coachGame.pgn(), move: coachGame.moves({ verbose: true })[0] }));
-    await page.locator(`#coachBoard .square-${before.move.from}`).dragTo(page.locator(`#coachBoard .square-${before.move.to}`)).catch(() => {});
-    await page.locator(`#coachBoard .square-${before.move.from}`).click({ force: true });
-    await page.locator(`#coachBoard .square-${before.move.to}`).click({ force: true });
+    const sq = name => page.locator(`#coachBoard .square[data-square="${name}"]`);
+    await sq(before.move.from).dragTo(sq(before.move.to)).catch(() => {});
+    await sq(before.move.from).click({ force: true });
+    await sq(before.move.to).click({ force: true });
     await page.waitForTimeout(400);
     const during = await page.evaluate(() => ({ pgn: coachGame.pgn(), reviewing: coachIsReviewing() }));
     if (during.pgn !== before.pgn) problems.push('a drag or tap changed the live game during analysis');
@@ -974,7 +986,7 @@ async page => {
     const darkBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     if (darkBg === 'rgb(245, 239, 227)') problems.push('choosing Dark left the light page colour');
     await page.locator('#board-theme').selectOption('contrast');
-    const lightSquare = await page.evaluate(() => getComputedStyle(document.querySelector('#coachBoard .white-1e1d7')).backgroundColor);
+    const lightSquare = await page.evaluate(() => getComputedStyle(document.querySelector('#coachBoard .square.white')).fill);
     if (lightSquare !== 'rgb(255, 255, 255)') problems.push('High contrast did not recolour the light squares: ' + lightSquare);
     await page.reload();
     await page.waitForFunction(() => typeof applyBoardTheme === 'function');
@@ -985,6 +997,273 @@ async page => {
     await page.waitForFunction(() => typeof applyBoardTheme === 'function');
     const migrated = await page.evaluate(() => [document.documentElement.dataset.theme || 'auto', document.documentElement.dataset.boardTheme]);
     if (migrated[0] !== 'auto' || migrated[1] !== 'walnut') problems.push('retired Ivory or Match device did not apply: ' + migrated.join('/'));
+    return problems;
+  });
+
+  // ── The board (src/ui/board.js on cm-chessboard): drag, click, touch ──
+  const boardSquare = (p, id, name) => p.locator(`#${id} .square[data-square="${name}"]`);
+  const squareCentre = async (p, id, name) => {
+    const box = await boardSquare(p, id, name).boundingBox();
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  };
+  const mouseDrag = async (id, from, to) => {
+    const a = await squareCentre(page, id, from), b = await squareCentre(page, id, to);
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down();
+    await page.mouse.move(b.x, b.y, { steps: 8 });
+    await page.mouse.up();
+  };
+
+  await check('the board plays a dragged move, snaps back an illegal drop and plays a clicked move once', async () => {
+    const problems = [];
+    await freshCoach();
+    await newGame();
+    const sq = name => boardSquare(page, 'coachBoard', name);
+    const boardMatchesGame = () => page.evaluate(() => Chessboard.objToFen(coachBoard.position()) === coachGame.fen().split(' ')[0]);
+    await mouseDrag('coachBoard', 'a2', 'a5');
+    await page.waitForTimeout(250);
+    const illegal = await page.evaluate(() => ({ plies: coachGame.history().length, a2: coachBoard.position().a2, a5: coachBoard.position().a5 || null,
+      shown: !!document.querySelector('#coachBoard .pieces g[data-square="a2"]:not([visibility="hidden"])'), floating: document.querySelectorAll('.cm-chessboard-draggable-piece').length }));
+    if (illegal.plies !== 0 || illegal.a2 !== 'wP' || illegal.a5 || !illegal.shown || illegal.floating) problems.push('an illegal drop was not snapped back: ' + JSON.stringify(illegal));
+    await mouseDrag('coachBoard', 'e2', 'e4');
+    await page.waitForFunction(() => coachGame.history().length >= 1, null, { timeout: 5000 }).catch(() => {});
+    const dragged = await page.evaluate(() => coachGame.history()[0] || null);
+    if (dragged !== 'e4') problems.push('a dragged e2-e4 was not played: ' + dragged);
+    await page.waitForFunction(() => coachGame.history().length >= 2 && !coachThinking, null, { timeout: 60000 });
+    await page.waitForTimeout(300);
+    if (!(await boardMatchesGame())) problems.push('the board does not show the game after the reply');
+    await sq('g1').click();
+    const selected = await page.evaluate(() => ({ sel: coachBoard.marks('tap-selected').join(), dots: coachBoard.marks('tap-target').sort().join(),
+      drawn: document.querySelectorAll('#coachBoard .board-mark.tap-target').length }));
+    if (selected.sel !== 'g1' || selected.dots !== 'e2,f3,h3' || selected.drawn !== 3) problems.push('clicking a piece did not select it with its legal moves: ' + JSON.stringify(selected));
+    // Another of your own pieces switches the selection; a second click on it drops it.
+    await sq('b1').click();
+    await sq('d2').click();
+    const switched = await page.evaluate(() => ({ sel: coachBoard.marks('tap-selected').join(), plies: coachGame.history().length, premove: !!coachPremove }));
+    if (switched.sel !== 'd2' || switched.plies !== 2 || switched.premove) problems.push('clicking your own piece did not switch the selection: ' + JSON.stringify(switched));
+    await sq('d2').click();
+    if (await page.evaluate(() => coachBoard.marks('tap-selected').length)) problems.push('a second click did not drop the selection');
+    await sq('g1').click();
+    await sq('f3').click();
+    await page.waitForFunction(() => coachGame.history().length >= 3, null, { timeout: 5000 }).catch(() => {});
+    const clicked = await page.evaluate(() => ({ third: coachGame.history()[2] || null, marks: coachBoard.marks('tap-selected').length + coachBoard.marks('tap-target').length }));
+    if (clicked.third !== 'Nf3' || clicked.marks) problems.push('a clicked g1-f3 was not played cleanly: ' + JSON.stringify(clicked));
+    await page.waitForFunction(() => coachGame.history().length >= 4 && !coachThinking, null, { timeout: 60000 });
+    await page.waitForTimeout(300);
+    const plies = await page.evaluate(() => coachGame.history().length);
+    if (plies !== 4) problems.push('one click played more than one move: ' + plies + ' plies');
+    if (!(await boardMatchesGame())) problems.push('the board does not show the game after a clicked move');
+    await playMove('d4');
+    await page.waitForFunction(() => coachGame.history().length >= 5, null, { timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(250);
+    const typed = await page.evaluate(() => ({ fifth: coachGame.history()[4] || null, d4: coachBoard.position().d4 || null }));
+    if (typed.fifth !== 'd4' || typed.d4 !== 'wP') problems.push('a keyboard move did not reach the board: ' + JSON.stringify(typed));
+    await settle();
+    return problems;
+  });
+
+  await check('flipping turns the board and its coordinates, also mid-animation', async () => {
+    const problems = [];
+    const read = () => page.evaluate(() => {
+      const r = s => document.querySelector(`#coachBoard .square[data-square="${s}"]`).getBoundingClientRect();
+      return { o: coachBoard.orientation(), a1Top: r('a1').top < r('a8').top, h1Left: r('h1').left < r('a1').left,
+        files: [...document.querySelectorAll('#coachBoard .board-coord.file')].map(t => t.textContent).join(''),
+        ranks: [...document.querySelectorAll('#coachBoard .board-coord.rank')].map(t => t.textContent).join('') };
+    });
+    await page.locator('#btn-coach-flip').click();
+    const flipped = await read();
+    if (flipped.o !== 'black' || !flipped.a1Top || !flipped.h1Left || flipped.files !== 'hgfedcba' || flipped.ranks !== '12345678') problems.push('flip did not turn the board: ' + JSON.stringify(flipped));
+    await page.locator('#btn-coach-flip').click();
+    const back = await read();
+    if (back.o !== 'white' || back.a1Top || back.h1Left || back.files !== 'abcdefgh' || back.ranks !== '87654321') problems.push('flipping back did not restore White at the bottom: ' + JSON.stringify(back));
+    // Flips requested while pieces are still moving wait for them and settle.
+    await page.evaluate(() => { coachBoard.position('start', true); coachBoard.flip(); coachBoard.flip(); coachBoard.flip(); });
+    await page.waitForTimeout(800);
+    const queued = await read();
+    if (queued.o !== 'black' || !queued.a1Top || queued.files !== 'hgfedcba') problems.push('flips during an animation did not settle: ' + JSON.stringify(queued));
+    await page.evaluate(() => { coachBoard.flip(); coachBoard.position(coachGame.fen(), false); });
+    await page.waitForTimeout(400);
+    return problems;
+  });
+
+  await check('board themes recolour the squares from the tokens', async () => {
+    const problems = [];
+    await page.evaluate(() => { document.getElementById('group-board').open = true; });
+    const seen = new Set();
+    for (const theme of ['green', 'walnut', 'blue', 'contrast']) {
+      await page.locator('#board-theme').selectOption(theme);
+      const colours = await page.evaluate(() => {
+        const probe = document.createElement('div');
+        document.body.appendChild(probe);
+        probe.style.background = 'var(--board-light)';
+        const light = getComputedStyle(probe).backgroundColor;
+        probe.style.background = 'var(--board-dark)';
+        const dark = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return { light, dark, squareLight: getComputedStyle(document.querySelector('#coachBoard .square.white[data-square="b1"]')).fill,
+          squareDark: getComputedStyle(document.querySelector('#coachBoard .square.black[data-square="a1"]')).fill };
+      });
+      if (colours.squareLight !== colours.light || colours.squareDark !== colours.dark) problems.push(`${theme}: squares ${colours.squareLight}/${colours.squareDark} do not match the tokens ${colours.light}/${colours.dark}`);
+      seen.add(colours.squareLight + colours.squareDark);
+    }
+    if (seen.size !== 4) problems.push('the four board themes did not give four different boards');
+    await page.locator('#board-theme').selectOption('green');
+    return problems;
+  });
+
+  await check('castling, en passant and promotion are redrawn after the move', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=library&mode=explore');
+    await page.waitForFunction(() => typeof exploreGame !== 'undefined' && exploreGame && !!board);
+    await page.locator('#explore-engine-toggle').uncheck().catch(() => {});
+    await page.locator('.explore-load summary').click();
+    const load = async fen => {
+      await page.locator('#explore-load-input').fill(fen);
+      await page.locator('#explore-load-form button').click();
+      await page.waitForFunction(f => exploreGame.fen() === f, fen, { timeout: 5000 });
+      await page.waitForTimeout(150);
+    };
+    const shown = () => page.evaluate(() => board.position());
+    await load('r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1');
+    await mouseDrag('myBoard', 'e1', 'g1');
+    await page.waitForTimeout(400);
+    let pos = await shown();
+    if (pos.g1 !== 'wK' || pos.f1 !== 'wR' || pos.h1 || pos.e1) problems.push('castling by drag left the rook behind: ' + JSON.stringify({ e1: pos.e1, f1: pos.f1, g1: pos.g1, h1: pos.h1 }));
+    await load('rnbqkbnr/ppp1pppp/8/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3');
+    await boardSquare(page, 'myBoard', 'e5').click();
+    await boardSquare(page, 'myBoard', 'd6').click();
+    await page.waitForTimeout(500);
+    pos = await shown();
+    if (pos.d6 !== 'wP' || pos.d5 || pos.e5) problems.push('en passant by click left the captured pawn: ' + JSON.stringify({ d5: pos.d5, d6: pos.d6, e5: pos.e5 }));
+    await load('8/P6k/8/8/8/8/8/K7 w - - 0 1');
+    await mouseDrag('myBoard', 'a7', 'a8');
+    await page.locator('#promotion-picker .promotion-choice[data-promotion="n"]').click();
+    await page.waitForTimeout(500);
+    pos = await shown();
+    if (pos.a8 !== 'wN' || pos.a7) problems.push('a dragged under-promotion did not show the knight: ' + JSON.stringify({ a7: pos.a7, a8: pos.a8 }));
+    await load('8/P6k/8/8/8/8/8/K7 w - - 0 1');
+    await boardSquare(page, 'myBoard', 'a7').click();
+    await boardSquare(page, 'myBoard', 'a8').click();
+    await page.locator('#promotion-picker .promotion-choice[data-promotion="q"]').click();
+    await page.waitForTimeout(500);
+    pos = await shown();
+    if (pos.a8 !== 'wQ' || pos.a7) problems.push('a clicked promotion did not show the queen: ' + JSON.stringify({ a7: pos.a7, a8: pos.a8 }));
+    const fenMatches = await page.evaluate(() => Chessboard.objToFen(board.position()) === exploreGame.fen().split(' ')[0]);
+    if (!fenMatches) problems.push('the Explore board and game disagree after promotion');
+    await page.locator('#explore-engine-toggle').check().catch(() => {});
+    return problems;
+  });
+
+  // The board itself, on a scratch element: only onSnapEnd can put the rook
+  // or the promoted piece where the game has it.
+  await check('onSnapEnd follows each accepted drag or click, so castling and promotion are drawn from the game', async () => {
+    const problems = [];
+    await page.evaluate(() => {
+      const host = document.createElement('div');
+      host.id = 'board-harness';
+      host.style.cssText = 'position:fixed;left:24px;top:24px;width:328px;z-index:9999';
+      document.body.appendChild(host);
+      const h = window.__harness = { game: new Chess('r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1'), snapEnds: 0, drops: [] };
+      h.board = Chessboard('board-harness', {
+        position: h.game.fen(), draggable: true,
+        onDrop: (from, to, piece, newPos, oldPos, side, info) => {
+          h.drops.push(`${from}${to}:${info.input}`);
+          if (h.throwNext) { h.throwNext = false; throw new Error('harness onDrop failure'); }
+          return h.game.move({ from, to, promotion: 'q' }) ? undefined : 'snapback'; },
+        onSnapEnd: () => { h.snapEnds++; h.board.position(h.game.fen(), false); }
+      });
+    });
+    const state = () => page.evaluate(() => ({ pos: __harness.board.position(), snapEnds: __harness.snapEnds, drops: __harness.drops.slice(), fenOk: Chessboard.objToFen(__harness.board.position()) === __harness.game.fen().split(' ')[0] }));
+    try {
+      await mouseDrag('board-harness', 'e1', 'g1');
+      await page.waitForTimeout(400);
+      let s = await state();
+      if (s.pos.f1 !== 'wR' || s.pos.h1 || s.snapEnds !== 1 || !s.fenOk) problems.push('dragged castling was not redrawn by onSnapEnd: ' + JSON.stringify({ f1: s.pos.f1, h1: s.pos.h1, snapEnds: s.snapEnds }));
+      await boardSquare(page, 'board-harness', 'e8').click();
+      await boardSquare(page, 'board-harness', 'c8').click();
+      await page.waitForTimeout(500);
+      s = await state();
+      if (s.pos.d8 !== 'bR' || s.pos.a8 || s.snapEnds !== 2 || !s.fenOk || s.drops[1] !== 'e8c8:click') problems.push('clicked castling was not redrawn by onSnapEnd: ' + JSON.stringify({ d8: s.pos.d8, a8: s.pos.a8, snapEnds: s.snapEnds, drops: s.drops }));
+      await mouseDrag('board-harness', 'a2', 'a5');
+      await page.waitForTimeout(300);
+      s = await state();
+      if (s.pos.a2 !== 'wP' || s.pos.a5 || s.snapEnds !== 2 || s.drops[2] !== 'a2a5:drag') problems.push('a refused drop moved the piece or called onSnapEnd: ' + JSON.stringify({ a2: s.pos.a2, a5: s.pos.a5, snapEnds: s.snapEnds }));
+      // Clicking another of your own pieces changes the selection; onDrop
+      // never hears of it (Coach would queue it as a premove).
+      await boardSquare(page, 'board-harness', 'b2').click();
+      await boardSquare(page, 'board-harness', 'c2').click();
+      s = await state();
+      const selected = await page.evaluate(() => __harness.board.marks('tap-selected').join());
+      if (s.drops.length !== 3 || selected !== 'c2') problems.push('clicking another own piece reached onDrop instead of switching the selection: ' + JSON.stringify({ drops: s.drops, selected }));
+      await boardSquare(page, 'board-harness', 'c2').click();
+      // A handler that throws sends the piece home, reports the error and
+      // leaves the board ready for the next move.
+      await page.evaluate(() => { __harness.throwNext = true; });
+      await mouseDrag('board-harness', 'b2', 'b3');
+      await page.waitForTimeout(300);
+      const afterThrow = (await state()).pos;
+      await mouseDrag('board-harness', 'b2', 'b4');
+      await page.waitForTimeout(300);
+      s = await state();
+      const thrown = pageErrors.indexOf('harness onDrop failure');
+      if (thrown === -1) problems.push('an onDrop error was swallowed');
+      else pageErrors.splice(thrown, 1);
+      if (afterThrow.b2 !== 'wP' || afterThrow.b3 || s.pos.b4 !== 'wP' || !s.fenOk) problems.push('a throwing onDrop left the board stuck or wrong: ' + JSON.stringify({ b2: afterThrow.b2, b3: afterThrow.b3, b4: s.pos.b4 }));
+      await page.evaluate(() => { __harness.game = new Chess('8/P6k/8/8/8/8/8/K7 w - - 0 1'); __harness.board.position(__harness.game.fen(), false); });
+      await mouseDrag('board-harness', 'a7', 'a8');
+      await page.waitForTimeout(300);
+      s = await state();
+      if (s.pos.a8 !== 'wQ' || s.pos.a7 || !s.fenOk) problems.push('a promotion was left as a pawn: ' + JSON.stringify({ a7: s.pos.a7, a8: s.pos.a8 }));
+      const shown = await page.evaluate(() => document.querySelector('#board-harness .pieces g[data-square="a8"]').getAttribute('data-piece'));
+      if (shown !== 'wq') problems.push('the promoted square draws ' + shown);
+    } finally {
+      await page.evaluate(() => { __harness.board.destroy(); document.getElementById('board-harness').remove(); delete window.__harness; });
+    }
+    return problems;
+  });
+
+  await check('touch: a tap selects, a second tap moves once, and a touch drag moves', async () => {
+    const problems = [];
+    const browser = page.context().browser();
+    if (!browser) return ['no browser handle to open a touch context'];
+    const ctx = await browser.newContext({ hasTouch: true, viewport: { width: 1440, height: 900 } });
+    try {
+      const tp = await ctx.newPage();
+      const errors = [];
+      tp.on('pageerror', e => errors.push(e.message));
+      await tp.goto(base + '/?view=coach');
+      await tp.waitForFunction(() => typeof engineClient !== 'undefined' && !!coachBoard && navigator.maxTouchPoints > 0);
+      await tp.locator('#btn-coach-newgame').tap();
+      await tp.waitForFunction(() => coachGameActive && !coachThinking, null, { timeout: 60000 });
+      const sq = name => boardSquare(tp, 'coachBoard', name);
+      await sq('e2').tap();
+      const sel = await tp.evaluate(() => coachBoard.marks('tap-selected').join());
+      if (sel !== 'e2') problems.push('a tap did not select the pawn: ' + sel);
+      await sq('e4').tap();
+      await tp.waitForFunction(() => coachGame.history().length >= 1, null, { timeout: 5000 }).catch(() => {});
+      await tp.waitForTimeout(400); // the emulated mouse events after a tap have arrived
+      const tapped = await tp.evaluate(() => ({ first: coachGame.history()[0] || null, sel: coachBoard.marks('tap-selected').length, premove: !!coachPremove }));
+      if (tapped.first !== 'e4' || tapped.sel || tapped.premove) problems.push('a tap move left a stray selection or premove: ' + JSON.stringify(tapped));
+      await tp.waitForFunction(() => coachGame.history().length >= 2 && !coachThinking, null, { timeout: 60000 });
+      await tp.waitForTimeout(300);
+      const cdp = await ctx.newCDPSession(tp);
+      const a = await squareCentre(tp, 'coachBoard', 'g1'), b = await squareCentre(tp, 'coachBoard', 'f3');
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: a.x, y: a.y }] });
+      for (let i = 1; i <= 8; i++) {
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: a.x + (b.x - a.x) * i / 8, y: a.y + (b.y - a.y) * i / 8 }] });
+      }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await tp.waitForFunction(() => coachGame.history().length >= 3, null, { timeout: 5000 }).catch(() => {});
+      const third = await tp.evaluate(() => coachGame.history()[2] || null);
+      if (third !== 'Nf3') problems.push('a touch drag g1-f3 was not played: ' + third);
+      await tp.waitForFunction(() => coachGame.history().length >= 4 && !coachThinking, null, { timeout: 60000 }).catch(() => {});
+      await tp.waitForTimeout(300);
+      const end = await tp.evaluate(() => ({ plies: coachGame.history().length, same: Chessboard.objToFen(coachBoard.position()) === coachGame.fen().split(' ')[0] }));
+      if (end.plies !== 4 || !end.same) problems.push('touch input moved twice or the board drifted from the game: ' + JSON.stringify(end));
+      if (errors.length) problems.push('page errors: ' + errors.join(' | '));
+    } finally {
+      await ctx.close();
+    }
     return problems;
   });
 
