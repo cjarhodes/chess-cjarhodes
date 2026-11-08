@@ -924,7 +924,7 @@ const OPENINGS = [
     category: 'black',
     tagline: 'Nimzowitsch\'s other weapon — the fianchetto variation',
     description: 'The Queen\'s Indian Defense (1.d4 Nf6 2.c4 e6 3.Nf3 b6) is the companion to the Nimzo-Indian. When White plays 3.Nf3 instead of 3.Nc3, Black plays b6 and fianchettoes the bishop on b7, controlling d5 and e4 from the flank. This leads to rich, positional battles. Kramnik won multiple world championship games with it, and Carlsen regularly employs it.',
-    moves: ['d4','Nf6','c4','e6','Nf3','b6','g3','Bb7','Bg2','Be7','O-O','O-O','Nc3','Ne4','Qc2','Nxc3','Qxc3','d6','b4','Nd7','Bb2','a5','bxa5','bxa5','Rfd1','c5'],
+    moves: ['d4','Nf6','c4','e6','Nf3','b6','g3','Bb7','Bg2','Be7','O-O','O-O','Nc3','Ne4','Qc2','Nxc3','Qxc3','d6','b4','Nd7','Bb2','a5','bxa5','Rxa5','Rfd1','Qa8'],
     explanations: [
       { label: '1. d4 — White', text: 'The Queen\'s Pawn — White aims for a strategic battle.' },
       { label: '1... Nf6 — Black', text: 'The flexible knight development — keeping Indian Defense options alive.' },
@@ -949,14 +949,14 @@ const OPENINGS = [
       { label: '11. Bb2 — White', text: 'The bishop develops to b2, engaging in the long diagonal battle with Black\'s Bb7. This is a key strategic moment.' },
       { label: '11... a5 — Black', text: 'Black challenges the queenside expansion with a5! This fights for space and creates tension on the b-file.' },
       { label: '12. bxa5 — White', text: 'White captures on a5, opening the b-file. This forces Black to recapture and creates some structural tension.' },
-      { label: '12... bxa5 — Black', text: 'Black recaptures on a5, now with a passed a-pawn. The pawn on a5 will be a long-term strategic asset.' },
+      { label: '12... Rxa5 — Black', text: 'Black recaptures with the rook and keeps the pawn structure intact. The rook is already active on a5, eyeing the a2 pawn along the half-open a-file, and Black has no pawn weaknesses.' },
       { label: '13. Rfd1 — White', text: 'White centralizes the rook to d1, supporting d4 and preparing for central action. Both sides are maneuvering for optimal positions.' },
-      { label: '13... c5 — Black', text: 'Black strikes in the center with c5! This challenges d4 directly. After the dust settles, Black has a solid position with active counterplay and no weaknesses — a typical Queen\'s Indian achievement.' }
+      { label: '13... Qa8 — Black', text: 'A typical Queen\'s Indian queen move! On a8 the queen lines up behind the Bb7 on the long diagonal toward g2, and it backs up the rook against a2. Black has active pieces and no weaknesses, and ...Bf6 or ...c5 can follow to challenge d4 — a typical Queen\'s Indian achievement.' }
     ],
     keyIdeas: [
       'QID key: Bb7 controls the long a8-h1 diagonal — fighting against White\'s Bg2 for central influence',
       'The "battle of fianchettoes": both bishops on g2 and b7 eye the same long diagonal',
-      'Black\'s queenside counterplay: ...a5 and ...c5 to challenge White\'s space advantage',
+      'Black\'s queenside counterplay: ...a5 to open the a-file, then ...c5 to challenge White\'s space advantage',
       'Very solid — Black has no structural weaknesses and always has counterplay ideas'
     ]
   },
