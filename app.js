@@ -1043,7 +1043,12 @@ function updatePracticeTabBadge(dueCount) {
 function initDesktopNotice() {
   let dismissed = false;
   try { dismissed = sessionStorage.getItem(DESKTOP_NOTICE_KEY) === '1'; } catch (e) { /* stays visible */ }
-  if (dismissed) document.documentElement.classList.add('desktop-notice-dismissed');
+  // The notice is a gate on arrival, not something to throw over a game in
+  // progress: a page that loads wider than a phone (a sideways phone, say)
+  // never shows it, even if the device is rotated later.
+  const narrowAtLoad = !!(window.matchMedia && window.matchMedia('(max-width: 759.98px)').matches);
+  if (dismissed || !narrowAtLoad) document.documentElement.classList.add('desktop-notice-dismissed');
+  else setTimeout(() => { const btn = document.getElementById('btn-desktop-notice-continue'); if (btn && btn.offsetParent) btn.focus(); }, 0);
   $('#btn-desktop-notice-continue').on('click', function() {
     try { sessionStorage.setItem(DESKTOP_NOTICE_KEY, '1'); } catch (e) { /* session only */ }
     document.documentElement.classList.add('desktop-notice-dismissed');
@@ -2146,6 +2151,9 @@ function coachFenAtPly(n) {
 
 function coachGotoPly(n) {
   if (!coachGame) return;
+  // A drill is played from its position; stepping back would leave the board
+  // in review with the step controls hidden.
+  if (coachPracticeSession) return;
   clearCoachReviewAnalysis({ restore: false });
   const total = coachGame.history().length;
   n = Math.max(0, Math.min(n, total));
@@ -3933,6 +3941,8 @@ $(function () {
   $('.board-area').on('touchstart', function(e) {
     if (quizMode || exploreMode) return;
     if (e.touches.length !== 1) return;
+    // The phone layout puts the notation strip here; swiping it scrolls it.
+    if ($(e.target).closest('#library-moves, .notation-strip').length) { touchStartX = touchStartY = null; return; }
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
   });

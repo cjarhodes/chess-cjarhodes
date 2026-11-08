@@ -45,8 +45,12 @@ function layoutIsStacked() {
         homes.set(strip.id, marker);
       }
       el.classList.toggle('notation-strip', stacked);
+      // Moving a node drops focus inside it; put it back (rotating a phone
+      // must not lose the keyboard or screen-reader position).
+      const focused = el.contains(document.activeElement) ? document.activeElement : null;
       if (stacked) strip.place(el);
       else homes.get(strip.id).after(el);
+      if (focused && document.activeElement !== focused) focused.focus({ preventScroll: true });
       centreCurrent(strip);
     });
   }
@@ -85,7 +89,7 @@ function layoutIsStacked() {
       if (!area || !area.offsetParent) return;
       const top = area.getBoundingClientRect().top;
       if (top >= 0 && top < window.innerHeight * 0.25) return;
-      window.scrollTo({ top: Math.max(0, window.scrollY + top), behavior: motionOk() ? 'smooth' : 'auto' });
+      window.scrollTo({ top: Math.max(0, window.scrollY + top), behavior: motionOk() ? 'smooth' : 'instant' });
     });
   }
 
@@ -96,6 +100,8 @@ function layoutIsStacked() {
       if (!target) return;
       if (target.closest('#library .opening-btn, #library [data-id], #sr-due-list button')) revealBoard('#library-view .board-area');
       // Puzzles: actions in the panel that load a position on the board.
+      // The mode buttons sit below the board in the stacked layout.
+      if (target.closest('.puzzles-rail .puzzle-mode')) revealBoard('.puzzles-board-area');
       const puzzleButton = target.closest('.puzzles-panel button');
       if (puzzleButton && !puzzleButton.closest('.puzzle-side-toggle') && puzzleButton.id !== 'btn-puzzle-rush-stop') revealBoard('.puzzles-board-area');
       // Coach: the panel tabs sit under the board; keep the chosen page in view.
@@ -104,7 +110,7 @@ function layoutIsStacked() {
           const tabs = document.querySelector('.coach-panel .panel-tabs');
           if (!tabs || !layoutIsStacked()) return;
           const top = tabs.getBoundingClientRect().top;
-          if (top < 0 || top > window.innerHeight * 0.6) tabs.scrollIntoView({ block: 'start', behavior: motionOk() ? 'smooth' : 'auto' });
+          if (top < 0 || top > window.innerHeight * 0.6) tabs.scrollIntoView({ block: 'start', behavior: motionOk() ? 'smooth' : 'instant' });
         });
       }
     }, true);
@@ -129,9 +135,12 @@ function layoutIsStacked() {
     ['library-view', 'coach-view', 'puzzles-view'].forEach(id => {
       const view = document.getElementById(id);
       if (!view || typeof MutationObserver === 'undefined') return;
-      new MutationObserver(() => {
-        if (layoutIsStacked() && view.getAttribute('aria-hidden') === 'false') window.scrollTo(0, 0);
-      }).observe(view, { attributes: true, attributeFilter: ['aria-hidden'] });
+      // Only when the view is newly shown: switchView re-writes aria-hidden
+      // on the current view too (for example on sign-in), which must not jump.
+      new MutationObserver(records => {
+        const shown = records.some(r => r.oldValue === 'true') && view.getAttribute('aria-hidden') === 'false';
+        if (shown && layoutIsStacked()) window.scrollTo(0, 0);
+      }).observe(view, { attributes: true, attributeFilter: ['aria-hidden'], attributeOldValue: true });
     });
   }
 

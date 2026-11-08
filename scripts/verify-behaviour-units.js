@@ -2528,6 +2528,86 @@ async page => {
     return problems;
   });
 
+  await check('phone: the notation strip scrolls without stepping, drills cannot be stepped back, and scrolling follows the user', async () => {
+    const problems = [];
+    if (!page.context().browser()) return ['no browser handle to open a phone context'];
+    const ctx = await sizedContext(375, 812, true);
+    try {
+      const tp = await ctx.newPage();
+      const errors = [];
+      tp.on('pageerror', e => errors.push(e.message));
+      await tp.addInitScript(() => { try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {} });
+      const cdp = await ctx.newCDPSession(tp);
+      const swipe = async (box, dx) => {
+        const y = box.y + box.height / 2, x0 = box.x + box.width / 2 + (dx < 0 ? 80 : -80);
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x0, y }] });
+        for (let i = 1; i <= 6; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + dx * i / 6, y }] });
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await tp.waitForTimeout(300);
+      };
+      // Library Study: swiping the board steps; swiping the strip only scrolls it.
+      await tp.goto(base + '/?opening=italian');
+      await tp.waitForFunction(() => !!board && document.querySelectorAll('#move-list .move-chip').length > 4);
+      await tp.evaluate(() => goToMove(2));
+      await swipe(await tp.locator('#myBoard').boundingBox(), -160);
+      const afterBoard = await tp.evaluate(() => currentMoveIdx);
+      if (afterBoard !== 3) problems.push('setup: a swipe on the board should step to the next move, got ' + afterBoard);
+      await swipe(await tp.locator('#library-moves').boundingBox(), -160);
+      const afterStrip = await tp.evaluate(() => currentMoveIdx);
+      if (afterStrip !== afterBoard) problems.push(`swiping the notation strip stepped the opening from ${afterBoard} to ${afterStrip}`);
+
+      // Coach drill: the move list is hidden and cannot put the board into review.
+      await tp.goto(base + '/?view=coach');
+      await tp.waitForFunction(() => typeof engineClient !== 'undefined' && !!coachBoard);
+      await tp.evaluate(() => {
+        startCoachPractice({ id: 'drill-strip', tag: 'development', meta: INSIGHT_TAG_META.development,
+          entry: { fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', bestUci: 'e2e4', bestSan: 'e4', userSan: 'a3', pairNum: 1, ply: 1 } });
+      });
+      await tp.waitForFunction(() => coachPracticeSession && coachPracticeSession.analysisReady, null, { timeout: 30000 });
+      await tp.evaluate(() => { document.getElementById('coach-keyboard-move').open = true; });
+      await tp.locator('#coach-keyboard-move-input').fill('e4');
+      await tp.locator('#coach-keyboard-move-form button[type=submit]').tap();
+      await tp.waitForFunction(() => coachPracticeSession && !coachPracticeSession.grading && coachGame.history()[0] === 'e4', null, { timeout: 30000 }).catch(() => problems.push('setup: the drill move was not graded'));
+      if (await tp.locator('#movelist-section').isVisible()) problems.push('the move list showed during a drill on a phone');
+      const reviewing = await tp.evaluate(() => { coachGotoPly(0); return coachReviewCursor; });
+      if (reviewing !== null) problems.push('stepping back during a drill put the board into review at ply ' + reviewing);
+      await tp.evaluate(() => { if (coachPracticeSession) exitCoachPractice(); });
+
+      // Re-showing the current view (as sign-in does) keeps the scroll position.
+      await tp.evaluate(() => window.scrollTo(0, 600));
+      await tp.waitForTimeout(200);
+      const before = await tp.evaluate(() => scrollY);
+      await tp.evaluate(() => switchView('coach'));
+      await tp.waitForTimeout(400);
+      const after = await tp.evaluate(() => scrollY);
+      if (before > 100 && after < before - 50) problems.push(`re-showing Coach jumped the page from ${before} to ${after}`);
+
+      // Puzzles: a mode chosen at the bottom brings its board into view.
+      await tp.locator('#nav-puzzles').tap();
+      await tp.waitForFunction(() => document.getElementById('puzzles-view').getAttribute('aria-hidden') === 'false');
+      await tp.waitForTimeout(1500);
+      await tp.locator('#puzzle-mode-rush').scrollIntoViewIfNeeded();
+      await tp.locator('#puzzle-mode-rush').tap();
+      await tp.waitForTimeout(900);
+      const boardTop = await tp.evaluate(() => document.querySelector('.puzzles-board-area').getBoundingClientRect().top);
+      if (boardTop < -10 || boardTop > 812 * 0.5) problems.push('choosing a puzzle mode left its board off screen (top ' + Math.round(boardTop) + ')');
+      if (errors.length) problems.push('page errors: ' + errors.join(' | '));
+    } finally {
+      await ctx.close();
+    }
+    // Reduced motion: page scrolls are instant.
+    const rm = await page.context().browser().newContext({ viewport: { width: 375, height: 812 }, reducedMotion: 'reduce' });
+    try {
+      const rp = await rm.newPage();
+      await rp.goto(base + '/?view=coach');
+      const behaviour = await rp.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior);
+      if (behaviour !== 'auto') problems.push('with reduced motion the page still scrolls smoothly (' + behaviour + ')');
+    } finally {
+      await rm.close();
+    }
+    return problems;
+  });
+
   if (pageErrors.length) failures.push('page errors: ' + pageErrors.join(' | '));
   if (failures.length) throw new Error(failures.join('\n'));
   return { passed: passed.length, checks: passed };

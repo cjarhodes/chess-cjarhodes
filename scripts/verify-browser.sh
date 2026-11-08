@@ -667,12 +667,13 @@ async page => {
   await settlePracticeMove();
   assert((await page.locator('#coach-practice-status').textContent()).includes('Solved after revealing the answer'), 'revealed answer was not completed');
 
-  // A phone-sized viewport gets the stacked layout behind the phone preview
-  // notice; the board fills the width without the page scrolling sideways.
-  // A tablet-sized viewport gets no notice.
+  // Narrowing a page that loaded wide gets the stacked layout but not the
+  // phone notice (it is a gate on arrival, never thrown over a game); the
+  // board fills the width without the page scrolling sideways. A fresh phone
+  // load shows the notice (checked with the Library visit below).
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(400);
-  assert(await page.locator('#desktop-notice').isVisible(), 'phone viewport did not show the phone preview notice');
+  assert(!(await page.locator('#desktop-notice').isVisible()), 'narrowing a page mid-session threw the phone notice over it');
   const narrowBoard = await page.locator('#coachBoard svg.cm-chessboard').boundingBox();
   assert(narrowBoard && narrowBoard.x >= 0 && narrowBoard.width >= 380 && narrowBoard.x + narrowBoard.width <= 390.5, `phone viewport did not fit the board to the width (${JSON.stringify(narrowBoard)})`);
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'phone viewport scrolled sideways');
