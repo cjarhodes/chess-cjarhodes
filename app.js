@@ -1380,9 +1380,11 @@ function preparePracticeAnalysis(session) {
       if (!practicePositionIsCurrent(session) || session.analysisToken !== token || session.positionFen !== fen) return null;
       // A timed-out engine must not turn every legal move into a false error.
       // The saved solution remains playable; alternatives require a reliable
-      // score and therefore remain ungraded until a later retry.
+      // score and therefore remain ungraded until a later retry: clearing the
+      // promise lets the next attempt analyse the position again.
       session.analysis = { fen, bestUci: null, bestCp: null, known: {}, pv: [], error: err };
       session.analysisReady = true;
+      session.analysisPromise = null;
       return session.analysis;
     });
   return session.analysisPromise;
@@ -1548,6 +1550,15 @@ function coachHandlePracticeMove(source, target, promotion, opts) {
   const move = temp.move({ from: source, to: target, promotion: promotion || 'q' });
   if (!move) return 'snapback';
   const actualUci = uciFromMove(move);
+  // The last analysis failed: analyse again for this attempt, once (the
+  // marked opts stop a second failure from retrying in a loop).
+  if (session.analysis && session.analysis.error && !session.analysisPromise && !session.pendingMove && !session.grading &&
+      !(opts && opts.analysisRetried)) {
+    session.analysis = null;
+    session.analysisReady = false;
+    preparePracticeAnalysis(session);
+    opts = Object.assign({}, opts, { analysisRetried: true });
+  }
   if (session.pendingMove) {
     const pendingUci = session.pendingMove.source + session.pendingMove.target + (session.pendingMove.promotion || '');
     if (pendingUci === actualUci) return 'pending';
@@ -3459,7 +3470,8 @@ $(function () {
     // Undo user move
     coachGame.undo();
     // Roll back stats
-    if (coachLastReview && coachStats) {
+    // Unscored ('unknown') reviews never counted, so they must not uncount.
+    if (coachLastReview && coachStats && coachLastReview.tier !== 'unknown') {
       coachStats.moves = Math.max(0, coachStats.moves - 1);
       coachStats[coachLastReview.tier] = Math.max(0, (coachStats[coachLastReview.tier] || 0) - 1);
     }

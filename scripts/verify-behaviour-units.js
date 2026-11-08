@@ -1335,6 +1335,71 @@ async page => {
     return problems;
   });
 
+  // ── Unscored moves and failed practice analysis ──
+  await check('taking back an unscored move leaves the scored move count alone', async () => {
+    const problems = [];
+    await freshCoach();
+    await newGame();
+    await playMove('e4');
+    await page.waitForFunction(() => coachGame.history().length >= 2 && !coachThinking && coachIsUserTurn(), null, { timeout: 60000 });
+    const scored = await page.evaluate(() => coachStats.moves);
+    // The engine stalls (no bestmove, no PV) for this move's review only.
+    await page.evaluate(() => {
+      window.__realEvaluate = engineClient.evaluate;
+      let stalls = 2;
+      engineClient.evaluate = function (...args) {
+        if (stalls-- > 0) return Promise.resolve({ lines: [], bestmove: null, info: {} });
+        return window.__realEvaluate.apply(this, args);
+      };
+    });
+    try {
+      await playMove(await page.evaluate(() => ['d4', 'd3', 'Nf3', 'Nc3'].find(m => coachGame.moves().includes(m))));
+      await page.waitForFunction(() => coachReviewLog.length >= 2 && !coachThinking, null, { timeout: 60000 });
+      if (await page.evaluate(() => coachLastReview.tier) !== 'unknown') problems.push('setup: the stalled review should be unscored');
+    } finally {
+      await page.evaluate(() => { engineClient.evaluate = window.__realEvaluate; });
+    }
+    await page.evaluate(() => $('#btn-coach-takeback').prop('disabled', false).trigger('click'));
+    const after = await page.evaluate(() => ({ moves: coachStats.moves, accuracy: accuracyFromTallies(coachStats, coachStats.moves) }));
+    if (after.moves !== scored) problems.push(`take-back of an unscored move changed the scored count from ${scored} to ${after.moves}`);
+    if (after.accuracy !== null && after.accuracy > 100) problems.push('accuracy rose past 100%: ' + after.accuracy);
+    return problems;
+  });
+
+  await check('a failed practice analysis is retried on the next attempt', async () => {
+    const problems = [];
+    await freshCoach();
+    const start = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    await page.evaluate(fen => {
+      window.__realEvaluate = engineClient.evaluate;
+      window.__practiceSearches = 0;
+      engineClient.evaluate = function (searchFen, ...rest) {
+        if (searchFen === fen) {
+          window.__practiceSearches += 1;
+          // The opening analysis and the first attempt's retry both fail.
+          if (window.__practiceSearches <= 2) return Promise.reject(new Error('engine timed out'));
+        }
+        return window.__realEvaluate.call(this, searchFen, ...rest);
+      };
+      startCoachPractice({ id: 'drill-analysis-retry', tag: 'development', meta: INSIGHT_TAG_META.development,
+        entry: { fenBefore: fen, bestUci: 'e2e4', bestSan: 'e4', userSan: 'a3', pairNum: 1, ply: 1 } });
+    }, start);
+    try {
+      await page.waitForFunction(() => coachPracticeSession && coachPracticeSession.analysisReady, null, { timeout: 30000 });
+      await playMove('d4');
+      await page.waitForFunction(() => !coachPracticeSession.grading && /could not verify/.test($('#coach-practice-status').text()), null, { timeout: 30000 })
+        .catch(() => problems.push('setup: the first attempt should be ungraded while the engine is down'));
+      if (await page.evaluate(() => window.__practiceSearches) > 2) problems.push('a failed retry analysed again in a loop');
+      await playMove('d4');
+      await page.waitForFunction(() => !coachPracticeSession.grading && !/could not verify|Checking/.test($('#coach-practice-status').text()), null, { timeout: 60000 })
+        .catch(() => problems.push('the second attempt was not graded: analysis was never retried'));
+      if (await page.evaluate(() => window.__practiceSearches) < 3) problems.push('the practice position was not analysed again on the next attempt');
+    } finally {
+      await page.evaluate(() => { engineClient.evaluate = window.__realEvaluate; if (coachPracticeSession) exitCoachPractice(); });
+    }
+    return problems;
+  });
+
   await check('Library quiz hides the moves you have not reached', async () => {
     const problems = [];
     await page.goto(base + '/?opening=italian&mode=quiz');
