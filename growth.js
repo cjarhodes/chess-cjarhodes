@@ -83,11 +83,9 @@ function emptyGrowthState() {
       ratingHistory: [],
       // Rating evidence syncs separately from preferences: ratingUpdatedAt
       // moves only when the estimate does, ratingResetAt marks a deliberate
-      // restart that discarded earlier games, and revoked games (taken back
-      // after their result) stay out of every device's history.
+      // restart that discarded earlier games.
       ratingUpdatedAt: 0,
       ratingResetAt: 0,
-      ratingRevokedIds: [],
       minutes: 10,
       goal: 'balanced',
       sessionStyle: 'balanced',
@@ -127,9 +125,6 @@ function normalizeGrowthState(value) {
     : [];
   profile.ratingHistory = Array.isArray(profile.ratingHistory)
     ? profile.ratingHistory.filter(item => item && Number.isFinite(item.at)).slice(-30)
-    : [];
-  profile.ratingRevokedIds = Array.isArray(profile.ratingRevokedIds)
-    ? profile.ratingRevokedIds.filter(id => typeof id === 'string').slice(-50)
     : [];
   profile.ratingResetAt = Number(profile.ratingResetAt) || 0;
   // Older states have no rating timestamp; their newest rated game stands in.
@@ -495,11 +490,10 @@ function mergeGrowthProfiles(local, remote) {
   const resetAt = Math.max(local.ratingResetAt || 0, remote.ratingResetAt || 0);
   // A reset discards the other side's games unless it rated more after it.
   const sides = [prefs, other].filter(profile => (profile.ratingResetAt || 0) === resetAt || newestRatingAt(profile) > resetAt);
-  const revoked = new Set([...local.ratingRevokedIds, ...remote.ratingRevokedIds]);
   const source = sides.slice().sort((a, b) => ((b.ratingUpdatedAt || 0) - (a.ratingUpdatedAt || 0)) || (b.ratingGames - a.ratingGames))[0];
   const history = new Map();
   sides.forEach(profile => profile.ratingHistory.forEach(item => {
-    if (item.at < resetAt || (item.gameId && revoked.has(item.gameId))) return;
+    if (item.at < resetAt) return;
     history.set(item.gameId || `at:${item.at}`, item);
   }));
   const ids = new Set();
@@ -511,7 +505,6 @@ function mergeGrowthProfiles(local, remote) {
     ratingUpdatedAt: source.ratingUpdatedAt || 0,
     ratingResetAt: resetAt,
     ratedGameIds: Array.from(ids).slice(-50),
-    ratingRevokedIds: Array.from(revoked).slice(-50),
     ratingHistory: Array.from(history.values()).sort((a, b) => a.at - b.at).slice(-30)
   });
 }
@@ -1152,34 +1145,6 @@ function recordRatedCoachResult(endReason) {
     renderAutoDifficultyNote(saved.state.profile);
   }
   return Object.assign({ eligible: true, saved: saved.ok }, update, { rated: saved.ok });
-}
-
-// A take-back makes the game unrated. When the game had already been rated
-// (taken back after its result), its entry is reversed and remembered as
-// revoked so a device that synced it first drops it too.
-function revokeRatedCoachResult(gameId) {
-  if (!gameId) return { revoked: false };
-  const state = loadGrowthState();
-  const profile = state.profile;
-  const last = profile.ratingHistory[profile.ratingHistory.length - 1];
-  if (!last || last.gameId !== gameId || !Number.isFinite(Number(last.before))) return { revoked: false };
-  const games = Math.max(0, profile.ratingGames - 1);
-  const at = Date.now();
-  state.profile = Object.assign({}, profile, {
-    ratingEstimate: Number(last.before),
-    ratingGames: games,
-    ratingDeviation: Math.max(80, Math.round(350 / Math.sqrt(1 + games * 0.35))),
-    ratingHistory: profile.ratingHistory.slice(0, -1),
-    ratingRevokedIds: profile.ratingRevokedIds.concat(gameId).slice(-50),
-    ratingUpdatedAt: at
-  });
-  state.updatedAt = at;
-  const saved = saveGrowthState(state);
-  if (saved.ok) {
-    renderPlayerProfileStatus(saved.state.profile);
-    renderAutoDifficultyNote(saved.state.profile);
-  }
-  return { revoked: saved.ok };
 }
 
 function renderPlayerProfileStatus(profile = playerProfile()) {

@@ -581,7 +581,7 @@ async page => {
     return problems;
   });
 
-  await check('a take-back makes the game unrated and reverses a rated result', async () => {
+  await check('a take-back makes the game unrated but never erases a rated result', async () => {
     const problems = [];
     const rating = () => page.evaluate(() => { const p = loadGrowthState().profile; return { estimate: p.ratingEstimate, games: p.ratingGames, ids: p.ratingHistory.map(h => h.gameId) }; });
     const hideSummary = () => page.evaluate(() => { if (typeof closeCoachSummary === 'function') closeCoachSummary(); $('#coach-summary-overlay, #summary-overlay').hide(); });
@@ -592,7 +592,8 @@ async page => {
       // The rating rule needs four reviewed moves; the take-back rule is what is under test.
       return page.evaluate(() => { coachStats.moves = Math.max(coachStats.moves, 4); return coachLocalGameId; });
     };
-    // A standard game is rated; taking back its result reverses that rating.
+    // A standard game is rated; taking back its result keeps that rating
+    // (a take-back must not erase a loss), and play after it is unrated.
     await newGame();
     const before = await rating();
     const id = await playOne();
@@ -601,8 +602,8 @@ async page => {
       .catch(() => problems.push('a standard finished game was not rated'));
     await hideSummary();
     await page.evaluate(() => $('#btn-coach-takeback').prop('disabled', false).trigger('click'));
-    const reversed = await rating();
-    if (reversed.games !== before.games || reversed.estimate !== before.estimate || reversed.ids.includes(id)) problems.push('taking back a rated result kept its rating: ' + JSON.stringify({ before, reversed }));
+    const kept = await rating();
+    if (kept.games !== before.games + 1 || !kept.ids.includes(id)) problems.push('taking back a rated result should keep its rating: ' + JSON.stringify({ before, kept }));
     if (!/unrated/.test(await page.locator('#coach-status').textContent())) problems.push('the status should say a game with a take-back is unrated');
     // A take-back mid-game survives a reload and keeps the finished game unrated.
     await newGame();
@@ -1511,6 +1512,20 @@ async page => {
     }
     return problems;
   });
+
+  await check('server practice schedules land on this browser\'s local midnight', () => page.evaluate(() => {
+    const problems = [];
+    const attemptAt = new Date(2026, 10, 7, 21, 30).getTime();   // 7 Nov, 21:30 local
+    mergeRemotePracticeRecords([{
+      drill_key: 'merge-midnight', fen: '8/8/8/8/8/8/4K3/7k w - - 0 1', best_uci: 'e2e3', tag: 'candidate_moves',
+      reps: 2, ease: 2.6, interval_days: 3, due_at: new Date(attemptAt + 3 * 86400000).toISOString(),
+      attempts: 2, correct: 2, last_result: 'correct', last_attempt_at: new Date(attemptAt).toISOString()
+    }]);
+    const record = loadPracticeProgress().records['merge-midnight'];
+    const want = new Date(2026, 10, 10).getTime();                // local midnight, three calendar days on
+    if (!record || record.dueAt !== want) problems.push('a three-day server interval should be due at local midnight on 10 Nov: ' + (record && new Date(record.dueAt).toString()));
+    return problems;
+  }));
 
   await check('Library quiz hides the moves you have not reached', async () => {
     const problems = [];

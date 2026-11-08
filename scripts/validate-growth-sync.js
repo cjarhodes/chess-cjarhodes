@@ -103,12 +103,6 @@ Object.assign(reset.profile, { rating: 1600, ratingEstimate: 1600, ratingGames: 
 const afterReset = context.mergeGrowthStates(deviceB, reset).profile;
 assert(afterReset.ratingEstimate === 1600 && afterReset.ratingGames === 0 && afterReset.ratingHistory.length === 0, 'an older device restored games from before a rating reset');
 
-// A game taken back after its result stays revoked on every device.
-const revoked = run('emptyGrowthState()');
-Object.assign(revoked.profile, { ratingEstimate: 1230, ratingGames: 1, ratingUpdatedAt: 6000, updatedAt: 40, ratedGameIds: ['a1', 'b1'], ratingRevokedIds: ['b1'], ratingHistory: [rated('a1', 3000, 1200, 1230)] });
-const afterRevoke = context.mergeGrowthStates(deviceB, revoked).profile;
-assert(afterRevoke.ratingEstimate === 1230 && !afterRevoke.ratingHistory.some(item => item.gameId === 'b1'), 'a revoked rated game came back from another device');
-
 // ── Repertoire openings keep their own timestamp ──
 const chooser = run('emptyGrowthState()');
 chooser.repertoire.ids = ['italian'];

@@ -3460,9 +3460,9 @@ $(function () {
     // to end again with a revised score.
     if (coachLifetimeRolledForThisGame) unrollGameFromLifetime();
     coachLifetimeRolledForThisGame = false;
-    // A game with a take-back is unrated; reverse its rating if it had one.
+    // A game with a take-back is unrated from here on. A result already rated
+    // stands: taking it back must not erase a loss from the rating.
     coachTakebackUsed = true;
-    if (typeof revokeRatedCoachResult === 'function') revokeRatedCoachResult(coachLocalGameId);
     // If the game just ended and the post-game summary is pending, abort it —
     // taking back un-ends the game.
     if (coachSummaryTimer) { clearTimeout(coachSummaryTimer); coachSummaryTimer = null; }

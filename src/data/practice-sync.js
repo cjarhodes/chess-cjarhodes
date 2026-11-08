@@ -31,7 +31,11 @@ function mergeRemotePracticeRecords(rows, ownerId = activePracticeOwnerId()) {
       reps: row.reps || 0,
       ease: Number(row.ease) || 2.5,
       intervalDays: row.interval_days || 0,
-      dueAt: row.due_at ? Date.parse(row.due_at) : 0,
+      // The server steps whole days from the attempt; this browser schedules
+      // to its own local midnight, as recordPracticeAttempt does.
+      dueAt: remoteAttemptAt && (row.interval_days || 0) > 0 && typeof practiceDayStart === 'function'
+        ? practiceDayStart(remoteAttemptAt, row.interval_days)
+        : (row.due_at ? Date.parse(row.due_at) : 0),
       attempts: row.attempts || 0,
       correct: row.correct || 0,
       lastResult: row.last_result || null,
