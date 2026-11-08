@@ -10,7 +10,7 @@ async browserPage => {
   };
   const tokenOwners = new Map();
   const tables = Object.fromEntries(['coach_checkpoints','player_training_profiles','coach_games','coach_moves','drill_queue','practice_attempts','daily_training_sessions','theory_cards'].map(t=>[t,[]]));
-  const raceWaiters = [];
+  const raceWaiters = [], ACCOUNT_LIMIT_BYTES = 240 * 1024;
   let serial = 1, stamp = 1, failLogout = false, offline = false, otpRequests = 0, logoutScope = '', profileRace = false, raceReads = 0;
   const stampTime = () => new Date(Date.UTC(2026,0,1,0,0,0,stamp++)).toISOString();
   const clone = value => JSON.parse(JSON.stringify(value));
@@ -249,6 +249,23 @@ async browserPage => {
     await d.evaluate(()=>refreshRemoteInsights({silent:true}).catch(()=>{}));
     assert(await d.evaluate(()=>coachRemoteInsightsLoaded),'a paused checkpoint still lets account insights load');
     await d.evaluate(()=>{sessionStorage.removeItem(coachMemoryKey('coach:checkpoint-conflict:v1'));accountCheckpoint.conflict=false;});
+    // A long game with a drill on top stores the game three times (saved game,
+    // return point, drill's return point). Sync must trim it, never fail.
+    await d.locator('#tab-game').click();await d.locator('#btn-coach-next-action').click();await play(d,'e4');
+    await d.evaluate(()=>{const real=coachReviewLog[coachReviewLog.length-1];while(coachReviewLog.length<60)coachReviewLog.unshift(JSON.parse(JSON.stringify(real)));saveCoachState();});
+    await d.locator('#tab-practice').click();await d.locator('#endgame-track-list .endgame-item button').first().click();
+    await d.waitForFunction(()=>coachPracticeSession&&coachPracticeSession.analysisReady,null,{timeout:60000});
+    const longBytes=await d.evaluate(()=>{saveCoachPracticeState();return new TextEncoder().encode(JSON.stringify(readLocalAccountCheckpoint())).length;});
+    assert(longBytes>ACCOUNT_LIMIT_BYTES&&longBytes<2*ACCOUNT_LIMIT_BYTES,'a 60-move game plus a drill exceeds the checkpoint limit ('+longBytes+' bytes)');
+    assert(await d.evaluate(()=>flushAccountCheckpoint().then(()=>true,()=>false)),'an oversized checkpoint does not fail the upload');
+    assert(await d.evaluate(()=>ensureAccountWritePermission().then(()=>true,()=>false)),'an oversized checkpoint does not block move and game writes');
+    const trimmed=drillRow().snapshot;
+    assert(trimmed.practice&&trimmed.practice.returnState&&trimmed.game&&trimmed.practice.returnState.reviewLog.length===60,'the uploaded checkpoint keeps the drill, its live game and every review');
+    assert(await d.evaluate(row=>{try{validateAccountCheckpoint(row);return true;}catch(e){return false;}},trimmed),'the trimmed checkpoint fits the limit and can be continued elsewhere');
+    await d.locator('#btn-coach-practice-exit').click();
+    await d.evaluate(()=>{const real=coachReviewLog[coachReviewLog.length-1];while(coachReviewLog.length<400)coachReviewLog.unshift(JSON.parse(JSON.stringify(real)));saveCoachState();});
+    assert(await d.evaluate(()=>flushAccountCheckpoint().then(()=>accountCheckpoint.message.includes('too large'),()=>false)),'a session too large even trimmed stays local without failing sync');
+    assert(await d.evaluate(()=>ensureAccountWritePermission().then(()=>true,()=>false)),'skipping an oversized checkpoint leaves account writes open');
     // Failed sign-out must leave the real session and UI consistent.
     failLogout=true;await b.locator('#btn-coach-logout').click();
     await b.waitForFunction(()=>!coachAuthUser&&document.querySelector('#coach-auth-status').textContent.includes('Signed out on this browser.'));
@@ -265,7 +282,7 @@ async browserPage => {
     assert(await b.evaluate(()=>currentInsightEntries().length===0&&!coachGameActive),'different account sees no previous account history or board');
     await capture(b,'separate-owner');
     assert(errors.length===0,'no browser runtime errors');
-    return {kind:'controlled-auth-and-rest-with-real-sdk',checks:checks.length,captures,scenarios:['email form and callback','two-browser game recovery','previous board recovery','offline move retry after replacement','offline takebacks before and after upload','practice backup and live-game return','malformed and quota rollback','concurrent profile merge','stale-tab conflict across reload and copy','finished drill clears the checkpoint without pausing sync','failed and local sign-out','account isolation'],errors};
+    return {kind:'controlled-auth-and-rest-with-real-sdk',checks:checks.length,captures,scenarios:['email form and callback','two-browser game recovery','previous board recovery','offline move retry after replacement','offline takebacks before and after upload','practice backup and live-game return','malformed and quota rollback','concurrent profile merge','stale-tab conflict across reload and copy','finished drill clears the checkpoint without pausing sync','oversized checkpoint trimmed or kept local','failed and local sign-out','account isolation'],errors};
   } catch(error) { const states=await Promise.all(contexts.map(async c=>{const p=c.pages()[0];try{return await p.evaluate(()=>({signedIn:!!coachAuthUser,status:document.querySelector('#coach-auth-status').textContent}));}catch(e){return{};}}));throw Error(error.message+'; last checks: '+JSON.stringify(checks.slice(-4))+'; states: '+JSON.stringify(states)); }
   finally { for(const context of contexts)await context.close(); }
 }

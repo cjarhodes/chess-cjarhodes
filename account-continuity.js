@@ -42,9 +42,37 @@ function accountCheckpointHasSession(snapshot) {
   return !!(snapshot && (snapshot.game || snapshot.practice));
 }
 
+function accountCheckpointBytes(value) {
+  return new TextEncoder().encode(JSON.stringify(value)).length;
+}
+
+// A long game with a drill on top is stored three times (saved game, return
+// point, the drill's own return point). Fit it under the account limit
+// without changing what can be resumed: drop the top-level return point when
+// the drill carries the same copy (only the drill's copy is restored), then
+// engine detail the review screen renders only when present, keeping the
+// latest review whole. Returns null when even that does not fit.
+function compactAccountCheckpoint(snapshot) {
+  if (accountCheckpointBytes(snapshot) <= ACCOUNT_CHECKPOINT_LIMIT) return snapshot;
+  const compact = cloneCoachValue(snapshot, null);
+  if (compact.returnState && compact.practice && compact.practice.returnState &&
+      JSON.stringify(compact.returnState) === JSON.stringify(compact.practice.returnState)) compact.returnState = null;
+  if (accountCheckpointBytes(compact) <= ACCOUNT_CHECKPOINT_LIMIT) return compact;
+  [compact.game, compact.returnState, compact.practice && compact.practice.returnState].forEach(game => {
+    if (!game || !Array.isArray(game.reviewLog)) return;
+    game.reviewLog.slice(0, -1).forEach(review => {
+      if (!review || typeof review !== 'object') return;
+      delete review.topAlternatives;
+      delete review.pvSan;
+      [review.evalBefore, review.evalAfter].forEach(info => { if (info && typeof info === 'object') delete info.pv; });
+    });
+  });
+  return accountCheckpointBytes(compact) <= ACCOUNT_CHECKPOINT_LIMIT ? compact : null;
+}
+
 function validateAccountCheckpoint(value) {
   if (!value || value.v !== 1 || typeof value.owner !== 'string' ||
-      new TextEncoder().encode(JSON.stringify(value)).length > ACCOUNT_CHECKPOINT_LIMIT ||
+      accountCheckpointBytes(value) > ACCOUNT_CHECKPOINT_LIMIT ||
       (!value.game && !value.practice)) throw new Error('That saved session is incomplete or too large. Export a smaller session backup.');
   const checkGame = game => {
     if (!game || game.v !== 1 || !['white', 'black', 'random'].includes(game.userSide) ||
@@ -222,7 +250,15 @@ function flushAccountCheckpoint() {
     if (accountCheckpoint.timer) { clearTimeout(accountCheckpoint.timer); accountCheckpoint.timer = null; }
     const local = readLocalAccountCheckpoint();
     if (!local && (accountCheckpoint.revision === null || accountCheckpoint.remoteEmpty)) return;
-    const snapshot = local ? validateAccountCheckpoint(local) : clearedAccountCheckpoint();
+    const fitted = local && compactAccountCheckpoint(local);
+    if (local && !fitted) {
+      // Too large even trimmed: keep it in this browser and let every other
+      // account write continue. A backup export still carries all of it.
+      accountCheckpoint.message = 'This session is too large to save to your account. It is kept in this browser; export a backup to continue elsewhere.';
+      renderAccountCheckpoint();
+      return;
+    }
+    const snapshot = local ? validateAccountCheckpoint(fitted) : clearedAccountCheckpoint();
     const dirty = accountCheckpoint.dirty, revision = accountCheckpoint.revision;
     const userId = coachAuthUser.id, device = accountCheckpointDeviceId();
     const payload = { user_id: userId, device_id: device, snapshot };
