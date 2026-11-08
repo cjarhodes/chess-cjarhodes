@@ -67,6 +67,49 @@ function layoutIsStacked() {
     list.scrollLeft += (c.left + c.width / 2) - (l.left + l.width / 2);
   }
 
+  // The stacked layout reorders sections with CSS `order` (board first, the
+  // opening list last, a drill's question above the board). Keyboard focus
+  // and screen readers follow the DOM, so the DOM is put in the same order:
+  // children sorted by their computed `order`, ties keeping their current
+  // place. Wider layouts get the original markup order back.
+  const ORDERED = ['#library-view', '#coach-view', '#puzzles-view', '#library-view .board-area', '.coach-board-area', '.puzzles-board-area'];
+  const original = new Map();
+  function syncOrder() {
+    const stacked = layoutIsStacked();
+    ORDERED.forEach(selector => {
+      const container = document.querySelector(selector);
+      if (!container) return;
+      if (!original.has(container)) original.set(container, [...container.children]);
+      const home = original.get(container);
+      const kids = [...container.children];
+      const at = el => kids.indexOf(el);
+      const homeAt = el => { const i = home.indexOf(el); return i < 0 ? home.length + at(el) : i; };
+      const orderOf = el => parseInt(getComputedStyle(el).order, 10) || 0;
+      const desired = kids.slice().sort(stacked
+        ? (a, b) => (orderOf(a) - orderOf(b)) || (at(a) - at(b))
+        : (a, b) => homeAt(a) - homeAt(b));
+      if (desired.every((el, i) => el === kids[i])) return;
+      const focused = container.contains(document.activeElement) ? document.activeElement : null;
+      desired.forEach(el => container.appendChild(el));
+      if (focused && document.activeElement !== focused) focused.focus({ preventScroll: true });
+    });
+  }
+
+  // What changes the order: the Coach state and classes, and whether the
+  // Library has an opening on the board.
+  function watchOrder() {
+    if (typeof MutationObserver === 'undefined') return;
+    let frame = null;
+    const schedule = () => {
+      if (frame !== null) return;
+      frame = requestAnimationFrame(() => { frame = null; syncOrder(); });
+    };
+    const coach = document.getElementById('coach-view');
+    if (coach) new MutationObserver(schedule).observe(coach, { attributes: true, attributeFilter: ['class', 'data-ui-state'] });
+    const placeholder = document.getElementById('board-placeholder');
+    if (placeholder) new MutationObserver(schedule).observe(placeholder, { attributes: true, attributeFilter: ['style'] });
+  }
+
   function watchStrips() {
     if (typeof MutationObserver === 'undefined') return;
     STRIPS.forEach(strip => {
@@ -144,13 +187,21 @@ function layoutIsStacked() {
     });
   }
 
+  // Going wide, the original order comes back before the strips go home;
+  // going stacked, the strips move first and then everything is sorted.
+  function relayout() {
+    if (layoutIsStacked()) { placeStrips(); syncOrder(); }
+    else { syncOrder(); placeStrips(); }
+  }
+
   function init() {
-    placeStrips();
+    relayout();
     watchStrips();
+    watchOrder();
     watchActions();
     if (window.matchMedia) {
       const query = window.matchMedia(LAYOUT_STACKED_QUERY);
-      const onChange = () => placeStrips();
+      const onChange = () => relayout();
       if (query.addEventListener) query.addEventListener('change', onChange);
       else if (query.addListener) query.addListener(onChange);
     }

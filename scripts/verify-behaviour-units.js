@@ -2608,6 +2608,72 @@ async page => {
     return problems;
   });
 
+  await check('phone: keyboard and screen-reader order follow the drawn order, and desktop gets the markup order back', async () => {
+    const problems = [];
+    if (!page.context().browser()) return ['no browser handle to open a phone context'];
+    const containers = ['#library-view', '#coach-view', '#puzzles-view', '#library-view .board-area', '.coach-board-area', '.puzzles-board-area'];
+    // In DOM order, the drawn order (CSS `order`) must never go down.
+    const outOfOrder = (p, where) => p.evaluate(([sels, where]) => {
+      const bad = [];
+      sels.forEach(sel => {
+        const c = document.querySelector(sel);
+        if (!c || !c.offsetParent) return;
+        const orders = [...c.children].map(el => ({ el, o: parseInt(getComputedStyle(el).order, 10) || 0 }));
+        for (let i = 1; i < orders.length; i++) {
+          if (orders[i].o < orders[i - 1].o) bad.push(`${where} ${sel}: ${orders[i].el.className || orders[i].el.id} (order ${orders[i].o}) comes after ${orders[i - 1].el.className || orders[i - 1].el.id} (order ${orders[i - 1].o})`);
+        }
+      });
+      return bad;
+    }, [containers, where]);
+    const childList = p => p.evaluate(sels => sels.map(sel => { const c = document.querySelector(sel); return c ? [...c.children].map(el => el.id || el.className).join('|') : ''; }), containers);
+    const ctx = await sizedContext(375, 812, true);
+    try {
+      const tp = await ctx.newPage();
+      await tp.addInitScript(() => { try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {} });
+      const settle = () => tp.waitForTimeout(300);
+      await tp.goto(base + '/?view=coach');
+      await tp.waitForFunction(() => typeof engineClient !== 'undefined' && !!coachBoard);
+      await settle();
+      problems.push(...await outOfOrder(tp, 'Coach ready'));
+      await tp.locator('#btn-coach-newgame').tap();
+      await tp.waitForFunction(() => coachGameActive && !coachThinking, null, { timeout: 60000 });
+      await settle();
+      problems.push(...await outOfOrder(tp, 'Coach playing'));
+      await tp.evaluate(() => {
+        startCoachPractice({ id: 'drill-order', tag: 'development', meta: INSIGHT_TAG_META.development,
+          entry: { fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', bestUci: 'e2e4', bestSan: 'e4', userSan: 'a3', pairNum: 1, ply: 1 } });
+      });
+      await settle();
+      problems.push(...await outOfOrder(tp, 'Coach drill'));
+      await tp.evaluate(() => { if (coachPracticeSession) exitCoachPractice(); });
+      await tp.locator('#nav-library').tap();
+      await settle();
+      problems.push(...await outOfOrder(tp, 'Library list'));
+      await tp.locator('.opening-btn').first().tap();
+      await settle();
+      problems.push(...await outOfOrder(tp, 'Library opening'));
+      await tp.locator('#nav-puzzles').tap();
+      await tp.waitForTimeout(1200);
+      problems.push(...await outOfOrder(tp, 'Puzzles'));
+      // Widening restores the markup order a desktop load has.
+      await tp.setViewportSize({ width: 1440, height: 900 });
+      await settle();
+      const widened = await childList(tp);
+      const dp = await (await sizedContext(1440, 900, false)).newPage();
+      try {
+        await dp.goto(base + '/?view=puzzles');
+        await dp.waitForTimeout(600);
+        const fresh = await childList(dp);
+        containers.forEach((sel, i) => { if (widened[i] !== fresh[i]) problems.push(`${sel} kept the phone order after widening: ${widened[i]} vs ${fresh[i]}`); });
+      } finally {
+        await dp.context().close();
+      }
+    } finally {
+      await ctx.close();
+    }
+    return problems;
+  });
+
   if (pageErrors.length) failures.push('page errors: ' + pageErrors.join(' | '));
   if (failures.length) throw new Error(failures.join('\n'));
   return { passed: passed.length, checks: passed };
