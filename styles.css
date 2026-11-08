@@ -3378,5 +3378,9 @@ input[type=range].strength-slider::-moz-range-thumb {
     margin-left: 0;
     margin-right: 0;
   }
+  .coach-board-area .board-controls, .coach-turn-header,
+  .puzzles-board-area .coach-turn-header, .puzzles-view .keyboard-move,
+  #library-view .board-controls, .captured-bar, .feedback-bar, .progress-bar, .board-nav,
+  .coach-analysis-strip { width: var(--stack-board); }
   .mode-toggle { width: auto; }
 }
