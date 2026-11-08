@@ -150,9 +150,25 @@ function loadInsights() {
   }
 }
 
+// Reviews of imported games (a pasted PGN, or a Chess.com or Lichess game)
+// may hold at most INSIGHTS_IMPORT_SHARE of the kept entries, so importing
+// never pushes the user's own Coach evidence below the other half. Legacy
+// pasted games used import-N ids. Entries are kept oldest first.
+const INSIGHTS_IMPORT_SHARE = 150;
+function isImportedInsightEntry(entry) {
+  return /^(chesscom|lichess|pgn|import)-/.test(String((entry && entry.localGameId) || ''));
+}
+
+function capInsightEntries(entries) {
+  const list = Array.isArray(entries) ? entries : [];
+  let excess = list.filter(isImportedInsightEntry).length - INSIGHTS_IMPORT_SHARE;
+  const kept = excess > 0 ? list.filter(entry => !(isImportedInsightEntry(entry) && excess-- > 0)) : list;
+  return kept.slice(-INSIGHTS_MAX_ENTRIES);
+}
+
 function saveInsights(state) {
   try {
-    const safe = { v: 1, entries: (state.entries || []).slice(-INSIGHTS_MAX_ENTRIES) };
+    const safe = { v: 1, entries: capInsightEntries(state.entries) };
     localStorage.setItem(coachMemoryKey(INSIGHTS_KEY), JSON.stringify(safe));
     return true;
   } catch (e) {

@@ -599,6 +599,7 @@ function invalidateCoachAsyncWork(reason) {
 
 function resetCoachState(fen, opts = {}) {
   coachContinuityCopy = false;
+  coachTakebackUsed = false;
   coachOpeningTransfer = null;
   coachPendingReview = null;
   invalidateCoachAsyncWork('A new game replaced the previous analysis.');
@@ -3459,6 +3460,9 @@ $(function () {
     // to end again with a revised score.
     if (coachLifetimeRolledForThisGame) unrollGameFromLifetime();
     coachLifetimeRolledForThisGame = false;
+    // A game with a take-back is unrated; reverse its rating if it had one.
+    coachTakebackUsed = true;
+    if (typeof revokeRatedCoachResult === 'function') revokeRatedCoachResult(coachLocalGameId);
     // If the game just ended and the post-game summary is pending, abort it —
     // taking back un-ends the game.
     if (coachSummaryTimer) { clearTimeout(coachSummaryTimer); coachSummaryTimer = null; }
@@ -3492,7 +3496,7 @@ $(function () {
     updateCoachSummary();
     updateMoveList();
     updateOpeningLabel();
-    setCoachStatus('Your move.');
+    setCoachStatus('Your move. A game with a take-back is unrated.');
     updateCoachControlsState();
     saveCoachState();
     if (removedReview) {

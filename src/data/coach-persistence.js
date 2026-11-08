@@ -10,6 +10,8 @@
 // game or dismisses the review summary after a game ends.
 let coachPendingReview = null;
 let coachContinuityCopy = false;
+// Set by a take-back; a game with any take-back is unrated.
+let coachTakebackUsed = false;
 const COACH_STATE_KEY = 'coach:state:v1';
 const COACH_STATE_BACKUP_KEY = 'coach:state:corrupt:v1';
 const COACH_PRACTICE_RETURN_KEY = 'coach:practice-return:v1';
@@ -36,6 +38,7 @@ function captureCoachPracticeReturnState() {
     engineElo: coachEngineElo,
     localGameId: coachLocalGameId,
     continuityCopy: coachContinuityCopy,
+    takebackUsed: coachTakebackUsed,
     remoteGameId: coachRemoteGameId,
     reviewLog: cloneCoachValue(coachReviewLog, []),
     stats: cloneCoachValue(coachStats, null),
@@ -224,6 +227,7 @@ function restoreCoachPracticeReturnState(snapshot) {
     coachGameGeneration++;
     coachLocalGameId = snapshot.localGameId || createCoachGameId();
     coachContinuityCopy = !!snapshot.continuityCopy;
+    coachTakebackUsed = !!snapshot.takebackUsed;
     coachRemoteGameId = snapshot.remoteGameId || null;
     coachUserSide = snapshot.userSide || 'white';
     coachEngineElo = typeof snapshot.engineElo === 'number' ? snapshot.engineElo : coachEngineElo;
@@ -290,6 +294,7 @@ function saveCoachState() {
       engineElo: coachEngineElo,
       localGameId: coachLocalGameId,
       continuityCopy: coachContinuityCopy,
+      takebackUsed: coachTakebackUsed,
       remoteGameId: coachRemoteGameId,
       reviewLog: coachReviewLog,
       pendingReview: coachPendingReview,
@@ -362,6 +367,7 @@ function tryRestoreCoachGame() {
     coachGameGeneration++;
     coachLocalGameId = s.localGameId || createCoachGameId();
     coachContinuityCopy = !!s.continuityCopy;
+    coachTakebackUsed = !!s.takebackUsed;
     coachUserSide = s.userSide || 'white';
     coachEngineElo = typeof s.engineElo === 'number' ? s.engineElo : 1200;
     coachRemoteGameId = s.remoteGameId || null;

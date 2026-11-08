@@ -581,6 +581,118 @@ async page => {
     return problems;
   });
 
+  await check('a take-back makes the game unrated and reverses a rated result', async () => {
+    const problems = [];
+    const rating = () => page.evaluate(() => { const p = loadGrowthState().profile; return { estimate: p.ratingEstimate, games: p.ratingGames, ids: p.ratingHistory.map(h => h.gameId) }; });
+    const hideSummary = () => page.evaluate(() => { if (typeof closeCoachSummary === 'function') closeCoachSummary(); $('#coach-summary-overlay, #summary-overlay').hide(); });
+    const playOne = async () => {
+      await playMove('e4');
+      await page.waitForFunction(() => coachGame.history().length >= 2 && !coachThinking, null, { timeout: 60000 });
+      await settle();
+      // The rating rule needs four reviewed moves; the take-back rule is what is under test.
+      return page.evaluate(() => { coachStats.moves = Math.max(coachStats.moves, 4); return coachLocalGameId; });
+    };
+    // A standard game is rated; taking back its result reverses that rating.
+    await newGame();
+    const before = await rating();
+    const id = await playOne();
+    await page.evaluate(() => $('#btn-coach-resign').trigger('click'));
+    await page.waitForFunction(gameId => loadGrowthState().profile.ratingHistory.some(h => h.gameId === gameId), id, { timeout: 10000 })
+      .catch(() => problems.push('a standard finished game was not rated'));
+    await hideSummary();
+    await page.evaluate(() => $('#btn-coach-takeback').prop('disabled', false).trigger('click'));
+    const reversed = await rating();
+    if (reversed.games !== before.games || reversed.estimate !== before.estimate || reversed.ids.includes(id)) problems.push('taking back a rated result kept its rating: ' + JSON.stringify({ before, reversed }));
+    if (!/unrated/.test(await page.locator('#coach-status').textContent())) problems.push('the status should say a game with a take-back is unrated');
+    // A take-back mid-game survives a reload and keeps the finished game unrated.
+    await newGame();
+    await playOne();
+    await page.evaluate(() => $('#btn-coach-takeback').prop('disabled', false).trigger('click'));
+    await page.reload();
+    await page.waitForFunction(() => typeof coachGameActive !== 'undefined' && coachGame && coachGameActive && !coachThinking, null, { timeout: 60000 });
+    const id2 = await playOne();
+    const midBefore = await rating();
+    await page.evaluate(() => $('#btn-coach-resign').trigger('click'));
+    await page.waitForFunction(() => !coachGameActive, null, { timeout: 10000 });
+    const eligibility = await page.evaluate(() => ratedCoachEligibility(coachLastEndMsg));
+    if (eligibility.eligible || eligibility.reason !== 'take-back used') problems.push('a game with a take-back should be unrated because of it: ' + JSON.stringify(eligibility));
+    const midAfter = await rating();
+    if (midAfter.games !== midBefore.games || midAfter.ids.includes(id2)) problems.push('a game with a take-back was rated: ' + JSON.stringify({ midBefore, midAfter }));
+    await hideSummary();
+    return problems;
+  });
+
+  await check('a pasted PGN counts once in Insights, signed in or pasted again', async () => {
+    const problems = [];
+    const pgn = '[Event "Club"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 *';
+    const paste = text => page.evaluate(async text => {
+      $('#game-inbox-side').val('white');
+      $('#game-inbox-pgn').val(text);
+      await analyseImportedPgn();
+      return $('#game-inbox-status').text();
+    }, text);
+    await freshCoach();
+    // Signed in: the shown game's moves sync to the account and must not be
+    // counted again from this browser's copy. Only the database is faked.
+    const signedIn = await page.evaluate(async pgn => {
+      const saved = { client: coachDbClient, user: coachAuthUser, insights: coachRemoteInsightEntries, loaded: coachRemoteInsightsLoaded,
+        ensure: window.ensureRemoteCoachGame, arts: window.syncRemoteLearningArtifacts, update: window.updateRemoteCoachGame };
+      let serial = 0;
+      const fakeClient = {
+        from(table) {
+          const result = () => (table === 'coach_moves' ? { data: { id: 'remote-move-' + (++serial) }, error: null } : { data: null, error: null });
+          const query = new Proxy(function () {}, {
+            get(_, prop) {
+              if (prop === 'then') return (resolve, reject) => Promise.resolve(result()).then(resolve, reject);
+              return () => (prop === 'single' || prop === 'maybeSingle' ? Promise.resolve(result()) : query);
+            }
+          });
+          return query;
+        },
+        rpc: async () => ({ data: null, error: null })
+      };
+      try {
+        coachDbClient = fakeClient;
+        coachAuthUser = { id: 'behaviour-import-user' };
+        coachRemoteInsightEntries = [];
+        coachRemoteInsightsLoaded = true;
+        window.ensureRemoteCoachGame = async () => 'remote-import-game';
+        window.syncRemoteLearningArtifacts = async () => {};
+        window.updateRemoteCoachGame = async () => {};
+        $('#game-inbox-side').val('white');
+        $('#game-inbox-pgn').val(pgn);
+        await analyseImportedPgn();
+        const deadline = Date.now() + 15000;
+        while (Date.now() < deadline && coachRemoteInsightEntries.length < 3) await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 300));
+        return { graded: coachReviewLog.filter(r => r.tier !== 'unknown').length, remote: coachRemoteInsightEntries.length, shown: currentInsightEntries().length };
+      } finally {
+        coachDbClient = saved.client;
+        coachAuthUser = saved.user;
+        coachRemoteInsightEntries = saved.insights;
+        coachRemoteInsightsLoaded = saved.loaded;
+        Object.assign(window, { ensureRemoteCoachGame: saved.ensure, syncRemoteLearningArtifacts: saved.arts, updateRemoteCoachGame: saved.update });
+        Object.keys(localStorage).filter(k => k.includes('behaviour-import-user')).forEach(k => localStorage.removeItem(k));
+      }
+    }, pgn);
+    if (signedIn.graded !== 3 || signedIn.remote !== 3) problems.push('the signed-in paste should sync its three graded moves: ' + JSON.stringify(signedIn));
+    if (signedIn.shown !== signedIn.graded) problems.push(`Insights counted the shown game ${signedIn.shown} times over ${signedIn.graded} moves`);
+    // Signed out: pasting the same game again replaces its evidence.
+    await freshCoach();
+    await paste(pgn);
+    const once = await page.evaluate(() => ({ id: coachLocalGameId, entries: loadInsights().entries.length, games: loadGrowthState().repertoire.observed.reduce((n, r) => n + r.games, 0), lifetime: loadLifetime().games }));
+    const status = await paste(pgn);
+    const twice = await page.evaluate(() => ({ id: coachLocalGameId, entries: loadInsights().entries.length, games: loadGrowthState().repertoire.observed.reduce((n, r) => n + r.games, 0), lifetime: loadLifetime().games }));
+    if (!/reviewed/.test(status)) problems.push('the second paste did not finish: ' + status);
+    if (once.entries !== 3 || twice.entries !== 3) problems.push('pasting the same game again added a second set of Insights entries: ' + JSON.stringify({ once, twice }));
+    if (once.games !== 1 || twice.games !== 1) problems.push('pasting the same game again counted it twice in the repertoire: ' + JSON.stringify({ once, twice }));
+    if (twice.id !== once.id || twice.lifetime !== once.lifetime) problems.push('pasting the same game again counted it twice in lifetime stats: ' + JSON.stringify({ once, twice }));
+    // Later checks reopen Coach expecting a live game, not the ended import.
+    await freshCoach();
+    await newGame();
+    return problems;
+  });
+
   // ── Library: spaced-repetition save failures are reported ──
   await page.goto(base + '/?opening=italian');
   await page.waitForFunction(() => currentOpening && currentOpening.id === 'italian');
