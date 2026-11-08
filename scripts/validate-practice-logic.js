@@ -209,6 +209,8 @@ const functionNames = [
   'settleDailySprintDay',
   'settleSavedDailySprints',
   'dailySprintStreak',
+  'practiceSolveCounts',
+  'practiceSolveSummary',
   'practiceDayStart'
 ];
 
@@ -703,6 +705,36 @@ resetStorage();
   const saved = JSON.stringify(context.loadDailySprintHistory());
   context.settleSavedDailySprints();
   assertEqual(JSON.stringify(context.loadDailySprintHistory()), saved, 'settling again must change nothing');
+}
+
+// === 16. "x/y correct" counts clean solves; helped solves are named apart ===
+
+resetStorage();
+{
+  currentNow = new Date(2024, 0, 10, 9, 0).getTime();
+  const item = { id: 'opening-bridge:test', tag: 'opening_principles', entry: { id: 'opening-bridge:test', fenBefore: 'fen-bridge w - - 0 1', bestUci: 'g1f3' }, meta: { practice: 'Develop.' } };
+  context.recordPracticeAttempt(item, true, true);
+  let counts = context.practiceSolveCounts(item);
+  assertEqual(counts.clean, 0, 'a hinted solve must not count as correct');
+  assertEqual(counts.assisted, 1, 'a hinted solve must be counted as helped');
+  assertEqual(context.practiceSolveSummary(counts), '0/1 correct unaided, 1 completed with a hint or answer.', 'the summary must name the hinted solve apart');
+  currentNow += DAY_MS;
+  context.recordPracticeAttempt(item, true, false);
+  currentNow += DAY_MS;
+  context.recordPracticeAttempt(item, false, false);
+  counts = context.practiceSolveCounts(item);
+  assertEqual(context.practiceSolveSummary(counts), '1/3 correct unaided, 1 completed with a hint or answer.', 'clean solves count as correct, misses only as attempts');
+
+  // A record saved before the counter (or merged from the account) still
+  // finds its helped solves in the attempt history.
+  const state = context.loadPracticeProgress();
+  delete state.records[item.id].assisted;
+  context.savePracticeProgress(state);
+  assertEqual(context.practiceSolveCounts(item).assisted, 1, 'helped solves must be found in the attempt history for older records');
+
+  const clean = { id: 'opening-bridge:clean', tag: 'opening_principles', entry: { id: 'opening-bridge:clean', fenBefore: 'fen-clean w - - 0 1', bestUci: 'e2e4' }, meta: { practice: 'Centre.' } };
+  context.recordPracticeAttempt(clean, true, false);
+  assertEqual(context.practiceSolveSummary(context.practiceSolveCounts(clean)), '1/1 correct unaided.', 'an all-clean record must not mention help');
 }
 
 // --- Report ---------------------------------------------------------------

@@ -167,6 +167,25 @@ function practiceRecordFor(item) {
   return related.sort((a, b) => (b.lastAttemptAt || 0) - (a.lastAttemptAt || 0))[0] || null;
 }
 
+// Clean and helped solves for one practice item. record.correct counts both,
+// since a solve after a hint or the answer still completes the attempt; the
+// helped ones are counted on the record (record.assisted) and, for records
+// older than that counter or merged from the account, in the attempt history.
+function practiceSolveCounts(item, record = practiceRecordFor(item)) {
+  if (!record) return { attempts: 0, correct: 0, clean: 0, assisted: 0 };
+  const correct = record.correct || 0;
+  const helpedEvents = loadPracticeProgress().events
+    .filter(event => event && event.drillId === item.id && event.correct && event.revealed).length;
+  const assisted = Math.min(correct, Math.max(Number(record.assisted) || 0, helpedEvents));
+  return { attempts: record.attempts || 0, correct, clean: correct - assisted, assisted };
+}
+
+// "x/y correct" counts only clean solves; helped ones are named separately.
+function practiceSolveSummary(counts) {
+  const helped = counts.assisted ? `, ${counts.assisted} completed with a hint or answer` : '';
+  return `${counts.clean}/${counts.attempts} correct unaided${helped}.`;
+}
+
 function practiceIsDue(item, now = Date.now()) {
   const record = practiceRecordFor(item);
   return !record || !record.dueAt || record.dueAt <= now;
@@ -346,6 +365,7 @@ function recordPracticeAttempt(item, correct, revealed) {
     // A hint or the answer named the move: the attempt is completed, but it
     // is not recall, so it earns no rep and comes back tomorrow.
     record.correct += 1;
+    record.assisted = (record.assisted || 0) + 1;
     record.ease = Math.max(1.3, record.ease - 0.05);
     record.intervalDays = 1;
     record.dueAt = practiceDayStart(now, 1);

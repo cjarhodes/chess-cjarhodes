@@ -2304,6 +2304,36 @@ async page => {
     return problems;
   });
 
+  await check('opening rehearsals count only unaided solves as correct', async () => {
+    const problems = [];
+    await freshCoach();
+    const rows = await page.evaluate(() => {
+      const item = openingBridgeItem(OPENINGS.find(opening => opening.id === 'italian'));
+      const rowText = () => {
+        renderOpeningBridgeTrack();
+        const row = Array.from(document.querySelectorAll('#opening-bridge-list .opening-bridge-row'))
+          .find(el => el.querySelector('strong') && el.querySelector('strong').textContent === item.meta.title);
+        return row ? row.querySelector('.opening-bridge-copy span').textContent : null;
+      };
+      // Solved after a hint, then solved cleanly.
+      recordPracticeAttempt(item, true, true);
+      const hinted = rowText();
+      const record = loadPracticeProgress();
+      record.records[item.id].dueAt = 0;
+      savePracticeProgress(record);
+      recordPracticeAttempt(item, true, false);
+      return { hinted, both: rowText() };
+    });
+    if (!rows.hinted) problems.push('the Italian rehearsal row was not shown');
+    else {
+      if (/1\/1 correct/.test(rows.hinted)) problems.push('a hinted solve was reported as correct: ' + rows.hinted);
+      if (!/0\/1 correct unaided/.test(rows.hinted) || !/1 completed with a hint or answer/.test(rows.hinted)) problems.push('the hinted solve should be named apart: ' + rows.hinted);
+      if (!/1\/2 correct unaided, 1 completed with a hint or answer/.test(rows.both || '')) problems.push('a clean solve after a hinted one should read 1/2 correct: ' + rows.both);
+    }
+    await freshCoach();
+    return problems;
+  });
+
   await check('Library quiz hides the moves you have not reached', async () => {
     const problems = [];
     await page.goto(base + '/?opening=italian&mode=quiz');

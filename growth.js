@@ -954,7 +954,7 @@ function renderOpeningBridgeTrack() {
     const $row = $('<div class="opening-bridge-row"></div>');
     $row.append($('<div class="opening-bridge-copy"></div>').append(
       $('<strong></strong>').text(item.meta.title),
-      $('<span></span>').text(`${item.meta.practice} ${record ? ` ${record.correct || 0}/${record.attempts || 0} correct.` : ' Not rehearsed yet.'}`)
+      $('<span></span>').text(`${item.meta.practice} ${record ? ` ${practiceSolveSummary(practiceSolveCounts(item, record))}` : ' Not rehearsed yet.'}`)
     ));
     $('<button type="button" class="movelist-copy"></button>')
       .text(record && record.correct ? 'Review' : 'Rehearse')
