@@ -2265,6 +2265,269 @@ async page => {
     return problems;
   }));
 
+  // ── Responsive layout (Phase 6a): phone, upright tablet, landscape tablet ──
+  // Fresh contexts at each size; the layout is CSS plus src/ui/layout.js, so
+  // these drive the real pages and measure what is on screen.
+  const layoutReport = (p, boardId) => p.evaluate(id => {
+    const board = document.getElementById(id);
+    const r = board ? board.getBoundingClientRect() : null;
+    // Visible elements that stick out sideways (for the failure message).
+    const wide = [...document.querySelectorAll('body *')].filter(el => {
+      if (!el.checkVisibility || !el.checkVisibility()) return false;
+      if (el.closest('.notation-strip .movelist, .notation-strip .move-list, .cat-tabs, .game-viewer-moves')) return false;
+      const b = el.getBoundingClientRect();
+      return b.width > 0 && (b.right > innerWidth + 1 || b.left < -1);
+    }).slice(0, 4).map(el => (el.id ? '#' + el.id : String(el.className && el.className.baseVal !== undefined ? el.className.baseVal : el.className)) + ' ' + Math.round(el.getBoundingClientRect().left) + '..' + Math.round(el.getBoundingClientRect().right));
+    return { scrollWidth: document.documentElement.scrollWidth, innerWidth, board: r && { left: r.left, right: r.right, width: r.width }, wide };
+  }, boardId);
+  const fitProblems = (where, m, minBoard) => {
+    const out = [];
+    if (m.scrollWidth > m.innerWidth) out.push(`${where}: the page scrolls sideways (${m.scrollWidth} > ${m.innerWidth}; ${m.wide.join(', ')})`);
+    if (!m.board || !m.board.width) out.push(`${where}: no board on screen`);
+    else {
+      if (m.board.left < -0.5 || m.board.right > m.innerWidth + 0.5) out.push(`${where}: the board runs off the screen (${Math.round(m.board.left)}..${Math.round(m.board.right)})`);
+      if (m.board.width < minBoard) out.push(`${where}: the board is ${Math.round(m.board.width)}px wide, expected at least ${minBoard}`);
+    }
+    return out;
+  };
+  const sizedContext = async (width, height, touch) => {
+    const browser = page.context().browser();
+    return browser.newContext({ viewport: { width, height }, hasTouch: !!touch });
+  };
+
+  await check('responsive: Coach, Library and Puzzles fit 375, 820 and 1024 wide with the whole board on screen', async () => {
+    const problems = [];
+    if (!page.context().browser()) return ['no browser handle to open a sized context'];
+    // [width, height, touch, smallest acceptable board]
+    for (const [w, h, touch, minBoard] of [[375, 812, true, 370], [820, 1180, true, 500], [1024, 768, false, 440]]) {
+      const ctx = await sizedContext(w, h, touch);
+      try {
+        const p = await ctx.newPage();
+        const errors = [];
+        p.on('pageerror', e => errors.push(e.message));
+        const tag = `${w}x${h}`;
+        await p.goto(base + '/?view=coach');
+        await p.waitForFunction(() => typeof engineClient !== 'undefined' && !!coachBoard);
+        const notice = await p.locator('#desktop-notice').isVisible();
+        if (w < 760 && !notice) problems.push(`${tag}: the phone preview notice did not appear`);
+        if (w >= 760 && notice) problems.push(`${tag}: the phone notice covered a tablet-sized screen`);
+        if (notice) await p.locator('#btn-desktop-notice-continue').click();
+        await p.waitForTimeout(200);
+        problems.push(...fitProblems(tag + ' Coach (ready)', await layoutReport(p, 'coachBoard'), minBoard));
+        await p.locator('#btn-coach-newgame').click();
+        await p.waitForFunction(() => coachGameActive && !coachThinking, null, { timeout: 60000 });
+        await p.evaluate(() => {
+          document.getElementById('coach-keyboard-move').open = true;
+          document.getElementById('coach-keyboard-move-input').value = 'e4';
+          document.querySelector('#coach-keyboard-move-form button[type=submit]').click();
+        });
+        await p.waitForFunction(() => coachGame.history().length >= 2 && !coachThinking, null, { timeout: 60000 }).catch(() => problems.push(`${tag}: setup: the opponent did not reply`));
+        // Typing a move deliberately gives up some board; close it again.
+        await p.evaluate(() => { document.getElementById('coach-keyboard-move').open = false; });
+        await p.waitForTimeout(400);
+        problems.push(...fitProblems(tag + ' Coach (live game)', await layoutReport(p, 'coachBoard'), minBoard));
+        for (const panel of ['practice', 'progress']) {
+          await p.evaluate(name => document.querySelector('.panel-tab[data-panel="' + name + '"]').click(), panel);
+          await p.waitForTimeout(250);
+          problems.push(...fitProblems(`${tag} Coach (${panel})`, await layoutReport(p, 'coachBoard'), minBoard));
+        }
+        await p.goto(base + '/?opening=italian');
+        await p.waitForFunction(() => !!board && !!currentOpening);
+        await p.waitForTimeout(300);
+        problems.push(...fitProblems(tag + ' Library (study)', await layoutReport(p, 'myBoard'), minBoard));
+        await p.goto(base + '/?opening=italian&mode=explore');
+        await p.waitForFunction(() => exploreMode && !!board);
+        await p.waitForTimeout(800);
+        problems.push(...fitProblems(tag + ' Library (explore)', await layoutReport(p, 'myBoard'), minBoard));
+        await p.goto(base + '/?view=puzzles');
+        await p.waitForFunction(() => { const s = window.PuzzlesView && PuzzlesView._debug().session; return s && s.phase === 'solving' && !s.busy; }, null, { timeout: 15000 });
+        problems.push(...fitProblems(tag + ' Puzzles', await layoutReport(p, 'puzzleBoard'), minBoard));
+        if (errors.length) problems.push(`${tag}: page errors: ${errors.join(' | ')}`);
+      } finally {
+        await ctx.close();
+      }
+    }
+    return problems;
+  });
+
+  await check('phone: taps play moves in Coach, a drill, Library and Puzzles, and the bottom tab bar switches views', async () => {
+    const problems = [];
+    if (!page.context().browser()) return ['no browser handle to open a phone context'];
+    const ctx = await sizedContext(375, 812, true);
+    try {
+      const tp = await ctx.newPage();
+      const errors = [];
+      tp.on('pageerror', e => errors.push(e.message));
+      const tapMove = async (id, from, to) => {
+        await boardSquare(tp, id, from).tap();
+        await boardSquare(tp, id, to).tap();
+      };
+      const smallTargets = () => tp.evaluate(() => [...document.querySelectorAll('.top-nav-btn, [data-primary-action="true"], .ctrl-btn.primary')]
+        .filter(el => el.checkVisibility() && !el.closest('.keyboard-move-form'))
+        .map(el => ({ id: el.id || el.textContent.trim(), r: el.getBoundingClientRect() }))
+        .filter(t => t.r.height < 44 || t.r.width < 44)
+        .map(t => `${t.id} ${Math.round(t.r.width)}x${Math.round(t.r.height)}`));
+      await tp.goto(base + '/?view=coach');
+      await tp.waitForFunction(() => typeof engineClient !== 'undefined' && !!coachBoard);
+      const notice = await tp.locator('#desktop-notice').textContent();
+      if (!/different browser/.test(notice) || !/week/.test(notice)) problems.push('the phone notice does not explain the sign-in and storage risks');
+      await tp.locator('#btn-desktop-notice-continue').tap();
+      if (await tp.locator('#desktop-notice').isVisible()) problems.push('Continue did not lead to the phone layout');
+
+      // The tab bar is fixed to the bottom and every tab is a 44px target.
+      const bar = await tp.evaluate(() => {
+        const nav = document.querySelector('.top-nav').getBoundingClientRect();
+        return { position: getComputedStyle(document.querySelector('.top-nav')).position, bottom: nav.bottom, top: nav.top, innerHeight };
+      });
+      if (bar.position !== 'fixed' || Math.abs(bar.bottom - bar.innerHeight) > 1) problems.push('the view tabs are not a bar fixed to the bottom: ' + JSON.stringify(bar));
+      let small = await smallTargets();
+      if (small.length) problems.push('targets under 44px in Coach: ' + small.join(', '));
+      for (const [tab, view] of [['library', 'library-view'], ['puzzles', 'puzzles-view'], ['coach', 'coach-view']]) {
+        await tp.locator('#nav-' + tab).tap();
+        await tp.waitForTimeout(250);
+        const state = await tp.evaluate(v => ({ app: appView, shown: document.getElementById(v).checkVisibility() }), view);
+        if (state.app !== tab || !state.shown) problems.push(`the ${tab} tab did not switch the view: ` + JSON.stringify(state));
+      }
+
+      // Coach: a game by taps; the notation strip sits under the board.
+      await tp.locator('#btn-coach-newgame').tap();
+      await tp.waitForFunction(() => coachGameActive && !coachThinking, null, { timeout: 60000 });
+      await tapMove('coachBoard', 'e2', 'e4');
+      await tp.waitForFunction(() => coachGame.history().length >= 2 && !coachThinking, null, { timeout: 60000 }).catch(() => {});
+      await tapMove('coachBoard', 'g1', 'f3');
+      await tp.waitForFunction(() => coachGame.history().length >= 4 && !coachThinking, null, { timeout: 60000 }).catch(() => {});
+      await tp.waitForTimeout(300);
+      const coach = await tp.evaluate(() => {
+        const board = document.getElementById('coachBoard').getBoundingClientRect();
+        const strip = document.getElementById('movelist');
+        const cur = strip.querySelector('.ply.current');
+        const s = strip.getBoundingClientRect(), c = cur && cur.getBoundingClientRect();
+        return { moves: coachGame.history().slice(0, 4), inBoardArea: !!strip.closest('.coach-board-area'), below: s.top >= board.bottom - 1,
+          current: !!c && c.left >= s.left - 1 && c.right <= s.right + 1, oneRow: s.height < 80 };
+      });
+      if (coach.moves[0] !== 'e4' || coach.moves[2] !== 'Nf3') problems.push('tapped moves were not played in Coach: ' + coach.moves.join(' '));
+      if (!coach.inBoardArea || !coach.below || !coach.current || !coach.oneRow) problems.push('the Coach notation is not a strip under the board showing the current move: ' + JSON.stringify(coach));
+      small = await smallTargets();
+      if (small.length) problems.push('targets under 44px during a game: ' + small.join(', '));
+
+      // A drill: its question sits above the board and a tap answers it.
+      await tp.evaluate(() => {
+        startCoachPractice({ id: 'drill-phone-tap', tag: 'development', meta: INSIGHT_TAG_META.development,
+          entry: { fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', bestUci: 'e2e4', bestSan: 'e4', userSan: 'a3', pairNum: 1, ply: 1 } });
+      });
+      try {
+        await tp.waitForFunction(() => coachPracticeSession && coachPracticeSession.analysisReady, null, { timeout: 30000 });
+        await tp.waitForTimeout(300);
+        const drill = await tp.evaluate(() => ({ prompt: document.getElementById('coach-practice-prompt').getBoundingClientRect().bottom,
+          board: document.getElementById('coachBoard').getBoundingClientRect().top, width: document.documentElement.scrollWidth }));
+        if (!(drill.prompt <= drill.board)) problems.push('the drill question is not above the board: ' + JSON.stringify(drill));
+        if (drill.width > 375) problems.push('the drill scrolls sideways: ' + drill.width);
+        await tapMove('coachBoard', 'e2', 'e4');
+        await tp.waitForFunction(() => coachPracticeSession && !coachPracticeSession.grading && coachGame.history()[0] === 'e4', null, { timeout: 30000 })
+          .catch(() => problems.push('a tapped drill answer was not accepted'));
+      } finally {
+        await tp.evaluate(() => { if (coachPracticeSession) exitCoachPractice(); });
+      }
+
+      // Library quiz: a tap plays White's first move; the strip follows Study.
+      await tp.goto(base + '/?opening=italian&mode=quiz');
+      await tp.waitForFunction(() => !!board && quizMode);
+      await tapMove('myBoard', 'e2', 'e4');
+      await tp.waitForFunction(() => currentMoveIdx >= 0, null, { timeout: 5000 }).catch(() => problems.push('a tapped quiz move was not accepted in the Library'));
+      await tp.locator('#btn-study').tap();
+      for (let i = 0; i < 6; i++) await tp.locator('#btn-next').tap();
+      const library = await tp.evaluate(() => {
+        const board = document.getElementById('myBoard').getBoundingClientRect();
+        const list = document.getElementById('move-list');
+        const s = list.getBoundingClientRect(), c = list.querySelector('.move-chip.current').getBoundingClientRect();
+        return { inBoardArea: !!list.closest('.board-area'), below: s.top >= board.bottom - 1, current: c.left >= s.left - 1 && c.right <= s.right + 1, oneRow: s.height < 80 };
+      });
+      if (!library.inBoardArea || !library.below || !library.current || !library.oneRow) problems.push('the Library notation is not a strip under the board showing the current move: ' + JSON.stringify(library));
+
+      // Puzzles: tap the solution's next move.
+      await tp.locator('#nav-puzzles').tap();
+      await tp.waitForFunction(() => { const s = PuzzlesView._debug().session; return s && s.phase === 'solving' && !s.busy; }, null, { timeout: 15000 });
+      const before = await tp.evaluate(() => { const s = PuzzlesView._debug().session; return { ply: s.ply, move: s.puzzle.moves[s.ply] }; });
+      await tapMove('puzzleBoard', before.move.slice(0, 2), before.move.slice(2, 4));
+      if (before.move.length === 5) await tp.locator(`.promotion-choice[data-promotion="${before.move[4]}"]`).tap();
+      await tp.waitForFunction(ply => { const s = PuzzlesView._debug().session; return s.ply > ply || s.phase === 'solved'; }, before.ply, { timeout: 10000 })
+        .catch(() => problems.push('a tapped puzzle move was not played'));
+      small = await smallTargets();
+      if (small.length) problems.push('targets under 44px in Puzzles: ' + small.join(', '));
+      if (errors.length) problems.push('page errors: ' + errors.join(' | '));
+    } finally {
+      await ctx.close();
+    }
+    return problems;
+  });
+
+  await check('phone: Settings, the review summary, the game viewer and the shortcut sheet fit 375 wide', async () => {
+    const problems = [];
+    if (!page.context().browser()) return ['no browser handle to open a phone context'];
+    const ctx = await sizedContext(375, 812, true);
+    try {
+      const tp = await ctx.newPage();
+      const errors = [];
+      tp.on('pageerror', e => errors.push(e.message));
+      await tp.addInitScript(() => { try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {} });
+      await tp.goto(base + '/?view=coach');
+      await tp.waitForFunction(() => typeof GameArchive !== 'undefined' && !!coachBoard);
+      const inside = sel => tp.evaluate(s => {
+        const el = document.querySelector(s);
+        if (!el || !el.checkVisibility()) return s + ' is not shown';
+        const r = el.getBoundingClientRect();
+        if (r.left < -0.5 || r.right > innerWidth + 0.5 || r.top < -0.5 || r.bottom > innerHeight + 0.5) return `${s} runs off the screen (${Math.round(r.left)},${Math.round(r.top)} → ${Math.round(r.right)},${Math.round(r.bottom)})`;
+        if (document.documentElement.scrollWidth > innerWidth) return `${s}: the page scrolls sideways`;
+        return null;
+      }, sel);
+      // Settings: every group open at once.
+      await tp.evaluate(() => document.querySelectorAll('.coach-settings details').forEach(d => { d.open = true; }));
+      await tp.waitForTimeout(200);
+      const settings = await layoutReport(tp, 'coachBoard');
+      if (settings.scrollWidth > settings.innerWidth) problems.push('open settings scroll sideways: ' + settings.wide.join(', '));
+      // A finished game: the summary, then the archived game in the viewer.
+      await tp.evaluate(() => {
+        coachStartFen = new Chess().fen();
+        coachLocalGameId = 'fixture-phone-game';
+        coachGame = new Chess();
+        const fens = [coachGame.fen()];
+        ['f3', 'e5', 'g4', 'Qh4#'].forEach(m => { coachGame.move(m); fens.push(coachGame.fen()); });
+        coachUserSide = 'white';
+        coachReviewLog = [
+          { ply: 1, userUci: 'f2f3', userSan: 'f3', bestUci: 'e2e4', bestSan: 'e4', tier: 'inaccuracy', fenBefore: fens[0], evalAfter: { cp: 20 }, localGameId: coachLocalGameId },
+          { ply: 3, userUci: 'g2g4', userSan: 'g4', bestUci: 'b1c3', bestSan: 'Nc3', tier: 'blunder', fenBefore: fens[2], evalAfter: { mate: 1 }, localGameId: coachLocalGameId }
+        ];
+        coachStats = { moves: 2, best: 0, excellent: 0, good: 0, inaccuracy: 1, mistake: 0, blunder: 1 };
+        GameArchive.record('Checkmate — Black wins.');
+        showPostGameSummary('Checkmate — Black wins.');
+      });
+      await tp.waitForTimeout(600);
+      let problem = await inside('.summary-card');
+      if (problem) problems.push(problem);
+      const actions = await tp.evaluate(() => [...document.querySelectorAll('.summary-actions .ctrl-btn')].filter(b => b.checkVisibility()).map(b => b.getBoundingClientRect()).filter(r => r.height < 44).length);
+      if (actions) problems.push(actions + ' summary actions are under 44px tall');
+      await tp.locator('#btn-summary-close').tap();
+      await tp.locator('#tab-progress').tap();
+      await tp.locator('.game-archive-open').first().tap();
+      await tp.locator('#game-viewer').waitFor({ state: 'visible' });
+      await tp.waitForTimeout(300);
+      problem = await inside('.game-viewer-card');
+      if (problem) problems.push(problem);
+      problem = await inside('#archiveBoard');
+      if (problem) problems.push(problem);
+      await tp.keyboard.press('Escape');
+      await tp.waitForTimeout(200);
+      await tp.locator('#btn-shortcuts').tap();
+      await tp.waitForTimeout(200);
+      problem = await inside('.shortcut-card');
+      if (problem) problems.push(problem);
+      if (errors.length) problems.push('page errors: ' + errors.join(' | '));
+    } finally {
+      await ctx.close();
+    }
+    return problems;
+  });
+
   if (pageErrors.length) failures.push('page errors: ' + pageErrors.join(' | '));
   if (failures.length) throw new Error(failures.join('\n'));
   return { passed: passed.length, checks: passed };
