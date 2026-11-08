@@ -2106,7 +2106,8 @@ async page => {
     try {
       await page.waitForFunction(() => coachPracticeSession && coachPracticeSession.analysisReady, null, { timeout: 30000 });
       await mouseDrag('coachBoard', 'e2', 'e4');
-      await page.waitForFunction(() => coachPracticeSession && !coachPracticeSession.grading && coachGame.history().length === 1, null, { timeout: 30000 })
+      // The drill may play the opponent's follow-up reply straight away.
+      await page.waitForFunction(() => coachPracticeSession && !coachPracticeSession.grading && coachGame.history()[0] === 'e4', null, { timeout: 30000 })
         .catch(() => problems.push('setup: the dragged best move was not accepted'));
       await page.waitForTimeout(500);
       const shown = await page.evaluate(() => ({ board: Chessboard.objToFen(coachBoard.position()), game: coachGame.fen().split(' ')[0] }));
