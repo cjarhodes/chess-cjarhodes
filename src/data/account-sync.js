@@ -460,6 +460,42 @@ function remoteGamePayload(endReason) {
   };
 }
 
+// A pasted game has a content id (importedPgnGameKey in growth.js), so the
+// account keeps one row per pasted game: the insert carries that id as
+// client_game_key, unique per user, and a second paste of the same game finds
+// the row already there instead of adding another. Live games have no key.
+function remoteGameClientKey(localGameId) {
+  return typeof localGameId === 'string' && /^pgn-[wb]/.test(localGameId) ? localGameId : null;
+}
+
+// Adds a game row, or for a keyed game returns the row the account already
+// holds for it. `created` says whether this call made the row, so a caller
+// that discards a stale insert never deletes an earlier paste's row.
+async function insertRemoteCoachGame(payload, localGameId) {
+  const key = remoteGameClientKey(localGameId);
+  if (!key) {
+    const { data, error } = await coachDbClient.from('coach_games').insert(payload).select('id').single();
+    if (error) throw error;
+    return { id: data.id, created: true };
+  }
+  const row = Object.assign({}, payload, { client_game_key: key });
+  const inserted = await coachDbClient
+    .from('coach_games')
+    .upsert(row, { onConflict: 'user_id,client_game_key', ignoreDuplicates: true })
+    .select('id');
+  if (inserted.error) throw inserted.error;
+  const created = Array.isArray(inserted.data) ? inserted.data[0] : inserted.data;
+  if (created && created.id) return { id: created.id, created: true };
+  const existing = await coachDbClient
+    .from('coach_games')
+    .select('id')
+    .eq('user_id', row.user_id)
+    .eq('client_game_key', key)
+    .single();
+  if (existing.error) throw existing.error;
+  return { id: existing.data.id, created: false };
+}
+
 async function ensureRemoteCoachGame(generation = coachGameGeneration) {
   if (!hasCoachDbSession() || !coachGame || coachPracticeSession) return null;
   const syncOwner = coachMemoryOwnerId();
@@ -472,20 +508,16 @@ async function ensureRemoteCoachGame(generation = coachGameGeneration) {
   const gameRef = coachGame;
   const userId = coachAuthUser.id;
   const payload = remoteGamePayload(null);
+  const localGameId = coachLocalGameId;
   coachRemoteGamePromiseGeneration = generation;
   coachRemoteGamePromise = (async () => {
-    const { data, error } = await coachDbClient
-      .from('coach_games')
-      .insert(payload)
-      .select('id')
-      .single();
-    if (error) throw error;
+    const data = await insertRemoteCoachGame(payload, localGameId);
     if (generation !== coachGameGeneration || coachGame !== gameRef ||
         !coachAuthUser || coachAuthUser.id !== userId) {
       // The insert completed after the user replaced the game. Remove the
       // now-orphaned row when the session still permits it, and never attach it
-      // to the current game.
-      coachDbClient.from('coach_games').delete().eq('id', data.id).eq('user_id', userId).then(() => {});
+      // to the current game. A row an earlier paste made stays.
+      if (data.created) coachDbClient.from('coach_games').delete().eq('id', data.id).eq('user_id', userId).then(() => {});
       return null;
     }
     coachRemoteGameId = data.id;
@@ -532,9 +564,7 @@ async function commitFinalRemoteCoachGame(final) {
   if (!gameId) {
     // The board moved on before this game reached the account: add it whole,
     // and point its queued reviews at the new row.
-    const created = await coachDbClient.from('coach_games').insert(final.payload).select('id').single();
-    if (created.error) throw created.error;
-    gameId = created.data.id;
+    gameId = (await insertRemoteCoachGame(final.payload, final.localGameId)).id;
     if (owner !== coachMemoryOwnerId()) return;
     if (current()) { coachRemoteGameId = gameId; saveCoachState(); }
     if (typeof pendingAccountReviews === 'function') {

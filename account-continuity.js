@@ -465,9 +465,7 @@ function flushPendingAccountReviews() {
       if (!gameId) {
         if (coachLocalGameId === pending.localGameId && !coachPracticeSession) gameId = await ensureRemoteCoachGame();
         else {
-          const created = await coachDbClient.from('coach_games').insert(pending.game).select('id').single();
-          if (created.error) throw created.error;
-          gameId = created.data.id;
+          gameId = (await insertRemoteCoachGame(pending.game, pending.localGameId)).id;
         }
         if (owner !== coachMemoryOwnerId() || !gameId) return;
         const entries = pendingAccountReviews();

@@ -851,6 +851,110 @@ async page => {
     await newGame();
     return problems;
   });
+  await check('re-pasting a PGN while signed in reuses its account game instead of adding another', async () => {
+    const problems = [];
+    await freshCoach();
+    // A fake Data API that keeps coach_games rows and enforces what the
+    // database does: one row per (user_id, client_game_key), nulls distinct.
+    const result = await page.evaluate(async pgn => {
+      const saved = { client: coachDbClient, user: coachAuthUser, insights: coachRemoteInsightEntries, loaded: coachRemoteInsightsLoaded, permission: window.ensureAccountWritePermission };
+      const games = [], moves = [];
+      let serial = 0;
+      const one = (list, maybe) => list.length === 1 || (maybe && !list.length)
+        ? { data: list[0] || null, error: null }
+        : { data: null, error: { code: 'PGRST116', message: `${list.length} rows` } };
+      const fakeClient = {
+        from(table) {
+          const state = { op: 'select', rows: null, opts: {}, filters: [] };
+          const run = () => {
+            if (table === 'coach_moves' && state.op === 'upsert') {
+              moves.push(Object.assign({}, state.rows));
+              return { data: [{ id: 'remote-move-' + (++serial) }], error: null };
+            }
+            if (table !== 'coach_games') return null;
+            if (state.op === 'insert' || state.op === 'upsert') {
+              const out = [];
+              for (const row of [].concat(state.rows)) {
+                const dup = row.client_game_key != null && games.find(g => g.user_id === row.user_id && g.client_game_key === row.client_game_key);
+                if (dup && state.op === 'insert') return { data: null, error: { code: '23505', message: 'duplicate key value' } };
+                if (dup && state.opts.ignoreDuplicates) continue;
+                if (dup) { Object.assign(dup, row); out.push(dup); continue; }
+                const created = Object.assign({ id: 'remote-game-' + (++serial) }, row);
+                games.push(created);
+                out.push(created);
+              }
+              return { data: out, error: null };
+            }
+            const matched = games.filter(g => state.filters.every(([key, value]) => g[key] === value));
+            if (state.op === 'update') matched.forEach(g => Object.assign(g, state.rows));
+            if (state.op === 'delete') matched.forEach(g => games.splice(games.indexOf(g), 1));
+            return { data: matched, error: null };
+          };
+          const settle = mode => {
+            const response = run();
+            if (!response) return { data: null, error: null };
+            if (!mode || response.error) return response;
+            return one(Array.isArray(response.data) ? response.data : [response.data].filter(Boolean), mode === 'maybe');
+          };
+          const builder = new Proxy({}, {
+            get(_, prop) {
+              if (prop === 'then') return (resolve, reject) => Promise.resolve(settle(null)).then(resolve, reject);
+              if (prop === 'single') return () => Promise.resolve(settle('single'));
+              if (prop === 'maybeSingle') return () => Promise.resolve(settle('maybe'));
+              if (prop === 'insert' || prop === 'update') return rows => { state.op = prop; state.rows = rows; return builder; };
+              if (prop === 'upsert') return (rows, opts) => { state.op = 'upsert'; state.rows = rows; state.opts = opts || {}; return builder; };
+              if (prop === 'delete') return () => { state.op = 'delete'; return builder; };
+              if (prop === 'eq') return (key, value) => { state.filters.push([key, value]); return builder; };
+              return () => builder;
+            }
+          });
+          return builder;
+        },
+        rpc: async () => ({ data: null, error: null })
+      };
+      const paste = async () => {
+        const before = moves.length;
+        $('#game-inbox-side').val('white');
+        $('#game-inbox-pgn').val(pgn);
+        await analyseImportedPgn();
+        const deadline = Date.now() + 15000;
+        while (Date.now() < deadline && moves.length < before + 3) await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 300));
+        return { remoteGameId: coachRemoteGameId, status: $('#game-inbox-status').text() };
+      };
+      try {
+        coachDbClient = fakeClient;
+        coachAuthUser = { id: 'behaviour-repaste-user' };
+        coachRemoteInsightEntries = [];
+        coachRemoteInsightsLoaded = true;
+        // The session checkpoint is its own boundary (covered above); let game writes through.
+        window.ensureAccountWritePermission = async () => {};
+        const first = await paste();
+        const second = await paste();
+        // A live game has no content id, so it still gets a row of its own.
+        const liveKey = typeof remoteGameClientKey === "function" ? remoteGameClientKey(createCoachGameId()) : null;
+        return { first, second, games: games.map(g => ({ id: g.id, key: g.client_game_key || null })), moveGames: Array.from(new Set(moves.map(m => m.game_id))), moves: moves.length, liveKey };
+      } finally {
+        coachDbClient = saved.client;
+        coachAuthUser = saved.user;
+        coachRemoteInsightEntries = saved.insights;
+        coachRemoteInsightsLoaded = saved.loaded;
+        window.ensureAccountWritePermission = saved.permission;
+        clearQueuedRemoteCoachGameUpdate();
+        Object.keys(localStorage).filter(k => k.includes('behaviour-repaste-user')).forEach(k => localStorage.removeItem(k));
+      }
+    }, '[Event "Club"]\n\n1. d4 d5 2. c4 e6 3. Nc3 Nf6 *');
+    if (!/reviewed/.test(result.second.status)) problems.push('the second paste did not finish: ' + result.second.status);
+    if (result.moves < 6) problems.push(`both pastes should sync their moves: ${result.moves} move writes`);
+    if (result.games.length !== 1) problems.push('re-pasting the same game added another account game: ' + JSON.stringify(result.games));
+    if (!result.games[0] || !/^pgn-w/.test(result.games[0].key || '')) problems.push('the pasted game row should carry its content id: ' + JSON.stringify(result.games));
+    if (result.first.remoteGameId !== result.second.remoteGameId) problems.push('the second paste should reuse the first paste\'s row: ' + JSON.stringify([result.first.remoteGameId, result.second.remoteGameId]));
+    if (result.moveGames.length !== 1) problems.push('the re-pasted moves should land on the one game row: ' + JSON.stringify(result.moveGames));
+    if (result.liveKey !== null) problems.push('a live game must not carry a pasted-game key: ' + result.liveKey);
+    await freshCoach();
+    await newGame();
+    return problems;
+  });
   await check('signing in adds guest lifetime stats to the account instead of keeping one side', () => page.evaluate(() => {
     const problems = [];
     const account = 'behaviour-lifetime-user';
