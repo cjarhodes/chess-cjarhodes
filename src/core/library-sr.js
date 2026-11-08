@@ -123,41 +123,6 @@ function updateSRPanel() {
   $panel.html(html).show();
 }
 
-function validateOpeningData() {
-  const errors = [];
-  const seenIds = new Set();
-  OPENINGS.forEach(opening => {
-    if (!opening.id) errors.push('Opening missing id');
-    if (seenIds.has(opening.id)) errors.push(`Duplicate opening id: ${opening.id}`);
-    seenIds.add(opening.id);
-    if (!Array.isArray(opening.moves) || opening.moves.length === 0) {
-      errors.push(`${opening.id}: missing moves`);
-    }
-    if (!Array.isArray(opening.explanations) || opening.explanations.length !== opening.moves.length) {
-      errors.push(`${opening.id}: explanations length does not match moves length`);
-    }
-    const lineIds = new Set();
-    getOpeningLines(opening).forEach(line => {
-      const lineKey = `${opening.id}/${line.id}`;
-      if (lineIds.has(line.id)) errors.push(`${opening.id}: duplicate line id ${line.id}`);
-      lineIds.add(line.id);
-      if (!Array.isArray(line.moves) || line.moves.length === 0) {
-        errors.push(`${lineKey}: missing moves`);
-        return;
-      }
-      if (!Array.isArray(line.explanations) || line.explanations.length !== line.moves.length) {
-        errors.push(`${lineKey}: explanations length does not match moves length`);
-      }
-      const g = new Chess();
-      for (let i = 0; i < line.moves.length; i++) {
-        const san = line.moves[i];
-        if (!g.move(san)) {
-          errors.push(`${lineKey}: illegal SAN at ply ${i + 1}: ${san}`);
-          break;
-        }
-      }
-    });
-  });
-  if (errors.length) console.warn('Opening data validation failed:', errors);
-  return errors;
-}
+// Opening data (ids, move counts, legal SAN in every line) is checked by
+// scripts/validate-openings.js in CI. It used to be replayed here on every
+// page load, which blocked the main thread for about half a second.

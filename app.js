@@ -3984,7 +3984,6 @@ $(function () {
   initCoachWorkspaceLayout();
   initLibraryWorkspaceLayout();
   updateSRSidebar();
-  validateOpeningData();
   hydrateFromUrl();
   updateNetworkStatus(false);
   window.addEventListener('offline', () => updateNetworkStatus(false));

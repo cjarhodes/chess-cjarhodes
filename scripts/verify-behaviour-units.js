@@ -1361,6 +1361,33 @@ async page => {
     return problems;
   });
 
+  await check('startup stays within its main-thread budget', async () => {
+    // Replaying every opening line at startup once blocked the page for
+    // ~450 ms on a fast desktop. Budget: under 350 ms of blocking time (the
+    // part of each long task over 50 ms), loose enough for a slow CI runner.
+    const problems = [];
+    const browser = page.context().browser();
+    if (!browser) return ['no browser handle to open a fresh context'];
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    try {
+      const fp = await ctx.newPage();
+      await fp.addInitScript(() => {
+        window.__longTasks = [];
+        try { new PerformanceObserver(list => list.getEntries().forEach(e => window.__longTasks.push(Math.round(e.duration)))).observe({ type: 'longtask', buffered: true }); } catch (e) {}
+      });
+      for (const view of ['?view=coach', '?opening=italian', '?view=puzzles']) {
+        await fp.goto(base + '/' + view, { waitUntil: 'load' });
+        await fp.waitForTimeout(1500);
+        const tasks = await fp.evaluate(() => window.__longTasks);
+        const blocking = tasks.reduce((sum, d) => sum + Math.max(0, d - 50), 0);
+        if (blocking >= 350) problems.push(`${view} blocked the main thread for ${blocking} ms at startup (long tasks: ${tasks.join(', ')} ms)`);
+      }
+    } finally {
+      await ctx.close();
+    }
+    return problems;
+  });
+
   await check('board overlay shows quality badges, best-move arrows and an evaluation bar', async () => {
     const problems = [];
     await page.goto(base + '/?view=coach');
