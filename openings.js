@@ -138,7 +138,7 @@ const OPENINGS = [
     category: 'white',
     tagline: 'Solid, flexible, and low on theory',
     description: 'The London System is a reliable, low-theory approach beloved by everyone from club players to Magnus Carlsen. White builds a solid pawn structure with the bishop developed to f4 BEFORE playing e3 — the key move order. White\'s plans are clear and safe; the position requires good maneuvering.',
-    moves: ['d4', 'd5', 'Nf3', 'Nf6', 'Bf4', 'e6', 'e3', 'Bd6', 'Bg3', 'O-O', 'Nbd2', 'c5', 'c3', 'Nc6', 'Bd3', 'Bxg3', 'hxg3', 'Qe7', 'O-O', 'b6', 'Ne5', 'Bb7', 'Qf3', 'Rfd8'],
+    moves: ['d4', 'd5', 'Nf3', 'Nf6', 'Bf4', 'e6', 'e3', 'Bd6', 'Bg3', 'O-O', 'Nbd2', 'c5', 'c3', 'Nc6', 'Bd3', 'Bxg3', 'hxg3', 'Qe7', 'Ne5', 'g6', 'f4', 'Nd7', 'Ndf3', 'f6'],
     explanations: [
       { label: '1. d4 — White', text: 'White opens with the Queen\'s Pawn, controlling the center and preparing a solid setup. Less sharp than 1.e4, but deeply strategic.' },
       { label: '1... d5 — Black', text: 'Black takes central space. The symmetrical 1...d5 is a principled response.' },
@@ -158,18 +158,18 @@ const OPENINGS = [
       { label: '8... Bxg3 — Black', text: 'Black exchanges the bishops. By trading the Bd6 for the Bg3, Black removes White\'s important bishop but concedes the h-file opening.' },
       { label: '9. hxg3 — White', text: 'White recaptures with the h-pawn, creating a half-open h-file. This is an important dynamic — White can use the h-file for attacking chances with Rh1.' },
       { label: '9... Qe7 — Black', text: 'Black develops the queen to e7, preparing to challenge White\'s center with ...e5 or contest the bishop on d3.' },
-      { label: '10. O-O — White', text: 'White castles kingside. The king goes to g1, and White\'s setup is complete. Now the game enters a positional middlegame.' },
-      { label: '10... b6 — Black', text: 'Black prepares ...Bb7, creating counterplay along the long diagonal. This fianchetto plan is Black\'s most active response to the London.' },
-      { label: '11. Ne5 — White', text: 'The knight jumps to e5 — a very powerful central outpost. From e5, the knight dominates the board and creates threats against f7. This is a typical London attacking move.' },
-      { label: '11... Bb7 — Black', text: 'The bishop arrives on b7, completing the fianchetto. Black now has counterplay along the long diagonal, pressuring White\'s center.' },
-      { label: '12. Qf3 — White', text: 'White brings the queen to f3, eyeing the h-file (Qh3 threat) and supporting the Ne5. White is building up an attacking setup.' },
-      { label: '12... Rfd8 — Black', text: 'Black centralizes the rook to d8, contesting the d-file and preparing for potential ...cxd4 or ...e5 breaks. The position is dynamically balanced with chances for both sides.' }
+      { label: '10. Ne5 — White', text: 'Don\'t castle yet! With the h-file half-open, the rook is already useful on h1. The knight jumps to its key outpost on e5, and now Bxh7+ is a real threat: the bishop on d3 and the rook on h1 both aim at h7, so after Bxh7+ the rook joins in with discovered checks. Castling kingside here would throw that pressure away.' },
+      { label: '10... g6 — Black', text: 'Black blocks the bishop\'s diagonal and covers h7 for good. This is the most solid defense, but it loosens the dark squares around the black king, and with the dark-squared bishops gone nobody can easily cover them.' },
+      { label: '11. f4 — White', text: 'White props up the knight with f4, a Stonewall-style grip on e5. If Black ever trades on e5, White recaptures with a pawn and keeps a wedge in the center that cramps Black\'s pieces.' },
+      { label: '11... Nd7 — Black', text: 'Black brings a second knight to challenge e5. Trading off White\'s best piece is Black\'s main idea in these structures.' },
+      { label: '12. Ndf3 — White', text: 'The d2 knight joins in, defending e5 again. Now if Black captures on e5, Nxe5 puts a fresh knight straight back on the outpost. White\'s king can stay in the center for now, or castle queenside later, while the rook keeps watch on the h-file.' },
+      { label: '12... f6 — Black', text: 'Black attacks the knight with a pawn to break White\'s grip on e5. It costs something, though: the e6 pawn becomes weaker and the black king more exposed. White keeps the easier game, with kingside chances and a firm hold on the center.' }
     ],
     keyIdeas: [
       'Always play Bf4 BEFORE e3 — the critical London move order',
       'Build the triangle: d4, e3, c3 for a rock-solid structure',
       'Ne5 is a key attacking outpost — aim to get the knight there',
-      'After hxg3: the h-file is half-open, giving White attacking chances'
+      'After hxg3 the h-file is half-open: keep the rook on h1 and don\'t rush to castle kingside'
     ]
   },
   {
