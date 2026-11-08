@@ -131,9 +131,11 @@ header .subtitle {
 }
 .opening-btn .eco {
   font-size: var(--text-xs);
-  opacity: 0.6;
+  color: var(--text-3);
   margin-left: 0.5rem;
 }
+.opening-btn.active .eco { color: inherit; }
+.token-help-note { color: var(--text-3); }
 
 /* ── BOARD AREA ── */
 .board-area {
@@ -562,10 +564,10 @@ header .subtitle {
   justify-content: center;
   height: 100%;
   gap: 0.75rem;
-  opacity: 0.4;
   text-align: center;
 }
-.empty-state .icon { font-size: calc(var(--text-2xl) * 1.25); }
+/* Only the glyph fades: the prompt text keeps --text-3 contrast. */
+.empty-state .icon { font-size: calc(var(--text-2xl) * 1.25); opacity: 0.4; }
 .empty-state p { font-size: var(--text-sm); color: var(--text-3); }
 
 .board-empty-state {
@@ -578,10 +580,9 @@ header .subtitle {
   justify-content: center;
   flex-direction: column;
   gap: 0.75rem;
-  opacity: 0.45;
   background: var(--surface);
 }
-.board-empty-state .icon { font-size: calc(var(--text-2xl) * 1.5); }
+.board-empty-state .icon { font-size: calc(var(--text-2xl) * 1.5); opacity: 0.45; }
 .board-empty-state p { font-size: var(--text-sm); color: var(--text-3); }
 
 /* Quiz mode badge */

@@ -315,10 +315,21 @@
 
   function reviewAt(ply) { return viewer.game.reviews.find(r => r.ply === ply) || null; }
 
+  // The board is role="img": its label is the position, read aloud.
+  function describeArchiveBoard(fen, move) {
+    const el = document.getElementById('archiveBoard');
+    if (!el || typeof describeChessPosition !== 'function') return;
+    try {
+      const after = move ? `After ${move.san}. ` : 'Starting position. ';
+      el.setAttribute('aria-label', after + describeChessPosition(new Chess(fen)));
+    } catch (e) { /* unreadable FEN: keep the previous label */ }
+  }
+
   function show() {
     const ply = viewer.cursor;
     viewer.board.position(viewer.fens[ply], false);
     const move = ply ? viewer.moves[ply - 1] : null;
+    describeArchiveBoard(viewer.fens[ply], move);
     if (typeof setBoardLastMove === 'function') setBoardLastMove('archiveBoard', move);
     const review = reviewAt(ply);
     const spec = { arrows: [], badges: [] };
@@ -537,6 +548,7 @@
     const accept = text => {
       retry.solved = true;
       viewer.board.position(game.fen(), !typed);
+      describeArchiveBoard(game.fen(), move);
       if (typeof setBoardLastMove === 'function') setBoardLastMove('archiveBoard', move);
       if (window.BoardOverlay) window.BoardOverlay.set('archiveBoard', 'archiveBoard-wrap', { badges: [{ square: move.to, tier: 'best' }], arrows: [] });
       setNote(text);

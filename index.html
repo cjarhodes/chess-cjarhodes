@@ -64,7 +64,7 @@
 <div class="app" id="library-view" role="tabpanel" aria-labelledby="nav-library" aria-hidden="true" style="display:none;">
 
   <!-- ── LIBRARY SIDEBAR ── -->
-  <aside class="library" id="library">
+  <aside class="library" id="library" aria-label="Openings">
     <!-- Search -->
     <div class="library-search">
       <label class="sr-only" for="library-search-input">Search openings</label>
@@ -174,14 +174,14 @@
   </main>
 
   <!-- ── INFO PANEL ── -->
-  <aside class="info-panel" id="info-panel">
+  <aside class="info-panel" id="info-panel" aria-label="Opening details">
     <div class="empty-state" id="empty-state">
       <div class="icon">♛</div>
       <p>Choose an opening from the library to start learning</p>
     </div>
     <div id="opening-content" style="display:none; flex-direction:column; gap:1.25rem;">
       <div>
-        <div class="opening-title" id="opening-title"></div>
+        <div class="opening-title" id="opening-title" role="heading" aria-level="2"></div>
         <div class="opening-tagline" id="opening-tagline"></div>
         <button class="btn-share" id="btn-share" title="Copy shareable link">Share link</button>
         <button class="btn-share repertoire-action" id="btn-repertoire-toggle" type="button">☆ Add to my repertoire</button>
@@ -222,7 +222,7 @@
     <!-- Explore mode panel -->
     <div id="explore-content" style="display:none; flex-direction:column; gap:1.25rem;">
       <div>
-        <div class="opening-title" id="explore-title">Free Exploration</div>
+        <div class="opening-title" id="explore-title" role="heading" aria-level="2">Free Exploration</div>
         <div class="opening-tagline" id="explore-tagline">Move freely — see what real players do</div>
       </div>
 
@@ -236,7 +236,7 @@
         <div class="section-label">Connect to Lichess</div>
         <div class="token-setup">
           <p>Opening Explorer data requires a free Lichess API token. It stays in this browser tab only.</p>
-          <p><a href="https://lichess.org/account/oauth/token/create?description=Chess+Opening+Library" target="_blank" rel="noopener noreferrer">→ Generate a token on Lichess ↗</a><br><small style="opacity:0.6;">No scopes needed — just click Create.</small></p>
+          <p><a href="https://lichess.org/account/oauth/token/create?description=Chess+Opening+Library" target="_blank" rel="noopener noreferrer">→ Generate a token on Lichess ↗</a><br><small class="token-help-note">No scopes needed — just click Create.</small></p>
           <form class="token-input-row" id="lichess-token-form">
             <label class="sr-only" for="lichess-token-input">Lichess personal access token</label>
             <input type="password" class="token-input" id="lichess-token-input" placeholder="lip_..." autocomplete="off" spellcheck="false" />
@@ -266,9 +266,9 @@
 <section class="coach-view" id="coach-view" role="tabpanel" aria-labelledby="nav-coach" aria-hidden="false">
 
   <!-- SETTINGS -->
-  <aside class="coach-settings">
+  <aside class="coach-settings" aria-label="Coach setup">
 <div class="coach-hero">
-      <div class="title">Coach</div>
+      <div class="title" role="heading" aria-level="2">Coach</div>
       <div class="tagline">Sharpen your reactive play</div>
     </div>
 <div id="network-status" class="network-status" role="status" aria-live="polite" hidden></div>
@@ -490,7 +490,7 @@
   </main>
 
   <!-- COACH PANEL -->
-  <aside class="coach-panel">
+  <aside class="coach-panel" aria-label="Game, practice and progress">
 <div class="coach-panel-section coach-daily-plan" id="coach-daily-plan" aria-labelledby="coach-daily-plan-label">
       <div class="daily-sprint-meta">
         <span class="section-label" id="coach-daily-plan-label">Adaptive session · 5–10 min</span>
@@ -561,7 +561,7 @@
     </section>
 
       <div class="coach-review-empty" id="coach-review-empty" role="note">
-        <div class="title">Your next move, explained</div>
+        <div class="title" role="heading" aria-level="3">Your next move, explained</div>
         <p>Play a move to see what it changes, what to watch for, and what to try next.</p>
       </div>
 <div id="coach-review" class="coach-review" style="display:none">
@@ -759,9 +759,9 @@
 </section>
 
 <section class="puzzles-view" id="puzzles-view" role="tabpanel" aria-labelledby="nav-puzzles" aria-hidden="true" style="display:none;">
-  <aside class="puzzles-rail">
+  <aside class="puzzles-rail" aria-label="Puzzle modes and rating">
     <div class="coach-hero">
-      <div class="title">Puzzles</div>
+      <div class="title" role="heading" aria-level="2">Puzzles</div>
       <div class="tagline">Spot the tactic, then prove it</div>
     </div>
     <div class="puzzle-modes" role="group" aria-label="Puzzle modes">
@@ -832,7 +832,7 @@
     </div>
   </main>
 
-  <aside class="puzzles-panel">
+  <aside class="puzzles-panel" aria-label="Puzzle details">
     <div class="puzzle-panel" id="puzzle-panel-rated" role="region" aria-label="Puzzle">
       <section class="coach-panel-section puzzle-card" aria-labelledby="puzzle-card-title">
         <div class="puzzle-card-meta">
@@ -1042,6 +1042,7 @@
 <script src="src/core/tactics.js"></script>
 <script src="src/core/opening-book.js"></script>
 <script src="src/core/library-sr.js"></script>
+<script src="src/core/position-text.js"></script>
 <script src="src/data/coach-persistence.js"></script>
 <script src="src/data/lifetime.js"></script>
 <script src="src/data/account-sync.js"></script>

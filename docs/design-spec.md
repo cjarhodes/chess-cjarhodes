@@ -26,7 +26,7 @@ the `blend-*` and `phone-blend-*` mockups in `design-directions/`.
 | Question (from §6 of the plan) | Decision |
 |---|---|
 | Two serifs? | **Keep both, with a strict split.** Fraunces is used only at `--text-xl` and above (titles, big numbers). Newsreader is used for every coach sentence, prompt and explanation. The gallery's "Serif test" sets a long explanation in both: Fraunces' soft, wedge-shaped details are charming in a headline but busy over three or four lines, while Newsreader stays quiet. |
-| Brass on cream contrast | Brass `--accent` is only ever a fill, with `--accent-ink` text on top (8.5:1). Brass as text or icon uses `--accent-text` (`#8f620c`, 5.2:1 on surface). Verified by `check-contrast.js`. |
+| Brass on cream contrast | Brass `--accent` is only ever a fill, with `--accent-ink` text on top (8.5:1). Brass as text or icon uses `--accent-text` (`#845a0b`, 5.9:1 on surface; at least 4.5:1 on `--accent-soft` rows). Verified by `check-contrast.js`. |
 | Move-quality colours as text | They fail AA as small text (inaccuracy 3.8:1, mistake 4.2:1 on surface). **Chip words stay in `--text`**, and only the tint and the symbol (`?!`, `?`, `??` …) carry the colour, which needs just 3:1 as a graphic. Every quality colour also travels with its symbol, so colour blindness doesn't hide the meaning. |
 | Threat arrow colour | It was brass in the earlier blend, which made it hard to tell apart from hint arrows (identical in dark mode). **Threats are now blue-violet** (`--iris-500` / `--iris-300`). It's the only cool hue on the board, so a threat never reads as advice. |
 | Board themes | **Sage** (default), **Walnut** (close to the old board), **Slate**, and **High contrast** (squares ≥ 3:1 apart, for low vision and bright rooms). Switch with `<html data-board-theme="green|walnut|blue|contrast">`; the keys match the values already saved under `ui:board-theme`, and the retired Ivory theme falls back to Walnut. |
@@ -53,7 +53,7 @@ tokens.
 | `--text-3` | `#6e6452` | `#8d9587` | Labels, captions (≥ 4.5:1 on every surface) |
 | `--accent` | `#e9ac3f` | `#f0b84a` | Fills: primary button, current move, progress |
 | `--accent-ink` | `#261a05` | `#1f1607` | Text on accent |
-| `--accent-text` | `#8f620c` | `#f0b84a` | Accent as text or icon |
+| `--accent-text` | `#845a0b` | `#f0b84a` | Accent as text or icon |
 | `--accent-soft` | brass 18% | brass 15% | Selected rows, hover, highlights |
 | `--danger` / `--success` | `#c2412d` / `#2f7d4c` | `#ff6a5a` / `#8fdc6a` | Errors, confirmations |
 

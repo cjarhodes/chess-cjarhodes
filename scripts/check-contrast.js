@@ -56,6 +56,20 @@ function rgb(value) {
   const h = hex[1].length === 3 ? hex[1].replace(/./g, c => c + c) : hex[1];
   return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16));
 }
+// A translucent token (rgba) is checked as drawn: composited over the
+// surface it sits on. A pair's background may be [overlay, base].
+function rgba(value) {
+  const m = value.match(/^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)$/);
+  if (!m) return [...rgb(value), 1];
+  return [Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4])];
+}
+function colour(vars, spec) {
+  if (!Array.isArray(spec)) return resolve(vars, spec);
+  const [over, under] = spec;
+  const [r, g, b, a] = rgba(resolve(vars, over));
+  const base = rgb(resolve(vars, under));
+  return '#' + [r, g, b].map((v, i) => Math.round(v * a + base[i] * (1 - a)).toString(16).padStart(2, '0')).join('');
+}
 function lum(c) {
   const [r, g, b] = c.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
@@ -71,6 +85,9 @@ const TEXT = [
   ['--text-2', '--surface'], ['--text-2', '--surface-2'], ['--text-2', '--bg'],
   ['--text-3', '--surface'], ['--text-3', '--surface-2'], ['--text-3', '--bg'], ['--text-3', '--nav-bg'],
   ['--accent-ink', '--accent'], ['--accent-text', '--surface'], ['--accent-text', '--bg'],
+  // Selected rows, the current move chip, the quiz badge and Coach cues.
+  ['--accent-text', ['--accent-soft', '--bg']], ['--accent-text', ['--accent-soft', '--surface']],
+  ['--text', ['--accent-soft', '--bg']], ['--text', ['--accent-soft', '--surface']],
   ['--danger', '--surface'],
 ].map(p => [...p, 4.5]);
 const GRAPHICS = [
@@ -84,9 +101,10 @@ const BOARD = [['--board-dark', '--board-light', 1.5]];
 let checked = 0;
 function run(label, vars, pairs) {
   for (const [fg, bg, min] of pairs) {
-    const r = ratio(resolve(vars, fg), resolve(vars, bg));
+    const r = ratio(colour(vars, fg), colour(vars, bg));
     checked++;
-    if (r < min) errors.push(`${label}: ${fg} on ${bg} is ${r.toFixed(2)}:1, needs ${min}:1`);
+    const bgName = Array.isArray(bg) ? bg.join(' over ') : bg;
+    if (r < min) errors.push(`${label}: ${fg} on ${bgName} is ${r.toFixed(2)}:1, needs ${min}:1`);
   }
 }
 const themes = { light: base, dark: { ...base, ...darkAttr } };

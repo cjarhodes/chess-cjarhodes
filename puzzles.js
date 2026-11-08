@@ -159,8 +159,7 @@
     if (!el) return;
     if (mode === 'vision') { el.setAttribute('aria-label', 'Vision board. Click the named square.'); return; }
     if (!session) { el.setAttribute('aria-label', 'Puzzle board'); return; }
-    const side = session.game.turn() === 'w' ? 'White' : 'Black';
-    el.setAttribute('aria-label', `Puzzle position, ${side} to move. FEN ${session.game.fen()}`);
+    el.setAttribute('aria-label', 'Puzzle position. ' + describeChessPosition(session.game));
   }
   function markSquares(cls, squares) {
     if (board) board.setMarks(cls, squares || []);

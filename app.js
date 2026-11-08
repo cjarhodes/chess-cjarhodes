@@ -987,13 +987,7 @@ function initColorTheme() {
   $('#color-theme').on('change', function() { applyColorTheme($(this).val()); });
 }
 
-function describeChessPosition(gameObj) {
-  if (!gameObj) return 'Chess position unavailable.';
-  const turn = gameObj.turn() === 'w' ? 'White' : 'Black';
-  const state = gameObj.in_checkmate() ? ' Checkmate.' : (gameObj.in_check() ? ' In check.' : '');
-  return `${turn} to move.${state} FEN: ${gameObj.fen()}`;
-}
-
+// describeChessPosition lives in src/core/position-text.js.
 function updateLibraryBoardAccessibility() {
   const activeGame = exploreMode && exploreGame ? exploreGame : game;
   $('#myBoard').attr('aria-label', describeChessPosition(activeGame));

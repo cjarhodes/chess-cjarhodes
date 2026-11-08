@@ -514,6 +514,40 @@ async page => {
     return problems;
   }));
 
+  await check('landmarks are named, headings do not skip levels and board labels read as words', async () => {
+    const problems = [];
+    // Every rail is a named complementary landmark (an unnamed aside inside
+    // a named section is not a landmark at all), and names are unique.
+    const names = await page.evaluate(() => [...document.querySelectorAll('aside')].map(a => a.getAttribute('aria-label') || ''));
+    if (names.some(n => !n)) problems.push('an aside has no aria-label: ' + JSON.stringify(names));
+    if (new Set(names).size !== names.length) problems.push('aside names repeat: ' + JSON.stringify(names));
+    const headingSkips = () => page.evaluate(() => {
+      const levels = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6,[role="heading"]')]
+        .filter(h => h.offsetParent || getComputedStyle(h).position === 'fixed')
+        .map(h => ({ level: Number(h.getAttribute('aria-level') || h.tagName.slice(1)), text: h.textContent.trim().slice(0, 30) }));
+      const skips = [];
+      levels.forEach((h, i) => { if (i && h.level > levels[i - 1].level + 1) skips.push(`${levels[i - 1].text} (h${levels[i - 1].level}) -> ${h.text} (h${h.level})`); });
+      return skips;
+    });
+    for (const [nav, setup] of [['#nav-coach', null], ['#nav-library', '#btn-explore'], ['#nav-puzzles', null]]) {
+      await page.locator(nav).click();
+      if (setup) { await page.locator('.opening-btn').first().click(); await page.locator(setup).click(); }
+      await page.waitForTimeout(300);
+      (await headingSkips()).forEach(skip => problems.push(nav + ': heading skips a level: ' + skip));
+    }
+    await page.locator('#nav-coach').click();
+    const label = await page.evaluate(() => {
+      const saved = coachGame;
+      try {
+        coachGame = new Chess('4k3/8/8/8/8/8/4q3/4K3 w - - 0 1');
+        updateCoachBoardAccessibility();
+        return document.getElementById('coachBoard').getAttribute('aria-label');
+      } finally { coachGame = saved; updateCoachBoardAccessibility(); }
+    });
+    expect(problems, label === 'White to move. In check. White: King e1. Black: King e8, Queen e2.', 'Coach board label is not the position in words: ' + label);
+    return problems;
+  });
+
   await check('arrow keys move between top-level and Coach panel tabs', async () => {
     const problems = [];
     await page.locator('#nav-coach').focus();

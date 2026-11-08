@@ -191,6 +191,23 @@ async function main() {
     check(najdorfMiss.matchedPlies === 5 && najdorfMiss.bookPlies === 9 && !najdorfMiss.exact, 'bookPlies is where the game left the book, matchedPlies the last named opening');
   }
 
+  // ── position-text.js ──
+  {
+    const ctx = sandbox(['src/core/position-text.js']);
+    const start = ctx.describeChessPosition(new ctx.Chess());
+    check(start.startsWith('White to move. White: King e1, Queen d1, Rooks a1 and h1, Bishops c1 and f1, Knights b1 and g1, Pawns a2, b2, c2, d2, e2, f2, g2 and h2. Black: King e8,'), 'the start position reads as words, pieces grouped by type: ' + start);
+    check(!/[/]|FEN/.test(start), 'a board label never spells out a FEN');
+    const mate = new ctx.Chess('rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3');
+    check(ctx.describeChessPosition(mate).startsWith('White to move. Checkmate. '), 'checkmate is announced');
+    const check1 = new ctx.Chess('4k3/8/8/8/8/8/4q3/4K3 w - - 0 1');
+    check(ctx.describeChessPosition(check1) === 'White to move. In check. White: King e1. Black: King e8, Queen e2.', 'check, single pieces: ' + ctx.describeChessPosition(check1));
+    const stale = new ctx.Chess('7k/5Q2/6K1/8/8/8/8/8 b - - 0 1');
+    check(ctx.describeChessPosition(stale).startsWith('Black to move. Stalemate.'), 'stalemate is announced');
+    const pawns = new ctx.Chess('4k3/8/8/8/8/8/P6P/4K3 w - - 0 1');
+    check(ctx.describeChessPosition(pawns).includes('White: King e1, Pawns a2 and h2.'), 'two squares join with "and"');
+    check(ctx.describeChessPosition(null) === 'Chess position unavailable.', 'a missing game has a fallback');
+  }
+
   // ── library-sr.js ──
   {
     const ctx = sandbox(['src/core/library-sr.js']);
@@ -219,7 +236,7 @@ async function main() {
     console.error(errors.join('\n'));
     process.exit(1);
   }
-  console.log(`Core unit validation passed (${assertions} assertions across 6 files loaded whole).`);
+  console.log(`Core unit validation passed (${assertions} assertions across 7 files loaded whole).`);
 }
 
 main().catch(error => { console.error(error); process.exit(1); });
