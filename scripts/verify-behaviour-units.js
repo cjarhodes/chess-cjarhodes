@@ -348,6 +348,8 @@ async page => {
     try {
       coachDbClient = fakeClient;
       coachAuthUser = { id: 'behaviour-test-user' };
+      // Earlier stubbed checks can leave this test owner's tab marked as paused.
+      sessionStorage.removeItem(coachMemoryKey('coach:checkpoint-conflict:v1'));
       Object.assign(accountCheckpoint, { owner: null, loaded: false, conflict: false, chain: Promise.resolve() });
       // Leaving Coach right after the result: the view change bumps the generation.
       coachRemoteGameId = 'game-final-1';
@@ -377,6 +379,50 @@ async page => {
       coachLocalGameId = saved.localId;
       Object.assign(accountCheckpoint, saved.checkpoint, { timer: null });
       Object.keys(localStorage).filter(k => k.includes('behaviour-test-user')).forEach(k => localStorage.removeItem(k));
+    }
+    return problems;
+  }));
+
+  await check('practice sync skips an attempt the account rejects and keeps going', () => page.evaluate(async () => {
+    const problems = [];
+    const saved = { client: coachDbClient, user: coachAuthUser };
+    const owner = 'behaviour-practice-user';
+    const calls = [];
+    let offline = false;
+    const event = (id, extra) => Object.assign({ id, ownerId: owner, drillId: 'drill-' + id, tag: 'king_safety',
+      fen: '8/8/8/8/8/8/4K3/7k w - - 0 1', bestUci: 'e2e3', at: Date.parse('2026-11-01T12:00:00Z'), correct: true, revealed: false, synced: false }, extra || {});
+    const pendingIds = () => loadPracticeProgress(owner).events.filter(e => !e.synced).map(e => e.id).join(',');
+    try {
+      coachDbClient = {
+        rpc(name, params) {
+          calls.push(params.p_event_id + (params.p_source_move_id ? '@' + params.p_source_move_id : ''));
+          if (offline) return Promise.resolve({ data: null, error: { message: 'Failed to fetch' } });
+          // The source move was taken back: its id no longer exists.
+          if (params.p_source_move_id === 'taken-back-move') return Promise.resolve({ data: null, error: { code: '23503', message: 'violates foreign key constraint' } });
+          if (params.p_event_id === 'malformed') return Promise.resolve({ data: null, error: { code: 'P0001', message: 'Practice attempt payload is incomplete' } });
+          return Promise.resolve({ data: null, error: null });
+        }
+      };
+      coachAuthUser = { id: owner };
+      savePracticeProgress({ records: {}, events: [event('orphaned', { sourceMoveId: 'taken-back-move' }), event('malformed'), event('later-1'), event('later-2')] }, owner);
+      let threw = null;
+      await syncPendingPracticeEvents().catch(error => { threw = error; });
+      if (pendingIds().includes('later')) problems.push('one failing attempt kept later attempts from syncing (pending: ' + pendingIds() + ')');
+      if (!calls.includes('orphaned')) problems.push('an attempt whose source move was taken back was not retried without it');
+      if (pendingIds().includes('orphaned')) problems.push('the attempt with a taken-back source move never synced');
+      calls.length = 0;
+      await syncPendingPracticeEvents().catch(error => { threw = error; });
+      if (calls.includes('malformed')) problems.push('a permanently rejected attempt is retried on every sync');
+      // A network outage is not permanent: stop, keep the attempts pending.
+      savePracticeProgress({ records: {}, events: loadPracticeProgress(owner).events.concat([event('offline-1'), event('offline-2')]) }, owner);
+      offline = true; calls.length = 0; threw = null;
+      await syncPendingPracticeEvents().catch(error => { threw = error; });
+      if (!threw) problems.push('a network failure was not reported');
+      if (calls.length !== 1 || !pendingIds().includes('offline-1') || !pendingIds().includes('offline-2')) problems.push('a network failure should stop the run and keep attempts pending: ' + calls.join(','));
+    } finally {
+      coachDbClient = saved.client;
+      coachAuthUser = saved.user;
+      Object.keys(localStorage).filter(k => k.includes(owner)).forEach(k => localStorage.removeItem(k));
     }
     return problems;
   }));
