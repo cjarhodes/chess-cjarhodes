@@ -7,7 +7,7 @@ async page => {
   const failures = [];
   const passed = [];
   const pageErrors = [];
-  page.on('pageerror', error => pageErrors.push(error.message));
+  page.on('pageerror', error => pageErrors.push((error.stack || error.message).split('\n').slice(0, 4).join(' <- ')));
   const check = async (name, fn) => {
     try {
       const problems = await fn();

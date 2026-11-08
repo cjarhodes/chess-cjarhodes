@@ -87,7 +87,7 @@ async browserPage => {
   const fresh = async () => {
     const context=await browser.newContext({viewport:{width:1440,height:900}}); contexts.push(context);
     await context.route('https://szbrgdmjsgrybptznogb.supabase.co/**',route);
-    const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
+    const page=await context.newPage();page.on('pageerror', e => errors.push((e.stack || e.message).split('\n').slice(0, 4).join(' <- ')));
     await page.goto(base);await page.waitForFunction(()=>coachDbClient!==null);return page;
   };
   const signIn = async (page,key='a') => {

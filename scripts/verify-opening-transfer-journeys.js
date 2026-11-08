@@ -1,7 +1,7 @@
 // Playwright CLI body: study/quiz -> opening idea -> real opponent -> review/return.
 async page=>{
  const errors=[],consoleErrors=[],checks=[],scenarios=[];
- page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});
+ page.on('pageerror', e => errors.push((e.stack || e.message).split('\n').slice(0, 4).join(' <- ')));page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});
  const assert=(ok,message)=>{if(!ok)throw Error(message);};
  await page.route('**/*',r=>r.continue());
  const appUrl=page.url().split('?')[0];

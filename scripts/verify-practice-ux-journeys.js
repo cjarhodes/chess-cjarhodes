@@ -8,7 +8,7 @@ async browserPage => {
   const fresh = async () => {
     if (page) await page.context().close();
     const context = await browser.newContext(); contexts.push(context); page = await context.newPage();
-    page.on('pageerror', e => errors.push(e.message));
+    page.on('pageerror', e => errors.push((e.stack || e.message).split('\n').slice(0, 4).join(' <- ')));
     await page.goto(base); await page.locator('#tab-practice').waitFor();
   };
   const play = async move => {

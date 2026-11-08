@@ -1,6 +1,6 @@
 // Playwright CLI body: real coaching flows, three desktop sizes, and screenshot evidence.
 async page => {
- const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const errors=[];page.on('pageerror', e => errors.push((e.stack || e.message).split('\n').slice(0, 4).join(' <- ')));
  const assert=(x,message)=>{if(!x)throw new Error(message);};
  await page.route('**/*',route=>route.continue());
  await page.evaluate(()=>{localStorage.clear();sessionStorage.removeItem('ui:coach-panel-tab');});await page.reload();

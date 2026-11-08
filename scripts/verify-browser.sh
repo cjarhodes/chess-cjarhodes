@@ -86,7 +86,7 @@ async page => {
     if (/favicon\.ico/.test(url) || /favicon\.ico/.test(message.text())) return;
     consoleErrors.push(message.text() + (url ? ' [' + url + ']' : ''));
   });
-  page.on('pageerror', error => pageErrors.push(error.message));
+  page.on('pageerror', error => pageErrors.push((error.stack || error.message).split('\n').slice(0, 4).join(' <- ')));
 
   const insightState = {
     v: 1,

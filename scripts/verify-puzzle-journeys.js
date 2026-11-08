@@ -11,7 +11,7 @@ async browserPage => {
     if (page) await page.context().close();
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } }); contexts.push(context);
     page = await context.newPage();
-    page.on('pageerror', e => errors.push(e.message));
+    page.on('pageerror', e => errors.push((e.stack || e.message).split('\n').slice(0, 4).join(' <- ')));
     page.on('console', m => { if (m.type() === 'error' && !/favicon/.test(m.text())) errors.push(m.text()); });
     await page.goto(base + query);
   };

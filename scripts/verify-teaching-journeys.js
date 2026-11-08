@@ -2,7 +2,7 @@
 // in an isolated session; can also verify the public custom domain.
 async page => {
   const errors = [];
-  page.on('pageerror', error => errors.push(error.message));
+  page.on('pageerror', error => errors.push((error.stack || error.message).split('\n').slice(0, 4).join(' <- ')));
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.route('**/*', route => route.continue());
