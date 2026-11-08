@@ -517,7 +517,7 @@ const OPENINGS = [
     category: 'white',
     tagline: 'Hypermodern king\'s knight — control without occupation',
     description: 'Named after Czech grandmaster Richard Réti, this hypermodern opening starts with 1.Nf3 rather than a pawn. White delays central pawn occupation, instead controlling the center from the flanks with knights and bishops. The Réti is extremely flexible and can transpose into many different structures. It was revolutionary in the 1920s and remains popular today.',
-    moves: ['Nf3','d5','g3','Nf6','Bg2','c6','O-O','Bf5','d3','e6','Nbd2','h6','Qe1','Be7','e4','dxe4','dxe4','Bg4','h3','Bxf3','Bxf3','Nbd7','e5','Nd5','c4','Nxe5','Qxe5','Bd6','Qd4','f5'],
+    moves: ['Nf3','d5','g3','Nf6','Bg2','c6','O-O','Bf5','d3','e6','Nbd2','h6','Qe1','Be7','e4','dxe4','dxe4','Bg4','h3','Bxf3','Bxf3','Nbd7','e5','Nd5','Qe2','Qc7','Re1','O-O','a4','Rfd8'],
     explanations: [
       { label: '1. Nf3 — White', text: 'The Réti! White develops the knight without committing to a pawn center. This delays revealing White\'s strategy and keeps maximum flexibility.' },
       { label: '1... d5 — Black', text: 'Black takes central space immediately. A principled response — Black occupies the center while White has not yet done so.' },
@@ -543,12 +543,12 @@ const OPENINGS = [
       { label: '11... Nbd7 — Black', text: 'Black develops the queenside knight, completing development. From d7, it can go to b6, c5, or e5.' },
       { label: '12. e5 — White', text: 'White advances e5, gaining central space and attacking the Nf6. This pawn advance is the Réti\'s typical aggressive central action.' },
       { label: '12... Nd5 — Black', text: 'The Nf6 retreats to d5 — a powerful central outpost! From d5, the knight controls many important squares.' },
-      { label: '13. c4 — White', text: 'White challenges the Nd5 with c4. The pawn advance gains more central space and opens lines for White\'s bishops.' },
-      { label: '13... Nxe5 — Black', text: 'Black\'s Nd7 knight takes the e5 pawn! An active sacrifice — Black wins material but White gets compensation with active pieces.' },
-      { label: '14. Qxe5 — White', text: 'White\'s queen recaptures on e5, dominating the center. The queen is very active from e5.' },
-      { label: '14... Bd6 — Black', text: 'Black develops the bishop to d6, attacking the queen and activating pieces. Black\'s position is rich despite material considerations.' },
-      { label: '15. Qd4 — White', text: 'The queen retreats to d4, maintaining central dominance while avoiding exchanges. White has a dynamic middlegame advantage.' },
-      { label: '15... f5 — Black', text: 'Black plays f5 — an ambitious pawn advance gaining space on the kingside. The game is sharp and double-edged with complex play ahead.' }
+      { label: '13. Qe2 — White', text: 'The queen steps to e2. It still guards the e5 pawn, and it frees e1 for the rook. The e5 wedge is White\'s main asset: it takes f6 away from Black\'s knights and gives White more space.' },
+      { label: '13... Qc7 — Black', text: 'Black adds a second attacker to e5, joining the knight on d7. The pawn is the target of Black\'s whole setup: if it falls, White\'s space advantage goes with it.' },
+      { label: '14. Re1 — White', text: 'The rook takes over e1 and lines up behind the queen, so e5 is now defended twice. Black\'s pressure is held, and the bishop pair can wait for the position to open.' },
+      { label: '14... O-O — Black', text: 'Black castles and completes development. The king is safe on g8, and the knight on d5 is a strong central piece.' },
+      { label: '15. a4 — White', text: 'A useful queenside move: a4 stops ...b5, which would gain space and take c4 away from White\'s knight. Nc4 can follow, eyeing the d6 square that the e5 pawn supports.' },
+      { label: '15... Rfd8 — Black', text: 'Black puts a rook on the d-file, ready to contest d6 and the open file. The game has reached a balanced maneuvering middlegame: White has space and the bishop pair, Black has a solid position and a fine knight on d5.' }
     ],
     keyIdeas: [
       'Réti hypermodernism: control the center from afar with Nf3 + Bg2 rather than occupying it',
