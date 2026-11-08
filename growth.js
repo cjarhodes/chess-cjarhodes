@@ -1417,6 +1417,7 @@ function collectImportedTargets(parsedEntries, side, gameMetadata) {
         fenAfter: replay.fen(),
         userUci: uciFromMove(played),
         userSan: played.san,
+        previousCaptureSquare: index > 0 && allMoves[index - 1].captured ? allMoves[index - 1].to : null,
         ply: index + 1,
         pairNum: Math.ceil((index + 1) / 2),
         gameIndex: gameIndex + 1,

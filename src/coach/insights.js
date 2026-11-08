@@ -110,6 +110,18 @@ const INSIGHT_TAG_META = {
     practice: 'Check center, development, king safety, and only then pawn grabs.',
     theory: 'The opening goal is not to win a pawn; it is to reach a playable middlegame with active pieces.'
   },
+  // Endgame-track lessons (growth.js ENDGAME_LESSONS) tag their practice
+  // attempts with these, so the adaptive focus needs to know them too.
+  endgame_conversion: {
+    title: 'Endgame conversion',
+    practice: 'With extra material, box in the king before you check, then find the finishing move.',
+    theory: 'Winning endgames are converted by coordinating the king with the stronger piece to take squares from the enemy king, not by checking at random.'
+  },
+  passed_pawns: {
+    title: 'Passed pawns',
+    practice: 'Count the pawn race: who reaches the queening square first, and which piece can stop it?',
+    theory: 'A passed pawn must be pushed or stopped. Rooks belong behind passers, and the defender needs control of the promotion square.'
+  },
   endgame_technique: {
     title: 'Endgame technique',
     practice: 'Activate the king and calculate pawn races before trading.',
@@ -273,7 +285,12 @@ function insightTagsForReview(review) {
       if (isNonCapturePawnWeakener(userMove) && loss >= 120) add('pawn_structure');
     }
     if (userMove.captured && loss >= 120) add('unsafe_trade');
-    if (bestMove && bestMove.captured && userMove.to === bestMove.from && loss >= 100) add('missed_recapture');
+    // A recapture: the opponent has just captured on a square, the best move
+    // takes back there, and the move played did not.
+    if (bestMove && bestMove.captured && review.previousCaptureSquare &&
+        bestMove.to === review.previousCaptureSquare && userMove.to !== bestMove.to && loss >= 100) {
+      add('missed_recapture');
+    }
     if (phase === 'endgame' && loss >= 120) add('endgame_technique');
   }
 

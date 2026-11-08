@@ -138,7 +138,9 @@
       const color = replay.turn();
       const move = replay.move({ from: moves[i].from, to: moves[i].to, promotion: moves[i].promotion });
       if (!move) return null;
-      if (color === mine) out.push({ ply: i + 1, fenBefore, uci: move.from + move.to + (move.promotion || ''), fenAfter: replay.fen(), san: move.san });
+      const previous = i > 0 ? moves[i - 1] : null;
+      if (color === mine) out.push({ ply: i + 1, fenBefore, uci: move.from + move.to + (move.promotion || ''), fenAfter: replay.fen(), san: move.san,
+        previousCaptureSquare: previous && previous.captured ? previous.to : null });
     }
     return { plies: moves.length, moves: out, cleanPgn: cleanPgn(ChessCtor, game, moves) };
   }

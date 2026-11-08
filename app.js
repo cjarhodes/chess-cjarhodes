@@ -760,10 +760,12 @@ async function coachHandleUserMove(source, target, promotion, opts) {
     }
     const ply = coachGame.history().length;
     const pairNum = Number(fenBefore.split(/\s+/)[5]) || Math.ceil(ply / 2);
+    const opponentPrevious = coachGame.history({ verbose: true })[ply - 2];
     const logged = Object.assign({}, review, {
       fenBefore,
       fenAfter,
       userUci,
+      previousCaptureSquare: opponentPrevious && opponentPrevious.captured ? opponentPrevious.to : null,
       ply,
       pairNum,
       gameGeneration: generation,

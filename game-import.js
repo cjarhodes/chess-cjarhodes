@@ -87,6 +87,7 @@
         const m = replay.moves[i];
         const r = await classifyWithRetry(m);
         full.push(Object.assign({}, r, { fenBefore: m.fenBefore, fenAfter: m.fenAfter, userUci: m.uci, userSan: r.userSan || m.san,
+          previousCaptureSquare: m.previousCaptureSquare || null,
           // Move numbers come from the position, which matters for games
           // that started from a set-up position.
           ply: m.ply, pairNum: parseInt(m.fenBefore.split(' ')[5], 10) || Math.ceil(m.ply / 2), gameIndex: 1, localGameId: game.id, source: 'import' }));

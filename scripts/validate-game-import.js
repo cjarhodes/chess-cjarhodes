@@ -93,6 +93,8 @@ const fromFen = { side: 'white', startFen: '4k3/8/8/8/8/8/4P3/4K3 w - - 0 1', pg
 const ff = G.userMoves(Chess, fromFen);
 expect(ff && ff.moves.map(m => m.uci), ['e2e4', 'e4e5'], 'a game from a set-up position replays from its FEN');
 expect(G.userMoves(Chess, { side: 'white', startFen: '', pgn: '1. e4 e5 2. Ke3 Ke6 3. Qh8 *' }), null, 'an illegal PGN is refused');
+const recapture = G.userMoves(Chess, { side: 'white', startFen: '', pgn: '1. e4 d5 2. Nc3 dxe4 3. Nxe4 *' });
+expect(recapture.moves.map(m => m.previousCaptureSquare), [null, null, 'e4'], 'each move records the square the opponent just captured on, for missed-recapture tagging');
 
 if (failures.length) { console.error(failures.join('\n')); process.exit(1); }
 console.log(`Game import validation passed (${checks} checks).`);
