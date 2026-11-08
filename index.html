@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Chess Coach &amp; Opening Library — Alex Rhodes</title>
   <meta name="description" content="Drill openings, play an adaptive Stockfish coach, solve puzzles and review every game. A personal chess training app by Alex Rhodes.">
   <link rel="canonical" href="https://chess.cjarhodes.com/">
@@ -42,12 +42,18 @@
   <button type="button" class="header-help" id="btn-shortcuts" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">?</button>
 </header>
 
-  <div class="desktop-notice" id="desktop-notice" role="dialog" aria-modal="true" aria-labelledby="desktop-notice-title">
+  <div class="desktop-notice" id="desktop-notice" role="dialog" aria-modal="true" aria-labelledby="desktop-notice-title" aria-describedby="desktop-notice-body">
     <div class="desktop-notice-card">
-      <div class="desktop-notice-eyebrow">Chess Coach</div>
-      <h2 id="desktop-notice-title">Built for the desktop</h2>
-      <p>The board, engine review, and training panels are laid out for a large screen. Open chess.cjarhodes.com on a laptop or desktop for the full experience.</p>
-      <button type="button" class="ctrl-btn" id="btn-desktop-notice-continue">Continue here anyway</button>
+      <div class="desktop-notice-eyebrow">Chess Coach · phone preview</div>
+      <h2 id="desktop-notice-title">The phone layout is a preview</h2>
+      <div id="desktop-notice-body">
+        <p>Everything works on this screen, but two things can still go wrong on a phone:</p>
+        <ul>
+          <li><strong>Signing in.</strong> The sign-in link may open in a different browser from the one you asked from. Sign in on a computer instead, or back up your progress from Training data at the bottom of Coach.</li>
+          <li><strong>Progress on this device.</strong> Progress that is kept only on this phone can be cleared by Safari after a week without a visit.</li>
+        </ul>
+      </div>
+      <button type="button" class="ctrl-btn primary" id="btn-desktop-notice-continue">Continue to the phone layout</button>
     </div>
   </div>
 
@@ -201,7 +207,7 @@
         <div class="line-selector" id="line-selector"></div>
       </div>
 
-      <div>
+      <div id="library-moves">
         <div class="section-label">Moves</div>
         <div class="move-list" id="move-list"></div>
       </div>
@@ -1054,6 +1060,7 @@
 <script src="src/coach/candidates.js"></script>
 <script src="src/coach/summary.js"></script>
 <script src="src/ui/sounds.js"></script>
+<script src="src/ui/layout.js"></script>
 <script src="src/ui/board.js"></script>
 <script type="module" src="src/ui/board-module.js"></script>
 <script src="src/library/explore.js"></script>

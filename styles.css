@@ -2115,7 +2115,8 @@ input[type=range].strength-slider::-moz-range-thumb {
 .auto-elo-note { color: var(--text-3); font-size: var(--text-xs); margin-top: 0.35rem; line-height: 1.35; }
 #repertoire-section:empty { display: none; }
 
-/* ── DESKTOP NOTICE ── shown on narrow screens instead of a mobile layout */
+/* ── PHONE NOTICE ── the stacked layout on phones is a preview; this says why
+   (sign-in links, Safari's storage limits) before the phone layout shows. */
 .desktop-notice {
   display: none;
   position: fixed;
@@ -2126,7 +2127,7 @@ input[type=range].strength-slider::-moz-range-thumb {
   justify-content: center;
   padding: 1.5rem;
 }
-@media (max-width: 1023px) {
+@media (max-width: 759.98px) {
   html:not(.desktop-notice-dismissed) .desktop-notice { display: flex; }
   html:not(.desktop-notice-dismissed) body { overflow: hidden; }
 }
@@ -2161,7 +2162,10 @@ input[type=range].strength-slider::-moz-range-thumb {
   opacity: 0.88;
   margin: 0;
 }
-.desktop-notice-card .ctrl-btn { align-self: flex-start; margin-top: 0.4rem; }
+.desktop-notice-card ul { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.desktop-notice-card li { font-family: var(--family-prose); font-size: var(--text-prose); line-height: 1.45; color: var(--text); }
+#desktop-notice-body { display: flex; flex-direction: column; gap: 0.7rem; }
+.desktop-notice-card .ctrl-btn { align-self: stretch; margin-top: 0.4rem; min-height: 48px; }
 
 /* ── COACH RAILS (desktop) ── */
 .play-card {
@@ -3091,3 +3095,288 @@ input[type=range].strength-slider::-moz-range-thumb {
 .coach-clock-note:empty { display: none; }
 .opponent-tag { display: inline-flex; align-items: center; gap: 0.35rem; margin-right: 0.35rem; font-size: var(--text-xs); color: var(--text-2); font-weight: var(--weight-medium); }
 .opponent-avatar.opponent-avatar-sm { width: 18px; height: 18px; font-size: var(--text-xs); }
+
+/* ══════════════════════════════════════════════════════════════════════
+   RESPONSIVE LAYOUT (redesign Phase 6a; docs/redesign-plan.md §3 "Phone and
+   tablet", docs/design-spec.md "Layout"). Breakpoints are 760px and 1200px.
+   - ≥ 1200px: the three-column desktop above, unchanged.
+   - 760–1199px, landscape: three columns with narrower rails.
+   - Stacked: below 760px, below 1200px when held upright, or on a short
+     (sideways phone) screen. One column: app bar, board edge to edge,
+     notation strip, then the panels; the top nav becomes a bottom tab bar.
+     src/ui/layout.js keeps LAYOUT_STACKED_QUERY equal to this query and
+     moves the notation into the strip under the board.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Inputs in a row with a button may shrink below their default width. */
+.token-input, .library-search input { min-width: 0; }
+
+/* ── Tablet and small laptop ── */
+@media (min-width: 760px) and (max-width: 1199.98px) and (orientation: landscape) and (min-height: 500px) {
+  :root {
+    --header-h: var(--appbar-h);
+    --rail-left: clamp(190px, 19vw, 240px);
+    --rail-right: clamp(280px, 29vw, var(--panel-w-compact));
+  }
+  body { min-width: 0; }
+  header { padding: 0 var(--space-4); gap: var(--space-4); }
+  .coach-view { --rail-left: clamp(190px, 19vw, 240px); --rail-right: clamp(280px, 29vw, var(--panel-w-compact)); }
+  .coach-settings, .coach-panel, .puzzles-rail, .puzzles-panel { padding: var(--space-4) var(--space-3) var(--space-5); }
+  .info-panel { padding: var(--space-4) var(--space-4) var(--space-5); }
+  .library { padding: var(--space-4) 0; }
+  .library-label, .opening-btn { padding-left: var(--space-4); padding-right: var(--space-4); }
+  .coach-panel .panel-tabs { top: calc(-1 * var(--space-4)); }
+  /* The vertical evaluation bar sits 34px left of the board: keep room for
+     it on the left while the board fills the column. */
+  .coach-board-area, #library-view .board-area, #library-view.has-eval-bar .board-area { padding: var(--space-3) var(--space-3) var(--space-4) 38px; }
+  .puzzles-board-area { padding: var(--space-4) var(--space-4) var(--space-5); }
+  .coach-turn-header { min-height: 52px; }
+}
+
+/* ── Stacked: phones, upright tablets, sideways phones ── */
+@media (max-width: 759.98px), (max-width: 1199.98px) and (orientation: portrait), (max-width: 1199.98px) and (max-height: 499.98px) {
+  :root {
+    --header-h: var(--appbar-h);
+    /* Edge to edge, but never taller than the screen leaves room for (a
+       sideways phone scrolls). Every board element also has max-width: 100%. */
+    --stack-board: min(100vw, max(320px, calc(100dvh - 140px)));
+    --stack-gutter: var(--space-4);
+  }
+  body {
+    min-width: 0;
+    min-height: 100dvh;
+    padding: 0 env(safe-area-inset-right) calc(var(--tabbar-h) + env(safe-area-inset-bottom)) env(safe-area-inset-left);
+  }
+
+  /* App bar: back link, title and help; the view tabs move to the bottom. */
+  header {
+    height: auto;
+    min-height: calc(var(--appbar-h) + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) var(--stack-gutter) 0;
+    gap: var(--space-3);
+  }
+  header h1 .tld { display: none; }
+  header a.back { font-size: var(--text-xs); }
+  .header-help { width: var(--tap-min); height: var(--tap-min); margin-left: auto; }
+  .top-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    margin: 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    background: var(--nav-bg);
+    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .top-nav-btn {
+    flex: 1 1 0;
+    min-height: var(--tabbar-h);
+    font-size: var(--text-sm);
+    border-top: 2px solid transparent;
+    color: var(--text-2);
+  }
+  .top-nav-btn.active { background: var(--nav-active); color: var(--accent-text); border-top-color: var(--accent); }
+
+  /* One column, page scroll. The views keep display: grid (set inline when
+     shown) so `order` places the board first. */
+  .app, .coach-view, .puzzles-view {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    height: auto;
+    min-height: 0;
+  }
+  .library, .info-panel, .board-area,
+  .coach-settings, .coach-board-area, .coach-panel,
+  .puzzles-rail, .puzzles-board-area, .puzzles-panel {
+    overflow: visible;
+    min-height: 0;
+    border: 0;
+  }
+  .library, .info-panel, .coach-settings, .coach-panel, .puzzles-rail, .puzzles-panel {
+    border-top: 1px solid var(--line);
+    padding: var(--space-5) var(--stack-gutter) var(--space-6);
+  }
+  .library { padding-left: 0; padding-right: 0; }
+  .library-search { padding-left: var(--stack-gutter); padding-right: var(--stack-gutter); }
+  .library-label, .opening-btn { padding-left: var(--stack-gutter); padding-right: var(--stack-gutter); }
+  .cat-tabs { padding-left: var(--stack-gutter); padding-right: var(--stack-gutter); overflow-x: auto; scrollbar-width: none; }
+
+  /* Board columns: full width, board edge to edge, tools in the gutter. */
+  .board-area, .coach-board-area, .puzzles-board-area,
+  #library-view .board-area, #library-view.has-eval-bar .board-area {
+    order: 1;
+    align-items: stretch;
+    padding: var(--space-2) 0 var(--space-4);
+    gap: var(--space-2);
+  }
+  .board-area > *, .coach-board-area > *, .puzzles-board-area > * {
+    width: auto;
+    max-width: none;
+    margin-left: var(--stack-gutter);
+    margin-right: var(--stack-gutter);
+  }
+  #board-wrap, #coachBoard-wrap, .puzzle-board-wrap {
+    align-self: center;
+    width: var(--board-size);
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .puzzle-board-wrap { width: var(--puzzle-board-size); }
+  #library-view, .coach-view { --board-size: var(--stack-board); }
+  .puzzles-view { --puzzle-board-size: var(--stack-board); }
+  #myBoard, #coachBoard, #library-view #myBoard { width: 100%; max-width: 100%; }
+  #library-view .board-empty-state { width: 100%; height: auto; aspect-ratio: 1; }
+  .board-host { border-width: 0; border-radius: 0; box-shadow: none; }
+  #coachBoard:focus-visible, #puzzleBoard:focus-visible { outline-offset: -3px; }
+  .coach-board-area .board-controls, .coach-turn-header,
+  .puzzles-board-area .coach-turn-header, .puzzles-view .keyboard-move,
+  #library-view .board-controls, .captured-bar, .feedback-bar, .progress-bar, .board-nav,
+  .coach-analysis-strip { width: auto; max-width: none; }
+  /* Typing a move is an extra on a touch screen: it goes last. */
+  .keyboard-move { order: 2; }
+  .mode-toggle { align-self: center; }
+  .mode-btn { flex: 1 1 0; }
+  .board-controls { flex-wrap: wrap; justify-content: center; }
+  .board-controls .ctrl-btn { flex: 1 1 0; min-width: 0; padding-left: var(--space-1); padding-right: var(--space-1); white-space: nowrap; }
+  .board-controls .ctrl-btn.flip { flex: 0 0 var(--tap-min); }
+  .board-nav { flex-wrap: wrap; }
+  .board-nav .ctrl-btn.nav { flex: 1 1 0; min-width: var(--tap-min); }
+  .coach-turn-header { min-height: 0; }
+  #library-view .feedback-bar { margin-top: 0; }
+
+  /* The evaluation bar turns into a thin bar above the board: the vertical
+     bar (board-overlay.js sizes it to the board's height) is turned a
+     quarter left; White's share grows from the left, or from the right when
+     the board is flipped. */
+  .board-eval-bar {
+    left: 0 !important;
+    width: 6px !important;
+    border-radius: var(--radius-pill);
+    transform-origin: 0 0;
+    transform: translateY(-4px) rotate(-90deg);
+    flex-direction: column;
+  }
+  .board-eval-bar.flipped { flex-direction: column-reverse; }
+  .board-eval-label { display: none; }
+  #coachBoard-wrap:has(> .board-eval-bar:not([hidden])),
+  #board-wrap:has(> .board-eval-bar:not([hidden])),
+  #archiveBoard-wrap:has(> .board-eval-bar:not([hidden])) { margin-top: var(--space-3); }
+
+  /* Notation: one scrolling row under the board (layout.js moves it here and
+     keeps the current move centred). */
+  .notation-strip { margin-left: 0 !important; margin-right: 0 !important; padding: 0; }
+  .notation-strip .section-label { display: none; }
+  .notation-strip .movelist-head { padding: 0 var(--stack-gutter); justify-content: flex-end; }
+  .notation-strip .movelist,
+  .notation-strip .move-list {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--space-1);
+    max-height: none;
+    min-height: var(--tap-min);
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    padding: 0 var(--stack-gutter);
+    margin: 0;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+  .notation-strip .movelist::-webkit-scrollbar,
+  .notation-strip .move-list::-webkit-scrollbar { display: none; }
+  .notation-strip .movelist .num, .notation-strip .movelist .ply, .notation-strip .movelist .ply-empty,
+  .notation-strip .move-pair { flex: none; white-space: nowrap; }
+  .notation-strip .movelist .ply { min-height: 36px; display: inline-flex; align-items: center; padding: 0 var(--space-2); }
+  .notation-strip .movelist .num { margin-left: var(--space-1); }
+  .notation-strip .move-chip { min-height: 36px; }
+  #library-view:has(#btn-explore[aria-pressed="true"]) #library-moves,
+  #library-view:has(#move-list:empty) #library-moves { display: none; }
+
+  /* Order follows the task. Library: the board, then the opening, then the
+     list, except before an opening is chosen, when the list comes first. */
+  .info-panel { order: 2; }
+  .library { order: 3; }
+  #library-view:has(#board-placeholder:not([style*="none"])) .library { order: 0; border-top: 0; }
+  /* Coach: board, then the game panel, then setup; while waiting to start,
+     setup (with the session's start button) comes before the panel; during
+     a drill its question sits above the board. */
+  .coach-panel { order: 2; }
+  .coach-settings { order: 3; }
+  .coach-view:is([data-ui-state="ready"], [data-ui-state="complete"]):not(.practice-browsing) .coach-settings { order: 2; }
+  .coach-view:is([data-ui-state="ready"], [data-ui-state="complete"]):not(.practice-browsing) .coach-panel { order: 3; }
+  .coach-view.practice-active .coach-panel { order: 0; border-top: 0; padding-top: var(--space-2); padding-bottom: 0; }
+  /* A drill's banner carries its question and status; keep it short enough
+     that the board below it stays on screen. The board's own status line
+     stays for screen readers only. */
+  .coach-view.practice-active .coach-practice-banner { padding: var(--space-3); gap: var(--space-1); }
+  .coach-view.practice-active .coach-practice-banner .status { padding: var(--space-1) 0 0; font-size: var(--text-sm); }
+  .coach-view.practice-active .coach-practice-actions { margin-top: var(--space-1); }
+  .coach-view.practice-active .coach-practice-actions .ctrl-btn:not(.primary) { flex: 1 1 0; min-width: 0; padding-left: var(--space-1); padding-right: var(--space-1); }
+  .coach-view.practice-active .coach-turn-header {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+  .coach-view.practice-active .coach-panel > .panel-page { display: none !important; }
+  .coach-panel .panel-tabs { top: 0; }
+  .panel-tab { flex: 1 1 0; justify-content: center; }
+  /* Puzzles: board, then the puzzle card, then modes and rating. */
+  .puzzles-panel { order: 2; }
+  .puzzles-rail { order: 3; }
+  .puzzle-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+  .puzzle-mode { border-color: var(--line); }
+
+  /* Touch targets: 44px at least; the primary action spans the width. */
+  button, select, summary, .toggle-label,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) { min-height: var(--tap-min); }
+  :is(.ctrl-btn, .movelist-copy, .token-disconnect, .db-btn, .cat-tab, .line-btn):not([hidden]) { display: inline-flex; align-items: center; justify-content: center; }
+  .ctrl-btn.primary:not(.keyboard-move-form .ctrl-btn) {
+    width: 100%;
+    flex: 1 1 100%;
+    min-height: 48px;
+  }
+  .summary-actions .primary { margin-right: 0; }
+  .board-controls .ctrl-btn, .coach-board-area .board-controls .ctrl-btn,
+  #library-view .board-controls .ctrl-btn, .play-actions .ctrl-btn { font-size: var(--text-sm); }
+  .opening-btn { min-height: var(--tap-min); }
+
+  /* Dialogs fit the screen. */
+  .desktop-notice { align-items: flex-start; overflow-y: auto; padding: calc(var(--space-4) + env(safe-area-inset-top)) var(--space-4) var(--space-4); }
+  .summary-overlay { padding: var(--space-2); align-items: stretch; }
+  .summary-card { padding: var(--space-4); max-height: calc(100dvh - 2 * var(--space-2)); }
+  .shortcut-card { max-height: calc(100dvh - 2 * var(--space-4)); padding: var(--space-4); }
+  .game-viewer-card {
+    width: calc(100vw - 2 * var(--space-2));
+    max-height: calc(100dvh - 2 * var(--space-2));
+    padding: var(--space-4);
+  }
+  .game-viewer-body { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+  .game-viewer-board-col { padding-left: 0; }
+  .game-viewer-board-wrap { width: min(100%, var(--stack-board)); align-self: center; }
+  .game-viewer-moves { max-height: 160px; }
+}
+
+/* Upright tablets: the stacked layout, with a framed board small enough
+   that the notation, step and game buttons stay on screen with it. */
+@media (min-width: 600px) and (max-width: 1199.98px) and (orientation: portrait) {
+  :root { --stack-board: min(calc(100vw - 2 * var(--space-6)), max(360px, calc(100dvh - 500px))); }
+  .board-host { border-width: 4px; border-radius: var(--radius-sm); box-shadow: var(--board-shadow); }
+  .board-area > *, .coach-board-area > *, .puzzles-board-area > * {
+    align-self: center;
+    width: var(--stack-board);
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .mode-toggle { width: auto; }
+}

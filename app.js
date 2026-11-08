@@ -999,8 +999,9 @@ function updateCoachBoardAccessibility() {
 
 const DESKTOP_NOTICE_KEY = 'ui:desktop-notice-dismissed';
 
-// Narrow screens get a desktop notice instead of a reflowed layout. Dismissal
-// lasts for the browser session so the page is still usable in a pinch.
+// Phones get the stacked layout behind a notice that says it is a preview
+// (sign-in links and Safari's storage limits; see index.html). Dismissal
+// lasts for the browser session.
 const COACH_PANEL_TAB_KEY = 'ui:coach-panel-tab';
 
 // Right-rail tabs: Game (live review), Practice (queue and drills), Progress.
@@ -1067,7 +1068,8 @@ let libraryBoardFitFrame = null;
 function fitLibraryBoard() {
   const area = document.querySelector('#library-view .board-area');
   const view = document.getElementById('library-view');
-  if (!area || !area.clientWidth || !area.clientHeight) return;
+  // The stacked (phone) layout sizes the board from the width in CSS.
+  if (!area || !area.clientWidth || !area.clientHeight || layoutIsStacked()) return;
   const css = getComputedStyle(area);
   const children = Array.from(area.children).filter(el => el.id !== 'board-wrap' && getComputedStyle(el).display !== 'none');
   const gap = parseFloat(css.rowGap) || 0;
@@ -1104,7 +1106,8 @@ let coachBoardFitFrame = null;
 function fitCoachBoard() {
   const area = document.querySelector('.coach-board-area');
   const view = document.getElementById('coach-view');
-  if (!area || !view || !area.clientWidth || !area.clientHeight) return;
+  // The stacked (phone) layout sizes the board from the width in CSS.
+  if (!area || !view || !area.clientWidth || !area.clientHeight || layoutIsStacked()) return;
   const css = getComputedStyle(area);
   const children = Array.from(area.children).filter(el => el.id !== 'coachBoard-wrap' && getComputedStyle(el).display !== 'none');
   const gap = parseFloat(css.rowGap) || 0;

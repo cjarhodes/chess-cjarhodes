@@ -89,6 +89,8 @@ const TEXT = [
   ['--accent-text', ['--accent-soft', '--bg']], ['--accent-text', ['--accent-soft', '--surface']],
   ['--text', ['--accent-soft', '--bg']], ['--text', ['--accent-soft', '--surface']],
   ['--danger', '--surface'],
+  // The phone tab bar: idle and selected tabs.
+  ['--text-2', '--nav-bg'], ['--accent-text', '--nav-active'],
 ].map(p => [...p, 4.5]);
 const GRAPHICS = [
   ['--mq-best', '--surface'], ['--mq-good', '--surface'], ['--mq-inaccuracy', '--surface'],
