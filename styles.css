@@ -3122,7 +3122,19 @@ input[type=range].strength-slider::-moz-range-thumb {
     --rail-left: clamp(190px, 19vw, 240px);
     --rail-right: clamp(280px, 29vw, var(--panel-w-compact));
   }
-  body { min-width: 0; }
+  body { min-width: 0; min-height: 100vh; min-height: 100dvh; }
+  /* Tablet browsers hide and show their toolbar on scroll: dvh follows the
+     visible height, vh (the larger, toolbar-hidden height) is the fallback.
+     Desktop (from 1200px) keeps the vh rules above unchanged. */
+  .app, .coach-view, .puzzles-view { height: calc(100vh - var(--header-h)); height: calc(100dvh - var(--header-h)); }
+  .shortcut-card { max-height: calc(100vh - 64px); max-height: calc(100dvh - 64px); }
+  .game-viewer-card { max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px); }
+  .game-viewer-board-wrap { width: min(560px, calc(100vh - 230px)); width: min(560px, calc(100dvh - 230px)); }
+  /* A custom property cannot fall back by repeating it, hence @supports. */
+  @supports (height: 100dvh) {
+    :root { --board-size: clamp(440px, calc(100dvh - 300px), 760px); }
+    .puzzles-view { --puzzle-board-size: clamp(360px, calc(100dvh - var(--puzzle-chrome) - var(--puzzle-kb)), 780px); }
+  }
   header { padding: 0 var(--space-4); gap: var(--space-4); }
   .coach-view { --rail-left: clamp(190px, 19vw, 240px); --rail-right: clamp(280px, 29vw, var(--panel-w-compact)); }
   .coach-settings, .coach-panel, .puzzles-rail, .puzzles-panel { padding: var(--space-4) var(--space-3) var(--space-5); }
