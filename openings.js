@@ -1190,7 +1190,7 @@ const OPENINGS = [
     category: 'trap',
     tagline: 'The knife into f7 — a legendary knight sacrifice',
     description: "The Fried Liver Attack is one of chess's most spectacular sacrificial attacks. Arising from the Two Knights Defense, White sacrifices the knight on f7 (6.Nxf7!) to drag the Black king into the center. With the king exposed, White launches a devastating attack. It\'s named because Black's position gets 'fried.' Very popular at club level where Black is not well-prepared.",
-    moves: ['e4','e5','Nf3','Nc6','Bc4','Nf6','Ng5','d5','exd5','Nxd5','Nxf7','Kxf7','Qf3+','Ke6','Nc3','Nb4','Qe4','c6','a3','Na6','d4','Bd7','O-O','Nc7'],
+    moves: ['e4','e5','Nf3','Nc6','Bc4','Nf6','Ng5','d5','exd5','Nxd5','Nxf7','Kxf7','Qf3+','Ke6','Nc3','Nb4','Qe4','c6','a3','Na6','d4','Bd7','Nxd5','Qa5+'],
     explanations: [
       { label: '1. e4 — White', text: 'Standard King\'s Pawn opening.' },
       { label: '1... e5 — Black', text: 'Black takes central space.' },
@@ -1213,14 +1213,14 @@ const OPENINGS = [
       { label: '10. a3 — White', text: 'White forces the Nb4 to declare its intentions. After Na6, the knight is sidelined.' },
       { label: '10... Na6 — Black', text: 'The knight retreats to a6 — a passive but forced move. Black\'s pieces are not coordinating well under the pressure.' },
       { label: '11. d4 — White', text: 'White advances d4, opening more lines and creating threats against the exposed king. The initiative remains firmly with White.' },
-      { label: '11... Bd7 — Black', text: 'Black develops the bishop to d7, preparing to coordinate the pieces and potentially castle queenside to get the king to safety.' },
-      { label: '12. O-O — White', text: 'White castles, bringing the rook into the game. White is fully developed and the attack on Black\'s king will continue.' },
-      { label: '12... Nc7 — Black', text: 'The knight reroutes to c7, defending and preparing ...Nd5 or ...Ne6. Black is trying desperately to organize a defense, but White has an enormous advantage in activity. This is the power of the Fried Liver!' }
+      { label: '11... Bd7 — Black', text: 'A natural-looking developing move, and a serious mistake. The bishop on d7 cuts the queen off from d5, so the knight there is defended only by the c6 pawn, and it is pinned: the Bc4 looks through it at the king on e6. Black had to play 11...Nc7, bringing the knight back to defend d5.' },
+      { label: '12. Nxd5! — White', text: 'White takes the pinned knight! If 12...cxd5, the queen or bishop takes on d5 with check and the exposed king is mated within a few moves. White has won back the sacrificed piece and the attack goes on.' },
+      { label: '12... Qa5+ — Black', text: 'Black\'s best try is this check, so the queen can take on d5 next. It does not help: after 13.Bd2 Qxd5 14.Bxd5+ cxd5 15.Qxe5+ White has won Black\'s queen for a bishop and is completely winning. One careless move and the king in the center collapses — this is the power of the Fried Liver!' }
     ],
     keyIdeas: [
       'The Fried Liver works: Nxf7 sacrifices a piece to drag the Black king into the center',
       'After Kxf7, White plays Qf3+ forcing Ke6 — the king is trapped in the middle of the board',
-      'White gets enormous compensation: open lines, centralized pieces, exposed king',
+      'White gets enormous compensation: open lines, centralized pieces, exposed king — and pins against the king on e6',
       'Defense: Black should play 5...Na5 (attacking Bc4) instead of 5...Nxd5 to avoid the sacrifice'
     ]
   },
