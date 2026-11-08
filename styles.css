@@ -214,8 +214,10 @@ header .subtitle {
   width: var(--board-size);
 }
 
-/* chessboard.js overrides. Board colour themes (html[data-board-theme] =
-   green | walnut | blue | contrast) are defined in styles/tokens.css. */
+/* The board: cm-chessboard SVG inside src/ui/board.js. Board colour themes
+   (html[data-board-theme] = green | walnut | blue | contrast) are defined in
+   styles/tokens.css. The host element (#myBoard, #coachBoard, …) carries the
+   frame; cm-chessboard sizes its SVG to the space inside it. */
 :root {
   --sq-light: var(--board-light);
   --sq-dark: var(--board-dark);
@@ -225,25 +227,42 @@ header .subtitle {
   --sq-last-move: var(--board-last);
   --sq-select: var(--board-select);
 }
-.board-b72b1 {
-  border: 4px solid var(--sq-frame) !important;
-  border-radius: var(--radius-sm) !important;
+.board-host {
+  box-sizing: border-box;
+  border: 4px solid var(--sq-frame);
+  border-radius: var(--radius-sm);
   overflow: hidden;
   box-shadow: var(--board-shadow);
+  background: var(--sq-frame);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
-.white-1e1d7 { background: var(--sq-light) !important; color: var(--sq-coord-on-light) !important; }
-.black-3c85d { background: var(--sq-dark) !important; color: var(--sq-coord-on-dark) !important; }
-.notation-322f9 {
-  font-family: var(--family-mono) !important;
-  font-weight: 600 !important;
-  font-size: var(--text-xs) !important;
+.board-host svg.cm-chessboard { display: block; }
+.cm-chessboard.app-board .board .border { fill: var(--sq-frame); stroke: none; }
+.cm-chessboard.app-board .board .square { shape-rendering: crispEdges; }
+.cm-chessboard.app-board .board .square.white { fill: var(--sq-light); }
+.cm-chessboard.app-board .board .square.black { fill: var(--sq-dark); }
+.cm-chessboard.app-board .board-marks { pointer-events: none; }
+.cm-chessboard.app-board .board-coord {
+  font-family: var(--family-mono);
+  font-weight: 600;
+  font-size: var(--text-xs);
   opacity: 0.9;
+  pointer-events: none;
+  user-select: none;
 }
-.alpha-d2270 { bottom: 2px !important; right: 4px !important; }
-.numeric-fc462 { top: 3px !important; left: 4px !important; }
-.square-55d63.last-move { box-shadow: inset 0 0 0 100px var(--sq-last-move); }
-.square-55d63.last-move.tap-selected { box-shadow: inset 0 0 0 100px var(--sq-last-move), inset 0 0 0 3px var(--accent); }
-.piece-417db { filter: drop-shadow(0 1px 1px var(--piece-shadow)); }
+.cm-chessboard.app-board .board-coord.on-light { fill: var(--sq-coord-on-light); }
+.cm-chessboard.app-board .board-coord.on-dark { fill: var(--sq-coord-on-dark); }
+.cm-chessboard.app-board .pieces .piece,
+.cm-chessboard-draggable-piece use { filter: drop-shadow(0 1px 1px var(--piece-shadow)); }
+.cm-chessboard-draggable-piece { position: absolute; z-index: 1000; }
+
+/* Square marks (src/ui/board.js draws one per square and name, under the
+   pieces, clipped to the square, so a stroke twice as wide as wanted reads
+   as an inset ring). */
+.board-mark { fill: none; stroke: none; }
+.board-mark.last-move { fill: var(--sq-last-move); }
 
 /* Board preference controls */
 .pref-row { display: flex; flex-direction: column; gap: 0.35rem; }
@@ -652,13 +671,10 @@ header .subtitle {
 .btn-share:hover { color: var(--text); border-color: var(--text-3); }
 .btn-share.copied { color: var(--success); border-color: var(--success); }
 
-/* ── TAP-TO-MOVE HIGHLIGHT ── */
-.square-55d63.tap-selected {
-  box-shadow: inset 0 0 0 3px var(--accent);
-}
-.square-55d63.tap-target {
-  box-shadow: inset 0 0 0 2px var(--sq-select);
-}
+/* ── SELECTED PIECE AND LEGAL MOVES (click, tap or drag) ── */
+.board-mark.tap-selected { stroke: var(--accent); stroke-width: 6px; }
+.board-mark.tap-target { fill: var(--board-dot); }
+.board-mark.tap-target.capture { fill: none; stroke: var(--board-dot); }
 
 /* ── COACH MODE ── */
 .coach-status {
@@ -869,9 +885,10 @@ header .subtitle {
 .coach-review-actions .ctrl-btn { width: 100%; }
 /* Premove highlights — claret tint on the source + target squares while
    the premove is queued. */
-#coachBoard .coach-premove-from,
-#coachBoard .coach-premove-to {
-  box-shadow: inset 0 0 0 3px var(--board-select);
+#coachBoard .board-mark.coach-premove-from,
+#coachBoard .board-mark.coach-premove-to {
+  stroke: var(--board-select);
+  stroke-width: 6px;
 }
 .coach-premove-hint {
   font-family: var(--family-ui);
@@ -2415,8 +2432,8 @@ input[type=range].strength-slider::-moz-range-thumb {
 .coach-practice-actions .ctrl-btn { min-height: 36px; }
 .coach-practice-actions #btn-coach-practice-next { flex: 1 0 100%; }
 #btn-coach-practice-exit { border-color: transparent; color: var(--text-3); }
-#coachBoard .practice-cue-source { box-shadow: inset 0 0 0 4px var(--arrow-played); }
-#coachBoard .practice-cue-target { box-shadow: inset 0 0 0 4px var(--arrow-best); }
+#coachBoard .board-mark.practice-cue-source { stroke: var(--arrow-played); stroke-width: 8px; }
+#coachBoard .board-mark.practice-cue-target { stroke: var(--arrow-best); stroke-width: 8px; }
 #coachBoard:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 4px; }
 
 .practice-activity { margin-top: .8rem; color: var(--text-3); }
@@ -2666,14 +2683,14 @@ input[type=range].strength-slider::-moz-range-thumb {
 }
 .puzzle-vision-prompt[hidden] { display: none; }
 .puzzles-view.vision-active .puzzle-controls { visibility: hidden; }
-.puzzles-view.vision-active .square-55d63 { cursor: pointer; }
+.puzzles-view.vision-active .cm-chessboard .square { cursor: pointer; }
 
 .puzzle-board-flash { position: absolute; inset: 0; pointer-events: none; border-radius: var(--radius-sm); opacity: 0; transition: opacity var(--duration-base); }
 .puzzle-board-flash.good { box-shadow: inset 0 0 0 4px var(--success); opacity: 1; }
 .puzzle-board-flash.bad { box-shadow: inset 0 0 0 4px var(--danger); opacity: 1; }
-.square-55d63.hint-square { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--arrow-hint) 45%, transparent); }
-.square-55d63.vision-good { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--success) 55%, transparent); }
-.square-55d63.vision-bad { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--danger) 55%, transparent); }
+.board-mark.hint-square { fill: color-mix(in srgb, var(--arrow-hint) 45%, transparent); }
+.board-mark.vision-good { fill: color-mix(in srgb, var(--success) 55%, transparent); }
+.board-mark.vision-bad { fill: color-mix(in srgb, var(--danger) 55%, transparent); }
 .puzzle-rating-spark[hidden] { display: none; }
 .puzzles-view.has-bar { --puzzle-chrome: 315px; }
 .puzzles-view.has-bar.has-prompt { --puzzle-chrome: 380px; }
