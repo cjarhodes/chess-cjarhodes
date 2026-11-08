@@ -8,7 +8,8 @@
 //     starting a game, drill or puzzle, switching view), the page scrolls back
 //     to the board instead of leaving it above the screen.
 // Nothing here touches game state or board input; it only moves and scrolls.
-// Keep LAYOUT_STACKED_QUERY in step with the media query in styles.css.
+// Must equal the stacked-layout media query in styles.css
+// (scripts/validate-design-tokens.js checks it).
 const LAYOUT_STACKED_QUERY = '(max-width: 759.98px), (max-width: 1199.98px) and (orientation: portrait), (max-width: 1199.98px) and (max-height: 499.98px)';
 
 function layoutIsStacked() {

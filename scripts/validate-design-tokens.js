@@ -71,6 +71,15 @@ for (const licence of ['vendor/pieces/cburnett/LICENSE.txt', 'vendor/cm-chessboa
   if (!fs.existsSync(path.join(root, licence))) errors.push(`missing licence ${licence}`);
 }
 
+// The stacked (phone / upright tablet) layout is one media query in
+// styles.css and the same query in src/ui/layout.js, which moves the
+// notation strip. They must be identical or the two disagree at some widths.
+{
+  const match = read('src/ui/layout.js').match(/const LAYOUT_STACKED_QUERY = '([^']+)'/);
+  if (!match) errors.push('src/ui/layout.js must declare LAYOUT_STACKED_QUERY');
+  else if (!css.includes(`@media ${match[1]} {`)) errors.push(`styles.css has no "@media ${match[1]} {" block matching LAYOUT_STACKED_QUERY in src/ui/layout.js`);
+}
+
 if (errors.length) {
   console.error(errors.join('\n'));
   process.exit(1);
