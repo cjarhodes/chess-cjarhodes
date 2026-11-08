@@ -693,6 +693,41 @@ async page => {
     await newGame();
     return problems;
   });
+  await check('signing in adds guest lifetime stats to the account instead of keeping one side', () => page.evaluate(() => {
+    const problems = [];
+    const account = 'behaviour-lifetime-user';
+    const savedUser = coachAuthUser;
+    const anonKey = `${LIFETIME_KEY}:anon:${coachDeviceId()}`, accountKey = `${LIFETIME_KEY}:user:${account}`;
+    const previousAnon = localStorage.getItem(anonKey);
+    const game = (id, moves, blunders) => [id, { games: 1, moves, accuracySum: 80 * moves, best: 0, excellent: 0, good: moves - blunders, inaccuracies: 0, mistakes: 0, blunders }];
+    const lifetime = rows => Object.assign(emptyLifetime(), rows.reduce((lt, [id, c]) => {
+      ['games', 'moves', 'accuracySum', 'good', 'blunders'].forEach(k => { lt[k] = (lt[k] || 0) + c[k]; });
+      lt.rollups[id] = c; return lt;
+    }, { rollups: {} }));
+    const adopt = (anonRows, accountRows) => {
+      localStorage.setItem(anonKey, JSON.stringify(lifetime(anonRows)));
+      localStorage.setItem(accountKey, JSON.stringify(lifetime(accountRows)));
+      adoptAnonymousCoachMemory(account);
+      coachAuthUser = { id: account };
+      const merged = loadLifetime();
+      coachAuthUser = savedUser;
+      return merged;
+    };
+    try {
+      let merged = adopt([game('guest-1', 20, 1), game('guest-2', 30, 2)], [game('acct-1', 10, 0), game('acct-2', 10, 1), game('acct-3', 10, 0)]);
+      if (merged.games !== 5 || merged.moves !== 80 || merged.blunders !== 4) problems.push(`account with more games lost the guest games: ${merged.games} games, ${merged.moves} moves`);
+      merged = adopt([game('guest-3', 20, 0), game('guest-4', 20, 0)], [game('acct-4', 40, 3)]);
+      if (merged.games !== 3 || merged.moves !== 80 || merged.blunders !== 3) problems.push(`guest with more games replaced the account games: ${merged.games} games, ${merged.moves} moves`);
+      if (Object.keys(merged.rollups).sort().join() !== 'acct-4,guest-3,guest-4') problems.push('per-game rollups were not merged, so a later take-back cannot undo them');
+      if (localStorage.getItem(anonKey) !== null) problems.push('guest lifetime was not consumed after the merge');
+    } finally {
+      coachAuthUser = savedUser;
+      localStorage.removeItem(accountKey);
+      Object.keys(localStorage).filter(k => k.includes(account)).forEach(k => localStorage.removeItem(k));
+      if (previousAnon === null) localStorage.removeItem(anonKey); else localStorage.setItem(anonKey, previousAnon);
+    }
+    return problems;
+  }));
 
   // ── Library: spaced-repetition save failures are reported ──
   await page.goto(base + '/?opening=italian');
