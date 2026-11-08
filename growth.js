@@ -332,6 +332,21 @@ function downloadTrainingBackup() {
   return Object.keys(payload.data).length;
 }
 
+// Download a backup and remember when (backup-nudge.js shows the date and
+// stops reminding for a week). Used by Export backup and the phone reminder.
+function exportTrainingBackupNow() {
+  try {
+    const count = downloadTrainingBackup();
+    $('#training-data-status').removeClass('error').addClass('success').text(`Backup downloaded with ${count} local data set${count === 1 ? "" : "s"}.`);
+    if (window.BackupNudge && window.BackupNudge.recordBackup) window.BackupNudge.recordBackup();
+    return { ok: true, count };
+  } catch (error) {
+    const message = (error && error.message) || 'Backup could not be created in this browser.';
+    $('#training-data-status').removeClass('success').addClass('error').text(message);
+    return { ok: false, message };
+  }
+}
+
 function importedBackupValue(data, exactKey, prefixKey) {
   if (Object.prototype.hasOwnProperty.call(data, exactKey)) return data[exactKey];
   const matches = Object.keys(data).filter(key => key === prefixKey || key.startsWith(prefixKey + ':'));
@@ -1796,14 +1811,7 @@ function initGrowthFeatures() {
   });
   $('#btn-analyse-pgn').on('click', () => analyseImportedPgn());
   $('#' + IMPORT_CANCEL_BUTTON_ID).on('click', () => cancelImportedPgnAnalysis());
-  $('#btn-export-training-data').on('click', () => {
-    try {
-      const count = downloadTrainingBackup();
-      $('#training-data-status').removeClass('error').addClass('success').text(`Backup downloaded with ${count} local data sets.`);
-    } catch (error) {
-      $('#training-data-status').removeClass('success').addClass('error').text((error && error.message) || 'Backup could not be created in this browser.');
-    }
-  });
+  $('#btn-export-training-data').on('click', () => exportTrainingBackupNow());
   $('#btn-import-training-data').on('click', () => $('#training-data-file').trigger('click'));
   $('#training-data-file').on('change', async function() {
     const file = this.files && this.files[0];

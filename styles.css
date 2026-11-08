@@ -1740,6 +1740,8 @@ input[type=range].strength-slider::-moz-range-thumb {
 }
 .network-status.offline { color: var(--warning); border-left-color: var(--warning); }
 .training-data-actions { display: flex; gap: 0.45rem; flex-wrap: wrap; }
+/* Backup reminder (backup-nudge.js): only ever shown in the stacked layout. */
+.backup-nudge { display: none; }
 .personal-repertoire-list { display: grid; gap: 0.45rem; margin-top: 0.6rem; }
 .repertoire-observed-row { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; padding: 0.55rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); }
 .repertoire-observed-copy { min-width: 0; }
@@ -3358,6 +3360,27 @@ input[type=range].strength-slider::-moz-range-thumb {
   .board-controls .ctrl-btn, .coach-board-area .board-controls .ctrl-btn,
   #library-view .board-controls .ctrl-btn, .play-actions .ctrl-btn { font-size: var(--text-sm); }
   .opening-btn { min-height: var(--tap-min); }
+
+  /* Backup reminder: a banner under the app bar, in the page flow (not a
+     dialog), for a signed-out user whose progress is only on this device. */
+  .backup-nudge:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: var(--space-2) var(--stack-gutter) 0;
+    padding: var(--space-3);
+    background: var(--surface);
+    border: 1px solid var(--card-border);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-md);
+  }
+  .backup-nudge p { font-size: var(--text-sm); line-height: var(--leading-snug); color: var(--text); }
+  .backup-nudge .backup-nudge-meta, .backup-nudge .backup-nudge-status { font-size: var(--text-xs); color: var(--text-2); }
+  .backup-nudge .backup-nudge-status:empty { display: none; }
+  .backup-nudge-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .backup-nudge .backup-nudge-actions .ctrl-btn { flex: 1 1 0; min-width: 0; }
+  .backup-nudge-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: calc(-1 * var(--space-2)); }
+  .backup-nudge .backup-nudge-dismiss { flex: none; margin-right: calc(-1 * var(--space-2)); padding-left: var(--space-2); padding-right: var(--space-2); border-color: transparent; color: var(--text-2); text-decoration: underline; text-underline-offset: 3px; }
 
   /* Dialogs fit the screen. */
   .desktop-notice { align-items: flex-start; overflow-y: auto; padding: calc(var(--space-4) + env(safe-area-inset-top)) var(--space-4) var(--space-4); }

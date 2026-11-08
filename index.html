@@ -42,6 +42,20 @@
   <button type="button" class="header-help" id="btn-shortcuts" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">?</button>
 </header>
 
+<section class="backup-nudge" id="backup-nudge" aria-label="Backup reminder" hidden>
+  <p class="backup-nudge-title"><strong>Progress kept only on this device</strong></p>
+  <p class="backup-nudge-text" id="backup-nudge-text">Safari can clear it after a week without a visit. Sign in to sync it, or save a backup file.</p>
+  <div class="backup-nudge-actions">
+    <button type="button" class="ctrl-btn" id="btn-backup-nudge-signin">Sign in to sync</button>
+    <button type="button" class="ctrl-btn" id="btn-backup-nudge-backup">Back up now</button>
+  </div>
+  <p class="backup-nudge-status" id="backup-nudge-status" role="status" aria-live="polite"></p>
+  <div class="backup-nudge-foot">
+    <p class="backup-nudge-meta" id="backup-nudge-last">Not backed up yet</p>
+    <button type="button" class="ctrl-btn backup-nudge-dismiss" id="btn-backup-nudge-dismiss">Hide for 2 weeks</button>
+  </div>
+</section>
+
   <div class="desktop-notice" id="desktop-notice" role="dialog" aria-modal="true" aria-labelledby="desktop-notice-title" aria-describedby="desktop-notice-body">
     <div class="desktop-notice-card">
       <div class="desktop-notice-eyebrow">Chess Coach · phone preview</div>
@@ -442,6 +456,7 @@
         <button class="ctrl-btn" id="btn-import-training-data" type="button">Import backup</button>
         <input id="training-data-file" type="file" accept="application/json,.json" hidden>
       </div>
+      <div class="growth-status training-data-last-backup" id="training-data-last-backup">Not backed up yet</div>
       <div class="growth-status" id="training-data-status" role="status" aria-live="polite"></div>
       </div>
       </div>
@@ -1085,5 +1100,6 @@
 <script src="puzzles.js"></script>
 <script src="shortcuts.js"></script>
 <script src="activity.js"></script>
+<script src="backup-nudge.js"></script>
 </body>
 </html>

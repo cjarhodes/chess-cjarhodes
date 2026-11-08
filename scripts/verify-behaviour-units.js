@@ -2674,6 +2674,221 @@ async page => {
     return problems;
   });
 
+  // ── Backups on phones (redesign plan §3, risk 2: local-only data) ──
+  // The download is the boundary: a link click with a download name is
+  // recorded instead of saving a file.
+  const stubDownloads = () => {
+    window.__downloads = [];
+    const realClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function () {
+      if (this.download) { window.__downloads.push(this.download); return; }
+      return realClick.call(this);
+    };
+  };
+  const loadSettled = async (p, view = 'coach') => {
+    await p.goto(base + '/?view=' + view);
+    await p.waitForFunction(v => typeof growthOwnerId === 'function' && typeof coachSync !== 'undefined' && (v === 'coach' ? !!coachBoard : appView === v), view);
+    // The reminder is decided once the first account check has finished.
+    await p.evaluate(async () => {
+      await coachSync.init();
+      await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 50)));
+    });
+  };
+  const nudgeState = p => p.evaluate(() => {
+    const el = document.getElementById('backup-nudge');
+    if (!el) return { exists: false, shown: false, text: '' };
+    return { exists: true, shown: !el.hidden && el.checkVisibility(), focusInside: el.contains(document.activeElement), text: el.textContent.replace(/\s+/g, ' ').trim() };
+  });
+
+  await check('Training data says when this browser last exported a backup', async () => {
+    const problems = [];
+    if (!page.context().browser()) return ['no browser handle to open a context'];
+    const ctx = await sizedContext(1440, 900, false);
+    try {
+      const p = await ctx.newPage();
+      await p.addInitScript(stubDownloads);
+      const line = () => p.evaluate(() => { const el = document.getElementById('training-data-last-backup'); return el ? el.textContent.trim() : null; });
+      await loadSettled(p);
+      expect(problems, await line() === 'Not backed up yet', 'before any backup the card says ' + JSON.stringify(await line()));
+      await p.evaluate(() => { document.getElementById('group-data').open = true; });
+      await p.locator('#btn-export-training-data').click();
+      const downloads = await p.evaluate(() => window.__downloads);
+      expect(problems, downloads.length === 1 && /^chess-coach-training-.*\.json$/.test(downloads[0]), 'export did not download a backup: ' + JSON.stringify(downloads));
+      expect(problems, await line() === 'Last backed up: today', 'after exporting the card says ' + JSON.stringify(await line()));
+      await loadSettled(p);
+      expect(problems, await line() === 'Last backed up: today', 'after a reload the card says ' + JSON.stringify(await line()));
+      // An older backup shows its date.
+      await p.evaluate(() => localStorage.setItem('coach:last-backup:v1', String(Date.now() - 10 * 86400000)));
+      await loadSettled(p);
+      const older = await line();
+      expect(problems, /^Last backed up: \S/.test(older || '') && !/today|yesterday/.test(older), 'a ten-day-old backup reads ' + JSON.stringify(older));
+      // A failed export records nothing.
+      await p.evaluate(() => localStorage.removeItem('coach:last-backup:v1'));
+      await loadSettled(p);
+      await p.evaluate(() => {
+        downloadTrainingBackup = () => { throw new Error('Storage is blocked.'); };
+        document.getElementById('group-data').open = true;
+      });
+      await p.locator('#btn-export-training-data').click();
+      const failed = await p.evaluate(() => ({ stored: localStorage.getItem('coach:last-backup:v1'), status: document.getElementById('training-data-status').textContent, line: document.getElementById('training-data-last-backup').textContent }));
+      expect(problems, failed.stored === null && failed.status === 'Storage is blocked.' && failed.line === 'Not backed up yet', 'a failed export still recorded a backup: ' + JSON.stringify(failed));
+    } finally {
+      await ctx.close();
+    }
+    return problems;
+  });
+
+  await check('phone: a signed-out user with progress is offered sign-in or a backup, and a dismissal lasts two weeks', async () => {
+    const problems = [];
+    if (!page.context().browser()) return ['no browser handle to open a phone context'];
+    const ctx = await sizedContext(375, 812, true);
+    try {
+      const tp = await ctx.newPage();
+      const errors = [];
+      tp.on('pageerror', e => errors.push(e.message));
+      await tp.addInitScript(() => { try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {} });
+      await tp.addInitScript(stubDownloads);
+      const daysAgo = n => Date.now() - n * 86400000;
+      // An empty profile: no reminder.
+      await loadSettled(tp);
+      let s = await nudgeState(tp);
+      if (!s.exists) return ['there is no backup reminder'];
+      expect(problems, !s.shown, 'shown to a user with no progress');
+      // Two finished games are not enough; three are. The reminder sits under
+      // the app bar, does not take focus and leaves the whole board on screen.
+      await tp.evaluate(() => { const lt = loadLifetime(); lt.games = 2; saveLifetime(lt); });
+      await loadSettled(tp);
+      expect(problems, !(await nudgeState(tp)).shown, 'shown with only two finished games');
+      await tp.evaluate(() => { const lt = loadLifetime(); lt.games = 3; saveLifetime(lt); });
+      await loadSettled(tp);
+      s = await nudgeState(tp);
+      expect(problems, s.shown, 'not shown to a signed-out phone user with three finished games');
+      expect(problems, !s.focusInside, 'the reminder took focus');
+      expect(problems, /only on this device/.test(s.text) && /Safari can clear it after a week without a visit/.test(s.text) && /Not backed up yet/.test(s.text), 'reminder text: ' + s.text);
+      const fit = await tp.evaluate(() => {
+        const b = document.getElementById('coachBoard').getBoundingClientRect();
+        const bar = document.querySelector('.top-nav').getBoundingClientRect();
+        const nudge = document.getElementById('backup-nudge').getBoundingClientRect();
+        return { boardTop: Math.round(b.top), boardBottom: Math.round(b.bottom), barTop: Math.round(bar.top), nudgeBottom: Math.round(nudge.bottom), wide: document.documentElement.scrollWidth > innerWidth };
+      });
+      expect(problems, fit.nudgeBottom <= fit.boardTop && fit.boardBottom <= fit.barTop, 'with the reminder the board is not fully on screen: ' + JSON.stringify(fit));
+      expect(problems, !fit.wide, 'the reminder makes the page scroll sideways');
+      const buttons = await tp.evaluate(() => [...document.querySelectorAll('#backup-nudge button')].filter(b => b.checkVisibility()).map(b => ({ name: b.textContent.trim(), h: Math.round(b.getBoundingClientRect().height) })));
+      expect(problems, buttons.map(b => b.name).join('|') === 'Sign in to sync|Back up now|Hide for 2 weeks', 'reminder buttons: ' + JSON.stringify(buttons));
+      expect(problems, buttons.every(b => b.h >= 44), 'reminder buttons under 44px: ' + JSON.stringify(buttons));
+      // Sign in to sync: from Puzzles, it opens Coach's sign-in form.
+      await loadSettled(tp, 'puzzles');
+      await tp.locator('#btn-backup-nudge-signin').tap();
+      await tp.waitForTimeout(400);
+      const signIn = await tp.evaluate(() => {
+        const r = document.getElementById('coach-auth-email').getBoundingClientRect();
+        return { view: appView, open: document.getElementById('group-account').open, focus: document.activeElement && document.activeElement.id, inView: r.top >= 0 && r.bottom <= innerHeight };
+      });
+      expect(problems, signIn.view === 'coach' && signIn.open && signIn.focus === 'coach-auth-email' && signIn.inView, 'Sign in to sync did not open the sign-in form: ' + JSON.stringify(signIn));
+      // Back up now: downloads, says so, and keeps the reminder away for a week.
+      await loadSettled(tp);
+      await tp.locator('#btn-backup-nudge-backup').tap();
+      const backedUp = await tp.evaluate(() => ({
+        downloads: window.__downloads.length,
+        status: document.getElementById('backup-nudge-status').textContent,
+        backupHidden: document.getElementById('btn-backup-nudge-backup').hidden,
+        focus: document.activeElement && document.activeElement.id,
+        card: document.getElementById('training-data-last-backup').textContent
+      }));
+      expect(problems, backedUp.downloads === 1 && /Backup downloaded/.test(backedUp.status) && backedUp.backupHidden, 'Back up now did not back up: ' + JSON.stringify(backedUp));
+      expect(problems, backedUp.focus === 'btn-backup-nudge-dismiss', 'focus was lost when the backup button went away: ' + backedUp.focus);
+      expect(problems, backedUp.card === 'Last backed up: today', 'the Training data card did not update: ' + backedUp.card);
+      // Closing after a backup is not a two-week dismissal.
+      await tp.locator('#btn-backup-nudge-dismiss').tap();
+      const closed = await tp.evaluate(() => ({ hidden: document.getElementById('backup-nudge').hidden, dismissedAt: localStorage.getItem('ui:backup-nudge-dismissed-at') }));
+      expect(problems, closed.hidden && closed.dismissedAt === null, 'closing after a backup: ' + JSON.stringify(closed));
+      await loadSettled(tp);
+      expect(problems, !(await nudgeState(tp)).shown, 'shown again right after a backup');
+      // A week-old backup brings it back, with the date.
+      await tp.evaluate(d => localStorage.setItem('coach:last-backup:v1', String(d)), daysAgo(8));
+      await loadSettled(tp);
+      s = await nudgeState(tp);
+      expect(problems, s.shown && /Last backed up: \S/.test(s.text) && !/Not backed up yet/.test(s.text), 'not back after a week-old backup: ' + s.text);
+      // Dismissal: hides it, hands focus to the view tab, and lasts two weeks.
+      await tp.locator('#btn-backup-nudge-dismiss').tap();
+      const dismissed = await tp.evaluate(() => ({ hidden: document.getElementById('backup-nudge').hidden, focus: document.activeElement && document.activeElement.id }));
+      expect(problems, dismissed.hidden && dismissed.focus === 'nav-coach', 'dismissing did not hide it, or dropped focus: ' + JSON.stringify(dismissed));
+      await loadSettled(tp);
+      expect(problems, !(await nudgeState(tp)).shown, 'a dismissal did not survive a reload');
+      await tp.evaluate(d => localStorage.setItem('ui:backup-nudge-dismissed-at', String(d)), daysAgo(13));
+      await loadSettled(tp);
+      expect(problems, !(await nudgeState(tp)).shown, 'shown again before two weeks were up');
+      await tp.evaluate(d => localStorage.setItem('ui:backup-nudge-dismissed-at', String(d)), daysAgo(15));
+      await loadSettled(tp);
+      expect(problems, (await nudgeState(tp)).shown, 'not back after two weeks');
+      // Signing in hides it at once.
+      await tp.evaluate(() => { coachAuthUser = { id: 'nudge-user', email: 'nudge@example.com' }; renderCoachAuth(); });
+      expect(problems, !(await nudgeState(tp)).shown, 'still shown after signing in');
+      await tp.evaluate(() => { coachAuthUser = null; renderCoachAuth(); });
+      // Wider than the stacked layout it goes; back in it, it returns.
+      await tp.setViewportSize({ width: 1024, height: 768 });
+      await tp.waitForTimeout(250);
+      expect(problems, !(await nudgeState(tp)).shown, 'shown at 1024 wide');
+      await tp.setViewportSize({ width: 375, height: 812 });
+      await tp.waitForTimeout(250);
+      expect(problems, (await nudgeState(tp)).shown, 'not back after returning to the phone layout');
+      if (errors.length) problems.push('page errors: ' + errors.join(' | '));
+    } finally {
+      await ctx.close();
+    }
+    return problems;
+  });
+
+  await check('backup reminder: never for a signed-in phone user or on a desktop, even with progress', async () => {
+    const problems = [];
+    if (!page.context().browser()) return ['no browser handle to open a context'];
+    // A signed-in session from the account service (the Supabase client is
+    // the boundary), switched on per tab; every query answers with no rows.
+    const signedInClient = () => {
+      try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {}
+      if (sessionStorage.getItem('test:signed-in') !== '1') return;
+      const result = { data: null, error: null, count: 0 };
+      const chain = () => new Proxy(function () {}, {
+        get: (t, prop) => prop === 'then' ? (ok, fail) => Promise.resolve(result).then(ok, fail) : chain(),
+        apply: () => chain()
+      });
+      const user = { id: '00000000-0000-4000-8000-00000000ab12', email: 'synced@example.com' };
+      window.supabase = { createClient: () => ({
+        auth: {
+          getSession: async () => ({ data: { session: { user, access_token: 'x' } }, error: null }),
+          onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+          signOut: async () => ({ error: null })
+        },
+        from: () => chain(),
+        rpc: () => chain(),
+        channel: () => chain(),
+        removeChannel: () => {}
+      }) };
+    };
+    for (const [tag, w, h, touch, signed, want] of [['signed-in phone', 375, 812, true, true, false], ['signed-out desktop', 1440, 900, false, false, false], ['signed-out phone (control)', 375, 812, true, false, true]]) {
+      const ctx = await sizedContext(w, h, touch);
+      try {
+        const p = await ctx.newPage();
+        await p.addInitScript(signedInClient);
+        await loadSettled(p);
+        // Guest progress first; a signed-in tab adopts it into the account.
+        await p.evaluate(signed => {
+          const lt = loadLifetime(); lt.games = 5; saveLifetime(lt);
+          if (signed) sessionStorage.setItem('test:signed-in', '1');
+        }, signed);
+        await loadSettled(p);
+        const s = await p.evaluate(() => ({ user: !!coachAuthUser, games: loadLifetime().games }));
+        if (signed && !s.user) problems.push(tag + ': setup: the stubbed session did not sign in');
+        if (s.games !== 5) problems.push(tag + ': setup: the guest games did not carry over: ' + s.games);
+        const shown = (await nudgeState(p)).shown;
+        if (shown !== want) problems.push(`${tag}: reminder ${shown ? 'shown' : 'not shown'}`);
+      } finally {
+        await ctx.close();
+      }
+    }
+    return problems;
+  });
+
   if (pageErrors.length) failures.push('page errors: ' + pageErrors.join(' | '));
   if (failures.length) throw new Error(failures.join('\n'));
   return { passed: passed.length, checks: passed };

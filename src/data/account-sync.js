@@ -148,6 +148,8 @@ function cleanAuthCallbackUrl() {
 
 function renderCoachAuth() {
   const configured = isSupabaseConfigured();
+  // Signing in hides the phone backup reminder (backup-nudge.js).
+  if (window.BackupNudge && window.BackupNudge.refresh) window.BackupNudge.refresh(false);
   $('#coach-auth-local').toggle(!configured);
   $('#coach-auth-form').toggle(configured && !coachAuthUser);
   $('#coach-auth-session').toggle(configured && !!coachAuthUser);

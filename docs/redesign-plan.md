@@ -316,7 +316,11 @@ Risks that only appear on phones (resolve before shipping phone support):
    visit. Because the app is deliberately browser-only (no home-screen
    install, which would be exempt), local-only phone users could lose
    training history. Mitigation: on phones, nudge sign-in for sync and show
-   "last backed up" in Settings.
+   "last backed up" in Settings. Done in `backup-nudge.js`: Training data
+   shows the last backup date at every width; in the stacked layout a
+   signed-out user with three or more finished games, drill attempts,
+   puzzles or Library reviews sees a banner (sign in / back up now) until
+   they back up (gone for 7 days) or hide it (gone for 14 days).
 3. **Engine speed.** Opponent strength is set by search depth
    (`COACH_DIFFICULTY_KEYFRAMES`, depth 10 with up to 20 lines), so it plays
    at the same strength on a phone, just more slowly. Measure think time on
