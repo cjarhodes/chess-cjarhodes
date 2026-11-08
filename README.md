@@ -99,8 +99,16 @@ choice when stepping back to a move that wasn't among its best, the next move
 of a **Show why** line, and an evaluation bar beside the board (dimmed when it
 is from before the latest move). Drills hide all of it. **Appearance &
 sounds → Arrows, move badges and evaluation bar** turns it off
-(`ui:board-feedback`). `board-overlay.js` draws on any chessboard.js board;
-`coach-overlay.js` decides what Coach shows.
+(`ui:board-feedback`). `board-overlay.js` draws on any board from
+`src/ui/board.js`; `coach-overlay.js` decides what Coach shows.
+
+Every board (Library, Coach, Puzzles, the game archive) is the same
+component, `src/ui/board.js`, built on the vendored
+[cm-chessboard](https://github.com/shaack/cm-chessboard) SVG board with the
+cburnett pieces. Drag a piece, or click (tap) a piece and then its square:
+both go through the same move check, a selected piece shows dots on its legal
+squares, and clicking another of your pieces switches the selection. Square
+colours follow the board theme tokens in `styles/tokens.css`.
 
 Engine-first moves can also earn **Great (!)**, the only good move with a
 clear gap to the second-best line, or **Brilliant (!!)**, a sound sacrifice
@@ -241,8 +249,9 @@ affects this browser's session. See [the account continuity audit](docs/account-
   build tooling, no package manager, no framework
 - Vendored libraries (see `vendor/` and `stockfish/`):
   - `chess.js` 0.10.3
-  - `chessboard.js` 1.0.0
-  - `jQuery` 3.6.0
+  - `cm-chessboard` 8.15.4 (ES modules, loaded by `src/ui/board-module.js`;
+    pieces: the cburnett sprite built by `scripts/build-piece-sprite.js`)
+  - `jQuery` 3.6.0 (app code still uses it; the board no longer needs it)
   - `@supabase/supabase-js` 2.114.0
   - Stockfish (WASM build: `stockfish.js` + `stockfish.wasm`)
 - Lichess Opening Explorer API for Explore mode
