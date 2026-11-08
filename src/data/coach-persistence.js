@@ -114,26 +114,38 @@ function applyCoachRecoveryUser(user) {
   coachRemoteInsightEntries = null;
   coachRemoteInsightsLoaded = false;
   if (previousOwner.startsWith('anon:') && nextOwner.startsWith('user:')) {
-    // Adopt guest recovery only if this account has no corresponding resume
-    // point. Never move recovery between two signed-in users.
-    [COACH_STATE_KEY, COACH_PRACTICE_STATE_KEY, COACH_PRACTICE_RETURN_KEY].forEach(base => {
+    // Adopt guest recovery only if this account has no resume point at all.
+    // The saved game, drill and drill's return game are one session: adopting
+    // part of it beside the account's own game would let the guest's return
+    // game overwrite it when the drill ends. Never move recovery between two
+    // signed-in users.
+    const recoveryKeys = [COACH_STATE_KEY, COACH_PRACTICE_STATE_KEY, COACH_PRACTICE_RETURN_KEY];
+    let accountHasSession = true;
+    try { accountHasSession = recoveryKeys.some(base => localStorage.getItem(`${base}:${nextOwner}`) !== null); } catch (e) {}
+    if (!accountHasSession) {
+      const written = [];
       try {
-        const oldKey = `${base}:${previousOwner}`;
-        const newKey = `${base}:${nextOwner}`;
-        const raw = localStorage.getItem(oldKey);
-        if (!raw || localStorage.getItem(newKey)) return;
-        const saved = JSON.parse(raw);
-        if (saved.owner) saved.owner = nextOwner;
-        if (saved.returnState) saved.returnState.owner = nextOwner;
-        [saved.openingTransfer, saved.returnState && saved.returnState.openingTransfer].forEach(transfer => {
-          if (!transfer || transfer.owner !== previousOwner) return;
-          transfer.owner = nextOwner;
-          if (transfer.returnState && transfer.returnState.owner === previousOwner) transfer.returnState.owner = nextOwner;
-        });
-        localStorage.setItem(newKey, JSON.stringify(saved));
-        localStorage.removeItem(oldKey);
-      } catch (e) { /* retain the outgoing copy when adoption cannot finish */ }
-    });
+        const moves = recoveryKeys.map(base => [`${base}:${previousOwner}`, `${base}:${nextOwner}`])
+          .map(([oldKey, newKey]) => [oldKey, newKey, localStorage.getItem(oldKey)])
+          .filter(([, , raw]) => raw)
+          .map(([oldKey, newKey, raw]) => {
+            const saved = JSON.parse(raw);
+            if (saved.owner) saved.owner = nextOwner;
+            if (saved.returnState) saved.returnState.owner = nextOwner;
+            [saved.openingTransfer, saved.returnState && saved.returnState.openingTransfer].forEach(transfer => {
+              if (!transfer || transfer.owner !== previousOwner) return;
+              transfer.owner = nextOwner;
+              if (transfer.returnState && transfer.returnState.owner === previousOwner) transfer.returnState.owner = nextOwner;
+            });
+            return [oldKey, newKey, JSON.stringify(saved)];
+          });
+        moves.forEach(([, newKey, value]) => { localStorage.setItem(newKey, value); written.push(newKey); });
+        moves.forEach(([oldKey]) => localStorage.removeItem(oldKey));
+      } catch (e) {
+        // Retain the whole guest session when adoption cannot finish.
+        written.forEach(key => { try { localStorage.removeItem(key); } catch (err) {} });
+      }
+    }
   }
   resetCoachState();
   coachPracticeReturnState = null;

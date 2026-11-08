@@ -729,6 +729,69 @@ async page => {
     return problems;
   }));
 
+  // ── Sign-in adopts a guest game, drill and return point only as one unit ──
+  await check('sign-in never adopts guest practice beside the account\'s saved game', async () => {
+    const problems = [];
+    await newGame();
+    await playMove('e4');
+    await page.waitForFunction(() => coachGame.history().length >= 2 && !coachThinking, null, { timeout: 60000 });
+    await settle();
+    const account = 'behaviour-adopt-user';
+    const guestGameId = await page.evaluate(acct => {
+      // The account already has a saved game of its own on this browser.
+      const own = JSON.parse(localStorage.getItem(coachMemoryKey(COACH_STATE_KEY)));
+      own.localGameId = 'account-saved-game';
+      own.remoteGameId = null;
+      localStorage.setItem(`${COACH_STATE_KEY}:user:${acct}`, JSON.stringify(own));
+      return coachLocalGameId;
+    }, account);
+    await page.locator('#tab-practice').click();
+    await page.locator('#endgame-track-list .endgame-item button').first().click();
+    await page.waitForFunction(() => coachPracticeSession && coachPracticeSession.analysisReady, null, { timeout: 60000 });
+    try {
+      await page.evaluate(acct => { saveCoachPracticeState(); applyCoachRecoveryUser({ id: acct }); }, account);
+      await page.waitForTimeout(300);
+      await page.evaluate(() => { if (coachPracticeSession) exitCoachPractice(); });
+      const after = await page.evaluate(acct => {
+        const read = key => { try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; } };
+        const anon = `anon:${coachDeviceId()}`;
+        return {
+          accountGame: (read(`${COACH_STATE_KEY}:user:${acct}`) || {}).localGameId || null,
+          guestGameKept: !!read(`${COACH_STATE_KEY}:${anon}`),
+          guestPracticeKept: !!read(`${COACH_PRACTICE_STATE_KEY}:${anon}`),
+          guestReturnKept: !!read(`${COACH_PRACTICE_RETURN_KEY}:${anon}`),
+          accountPractice: !!read(`${COACH_PRACTICE_STATE_KEY}:user:${acct}`),
+          accountReturn: !!read(`${COACH_PRACTICE_RETURN_KEY}:user:${acct}`)
+        };
+      }, account);
+      if (after.accountGame !== 'account-saved-game') problems.push(`the account's saved game was replaced by ${after.accountGame === guestGameId ? 'the guest game' : after.accountGame}`);
+      if (after.accountPractice || after.accountReturn) problems.push('guest practice was adopted beside the account game');
+      if (!after.guestGameKept || !after.guestPracticeKept || !after.guestReturnKept) problems.push('the guest session was not kept intact for the guest');
+      // An account with no saved session takes the whole guest session.
+      const adopted = await page.evaluate(acct => {
+        applyCoachRecoveryUser(null);
+        localStorage.removeItem(`${COACH_STATE_KEY}:user:${acct}`);
+        applyCoachRecoveryUser({ id: acct });
+        const anon = `anon:${coachDeviceId()}`;
+        return [COACH_STATE_KEY, COACH_PRACTICE_STATE_KEY, COACH_PRACTICE_RETURN_KEY]
+          .map(base => [!!localStorage.getItem(`${base}:user:${acct}`), !localStorage.getItem(`${base}:${anon}`)]);
+      }, account);
+      if (!adopted.every(([moved, cleared]) => moved && cleared)) problems.push('an account with no saved session did not adopt the whole guest session: ' + JSON.stringify(adopted));
+    } finally {
+      await page.evaluate(acct => {
+        applyCoachRecoveryUser(null);
+        if (coachPracticeSession) exitCoachPractice();
+        Object.keys(localStorage).filter(k => k.includes(acct)).forEach(k => localStorage.removeItem(k));
+      }, account);
+      // Leave a live guest game for the checks that follow.
+      await page.locator('#tab-game').click();
+      await newGame();
+      await playMove('e4');
+      await page.waitForFunction(() => coachGame.history().length >= 2 && !coachThinking, null, { timeout: 60000 });
+    }
+    return problems;
+  });
+
   // ── Library: spaced-repetition save failures are reported ──
   await page.goto(base + '/?opening=italian');
   await page.waitForFunction(() => currentOpening && currentOpening.id === 'italian');
