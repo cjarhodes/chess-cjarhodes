@@ -4,7 +4,8 @@ let openingTransferFinishPending = false;
 
 function openingTransferTarget(opening, line, requestedPly) {
   if (!opening || !line || !Array.isArray(line.moves) || !line.moves.length) return null;
-  const side = opening.category === 'black' ? 'black' : 'white';
+  // Played from the side that owns the line, as in the Library quiz.
+  const side = typeof openingLineSide === 'function' ? openingLineSide(opening, line.id) : (opening.category === 'black' ? 'black' : 'white');
   const positions = [new Chess().fen()];
   const terminal = [false];
   const position = new Chess();

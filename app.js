@@ -2654,16 +2654,22 @@ function loadQuizReviewPosition() {
 // ─────────────────────────────────────────────
 // QUIZ AUTO-PLAY HELPERS
 // ─────────────────────────────────────────────
+// The side that owns a Library line: traps and gambits are played by the side
+// that springs them (Fool's Mate, Stafford and the Slav are Black's), which
+// opponents.js records. It loads after app.js, so it is looked up at call
+// time; without it the opening's category decides.
+function openingLineSide(opening, lineId) {
+  if (!opening) return 'white';
+  if (typeof OpponentPersonas !== 'undefined' && OpponentPersonas.lineSide) {
+    const id = lineId && lineId !== 'main' ? lineId : opening.id;
+    return OpponentPersonas.lineSide(id, opening) === 'b' ? 'black' : 'white';
+  }
+  return opening.category === 'black' ? 'black' : 'white';
+}
+
 function getUserColor() {
   if (!currentOpening) return 'white';
-  // The side that owns the selected line: traps and gambits are played by the
-  // side that springs them (Fool's Mate, Stafford, Slav are Black's), which
-  // opponents.js already records. It loads after app.js, so look it up here.
-  if (typeof OpponentPersonas !== 'undefined' && OpponentPersonas.lineSide) {
-    const lineId = currentLine && currentLine.id !== 'main' ? currentLine.id : currentOpening.id;
-    return OpponentPersonas.lineSide(lineId, currentOpening) === 'b' ? 'black' : 'white';
-  }
-  return currentOpening.category === 'black' ? 'black' : 'white';
+  return openingLineSide(currentOpening, currentLine && currentLine.id);
 }
 
 function isUserTurn(idx) {

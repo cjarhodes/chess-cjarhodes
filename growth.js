@@ -767,7 +767,8 @@ function repertoireFocusOpening() {
 
 function openingBridgeItem(opening) {
   if (!opening || !Array.isArray(opening.moves) || opening.moves.length < 14) return null;
-  const targetIndex = opening.category === 'black' ? 13 : 12;
+  const owner = typeof openingLineSide === 'function' ? openingLineSide(opening) : (opening.category === 'black' ? 'black' : 'white');
+  const targetIndex = owner === 'black' ? 13 : 12;
   const position = new Chess();
   for (let i = 0; i < targetIndex; i++) {
     if (!position.move(opening.moves[i])) return null;
