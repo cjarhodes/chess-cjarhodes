@@ -503,11 +503,53 @@ async function ensureRemoteCoachGame(generation = coachGameGeneration) {
 
 function updateRemoteCoachGame(endReason, generation = coachGameGeneration) {
   const owner = coachMemoryOwnerId(), localGameId = coachLocalGameId;
+  // A result is captured now: leaving Coach or starting the next game while
+  // this write waits behind the checkpoint upload must not drop it.
+  const final = endReason && hasCoachDbSession() && coachGame
+    ? { payload: remoteGamePayload(endReason), remoteGameId: coachRemoteGameId, localGameId } : null;
   const write = () => {
-    if (owner !== coachMemoryOwnerId() || localGameId !== coachLocalGameId || generation !== coachGameGeneration) return;
+    if (owner !== coachMemoryOwnerId()) return;
+    if (final) return commitFinalRemoteCoachGame(final);
+    if (localGameId !== coachLocalGameId || generation !== coachGameGeneration) return;
     return commitRemoteCoachGame(endReason, generation);
   };
   return typeof runAccountGameWrite === 'function' ? runAccountGameWrite(write) : Promise.resolve(write());
+}
+
+// Writes a captured result to its own game row, identified by the game rather
+// than the board generation (a view change or the next game bumps that).
+async function commitFinalRemoteCoachGame(final) {
+  if (!hasCoachDbSession()) return;
+  const owner = coachMemoryOwnerId();
+  const current = () => owner === coachMemoryOwnerId() && final.localGameId === coachLocalGameId;
+  if (typeof ensureAccountWritePermission === 'function') await ensureAccountWritePermission();
+  if (owner !== coachMemoryOwnerId() || !hasCoachDbSession()) return;
+  let gameId = final.remoteGameId || (current() ? coachRemoteGameId : null);
+  if (!gameId && current() && coachGame && !coachPracticeSession) gameId = await ensureRemoteCoachGame(coachGameGeneration);
+  if (owner !== coachMemoryOwnerId()) return;
+  if (!gameId) {
+    // The board moved on before this game reached the account: add it whole,
+    // and point its queued reviews at the new row.
+    const created = await coachDbClient.from('coach_games').insert(final.payload).select('id').single();
+    if (created.error) throw created.error;
+    gameId = created.data.id;
+    if (owner !== coachMemoryOwnerId()) return;
+    if (current()) { coachRemoteGameId = gameId; saveCoachState(); }
+    if (typeof pendingAccountReviews === 'function') {
+      const entries = pendingAccountReviews();
+      entries.forEach(entry => { if (entry.localGameId === final.localGameId && !entry.remoteGameId) entry.remoteGameId = gameId; });
+      savePendingAccountReviews(entries);
+    }
+    setCoachDbStatus('Game saved.');
+    return;
+  }
+  const { error } = await coachDbClient
+    .from('coach_games')
+    .update(final.payload)
+    .eq('id', gameId);
+  if (owner !== coachMemoryOwnerId()) return;
+  if (error) throw error;
+  setCoachDbStatus('Game saved.');
 }
 
 async function commitRemoteCoachGame(endReason, generation = coachGameGeneration) {

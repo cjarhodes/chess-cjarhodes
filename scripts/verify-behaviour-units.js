@@ -315,6 +315,72 @@ async page => {
     return problems;
   }));
 
+  await check('a game result survives leaving Coach or starting the next game while sync waits', () => page.evaluate(async () => {
+    const problems = [];
+    const saved = { client: coachDbClient, user: coachAuthUser, remoteId: coachRemoteGameId, localId: coachLocalGameId, checkpoint: Object.assign({}, accountCheckpoint) };
+    const writes = [];
+    // The checkpoint upload is slow; every game write waits behind it.
+    const fakeClient = {
+      from(table) {
+        const ops = [];
+        const result = () => {
+          if (table === 'coach_checkpoints') return new Promise(resolve => setTimeout(() => resolve(ops.includes('neq') ? { data: [], error: null } : ops.includes('insert') || ops.includes('update') ? { data: { revision: 1 }, error: null } : { data: null, error: null }), 400));
+          if (table === 'coach_games') {
+            writes.push(ops.slice());
+            return Promise.resolve(ops.includes('insert') ? { data: { id: 'game-final-inserted' }, error: null } : { data: null, error: null });
+          }
+          return Promise.resolve({ data: null, error: null });
+        };
+        const query = new Proxy(function () {}, {
+          get(_, prop) {
+            if (prop === 'then') return (resolve, reject) => result().then(resolve, reject);
+            return (...args) => {
+              ops.push(prop, ...args.map(arg => (arg && typeof arg === 'object' ? JSON.parse(JSON.stringify(arg)) : arg)));
+              return prop === 'single' || prop === 'maybeSingle' ? result() : query;
+            };
+          }
+        });
+        return query;
+      }
+    };
+    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const finalWrite = (id, msg) => writes.find(ops => ops.includes('update') && ops.some(arg => arg && arg.end_reason === msg) && ops.includes(id));
+    try {
+      coachDbClient = fakeClient;
+      coachAuthUser = { id: 'behaviour-test-user' };
+      Object.assign(accountCheckpoint, { owner: null, loaded: false, conflict: false, chain: Promise.resolve() });
+      // Leaving Coach right after the result: the view change bumps the generation.
+      coachRemoteGameId = 'game-final-1';
+      coachSync.saveGame('Checkmate — White wins.').catch(error => problems.push('final save threw ' + error.message));
+      invalidateCoachAsyncWork('Coach view changed.');
+      await wait(1500);
+      const left = finalWrite('game-final-1', 'Checkmate — White wins.');
+      if (!left) problems.push('leaving Coach while the checkpoint uploaded dropped the game result');
+      else if (!left.some(arg => arg && arg.result === '1-0' || arg && arg.result === '0-1' || arg && arg.result === '*')) problems.push('final write carried no result');
+      // Starting the next game before the result reached the account.
+      writes.length = 0;
+      Object.assign(accountCheckpoint, { owner: null, loaded: false, conflict: false });
+      coachRemoteGameId = 'game-final-2';
+      coachSync.saveGame('Black resigned.').catch(error => problems.push('final save threw ' + error.message));
+      invalidateCoachAsyncWork('A new game replaced the previous analysis.');
+      coachLocalGameId = 'behaviour-next-game';
+      coachRemoteGameId = null;
+      await wait(1500);
+      if (!finalWrite('game-final-2', 'Black resigned.')) problems.push('starting the next game dropped the previous game result');
+      if (writes.some(ops => ops.includes('behaviour-next-game') || (ops.includes('update') && !ops.includes('game-final-2')))) problems.push('the previous result was written to the wrong game');
+    } finally {
+      clearQueuedRemoteCoachGameUpdate();
+      if (accountCheckpoint.timer) clearTimeout(accountCheckpoint.timer);
+      coachDbClient = saved.client;
+      coachAuthUser = saved.user;
+      coachRemoteGameId = saved.remoteId;
+      coachLocalGameId = saved.localId;
+      Object.assign(accountCheckpoint, saved.checkpoint, { timer: null });
+      Object.keys(localStorage).filter(k => k.includes('behaviour-test-user')).forEach(k => localStorage.removeItem(k));
+    }
+    return problems;
+  }));
+
   await check('manual sync reports partial failures', () => page.evaluate(async () => {
     const problems = [];
     const saved = { client: coachDbClient, user: coachAuthUser, load: coachSync.loadInsights, save: coachSync.saveGame, flush: window.flushAccountCheckpoint };
