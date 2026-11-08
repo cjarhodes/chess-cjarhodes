@@ -22,7 +22,6 @@ let quizReviewMode = false;
 let quizReviewQueue = [];
 let quizReviewCursor = 0;
 let quizTimerGeneration = 0; // invalidates pending quiz auto-play when the quiz restarts
-let tapSelected = null;      // square selected for tap-to-move, or null
 let pendingPromotionChoice = null;
 let promotionReturnFocus = null;
 let summaryReturnFocus = null;
@@ -40,7 +39,7 @@ let coachUserSide = 'white';       // 'white' | 'black'
 let coachEngineElo = 1200;         // displayed opponent level
 let coachOpeningTransfer = null;   // optional Library-to-play context, owned with the saved game
 let coachOpeningId = null;         // deepest identified opening in the current game
-let coachBoard = null;             // separate Chessboard.js instance
+let coachBoard = null;             // the Coach board (src/ui/board.js)
 let coachBoardFlipped = false;
 let coachGameActive = false;       // true once user hits New Game
 let coachGameGeneration = 0;       // invalidates async work from replaced/rewound games
@@ -138,10 +137,9 @@ window.COACH_SUPABASE_CONFIG = window.COACH_SUPABASE_CONFIG || {
 // PREMOVE — queue your move while the engine is thinking
 // ─────────────────────────────────────────────
 function setPremoveSquares(from, to) {
-  $('#coachBoard .coach-premove-from').removeClass('coach-premove-from');
-  $('#coachBoard .coach-premove-to').removeClass('coach-premove-to');
-  if (from) $('#coachBoard .square-' + from).addClass('coach-premove-from');
-  if (to)   $('#coachBoard .square-' + to).addClass('coach-premove-to');
+  if (!coachBoard) return;
+  coachBoard.setMarks('coach-premove-from', from ? [from] : []);
+  coachBoard.setMarks('coach-premove-to', to ? [to] : []);
 }
 function setPremove(from, to, promotion) {
   coachPremove = { from, to, promotion: promotion || 'q' };
@@ -908,26 +906,19 @@ function readURL() {
 // ─────────────────────────────────────────────
 // Pieces: the cburnett vector set (Colin M.L. Burnett, CC BY-SA 3.0, as
 // shipped by Lichess). Strong outlines and interior shading keep white pieces
-// legible on light squares at every board size. Files live in vendor/pieces.
-function localPieceTheme(piece) {
-  return `vendor/pieces/cburnett/${piece}.svg`;
-}
+// legible on light squares at every board size. The board draws them from
+// vendor/pieces/cburnett/sprite.svg (scripts/build-piece-sprite.js).
 
-// Last-move highlight. chessboard.js rebuilds the square elements whenever a
-// position is drawn, so the highlight is re-applied by a mutation observer on
-// the board container rather than set once.
+// Last-move highlight, per board element id. The board keeps its marks
+// across redraws; the move is remembered here so a rebuilt board (new game,
+// new opening, retry) shows it again.
 const boardLastMove = { myBoard: null, coachBoard: null };
 
 function applyBoardLastMove(boardId) {
-  const root = document.getElementById(boardId);
-  if (!root) return;
-  root.querySelectorAll('.square-55d63.last-move').forEach(el => el.classList.remove('last-move'));
+  const board = typeof Chessboard === 'function' && Chessboard.get ? Chessboard.get(boardId) : null;
+  if (!board) return;
   const mv = boardLastMove[boardId];
-  if (!mv) return;
-  [mv.from, mv.to].forEach(sq => {
-    const el = root.querySelector('.square-' + sq);
-    if (el) el.classList.add('last-move');
-  });
+  board.setMarks('last-move', mv ? [mv.from, mv.to] : []);
 }
 
 function setBoardLastMove(boardId, move) {
@@ -935,15 +926,9 @@ function setBoardLastMove(boardId, move) {
   applyBoardLastMove(boardId);
 }
 
-function observeBoardLastMove(boardId) {
-  const root = document.getElementById(boardId);
-  if (!root || root.__lastMoveObserver || typeof MutationObserver === 'undefined') return;
-  const observer = new MutationObserver(() => {
-    applyBoardLastMove(boardId);
-    if (boardId === 'coachBoard') renderPracticeBoardCue();
-  });
-  observer.observe(root, { childList: true, subtree: true });
-  root.__lastMoveObserver = observer;
+// Call after building a board to show the remembered last move on it.
+function restoreBoardLastMove(boardId) {
+  applyBoardLastMove(boardId);
 }
 
 // Coach: highlight the move that produced the displayed position (live or
@@ -1641,13 +1626,11 @@ function focusPracticeTarget() {
 }
 
 function renderPracticeBoardCue() {
-  $('#coachBoard .practice-cue-source, #coachBoard .practice-cue-target').removeClass('practice-cue-source practice-cue-target');
+  if (!coachBoard) return;
   const session = coachPracticeSession;
-  if (!session || session.completed || session.hintStage < 2) return;
-  const move = practiceMoveFor(coachGame.fen(), session.expectedUci);
-  if (!move) return;
-  $(`#coachBoard .square-${move.from}`).addClass('practice-cue-source');
-  if (session.hintStage >= 3) $(`#coachBoard .square-${move.to}`).addClass('practice-cue-target');
+  const move = session && !session.completed && session.hintStage >= 2 ? practiceMoveFor(coachGame.fen(), session.expectedUci) : null;
+  coachBoard.setMarks('practice-cue-source', move ? [move.from] : []);
+  coachBoard.setMarks('practice-cue-target', move && session.hintStage >= 3 ? [move.to] : []);
 }
 
 function practiceMistakeFeedback(session, uci, result) {
@@ -1764,17 +1747,30 @@ function exitCoachPractice(message) {
   renderInsights();
 }
 
+// Library board: interactive in Quiz and Explore. Only the side to move can
+// pick up a piece; the drop handlers check the move itself.
+function libraryActiveGame() {
+  return exploreMode && exploreGame ? exploreGame : game;
+}
+
 function createBoard(position, draggable, orientation) {
   if (board) board.destroy();
   board = Chessboard('myBoard', {
     position: position || 'start',
     draggable: !!draggable,
     orientation: orientation || 'white',
-    pieceTheme: localPieceTheme,
+    onDragStart: function(source, piece) {
+      const active = libraryActiveGame();
+      return !!(active && (quizMode || exploreMode) && piece[0] === active.turn());
+    },
+    moveTargets: function(square) {
+      const active = libraryActiveGame();
+      return active ? active.moves({ square, verbose: true }).map(m => m.to) : [];
+    },
     onDrop: handleDrop,
     onSnapEnd: handleSnapEnd,
   });
-  observeBoardLastMove('myBoard');
+  restoreBoardLastMove('myBoard');
   scheduleLibraryBoardFit();
   updateLibraryBoardAccessibility();
 }
@@ -1785,7 +1781,6 @@ function createCoachBoard(position, orientation) {
     position: position || 'start',
     draggable: true,
     orientation: orientation || 'white',
-    pieceTheme: localPieceTheme,
     onDragStart: function(source, piece) {
       if (!coachGameActive || !coachGame) return false;
       if (coachPracticeSession && coachPracticeSession.completed) return false;
@@ -1795,7 +1790,12 @@ function createCoachBoard(position, orientation) {
       if (piece[0] !== userPrefix) return false;
       // Block during our own classification window — premoves wait for opponent's move.
       if (coachThinking && coachIsUserTurn()) return false;
-      // Both regular drags (our turn) and premove drags (their turn) are allowed.
+      // Both regular moves (our turn) and premoves (their turn) are allowed.
+    },
+    moveTargets: function(square) {
+      // Legal-move dots on your turn; a premove is checked when it is played.
+      if (!coachGame || !coachIsUserTurn() || coachIsReviewing()) return [];
+      return coachGame.moves({ square, verbose: true }).map(m => m.to);
     },
     onDrop: function(source, target) {
       if (!coachGameActive || !coachGame) return 'snapback';
@@ -1812,7 +1812,7 @@ function createCoachBoard(position, orientation) {
         }, true)) {
           return 'snapback';
         }
-        // Synchronous legality check — chessboard.js needs a sync return value
+        // Synchronous legality check: the board needs a sync return value.
         const tempGame = new Chess(coachGame.fen());
         const move = tempGame.move({ from: source, to: target, promotion: 'q' });
         if (!move) return 'snapback';
@@ -1837,9 +1837,9 @@ function createCoachBoard(position, orientation) {
     },
     onSnapEnd: function() {
       if (!coachGame || !coachBoard) return;
-      // chessboard.js calls this after both user drags and programmatic
-      // position changes. Keep analysis/review positions on the board instead
-      // of snapping them back to the live game.
+      // Runs after an accepted move. Redraw from the game so castling, en
+      // passant and promotion show correctly, and keep analysis/review
+      // positions on the board instead of snapping back to the live game.
       const fen = coachAnalysisFen() || (coachReviewCursor !== null ? coachFenAtPly(coachReviewCursor) : coachGame.fen());
       coachBoard.position(fen, false);
       if (coachReviewAnalysis) {
@@ -1849,8 +1849,9 @@ function createCoachBoard(position, orientation) {
       } else coachSyncLastMove();
     }
   });
-  observeBoardLastMove('coachBoard');
   coachSyncLastMove();
+  if (coachPremove) setPremoveSquares(coachPremove.from, coachPremove.to);
+  renderPracticeBoardCue();
   updateCoachBoardAccessibility();
   setTimeout(() => {
     if (coachBoard) coachBoard.resize();
@@ -2876,7 +2877,7 @@ function loadOpening(id, lineId) {
   game.reset();
   boardFlipped = false;
 
-  // Show board element first (must be visible before chessboard.js measures it)
+  // Show board element first so the board measures its real size
   $('#board-placeholder').hide();
   $('#myBoard').show();
   createBoard('start', quizMode, 'white');
@@ -3609,9 +3610,12 @@ $(function () {
     if (!isNaN(ply)) coachGotoPly(ply);
   });
 
-  // Coach: click anywhere on the board to cancel a queued premove. Only fires
-  // when no drag is in progress (a real drop fires onDrop instead).
-  $(document).on('mousedown touchstart', '#coachBoard', function() {
+  // Coach: pressing anywhere on the board cancels a queued premove. Pointer
+  // events arrive once per press (a touch is not repeated as a mouse event)
+  // and before the board reads the press, so a press that queues a new
+  // premove clears the old one first.
+  const coachBoardEl = document.getElementById('coachBoard');
+  if (coachBoardEl) coachBoardEl.addEventListener('pointerdown', function() {
     if (coachPremove) clearPremove();
   });
 
@@ -3769,9 +3773,9 @@ $(function () {
 
   function bindGlobalInputEvents() {
 
-  // chessboard.js measures its internal grid at creation time. Re-measure both
-  // boards after responsive layout changes so desktop-to-mobile resizing and
-  // device rotation cannot leave a 440px grid clipped inside a smaller shell.
+  // The boards follow their container's size; also re-measure both after
+  // responsive layout changes so desktop-to-mobile resizing and device
+  // rotation cannot leave a 440px grid clipped inside a smaller shell.
   let boardResizeTimer = null;
   $(window).on('resize', function() {
     if (boardResizeTimer) clearTimeout(boardResizeTimer);
@@ -3920,91 +3924,9 @@ $(function () {
     if (k === '3') { e.preventDefault(); setMode('explore'); return; }
   });
 
-  // ─── TAP-TO-MOVE (mobile) ───────────────
-  function clearTapSelection() {
-    $('.square-55d63').removeClass('tap-selected tap-target');
-    tapSelected = null;
-  }
-  $(document).on('click', '#myBoard .square-55d63', function(e) {
-    // Only intercept taps in interactive modes (study has no interaction)
-    if (!quizMode && !exploreMode) return;
-    // If the drop already happened (pointerup after drag), chessboard will have already moved — don't interfere
-    const sq = $(this).data('square');
-    if (!sq) return;
-    const activeGame = exploreMode ? exploreGame : game;
-    if (!activeGame) return;
-
-    if (tapSelected && tapSelected !== sq) {
-      // Attempt move
-      if (exploreMode) {
-        const from = tapSelected;
-        if (requestPromotionChoice(exploreGame, from, sq, promotion => {
-          applyExploreMove(from, sq, promotion, { updateBoard: true });
-        }, true)) {
-          clearTapSelection();
-          return;
-        }
-        applyExploreMove(from, sq, 'q', { updateBoard: true });
-      } else {
-        // Quiz: delegate to handleDrop to reuse validation logic
-        const result = handleDrop(tapSelected, sq);
-        if (result !== 'snapback') {
-          // handleDrop already updated game; update board position
-          board.position(game.fen());
-          librarySyncLastMove(game);
-        }
-      }
-      clearTapSelection();
-    } else if (tapSelected === sq) {
-      clearTapSelection();
-    } else {
-      // Select source if it has a piece of the side to move
-      const piece = activeGame.get(sq);
-      if (!piece) return;
-      const turn = activeGame.turn(); // 'w' or 'b'
-      if (piece.color !== turn) return;
-      clearTapSelection();
-      tapSelected = sq;
-      $(this).addClass('tap-selected');
-      // Highlight legal target squares
-      const moves = activeGame.moves({ square: sq, verbose: true });
-      moves.forEach(m => $('.square-' + m.to).addClass('tap-target'));
-    }
-  });
-
-  // Coach board: tap-to-move (scoped to #coachBoard)
-  $(document).on('click', '#coachBoard .square-55d63', function() {
-    if (!coachMode || !coachGameActive || !coachGame || coachIsReviewing()) return;
-    const sq = $(this).data('square');
-    if (!sq) return;
-    if (tapSelected && tapSelected !== sq) {
-      const from = tapSelected;
-      if (requestPromotionChoice(coachGame, from, sq, promotion => {
-        coachHandleUserMove(from, sq, promotion, { updateBoard: true }).then(() => {
-          if (coachBoard) coachBoard.position(coachGame.fen());
-        });
-      }, true)) {
-        clearTapSelection();
-        return;
-      }
-      coachHandleUserMove(from, sq, 'q', { updateBoard: true }).then(() => {
-        if (coachBoard) coachBoard.position(coachGame.fen());
-      });
-      clearTapSelection();
-    } else if (tapSelected === sq) {
-      clearTapSelection();
-    } else {
-      const piece = coachGame.get(sq);
-      if (!piece) return;
-      if (piece.color !== coachGame.turn()) return;
-      if (!coachIsUserTurn()) return;
-      clearTapSelection();
-      tapSelected = sq;
-      $(this).addClass('tap-selected');
-      const moves = coachGame.moves({ square: sq, verbose: true });
-      moves.forEach(m => $('.square-' + m.to).addClass('tap-target'));
-    }
-  });
+  // Tap-to-move needs no handler here: the board (src/ui/board.js) turns a
+  // tap or click on a piece and then a square into the same onDragStart /
+  // onDrop calls as a drag, so every input takes one path.
 
   // ─── SWIPE FOR PREV/NEXT (mobile, study only) ───
   let touchStartX = null;
