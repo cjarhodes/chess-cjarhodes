@@ -168,7 +168,7 @@ function extractConst(name) {
 
 // --- Build the vm slice --------------------------------------------------
 
-const constNames = ['DAILY_DRILL_TARGET', 'DAY_MS', 'PRACTICE_PROGRESS_KEY', 'LEGACY_PRACTICE_PROGRESS_KEY', 'PRACTICE_EVENT_LIMIT', 'practiceRemoteSyncChains'];
+const constNames = ['DAILY_DRILL_TARGET', 'DAILY_SPRINT_KEY', 'DAILY_MOVE_TARGET', 'DAILY_TRANSFER_TARGET', 'DAILY_HISTORY_LIMIT', 'DAY_MS', 'PRACTICE_PROGRESS_KEY', 'LEGACY_PRACTICE_PROGRESS_KEY', 'PRACTICE_EVENT_LIMIT', 'practiceRemoteSyncChains'];
 const functionNames = [
   'emptyPracticeProgress',
   'activePracticeOwnerId',
@@ -192,7 +192,22 @@ const functionNames = [
   'recordPracticeAttempt',
   'markPracticeEventSynced',
   'hasCoachDbSession',
-  'queueRemotePracticeProgressSync'
+  'queueRemotePracticeProgressSync',
+  'formatPracticeDue',
+  'dailySprintStorageKey',
+  'emptyDailySprintHistory',
+  'loadDailySprintHistory',
+  'saveDailySprintHistory',
+  'dailySprintDayKey',
+  'dailySprintToday',
+  'updateDailySprint',
+  'initializeAdaptiveDay',
+  'upgradeLegacyDailySprint',
+  'beginDailyDrillSprint',
+  'recordDailySprintMove',
+  'recordDailySprintDrill',
+  'settleDailySprintDay',
+  'practiceDayStart'
 ];
 
 const slicedParts = [];
@@ -234,7 +249,14 @@ const context = {
   coachAuthUser: null,
   coachDbClient: null,
   Date: MockDate,
-  console
+  console,
+  // Daily Sprint boundaries: status text, remote sync and the takeaway copy.
+  setCoachStatus: () => {},
+  queueRemoteDailySprintSync: () => {},
+  dailyMoveSprintTakeaway: () => 'takeaway',
+  adaptiveDailyPlan: () => ({ focusTag: null, drillTarget: 0, moveTarget: 10 }),
+  coachLocalGameId: 'game-1',
+  renderedAdaptivePlan: null
 };
 vm.createContext(context);
 vm.runInContext(sliceCode, context, { filename: 'app.js#practice-slice' });
@@ -295,7 +317,7 @@ resetStorage();
   assertEqual(record.reps, 1, 'first correct attempt must bring reps to 1');
   assert(Math.abs(record.ease - 2.58) < 1e-9, `ease after 1 correct unassisted attempt should be 2.5+0.08=2.58, got ${record.ease}`);
   assertEqual(record.intervalDays, 1, 'nextPracticeInterval must return 1 day when reps<=1');
-  assertEqual(record.dueAt, currentNow + 1 * DAY_MS, 'dueAt must be now + intervalDays*DAY_MS after attempt 1');
+  assertEqual(record.dueAt, new Date(2024, 0, 11).getTime(), 'dueAt must be local midnight intervalDays calendar days later after attempt 1');
 
   assert(context.practiceIsDue(item, record.dueAt - 1) === false, 'item must not be due 1ms before its scheduled dueAt');
   assert(context.practiceIsDue(item, record.dueAt) === true, 'item must be due exactly at its scheduled dueAt (dueAt <= now)');
@@ -336,9 +358,9 @@ resetStorage();
   currentNow = Date.parse('2024-01-10T12:00:00');
   const record = context.recordPracticeAttempt(item, true, true); // correct but revealed ("assisted")
   assert(Math.abs(record.ease - (2.5 - 0.05)) < 1e-9, `a revealed-but-correct ("assisted") attempt should lower ease by 0.05 to 2.45, got ${record.ease}`);
-  assertEqual(record.reps, 1, 'an assisted-correct attempt still counts as a rep towards spaced repetition');
+  assertEqual(record.reps, 0, 'an assisted-correct attempt must not count as a spaced-repetition rep');
   assertEqual(record.lastResult, 'assisted', 'lastResult must be "assisted" when correct+revealed');
-  assertEqual(record.intervalDays, 1, 'assisted attempts follow the same nextPracticeInterval schedule as unassisted ones');
+  assertEqual(record.intervalDays, 1, 'an assisted attempt must come back after one day');
 
   // Drive ease down toward the 1.3 floor with repeated incorrect attempts.
   for (let i = 0; i < 20; i++) context.recordPracticeAttempt(item, false, false);
@@ -502,6 +524,151 @@ resetStorage();
   assertEqual(context.orderedPracticeRunItems([first, second]).length, 1, 'manual practice must remain available for a play-first plan');
   context.renderedAdaptivePlan = { drillTarget: 4 };
   assertEqual(context.orderedPracticeRunItems([first, second, another]).length, 2, 'session must cap to available distinct positions');
+}
+
+// === 10. hints never advance spaced repetition =========================
+//
+// Hint stage 3 names the destination square, so a hinted solve is not
+// evidence of recall: it keeps reps, comes back tomorrow, and never reaches
+// "Repeated 3×". It still counts as a completed attempt, matching the
+// "completed with a hint or answer" wording in Progress.
+
+resetStorage();
+{
+  const item = { id: 'drill-hinted', entry: { fenBefore: 'fen-hint', bestUci: 'e2e4' }, tag: 'candidate_moves', meta: { practice: 'Find it' } };
+  currentNow = Date.parse('2024-01-10T12:00:00');
+  for (let i = 0; i < 3; i++) {
+    const record = context.recordPracticeAttempt(item, true, true);
+    currentNow = record.dueAt;
+  }
+  const record = context.loadPracticeProgress().records[item.id];
+  assertEqual(record.reps, 0, 'three hinted solves must not build spaced-repetition reps');
+  assertEqual(record.intervalDays, 1, 'a hinted solve must come back after one day');
+  assertEqual(context.practiceProgressTotals().mastered, 0, 'hinted solves must never count as "Repeated 3×"');
+  assertEqual(record.correct, 3, 'hinted solves still count as completed attempts');
+
+  // Two clean solves then a hinted one: reps hold at 2 and the interval drops to a day.
+  context.recordPracticeAttempt(item, true, false);
+  currentNow += 2 * DAY_MS;
+  context.recordPracticeAttempt(item, true, false);
+  currentNow += 4 * DAY_MS;
+  const hinted = context.recordPracticeAttempt(item, true, true);
+  assertEqual(hinted.reps, 2, 'a hinted solve must keep the reps earned by clean solves');
+  assertEqual(hinted.intervalDays, 1, 'a hinted solve must shorten the interval to one day');
+}
+
+// === 11. the same position under a new tag keeps its schedule =============
+
+resetStorage();
+{
+  const entry = { fenBefore: 'fen-retag w - - 0 1', bestUci: 'e2e4', tags: ['development', 'missed_center_break'] };
+  const make = tag => ({ id: context.practiceItemId(entry, tag), tag, entry, meta: { practice: 'Compare candidates.' } });
+  const first = make('development'), second = make('missed_center_break');
+  currentNow = Date.parse('2024-01-10T12:00:00');
+  let record = context.recordPracticeAttempt(first, true, false);
+  currentNow = record.dueAt;
+  record = context.recordPracticeAttempt(first, true, false);
+  assertEqual(record.reps, 2, 'setup: two clean solves under the first tag');
+  currentNow = record.dueAt;
+  assert(context.practiceIsDue(second), 'setup: the position is due again under its new tag');
+  record = context.recordPracticeAttempt(second, true, false);
+  assertEqual(record.reps, 3, 'a clean solve under a new tag must continue the position\'s schedule');
+  assert(record.intervalDays >= 4, `the continued schedule must grow past 3 days, got ${record.intervalDays}`);
+  assertEqual(record.attempts, 1, 'the new tag record must count only its own attempt');
+  assertEqual(context.practiceProgressTotals().attempts, 3, 'continuing a schedule must not double-count attempts');
+}
+
+// === 12. due dates are calendar days ======================================
+
+resetStorage();
+{
+  const item = { id: 'drill-evening', entry: { fenBefore: 'fen-evening', bestUci: 'e2e4' }, tag: 'candidate_moves', meta: { practice: 'Find it' } };
+  currentNow = new Date(2024, 0, 10, 20, 0).getTime();
+  const record = context.recordPracticeAttempt(item, true, false);
+  assertEqual(record.dueAt, new Date(2024, 0, 11).getTime(), 'a one-day interval must fall due at the start of tomorrow');
+  assert(context.practiceIsDue(item, new Date(2024, 0, 11, 8, 0).getTime()), 'a drill solved last evening must be due this morning');
+}
+
+{
+  // Across the autumn clock change, 48.5 elapsed hours are still two calendar days.
+  const savedTz = process.env.TZ;
+  process.env.TZ = 'America/Chicago';
+  try {
+    currentNow = new Date(2024, 10, 2, 0, 30).getTime();
+    assertEqual(context.formatPracticeDue({ dueAt: new Date(2024, 10, 4).getTime() }), 'Due in 2d', 'formatPracticeDue must count calendar days across a clock change');
+    currentNow = new Date(2024, 0, 10, 8, 0).getTime();
+    assertEqual(context.formatPracticeDue({ dueAt: new Date(2024, 0, 11).getTime() }), 'Due in 1d', 'due tomorrow must read as one day');
+
+    // The seven-day trend window starts at local midnight six calendar days ago.
+    resetStorage();
+    const now = new Date(2024, 10, 5, 12, 0).getTime();
+    const firstDay = new Date(2024, 9, 30, 0, 30).getTime();
+    context.savePracticeProgress({ records: {}, events: [{ at: firstDay, correct: true, tag: 'candidate_moves' }] });
+    const trend = context.practiceTrendSnapshot(now);
+    assertEqual(trend.attempts, 1, 'an attempt just after midnight on the first day of the window must count across a clock change');
+    assertEqual(trend.days[0].attempts, 1, 'the first bar must show its attempt across a clock change');
+  } finally {
+    if (savedTz === undefined) delete process.env.TZ; else process.env.TZ = savedTz;
+  }
+}
+
+// === 13. Daily Sprint phases and completion ================================
+
+const focusPlan = { kind: 'focus-transfer', focusTag: 'development', focus: 'Slow development', cue: 'Develop.', reason: 'r', drillTarget: 2, moveTarget: 6, orderedDue: [] };
+const drillItem = n => ({ id: 'drill-sprint-' + n, tag: 'development', entry: { fenBefore: `fen-sprint-${n} w - - 0 1`, bestUci: 'e2e4' }, meta: { practice: 'Develop.' } });
+
+resetStorage();
+{
+  // A game resumed on a new day: its first move starts a drills-first day,
+  // which must stay in drills rather than counting moves it cannot finish.
+  currentNow = new Date(2024, 0, 10, 9, 0).getTime();
+  context.renderedAdaptivePlan = focusPlan;
+  let day = context.recordDailySprintMove({ ply: 1 });
+  assertEqual(day.phase, 'drills', 'the first move of a drills-first day must leave the day in its drills phase');
+  assertEqual(day.movesCompleted, 0, 'moves must not count before the day\'s drills');
+  context.recordDailySprintDrill(drillItem(1), false, true);
+  day = context.recordDailySprintDrill(drillItem(2), false, true);
+  assertEqual(day.phase, 'moves', 'finishing the drills must open the live-play phase');
+  for (let ply = 2; ply <= 7; ply++) day = context.recordDailySprintMove({ ply });
+  assert(!!day.completedAt, 'six transfer moves after the drills must complete the day');
+}
+
+resetStorage();
+{
+  // A day saved with its moves done but drills outstanding completes on the last drill.
+  currentNow = new Date(2024, 0, 10, 9, 0).getTime();
+  context.updateDailySprint(day => Object.assign(day, {
+    mode: 'adaptive', phase: 'moves', focusTag: 'development', drillTarget: 2, drillsCompleted: 0, drillIds: [],
+    moveTarget: 6, movesCompleted: 6, moveIds: ['g:1', 'g:2', 'g:3', 'g:4', 'g:5', 'g:6'], target: 8, completedUnits: 6
+  }));
+  context.recordDailySprintDrill(drillItem(1), false, true);
+  const day = context.recordDailySprintDrill(drillItem(2), false, true);
+  assert(!!day.completedAt, 'the drill that reaches the day\'s target must complete the day');
+  assertEqual(day.phase, 'complete', 'a completed day must be in its complete phase');
+}
+
+resetStorage();
+{
+  // A play-first plan has no drill target; manual practice must not add one.
+  currentNow = new Date(2024, 0, 10, 9, 0).getTime();
+  context.renderedAdaptivePlan = Object.assign({}, focusPlan, { kind: 'transfer', drillTarget: 0, moveTarget: 8 });
+  const day = context.beginDailyDrillSprint([drillItem(1)]);
+  assertEqual(day.drillTarget, 0, 'a play-first plan must keep a drill target of 0');
+  assertEqual(day.phase, 'moves', 'a play-first day must start in live play');
+}
+
+// === 14. a reloaded drills phase sizes the run from the saved day ==========
+
+resetStorage();
+{
+  currentNow = new Date(2024, 0, 10, 9, 0).getTime();
+  context.renderedAdaptivePlan = null; // not rebuilt after a reload while a day exists
+  context.updateDailySprint(day => Object.assign(day, {
+    mode: 'adaptive', phase: 'drills', focusTag: 'development', drillTarget: 3, drillsCompleted: 2, drillIds: ['a', 'b'],
+    moveTarget: 6, movesCompleted: 0, moveIds: [], target: 9, completedUnits: 2
+  }));
+  const run = context.orderedPracticeRunItems([drillItem(1), drillItem(2), drillItem(3)]);
+  assertEqual(run.length, 1, 'a drills phase with one drill left must start a one-drill run');
 }
 
 // --- Report ---------------------------------------------------------------

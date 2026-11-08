@@ -1194,7 +1194,12 @@ function orderedPracticeRunItems(items, firstItem) {
     seen.add(item.id);
     unique.push(item);
   });
-  const target = renderedAdaptivePlan ? renderedAdaptivePlan.drillTarget : DAILY_DRILL_TARGET;
+  // While today's drills phase is open, size the run from the saved day:
+  // the rendered plan is not rebuilt after a reload once a day exists.
+  const sprint = dailySprintToday();
+  const target = sprint && !sprint.completedAt && sprint.mode === 'adaptive' && sprint.phase === 'drills'
+    ? (Number(sprint.drillTarget) || 0) - (Number(sprint.drillsCompleted) || 0)
+    : renderedAdaptivePlan ? renderedAdaptivePlan.drillTarget : DAILY_DRILL_TARGET;
   return unique.slice(0, Math.max(1, target));
 }
 

@@ -189,11 +189,10 @@ function practiceDayKey(timestamp) {
 
 function practiceTrendSnapshot(now = Date.now()) {
   const events = loadPracticeProgress().events.filter(event => Number.isFinite(event.at));
-  const dayMs = DAY_MS;
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
-  const currentStart = today.getTime() - 6 * dayMs;
-  const previousStart = currentStart - 7 * dayMs;
+  const currentStart = practiceDayStart(now, -6);
+  const previousStart = practiceDayStart(now, -13);
   const current = events.filter(event => event.at >= currentStart);
   const previous = events.filter(event => event.at >= previousStart && event.at < currentStart);
   const summarize = list => ({
@@ -233,7 +232,7 @@ function practiceTrendSnapshot(now = Date.now()) {
   }
 
   const tagStats = {};
-  events.filter(event => event.at >= today.getTime() - 13 * dayMs).forEach(event => {
+  events.filter(event => event.at >= previousStart).forEach(event => {
     const tag = event.tag || 'candidate_moves';
     if (!tagStats[tag]) tagStats[tag] = { tag, attempts: 0, correct: 0 };
     tagStats[tag].attempts += 1;
@@ -316,24 +315,46 @@ function nextPracticeInterval(record, clean) {
   return Math.max(4, Math.round((record.intervalDays || 3) * (record.ease || 2.5)));
 }
 
+// Local midnight `days` calendar days after `timestamp` (DST-safe).
+function practiceDayStart(timestamp, days = 0) {
+  const date = new Date(timestamp);
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + days);
+  return date.getTime();
+}
+
 function recordPracticeAttempt(item, correct, revealed) {
   if (item && item.learningTransfer && typeof recordLearningTransferHelp === 'function') return recordLearningTransferHelp(item, revealed);
   const state = loadPracticeProgress();
   const now = Date.now();
   const event = practiceEventFromAttempt(item, correct, revealed, now);
-  const previous = state.records[item.id] || {
-    attempts: 0, correct: 0, reps: 0, ease: 2.5, intervalDays: 0, dueAt: 0
-  };
-  const record = Object.assign({}, previous);
+  const own = state.records[item.id] || null;
+  // The same position can return under another weakness tag (a new id).
+  // Continue its schedule from the latest related record, but keep this
+  // record's own counters so totals never count an attempt twice.
+  const schedule = practiceRecordFor(item) || own || {};
+  const record = Object.assign({ attempts: 0, correct: 0 }, own || {}, {
+    reps: schedule.reps || 0,
+    ease: Number(schedule.ease) || 2.5,
+    intervalDays: schedule.intervalDays || 0,
+    dueAt: schedule.dueAt || 0
+  });
   record.attempts += 1;
   record.lastAttemptAt = now;
   record.lastResult = correct ? (revealed ? 'assisted' : 'correct') : 'incorrect';
-  if (correct) {
+  if (correct && revealed) {
+    // A hint or the answer named the move: the attempt is completed, but it
+    // is not recall, so it earns no rep and comes back tomorrow.
+    record.correct += 1;
+    record.ease = Math.max(1.3, record.ease - 0.05);
+    record.intervalDays = 1;
+    record.dueAt = practiceDayStart(now, 1);
+  } else if (correct) {
     record.correct += 1;
     record.reps += 1;
-    record.ease = Math.max(1.3, record.ease + (revealed ? -0.05 : 0.08));
+    record.ease = Math.max(1.3, record.ease + 0.08);
     record.intervalDays = nextPracticeInterval(record, true);
-    record.dueAt = now + record.intervalDays * DAY_MS;
+    record.dueAt = practiceDayStart(now, record.intervalDays);
   } else {
     record.reps = 0;
     record.ease = Math.max(1.3, record.ease - 0.2);
