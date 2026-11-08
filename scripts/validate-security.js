@@ -15,6 +15,7 @@ const html = read('index.html');
 const schema = read('supabase-schema.sql');
 const migration = read('supabase/migrations/20260722030933_initial_coach_schema.sql');
 const practiceMigration = read('supabase/migrations/20260724025215_durable_practice_progress.sql');
+const ootdDropMigration = read('supabase/migrations/20261108060000_drop_ootd_objects.sql');
 const vercel = JSON.parse(read('vercel.json'));
 
 if (/https:\/\/cdnjs\.cloudflare\.com|https:\/\/cdn\.jsdelivr\.net/.test(html)) {
@@ -112,6 +113,24 @@ if (!/revoke all on function public\.record_practice_attempt[\s\S]+?from public,
 if (!/revoke all on table public\.practice_attempts from anon/i.test(practiceMigration) ||
     !/grant select, insert on table public\.practice_attempts to authenticated/i.test(practiceMigration)) {
   fail('practice attempt Data API grants must exclude anonymous users');
+}
+
+// The OOTD leftovers (a security-definer RPC, two tables, a storage bucket)
+// are dropped, never re-created, and the drop never deletes stored files'
+// rows from SQL, which would orphan the files in the storage backend.
+if (/ootd/i.test(schema)) fail('the canonical schema must not grant or define OOTD objects');
+if (!/drop function if exists public\.ootd_save_wardrobe\(jsonb, bigint, boolean\)/.test(ootdDropMigration)) {
+  fail('the OOTD security-definer save function must be dropped');
+}
+if (/delete\s+from\s+storage\.objects/i.test(ootdDropMigration) ||
+    !/exists \(select 1 from storage\.objects where bucket_id = 'ootd-photos'\)[\s\S]+raise exception/.test(ootdDropMigration)) {
+  fail('the OOTD bucket must only be removed once empty, without deleting storage object rows in SQL');
+}
+const laterMigrations = fs.readdirSync(path.join(root, 'supabase/migrations')).filter(file => file > '20261108060000_drop_ootd_objects.sql');
+for (const file of laterMigrations) {
+  if (/create\s+(?:table|(?:or\s+replace\s+)?function)\s+public\.ootd_|'ootd-photos'/i.test(read(`supabase/migrations/${file}`))) {
+    fail(`${file} re-creates an OOTD object after it was dropped`);
+  }
 }
 
 if (errors.length) {
