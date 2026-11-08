@@ -1189,13 +1189,19 @@ async page => {
       s = await state();
       if (s.pos.a2 !== 'wP' || s.pos.a5 || s.snapEnds !== 2 || s.drops[2] !== 'a2a5:drag') problems.push('a refused drop moved the piece or called onSnapEnd: ' + JSON.stringify({ a2: s.pos.a2, a5: s.pos.a5, snapEnds: s.snapEnds }));
       // Clicking another of your own pieces changes the selection; onDrop
-      // never hears of it (Coach would queue it as a premove).
+      // never hears of it.
       await boardSquare(page, 'board-harness', 'b2').click();
       await boardSquare(page, 'board-harness', 'c2').click();
       s = await state();
       const selected = await page.evaluate(() => __harness.board.marks('tap-selected').join());
       if (s.drops.length !== 3 || selected !== 'c2') problems.push('clicking another own piece reached onDrop instead of switching the selection: ' + JSON.stringify({ drops: s.drops, selected }));
       await boardSquare(page, 'board-harness', 'c2').click();
+      // Dragging onto your own piece is deliberate (a recapture premove in
+      // Coach): onDrop hears of it, and a refusal leaves both pieces home.
+      await mouseDrag('board-harness', 'b2', 'c2');
+      await page.waitForTimeout(300);
+      s = await state();
+      if (s.drops[3] !== 'b2c2:drag' || s.pos.b2 !== 'wP' || s.pos.c2 !== 'wP' || s.snapEnds !== 2 || !s.fenOk) problems.push('a drag onto an own piece did not reach onDrop or moved a piece: ' + JSON.stringify({ drops: s.drops, b2: s.pos.b2, c2: s.pos.c2, snapEnds: s.snapEnds }));
       // A handler that throws sends the piece home, reports the error and
       // leaves the board ready for the next move.
       await page.evaluate(() => { __harness.throwNext = true; });
@@ -1205,7 +1211,7 @@ async page => {
       await mouseDrag('board-harness', 'b2', 'b4');
       await page.waitForTimeout(300);
       s = await state();
-      const thrown = pageErrors.indexOf('harness onDrop failure');
+      const thrown = pageErrors.findIndex(e => e.startsWith('Error: harness onDrop failure'));
       if (thrown === -1) problems.push('an onDrop error was swallowed');
       else pageErrors.splice(thrown, 1);
       if (afterThrow.b2 !== 'wP' || afterThrow.b3 || s.pos.b4 !== 'wP' || !s.fenOk) problems.push('a throwing onDrop left the board stuck or wrong: ' + JSON.stringify({ b2: afterThrow.b2, b3: afterThrow.b3, b4: s.pos.b4 }));
@@ -1260,6 +1266,60 @@ async page => {
       await tp.waitForTimeout(300);
       const end = await tp.evaluate(() => ({ plies: coachGame.history().length, same: Chessboard.objToFen(coachBoard.position()) === coachGame.fen().split(' ')[0] }));
       if (end.plies !== 4 || !end.same) problems.push('touch input moved twice or the board drifted from the game: ' + JSON.stringify(end));
+      if (errors.length) problems.push('page errors: ' + errors.join(' | '));
+    } finally {
+      await ctx.close();
+    }
+    return problems;
+  });
+
+  await check('touch: a tapped promotion keeps its picker open and a slow tap leaves nothing selected', async () => {
+    const problems = [];
+    const browser = page.context().browser();
+    if (!browser) return ['no browser handle to open a touch context'];
+    const ctx = await browser.newContext({ hasTouch: true, viewport: { width: 1440, height: 900 } });
+    try {
+      const tp = await ctx.newPage();
+      const errors = [];
+      tp.on('pageerror', e => errors.push(e.message));
+      const cdp = await ctx.newCDPSession(tp);
+      // A tap held past the 200 ms move animation: the browser's emulated
+      // mouse events then land on the piece that just moved.
+      const slowTap = async (id, name) => {
+        const c = await squareCentre(tp, id, name);
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: c.x, y: c.y }] });
+        await tp.waitForTimeout(350);
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      };
+      // Explore: tap the pawn, then the empty promotion square.
+      await tp.goto(base + '/?opening=italian&mode=explore');
+      await tp.waitForFunction(() => exploreMode && !!board);
+      await tp.locator('.explore-load summary').tap();
+      await tp.locator('#explore-load-input').fill('8/P6k/8/8/8/8/8/K7 w - - 0 1');
+      await tp.locator('#explore-load-form button[type=submit]').tap();
+      await tp.waitForFunction(() => exploreGame && exploreGame.fen().startsWith('8/P6k'));
+      await boardSquare(tp, 'myBoard', 'a7').tap();
+      await slowTap('myBoard', 'a8');
+      await tp.waitForTimeout(400);
+      const open = await tp.evaluate(() => document.getElementById('promotion-picker').getAttribute('aria-hidden') === 'false');
+      if (!open) problems.push('the promotion picker closed straight after the tap that opened it');
+      else {
+        await tp.locator('.promotion-choice[data-promotion="n"]').tap();
+        await tp.waitForTimeout(300);
+        const promoted = await tp.evaluate(() => board.position().a8);
+        if (promoted !== 'wN') problems.push('choosing a knight did not promote to a knight: ' + promoted);
+      }
+      // Coach: a slow tap on the target plays the move and selects nothing.
+      await tp.goto(base + '/?view=coach');
+      await tp.waitForFunction(() => typeof engineClient !== 'undefined' && !!coachBoard);
+      await tp.locator('#btn-coach-newgame').tap();
+      await tp.waitForFunction(() => coachGameActive && !coachThinking, null, { timeout: 60000 });
+      await boardSquare(tp, 'coachBoard', 'd2').tap();
+      await slowTap('coachBoard', 'd4');
+      await tp.waitForTimeout(400);
+      const after = await tp.evaluate(() => ({ first: coachGame.history()[0] || null, sel: coachBoard.marks('tap-selected').join(), premove: !!coachPremove }));
+      if (after.first !== 'd4' || after.sel || after.premove) problems.push('a slow tap left the moved piece selected or a premove queued: ' + JSON.stringify(after));
+      await tp.waitForFunction(() => !coachThinking, null, { timeout: 60000 }).catch(() => {});
       if (errors.length) problems.push('page errors: ' + errors.join(' | '));
     } finally {
       await ctx.close();
@@ -1998,6 +2058,27 @@ async page => {
       if (await page.evaluate(() => window.__practiceSearches) < 3) problems.push('the practice position was not analysed again on the next attempt');
     } finally {
       await page.evaluate(() => { engineClient.evaluate = window.__realEvaluate; if (coachPracticeSession) exitCoachPractice(); });
+    }
+    return problems;
+  });
+
+  await check('a practice move made on the board is drawn once it is graded', async () => {
+    const problems = [];
+    await freshCoach();
+    await page.evaluate(() => {
+      startCoachPractice({ id: 'drill-board-drag', tag: 'development', meta: INSIGHT_TAG_META.development,
+        entry: { fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', bestUci: 'e2e4', bestSan: 'e4', userSan: 'a3', pairNum: 1, ply: 1 } });
+    });
+    try {
+      await page.waitForFunction(() => coachPracticeSession && coachPracticeSession.analysisReady, null, { timeout: 30000 });
+      await mouseDrag('coachBoard', 'e2', 'e4');
+      await page.waitForFunction(() => coachPracticeSession && !coachPracticeSession.grading && coachGame.history().length === 1, null, { timeout: 30000 })
+        .catch(() => problems.push('setup: the dragged best move was not accepted'));
+      await page.waitForTimeout(500);
+      const shown = await page.evaluate(() => ({ board: Chessboard.objToFen(coachBoard.position()), game: coachGame.fen().split(' ')[0] }));
+      if (shown.board !== shown.game) problems.push('the board still shows the old position after a graded drag: ' + JSON.stringify(shown));
+    } finally {
+      await page.evaluate(() => { if (coachPracticeSession) exitCoachPractice(); });
     }
     return problems;
   });

@@ -16,10 +16,9 @@
 // onDragStart returning false refuses the piece; onDrop returning 'snapback'
 // sends it home. After an accepted move onSnapEnd runs, so the caller can
 // redraw castling, en passant and promotion. Drag, click and tap all go
-// through these two callbacks: there is one input path per board. (A tap on
-// a piece is preventDefault-ed by cm-chessboard, so no emulated mouse events
-// follow it; the ones after a tap on the target square arrive while the move
-// is still being drawn, and cm-chessboard ignores input then.)
+// through these two callbacks: there is one input path per board. (No
+// emulated mouse events follow a tap: cm-chessboard cancels a tap on a
+// piece, and this file cancels the target tap while a piece is selected.)
 //
 // Square marks (last move, hints, premoves, selection, legal-move dots) are
 // drawn by this file in a layer between the squares and the pieces, styled
@@ -131,7 +130,21 @@
       },
       extensions: [{ class: CM.BoardDecorations, props: { redraw: cm => this._decorate(cm) } }]
     });
-    if (this.config.draggable) this.cm.enableMoveInput(event => this._onInput(event));
+    if (this.config.draggable) {
+      this.cm.enableMoveInput(event => this._onInput(event));
+      // cm-chessboard cancels a touch's default only when it lands on a
+      // piece. The second tap of a tap-move lands on an empty or enemy
+      // square, and the browser then sends emulated mouse events and a click
+      // to whatever is under the finger once the move is drawn: the
+      // promotion picker's backdrop (closing it) or the piece just moved
+      // (selecting it again). While a piece is selected, cancel the default
+      // here, in the capture phase, before cm-chessboard reads the tap.
+      this._onTouchStart = event => {
+        const input = this.cm.view && this.cm.view.visualMoveInput;
+        if (input && input.moveInputState && input.moveInputState !== 'waitForInputStart' && event.cancelable) event.preventDefault();
+      };
+      el.addEventListener('touchstart', this._onTouchStart, { capture: true, passive: false });
+    }
   }
 
   Board.prototype = {
@@ -167,6 +180,7 @@
     destroy() {
       if (this._destroyed) return;
       this._destroyed = true;
+      if (this._onTouchStart) this.el.removeEventListener('touchstart', this._onTouchStart, { capture: true });
       try { this.cm.destroy(); } catch (e) { /* already torn down */ }
       this.el.classList.remove('board-host');
       if (this.el.__board === this) this.el.__board = null;
@@ -258,11 +272,13 @@
       if (!to || from === to) return false;
       const cm = this.cm;
       const moving = cm.getPiece(from), occupant = cm.getPiece(to);
-      // A piece of the same colour on the target: the player is choosing a
-      // different piece, not moving onto their own. cm-chessboard then
-      // selects that piece.
-      if (!moving || (occupant && occupant[0] === moving[0])) return false;
       const dragged = !!cm.view.visualMoveInput.draggablePiece;
+      if (!moving) return false;
+      // A click on a piece of the same colour chooses that piece instead
+      // (cm-chessboard then selects it). A drag onto one is deliberate: it is
+      // a recapture premove in Coach, so the caller decides; every caller
+      // refuses it as a move.
+      if (occupant && occupant[0] === moving[0] && !dragged) return false;
       const oldPos = fenToObj(cm.getPosition());
       const newPos = Object.assign({}, oldPos);
       delete newPos[from];

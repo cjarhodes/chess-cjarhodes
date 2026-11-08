@@ -1817,7 +1817,9 @@ function createCoachBoard(position, orientation) {
         const move = tempGame.move({ from: source, to: target, promotion: 'q' });
         if (!move) return 'snapback';
         if (coachPracticeSession) {
-          const result = coachHandlePracticeMove(source, target, 'q', { updateBoard: false });
+          // Grading is async, so the piece goes home now and the board is
+          // redrawn from coachGame once the move is accepted.
+          const result = coachHandlePracticeMove(source, target, 'q', { updateBoard: true });
           return result && typeof result.then === 'function' ? 'snapback' : result;
         }
         // Legal move — dispatch async classification + opponent reply
