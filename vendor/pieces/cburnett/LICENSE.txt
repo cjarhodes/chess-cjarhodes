@@ -2,3 +2,7 @@ cburnett chess piece set
 Copyright (c) Colin M.L. Burnett. Licensed under CC BY-SA 3.0
 (https://creativecommons.org/licenses/by-sa/3.0/). Obtained from the Lichess
 repository (lichess-org/lila, public/piece/cburnett). Unmodified.
+
+sprite.svg is generated from these files by scripts/build-piece-sprite.js
+for cm-chessboard (same licence and attribution; the piece drawings are
+unchanged, only gathered into one SVG).

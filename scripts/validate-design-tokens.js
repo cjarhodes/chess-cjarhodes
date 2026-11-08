@@ -61,6 +61,16 @@ for (const family of ['DM Sans', 'DM Mono', 'Fraunces', 'Newsreader']) {
   if (!families.has(family)) errors.push(`styles/fonts.css must declare ${family}`);
 }
 
+// The board's piece sprite is generated from the vendored cburnett files and
+// must match them; both vendored board assets keep their licences.
+const sprite = require('./build-piece-sprite');
+if (!fs.existsSync(sprite.out) || fs.readFileSync(sprite.out, 'utf8') !== sprite.build()) {
+  errors.push('vendor/pieces/cburnett/sprite.svg is out of date; run node scripts/build-piece-sprite.js');
+}
+for (const licence of ['vendor/pieces/cburnett/LICENSE.txt', 'vendor/cm-chessboard/LICENSE']) {
+  if (!fs.existsSync(path.join(root, licence))) errors.push(`missing licence ${licence}`);
+}
+
 if (errors.length) {
   console.error(errors.join('\n'));
   process.exit(1);
