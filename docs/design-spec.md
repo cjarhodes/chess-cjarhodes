@@ -98,6 +98,20 @@ an abbreviation is natural (ECO codes).
 Breakpoints are 760px and 1200px. They can't be custom properties inside
 media queries, so they live as constants in `components.css` and here.
 
+**Today (Phase 6a, before the new shell).** The current views follow this
+table with their existing markup, in the "RESPONSIVE LAYOUT" section at the
+end of `styles.css`: the left rail is still content (Coach setup, the opening
+list, puzzle modes) rather than a nav, so on tablets both rails narrow
+(`clamp(190px, 19vw, 240px)` and `clamp(280px, 29vw, 340px)`) and a 1024×768
+screen gets a 456–500px board. The one-column layout also covers tablets held
+upright and sideways phones (`(max-width: 759.98px), (max-width: 1199.98px)
+and (orientation: portrait), (max-width: 1199.98px) and (max-height:
+499.98px)`, mirrored as `LAYOUT_STACKED_QUERY` in `src/ui/layout.js`); there
+the top nav is the tab bar, the eval bar turns horizontal above the board,
+and upright tablets keep a framed board small enough for the controls to
+stay on screen. There is no Settings gear yet: settings stay in the Coach
+setup groups, stacked under the board.
+
 ---
 
 ## 3. Components
