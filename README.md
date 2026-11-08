@@ -7,7 +7,7 @@ with vendored copies of every third-party library.
 
 ## Modes
 
-**Library** — Guided study of 28 openings across 35 total lines (main
+**Library** — Guided study of 39 openings across 50 total lines (main
 lines plus attached variations, e.g. the Italian Game links to the Evans
 Gambit, Fried Liver Attack, and Blackburne Shilling as sub-lines). Each
 line has move-by-move explanations and key ideas. A quiz mode tests

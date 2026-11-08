@@ -134,7 +134,7 @@ Reference screenshots: [`docs/baseline/`](baseline/), regenerated with
 
 ## 8. Library
 
-- [ ] 28 openings and 35 lines, with unique IDs, names, categories, and exactly one explanation per move. **B**
+- [ ] 39 openings and 50 lines, with unique IDs, names, categories, and exactly one explanation per move. **B**
 - [ ] Every opening line is legal chess (806 moves replayed with the vendored chess.js). **B**
 - [ ] Study: step through with Prev/Next/Start/End; per-move explanations and key ideas. Baseline screenshots
 - [ ] Quiz: the opponent's replies play automatically; misses are counted and can be reviewed; spaced repetition is recorded per line. **S**
