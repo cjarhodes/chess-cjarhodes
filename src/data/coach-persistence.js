@@ -63,6 +63,8 @@ function persistCoachPracticeReturnState(snapshot) {
 // state is saved: workers, pending promises, and speculative moves are rebuilt.
 function clearCoachPracticeState(owner = coachMemoryOwnerId()) {
   try { localStorage.removeItem(`${COACH_PRACTICE_STATE_KEY}:${owner}`); } catch (e) {}
+  // Upload the cleared resume point too, or the account keeps a stale drill.
+  if (typeof queueAccountCheckpoint === 'function' && owner === coachMemoryOwnerId()) queueAccountCheckpoint();
 }
 
 function loadCoachPracticeState() {
@@ -328,6 +330,7 @@ function loadCoachState() {
 }
 function clearCoachState() {
   try { localStorage.removeItem(coachMemoryKey(COACH_STATE_KEY)); } catch (e) {}
+  if (typeof queueAccountCheckpoint === 'function') queueAccountCheckpoint();
 }
 function backupCorruptCoachState(raw, reason) {
   if (!raw) return;

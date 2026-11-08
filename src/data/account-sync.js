@@ -776,12 +776,15 @@ async function refreshRemoteInsights(opts = {}) {
   const ownerId = activePracticeOwnerId();
   if (typeof refreshAccountCheckpoints === 'function') refreshAccountCheckpoints().catch(handleAccountCheckpointError);
   if (!opts.silent) setCoachDbStatus('Loading account insights...');
-  await Promise.all([
+  // Uploads go first so the reads include them, but a failed or paused upload
+  // (e.g. a checkpoint conflict) must not keep account insights from loading.
+  const uploads = await Promise.allSettled([
     syncPendingPracticeEvents(),
     typeof flushPendingAccountReviews === 'function' ? flushPendingAccountReviews() : Promise.resolve(),
     syncRemoteDailySprints({ silent: true }),
     typeof syncGrowthState === 'function' ? syncGrowthState({ silent: true }) : Promise.resolve()
   ]);
+  const uploadFailure = uploads.find(result => result.status === 'rejected');
   const [movesResult, drillsResult, attemptsResult] = await Promise.all([
     coachDbClient
       .from('coach_moves')
@@ -812,6 +815,7 @@ async function refreshRemoteInsights(opts = {}) {
   if (!opts.silent) setCoachDbStatus('Account insights loaded.');
   renderCoachAuth();
   renderInsights();
+  if (uploadFailure) throw uploadFailure.reason;
 }
 
 const coachSync = {

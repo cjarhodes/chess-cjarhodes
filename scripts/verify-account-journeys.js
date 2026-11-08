@@ -226,6 +226,29 @@ async browserPage => {
     await b.evaluate(()=>flushAccountCheckpoint());
     assert(await b.evaluate(old=>accountCheckpointDeviceId()!==old&&!accountCheckpoint.conflict,device),'explicit continuation forks the stale tab checkpoint');
     assert(JSON.stringify(contested.snapshot)===protectedSnapshot,'continued stale tab still leaves source checkpoint intact');
+    // A browser with no game uploads a drill checkpoint, then finishes the
+    // drill. The cleared checkpoint is not "a newer session elsewhere".
+    const d=await fresh();await signIn(d);
+    await d.locator('#tab-practice').click();await d.locator('#endgame-track-list .endgame-item button').first().click();
+    await d.waitForFunction(()=>coachPracticeSession&&coachPracticeSession.analysisReady,null,{timeout:60000});
+    await d.evaluate(()=>{saveCoachPracticeState();return flushAccountCheckpoint();});
+    const drillDevice=await d.evaluate(()=>accountCheckpointDeviceId());
+    const drillRow=()=>tables.coach_checkpoints.find(row=>row.device_id===drillDevice);
+    assert(drillRow()&&drillRow().snapshot.practice,'drill-only checkpoint reaches the account');
+    await d.locator('#btn-coach-practice-exit').click();
+    await d.evaluate(()=>new Promise(resolve=>setTimeout(resolve,1300))).then(()=>d.evaluate(()=>flushAccountCheckpoint()));
+    assert(await d.evaluate(()=>!readLocalAccountCheckpoint()),'finished drill leaves no local checkpoint');
+    assert(!drillRow().snapshot.practice&&!drillRow().snapshot.game,'finished drill clears the remote checkpoint');
+    await d.reload();
+    await d.waitForFunction(()=>coachAuthUser&&accountCheckpoint.loaded,null,{timeout:15000});
+    await d.waitForFunction(()=>coachRemoteInsightsLoaded,null,{timeout:15000}).catch(()=>{});
+    assert(await d.evaluate(()=>!accountCheckpoint.conflict),'a cleared checkpoint does not pause session sync after reload');
+    assert(await d.evaluate(()=>coachRemoteInsightsLoaded),'account insights load after a finished drill');
+    // Insight reads never depend on checkpoint health.
+    await d.evaluate(()=>{pauseAccountCheckpoint();coachRemoteInsightsLoaded=false;});
+    await d.evaluate(()=>refreshRemoteInsights({silent:true}).catch(()=>{}));
+    assert(await d.evaluate(()=>coachRemoteInsightsLoaded),'a paused checkpoint still lets account insights load');
+    await d.evaluate(()=>{sessionStorage.removeItem(coachMemoryKey('coach:checkpoint-conflict:v1'));accountCheckpoint.conflict=false;});
     // Failed sign-out must leave the real session and UI consistent.
     failLogout=true;await b.locator('#btn-coach-logout').click();
     await b.waitForFunction(()=>!coachAuthUser&&document.querySelector('#coach-auth-status').textContent.includes('Signed out on this browser.'));
@@ -242,7 +265,7 @@ async browserPage => {
     assert(await b.evaluate(()=>currentInsightEntries().length===0&&!coachGameActive),'different account sees no previous account history or board');
     await capture(b,'separate-owner');
     assert(errors.length===0,'no browser runtime errors');
-    return {kind:'controlled-auth-and-rest-with-real-sdk',checks:checks.length,captures,scenarios:['email form and callback','two-browser game recovery','previous board recovery','offline move retry after replacement','offline takebacks before and after upload','practice backup and live-game return','malformed and quota rollback','concurrent profile merge','stale-tab conflict across reload and copy','failed and local sign-out','account isolation'],errors};
+    return {kind:'controlled-auth-and-rest-with-real-sdk',checks:checks.length,captures,scenarios:['email form and callback','two-browser game recovery','previous board recovery','offline move retry after replacement','offline takebacks before and after upload','practice backup and live-game return','malformed and quota rollback','concurrent profile merge','stale-tab conflict across reload and copy','finished drill clears the checkpoint without pausing sync','failed and local sign-out','account isolation'],errors};
   } catch(error) { const states=await Promise.all(contexts.map(async c=>{const p=c.pages()[0];try{return await p.evaluate(()=>({signedIn:!!coachAuthUser,status:document.querySelector('#coach-auth-status').textContent}));}catch(e){return{};}}));throw Error(error.message+'; last checks: '+JSON.stringify(checks.slice(-4))+'; states: '+JSON.stringify(states)); }
   finally { for(const context of contexts)await context.close(); }
 }
