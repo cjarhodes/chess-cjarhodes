@@ -41,6 +41,18 @@ for (const required of [
   if (!headerNames.has(required)) fail(`missing security header: ${required}`);
 }
 
+// Long-lived caching only for files whose name carries their version: a new
+// version is a new URL, so a year-long immutable copy can never go stale.
+for (const entry of headers) {
+  const cache = (entry.headers || []).find(h => h.key.toLowerCase() === 'cache-control');
+  if (!cache || !/immutable|max-age=(?!0\b)\d+/.test(cache.value)) continue;
+  if (!/-\d+\.\d+\.\d+[^/]*$/.test(entry.source) || /[(*:]/.test(entry.source)) {
+    fail(`long-lived cache rule must name one versioned file: ${entry.source}`);
+  } else if (!fs.existsSync(path.join(__dirname, '..', entry.source))) {
+    fail(`long-lived cache rule names a file that does not exist: ${entry.source}`);
+  }
+}
+
 const csp = ((rootHeaders && rootHeaders.headers || []).find(h => h.key.toLowerCase() === 'content-security-policy') || {}).value || '';
 const scriptSrc = (csp.match(/(?:^|;\s*)script-src\s+([^;]+)/) || [])[1] || '';
 if (scriptSrc.includes("'unsafe-inline'")) {
