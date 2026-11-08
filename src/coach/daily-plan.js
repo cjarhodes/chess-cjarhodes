@@ -522,6 +522,41 @@ function settleDailySprintDay(day) {
   return day;
 }
 
+// Days saved before drills and moves shared settleDailySprintDay can be
+// stuck: their units reached the target with no completedAt, or live play
+// opened with drills still owed ("0 moves remain"). Settle them whenever
+// Coach renders the plan, instead of waiting for the next recorded move
+// (which only ever reached today, so an earlier stuck day broke the streak).
+function settleSavedDailySprints(ownerId = activePracticeOwnerId()) {
+  const history = loadDailySprintHistory(ownerId);
+  const todayKey = dailySprintDayKey();
+  let changed = false;
+  Object.entries(history.days).forEach(([key, day]) => {
+    if (!day || day.completedAt || day.mode !== 'adaptive') return;
+    const before = JSON.stringify(day);
+    const settled = Object.assign({}, day);
+    if (key === todayKey) {
+      settleDailySprintDay(settled);
+    } else {
+      // An earlier day that reached its target finished when its last unit
+      // was recorded, not now.
+      const units = (Number(settled.drillsCompleted) || 0) + (Number(settled.movesCompleted) || 0);
+      if (!(settled.target > 0 && units >= settled.target)) return;
+      settled.completedUnits = units;
+      settled.completedAt = Number(settled.updatedAt) || Number(settled.startedAt) || Date.now();
+      settled.phase = 'complete';
+    }
+    if (JSON.stringify(settled) === before) return;
+    if (key === todayKey) settled.updatedAt = Date.now();
+    history.days[key] = settled;
+    changed = true;
+  });
+  if (!changed) return;
+  const saved = saveDailySprintHistory(history, ownerId);
+  if (!saved.ok) setCoachStatus('Daily Sprint progress could not be saved in this browser.');
+  else queueRemoteDailySprintSync();
+}
+
 function recordDailySprintMove(review) {
   const existing = dailySprintToday();
   if (existing && (existing.completedAt || existing.mode === 'drills' || (existing.mode === 'adaptive' && existing.phase === 'drills'))) return existing;

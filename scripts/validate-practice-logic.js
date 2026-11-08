@@ -207,6 +207,8 @@ const functionNames = [
   'recordDailySprintMove',
   'recordDailySprintDrill',
   'settleDailySprintDay',
+  'settleSavedDailySprints',
+  'dailySprintStreak',
   'practiceDayStart'
 ];
 
@@ -669,6 +671,38 @@ resetStorage();
   }));
   const run = context.orderedPracticeRunItems([drillItem(1), drillItem(2), drillItem(3)]);
   assertEqual(run.length, 1, 'a drills phase with one drill left must start a one-drill run');
+}
+
+// === 15. days saved stuck before the shared completion check settle on render =
+
+resetStorage();
+{
+  currentNow = new Date(2024, 0, 10, 9, 0).getTime();
+  const yesterday = new Date(2024, 0, 9, 21, 15).getTime();
+  const history = { v: 1, days: {
+    // Yesterday: the last drill reached the target, but the drill path never set completedAt.
+    '2024-01-09': { mode: 'adaptive', phase: 'drills', focusTag: 'development', drillTarget: 2, drillsCompleted: 2, drillIds: ['a', 'b'],
+      moveTarget: 6, movesCompleted: 6, moveIds: ['g:1', 'g:2', 'g:3', 'g:4', 'g:5', 'g:6'], target: 8, completedUnits: 6, startedAt: yesterday - 3600000, updatedAt: yesterday, completedAt: null },
+    // Today: live play opened with drills still owed, so "0 moves remain".
+    '2024-01-10': { mode: 'adaptive', phase: 'moves', focusTag: 'development', drillTarget: 2, drillsCompleted: 0, drillIds: [],
+      moveTarget: 6, movesCompleted: 6, moveIds: ['g:1', 'g:2', 'g:3', 'g:4', 'g:5', 'g:6'], target: 8, completedUnits: 6, startedAt: currentNow - 60000, updatedAt: currentNow - 60000, completedAt: null },
+    // An earlier day short of its target stays incomplete.
+    '2024-01-08': { mode: 'adaptive', phase: 'moves', drillTarget: 0, drillsCompleted: 0, moveTarget: 10, movesCompleted: 4, target: 10, completedUnits: 4, updatedAt: yesterday - DAY_MS, completedAt: null }
+  } };
+  context.saveDailySprintHistory(history);
+  assertEqual(context.dailySprintStreak(context.loadDailySprintHistory(), currentNow), 0, 'setup: the stuck day breaks the streak');
+  context.settleSavedDailySprints();
+  const days = context.loadDailySprintHistory().days;
+  assertEqual(days['2024-01-09'].phase, 'complete', 'a past day that reached its target must settle as complete');
+  assertEqual(days['2024-01-09'].completedAt, yesterday, 'a past day must complete when its last unit was recorded, not now');
+  assertEqual(days['2024-01-09'].completedUnits, 8, 'a settled past day must count drills and moves together');
+  assertEqual(context.dailySprintStreak(context.loadDailySprintHistory(), currentNow), 1, 'the settled day must count in the streak');
+  assertEqual(days['2024-01-10'].phase, 'drills', 'today\'s day with drills owed must return to its drills phase');
+  assert(!days['2024-01-10'].completedAt, 'today\'s day with drills owed must not complete');
+  assert(!days['2024-01-08'].completedAt, 'a past day short of its target must stay incomplete');
+  const saved = JSON.stringify(context.loadDailySprintHistory());
+  context.settleSavedDailySprints();
+  assertEqual(JSON.stringify(context.loadDailySprintHistory()), saved, 'settling again must change nothing');
 }
 
 // --- Report ---------------------------------------------------------------

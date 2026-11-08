@@ -2263,6 +2263,47 @@ async page => {
     return problems;
   }));
 
+  await check('a Daily Sprint day saved stuck shows its real state straight after reload', async () => {
+    const problems = [];
+    await freshCoach();
+    // Days saved before drills and moves shared one completion check:
+    // yesterday reached its target without completedAt, and today opened
+    // live play with drills still owed ("0 moves remain").
+    await page.evaluate(() => {
+      const now = Date.now();
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const moves = Array.from({ length: 6 }, (_, i) => `g:${i + 1}`);
+      const base = { mode: 'adaptive', focusTag: 'development', focus: 'Slow development', focusCue: 'Develop a piece.', focusReason: 'Recent reviews.',
+        moveTarget: 6, movesCompleted: 6, moveIds: moves, target: 8, completedAt: null, takeaway: null };
+      const history = { v: 1, days: {
+        [dailySprintDayKey(yesterday.getTime())]: Object.assign({}, base, { phase: 'drills', drillTarget: 2, drillsCompleted: 2, drillIds: ['a', 'b'], completedUnits: 6,
+          startedAt: yesterday.getTime() - 3600000, updatedAt: yesterday.getTime() }),
+        [dailySprintDayKey(now)]: Object.assign({}, base, { phase: 'moves', drillTarget: 2, drillsCompleted: 0, drillIds: [], completedUnits: 6,
+          startedAt: now - 120000, updatedAt: now - 120000 })
+      } };
+      saveDailySprintHistory(history);
+    });
+    await page.goto(base + '/?view=coach');
+    await page.waitForFunction(() => typeof dailySprintToday === 'function' && $('#coach-daily-plan-title').text().trim().length > 0);
+    const shown = await page.evaluate(() => ({
+      title: $('#coach-daily-plan-title').text(),
+      detail: $('#coach-daily-plan-detail').text(),
+      streak: $('#daily-sprint-streak').text(),
+      today: dailySprintToday(),
+      days: Object.values(loadDailySprintHistory().days).map(day => ({ phase: day.phase, done: !!day.completedAt }))
+    }));
+    // No drills are due in a fresh browser, so today's owed drills are
+    // removed and its six moves complete it.
+    if (!/training complete/.test(shown.title)) problems.push(`today should show as complete after reload: ${shown.title} — ${shown.detail}`);
+    if (/0 reviewed moves remain/.test(shown.detail)) problems.push('the stuck "0 reviewed moves remain" state survived a reload');
+    if (!shown.today || !shown.today.completedAt) problems.push('today\'s settled state was not saved: ' + JSON.stringify(shown.today));
+    if (shown.days.some(day => !day.done)) problems.push('a stuck saved day was left incomplete: ' + JSON.stringify(shown.days));
+    if (shown.streak !== '2-day streak') problems.push(`the settled days should count in the streak: ${shown.streak}`);
+    await freshCoach();
+    return problems;
+  });
+
   await check('Library quiz hides the moves you have not reached', async () => {
     const problems = [];
     await page.goto(base + '/?opening=italian&mode=quiz');
