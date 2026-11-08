@@ -448,7 +448,9 @@ function flushPendingAccountReviews() {
         if (move.error) throw move.error;
         if (move.data) {
           for (const table of ['drill_queue', 'theory_cards']) {
-            const removed = await coachDbClient.from(table).delete().eq('source_move_id', move.data.id).eq('user_id', coachAuthUser.id);
+            let removal = coachDbClient.from(table).delete().eq('source_move_id', move.data.id).eq('user_id', coachAuthUser.id);
+            if (table === 'drill_queue') removal = removal.eq('attempts', 0);
+            const removed = await removal;
             if (owner !== coachMemoryOwnerId()) return;
             if (removed.error) throw removed.error;
           }

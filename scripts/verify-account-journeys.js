@@ -65,6 +65,7 @@ async browserPage => {
         } else {
           const row = {...clone(item), id:item.id||id(), updated_at:stampTime()};
           if (table==='coach_checkpoints') row.revision=1;
+          if (table==='drill_queue') row.attempts=row.attempts??0;
           tables[table].push(row);result.push(clone(row));
         }
       }
@@ -266,6 +267,28 @@ async browserPage => {
     await d.evaluate(()=>{const real=coachReviewLog[coachReviewLog.length-1];while(coachReviewLog.length<400)coachReviewLog.unshift(JSON.parse(JSON.stringify(real)));saveCoachState();});
     assert(await d.evaluate(()=>flushAccountCheckpoint().then(()=>accountCheckpoint.message.includes('too large'),()=>false)),'a session too large even trimmed stays local without failing sync');
     assert(await d.evaluate(()=>ensureAccountWritePermission().then(()=>true,()=>false)),'skipping an oversized checkpoint leaves account writes open');
+    // A drill practised after one game must survive taking back the same
+    // mistake in a later game (and taking back the move that created it).
+    await a.evaluate(()=>{if(coachPracticeSession)exitCoachPractice();});
+    if(await a.evaluate(()=>!coachGameActive)){await a.locator('#btn-coach-newgame').click();await settle(a);}
+    const mistake=await a.evaluate(()=>{
+      const fenBefore='rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2';
+      const tag=Object.keys(INSIGHT_TAG_META)[0];
+      const review=ply=>({tier:'mistake',loss:150,fenBefore,fenAfter:'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPPKPPP/RNBQ1BNR b kq - 1 2',userUci:'e1e2',userSan:'Ke2',bestUci:'g1f3',bestSan:'Nf3',
+        ply,pairNum:2,insightTags:[tag],gameGeneration:coachGameGeneration,localGameId:coachLocalGameId});
+      return {first:review(201),repeat:review(203)};
+    });
+    await a.evaluate(r=>runAccountMoveWrite(()=>syncRemoteCoachMove(r)),mistake.first);
+    const drill=tables.drill_queue.find(row=>row.user_id===users.a.id&&row.fen===mistake.first.fenBefore);
+    assert(drill&&drill.source_move_id,'a reviewed mistake creates its account drill'+(drill?'':' '+JSON.stringify(requests.slice(-6))));
+    const firstMove=drill.source_move_id;
+    Object.assign(drill,{attempts:3,correct:2,reps:2,interval_days:6});
+    await a.evaluate(r=>runAccountMoveWrite(()=>syncRemoteCoachMove(r)),mistake.repeat);
+    await a.evaluate(r=>runAccountMoveWrite(()=>deleteRemoteCoachMove(r)),mistake.repeat);
+    const kept=()=>tables.drill_queue.find(row=>row.drill_key===drill.drill_key&&row.user_id===users.a.id);
+    assert(kept()&&kept().attempts===3&&kept().source_move_id===firstMove,'taking back a repeated mistake keeps the practised drill and its source');
+    await a.evaluate(r=>runAccountMoveWrite(()=>deleteRemoteCoachMove(r)),mistake.first);
+    assert(kept()&&kept().attempts===3,'taking back the original move keeps a practised drill');
     // Failed sign-out must leave the real session and UI consistent.
     failLogout=true;await b.locator('#btn-coach-logout').click();
     await b.waitForFunction(()=>!coachAuthUser&&document.querySelector('#coach-auth-status').textContent.includes('Signed out on this browser.'));
@@ -282,7 +305,7 @@ async browserPage => {
     assert(await b.evaluate(()=>currentInsightEntries().length===0&&!coachGameActive),'different account sees no previous account history or board');
     await capture(b,'separate-owner');
     assert(errors.length===0,'no browser runtime errors');
-    return {kind:'controlled-auth-and-rest-with-real-sdk',checks:checks.length,captures,scenarios:['email form and callback','two-browser game recovery','previous board recovery','offline move retry after replacement','offline takebacks before and after upload','practice backup and live-game return','malformed and quota rollback','concurrent profile merge','stale-tab conflict across reload and copy','finished drill clears the checkpoint without pausing sync','oversized checkpoint trimmed or kept local','failed and local sign-out','account isolation'],errors};
+    return {kind:'controlled-auth-and-rest-with-real-sdk',checks:checks.length,captures,scenarios:['email form and callback','two-browser game recovery','previous board recovery','offline move retry after replacement','offline takebacks before and after upload','practice backup and live-game return','malformed and quota rollback','concurrent profile merge','stale-tab conflict across reload and copy','finished drill clears the checkpoint without pausing sync','oversized checkpoint trimmed or kept local','practised drill survives take-backs','failed and local sign-out','account isolation'],errors};
   } catch(error) { const states=await Promise.all(contexts.map(async c=>{const p=c.pages()[0];try{return await p.evaluate(()=>({signedIn:!!coachAuthUser,status:document.querySelector('#coach-auth-status').textContent}));}catch(e){return{};}}));throw Error(error.message+'; last checks: '+JSON.stringify(checks.slice(-4))+'; states: '+JSON.stringify(states)); }
   finally { for(const context of contexts)await context.close(); }
 }

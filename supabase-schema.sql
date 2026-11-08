@@ -65,7 +65,7 @@ create table if not exists public.drill_queue (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   drill_key text not null,
-  source_move_id uuid references public.coach_moves(id) on delete cascade,
+  source_move_id uuid references public.coach_moves(id) on delete set null,
   tag text not null,
   fen text not null,
   best_uci text,

@@ -607,9 +607,12 @@ async function syncRemoteLearningArtifacts(review, moveId, generation) {
 
   const writes = [];
   if (artifacts.drills.length) {
+    // A drill key already in the account (the same mistake in an earlier
+    // game) keeps its source move and schedule; re-pointing it here would let
+    // this move's take-back delete progress built up across games.
     writes.push(coachDbClient
       .from('drill_queue')
-      .upsert(artifacts.drills, { onConflict: 'user_id,drill_key' }));
+      .upsert(artifacts.drills, { onConflict: 'user_id,drill_key', ignoreDuplicates: true }));
   }
   if (artifacts.cards.length) {
     writes.push(coachDbClient
@@ -622,6 +625,8 @@ async function syncRemoteLearningArtifacts(review, moveId, generation) {
   }
 }
 
+// Only drills never practised go with their move. A practised drill keeps its
+// progress; the database clears its source_move_id when the move is deleted.
 async function deleteRemoteLearningArtifacts(moveId) {
   if (!hasCoachDbSession() || !moveId) return;
   const [drillDelete, cardDelete] = await Promise.all([
@@ -629,7 +634,8 @@ async function deleteRemoteLearningArtifacts(moveId) {
       .from('drill_queue')
       .delete()
       .eq('source_move_id', moveId)
-      .eq('user_id', coachAuthUser.id),
+      .eq('user_id', coachAuthUser.id)
+      .eq('attempts', 0),
     coachDbClient
       .from('theory_cards')
       .delete()

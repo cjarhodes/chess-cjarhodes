@@ -19,6 +19,8 @@ const practiceMigration = read('supabase/migrations/20260724025215_durable_pract
 const practiceTest = read('supabase/tests/database/durable_practice_progress.test.sql');
 const dailyMigration = read('supabase/migrations/20260817024158_sync_adaptive_training_sessions.sql');
 const dailyTest = read('supabase/tests/database/daily_training_sessions.test.sql');
+const drillSourceMigration = read('supabase/migrations/20261108030000_keep_practised_drills.sql');
+const drillSourceTest = read('supabase/tests/database/drill_source_move.test.sql');
 const workflow = read('.github/workflows/ci.yml');
 const serviceWorker = read('service-worker.js');
 
@@ -34,7 +36,12 @@ requirePattern(practiceMigration, /function public\.record_practice_attempt[\s\S
 requirePattern(practiceMigration, /on conflict \(id\) do nothing[\s\S]{0,300}row_count/, 'practice RPC must be idempotent by event id');
 requirePattern(practiceMigration, /order by attempted_at asc, id asc[\s\S]{0,1800}last_attempt_at = v_last_attempt_at/, 'practice RPC must rebuild schedules chronologically for late offline events');
 
+// A practised drill outlives its source move (take-backs must not erase it)
+requirePattern(drillSourceMigration, /drop constraint[\s\S]+add constraint drill_queue_source_move_id_fkey\s+foreign key \(source_move_id\) references public\.coach_moves\(id\) on delete set null/, 'drill_queue.source_move_id must be re-created with on delete set null');
+requirePattern(schema, /create table if not exists public\.drill_queue \([\s\S]{0,200}source_move_id uuid references public\.coach_moves\(id\) on delete set null/, 'canonical schema must keep drills when their source move is deleted');
+
 // Database tests that prove the above
+requirePattern(drillSourceTest, /plan\(6\)[\s\S]+deleting the source move keeps the drill and its practice progress[\s\S]+another account cannot read a drill with no source move/, 'database tests must prove a practised drill survives its source move and stays private');
 requirePattern(profileTest, /plan\(12\)[\s\S]+another account cannot read the first account profile[\s\S]+another account cannot insert for the first account/, 'database tests must prove training-profile account isolation');
 requirePattern(practiceTest, /plan\(23\)[\s\S]+older offline attempt can arrive after newer events[\s\S]+late delivery preserves the chronologically latest schedule anchor/, 'database tests must prove idempotency, late-event ordering, and account isolation');
 requirePattern(dailyTest, /plan\(12\)[\s\S]+another account cannot read the first account session[\s\S]+another account cannot insert for the first account/, 'database tests must prove adaptive-session account isolation');
