@@ -474,7 +474,7 @@ const OPENINGS = [
     category: 'white',
     tagline: 'Flexible hypermodern control from the flank',
     description: 'The English Opening (1.c4) is a hypermodern classic — rather than occupying the center with pawns, White controls it from the flank. It leads to rich positional battles and can transpose into many other openings. The English is favored by positional players who want to sidestep Black\'s prepared systems while building long-term pressure.',
-    moves: ['c4','e5','Nc3','Nf6','Nf3','Nc6','g3','d5','cxd5','Nxd5','Bg2','Nb6','O-O','Be7','d3','O-O','Be3','Be6','Qd2','f6','Rfd1','Qd7','a3','a5','Rac1','Nd4'],
+    moves: ['c4','e5','Nc3','Nf6','Nf3','Nc6','g3','d5','cxd5','Nxd5','Bg2','Nb6','O-O','Be7','d3','O-O','Be3','Be6','Rc1','f5','a3','a6','b4','h6','Qd2','Qd7'],
     explanations: [
       { label: '1. c4 — White', text: 'The English Opening! White controls d5 from the flank without immediately occupying the center. This flexible move allows many different setups.' },
       { label: '1... e5 — Black', text: 'The most direct response — Black occupies the center immediately. This leads to the "Reversed Sicilian" structure where Black gets the dynamic Sicilian positions with an extra tempo.' },
@@ -494,18 +494,18 @@ const OPENINGS = [
       { label: '8... O-O — Black', text: 'Black castles, completing basic development. Now the strategic battle begins — Black will try to use the e5 pawn as a strength.' },
       { label: '9. Be3 — White', text: 'The queen\'s bishop develops to e3, where it supports the center and prepares queenside activity. White is building up slowly but effectively.' },
       { label: '9... Be6 — Black', text: 'Black\'s bishop develops to e6, contesting the long diagonal and fighting for the d5 square. Solid and natural.' },
-      { label: '10. Qd2 — White', text: 'White\'s queen comes to d2, completing the "London-style" setup on the queenside. The queen supports d3 and prepares Rfd1.' },
-      { label: '10... f6 — Black', text: 'Black plays f6, defending e5 and preparing ...Nd5 or ...Qd7. This solidifies the e5 pawn but slightly weakens the kingside.' },
-      { label: '11. Rfd1 — White', text: 'White centralizes the rook to d1, increasing pressure on the d-file and supporting potential d4 advances.' },
-      { label: '11... Qd7 — Black', text: 'Black\'s queen comes to d7, connecting the rooks and preparing queenside counterplay. Both sides are building up steadily.' },
-      { label: '12. a3 — White', text: 'Prophylaxis! White prevents ...Nb4 and prepares b4 to gain queenside space. Small moves like these are typical in positional English games.' },
-      { label: '12... a5 — Black', text: 'Black prevents b4 and grabs queenside space. The game is now a strategic battle over the queenside.' },
-      { label: '13. Rac1 — White', text: 'The rook comes to c1, controlling the c-file and preparing for queenside action. Both rooks are active.' },
-      { label: '13... Nd4 — Black', text: 'Black\'s knight jumps to d4! From d4, it controls many key squares and is very hard to challenge. This is a typical outpost in the English — the game has reached a rich strategic middlegame.' }
+      { label: '10. Rc1 — White', text: 'The rook goes straight to the half-open c-file, where it eyes c7 and supports play on the queenside. This is a Sicilian plan with colors reversed: White attacks on the queenside, where the extra tempo counts.' },
+      { label: '10... f5 — Black', text: 'Black grabs kingside space with f5, the reversed-Dragon plan. The e5 and f5 pawns control the center, take e4 away from White\'s knight, and prepare ...f4 to hit the bishop on e3.' },
+      { label: '11. a3 — White', text: 'Prophylaxis and preparation in one move. a3 takes b4 away from the c6 knight and prepares b4, gaining queenside space with the plan b4-b5 to drive the Nc6 away from the center.' },
+      { label: '11... a6 — Black', text: 'Black stops b5 in advance, so the knight on c6 cannot be chased away from the center. Small moves like these are typical of positional English games.' },
+      { label: '12. b4 — White', text: 'White gains space on the queenside. The b4 pawn covers c5, where the e3-bishop can go to trade off Black\'s e7-bishop, an important defender of the dark squares.' },
+      { label: '12... h6 — Black', text: 'A quiet but useful move. h6 takes g5 away from White\'s knight, so Ng5 can no longer harass the bishop on e6, and gives the black king a little air.' },
+      { label: '13. Qd2 — White', text: 'The queen steps up to d2, connecting the rooks. It also lines up with the Be3 on the c1-h6 diagonal against the h6 pawn, and Rfd1 or Bc5 can follow.' },
+      { label: '13... Qd7 — Black', text: 'Black connects the rooks too, ready to bring one to d8. Both sides have finished developing: White will press on the queenside with Bc5, Na4 or b5, while Black plays in the center and on the kingside. A rich, balanced middlegame lies ahead.' }
     ],
     keyIdeas: [
       'English fianchetto: g3 + Bg2 creates long-term diagonal pressure and solid kingside',
-      'Typical plan: cxd5, Bg2, O-O, d3, Be3, Qd2, Rfd1 — build up slowly',
+      'Typical plan: Bg2, O-O, d3, Be3, then Rc1, a3 and b4 — a Sicilian queenside attack with colors reversed',
       'Watch for Black\'s ...Nd4 outpost — it can be very powerful in these structures',
       'The English often transposes into Queen\'s Gambit or King\'s Indian structures'
     ]
