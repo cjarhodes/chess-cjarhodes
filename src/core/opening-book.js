@@ -120,11 +120,13 @@ const OPENING_TRIE = (() => {
 })();
 
 // Find the deepest opening-book match for the given SAN history.
-// Returns { match, exact, matchedPlies } — exact=true only if every move in
-// `sans` walked into a trie node; matchedPlies is how far the named opening
-// extends (i.e. the depth of the last {eco,name}-bearing node we passed).
+// Returns { match, exact, matchedPlies, bookPlies } — exact=true only if every
+// move in `sans` walked into a trie node; matchedPlies is how far the named
+// opening extends (i.e. the depth of the last {eco,name}-bearing node we
+// passed); bookPlies is how far the game stayed in the book at all, which is
+// where it actually left theory (an unnamed book move still counts).
 function identifyOpening(sans) {
-  if (!sans || sans.length === 0) return { match: null, exact: false, matchedPlies: 0 };
+  if (!sans || sans.length === 0) return { match: null, exact: false, matchedPlies: 0, bookPlies: 0 };
   let node = OPENING_TRIE;
   let last = null;
   let lastDepth = 0;
@@ -136,7 +138,7 @@ function identifyOpening(sans) {
     walked = i + 1;
     if (node.data) { last = node.data; lastDepth = walked; }
   }
-  return { match: last, exact: walked === sans.length, matchedPlies: lastDepth };
+  return { match: last, exact: walked === sans.length, matchedPlies: lastDepth, bookPlies: walked };
 }
 
 function openingDefinitionForSans(sans) {
@@ -185,7 +187,7 @@ function updateOpeningLabel() {
     $('#coach-opening-name').text(info.match.name);
   } else {
     // Out of book — pin the deepest named match and say after which move.
-    const moveNum = Math.ceil(info.matchedPlies / 2);
+    const moveNum = Math.ceil(info.bookPlies / 2);
     $('#coach-opening-name').text(
       `${info.match.name} — out of book after move ${moveNum}`
     );

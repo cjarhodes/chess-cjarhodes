@@ -21,6 +21,7 @@ let quizMissedMoves = [];
 let quizReviewMode = false;
 let quizReviewQueue = [];
 let quizReviewCursor = 0;
+let quizTimerGeneration = 0; // invalidates pending quiz auto-play when the quiz restarts
 let tapSelected = null;      // square selected for tap-to-move, or null
 let pendingPromotionChoice = null;
 let promotionReturnFocus = null;
@@ -2400,8 +2401,14 @@ function resolveAccessibleMove(gameObj, rawMove) {
     return legalMoves.find(move => move.from === uci[1] && move.to === uci[2] &&
       (!move.promotion || (uci[3] || 'q') === move.promotion)) || null;
   }
-  const normalized = value.replace(/\s+/g, '').replace(/[+#?!]+$/, '').toLowerCase();
-  return legalMoves.find(move => move.san.replace(/\s+/g, '').replace(/[+#?!]+$/, '').toLowerCase() === normalized) || null;
+  // Case matters in SAN (Bxc3 is the bishop, bxc3 the pawn): an exact match
+  // wins, and a case-insensitive one is accepted only when it is unique.
+  const bare = san => san.replace(/\s+/g, '').replace(/[+#?!]+$/, '');
+  const typed = bare(value);
+  const exact = legalMoves.find(move => bare(move.san) === typed);
+  if (exact) return exact;
+  const loose = legalMoves.filter(move => bare(move.san).toLowerCase() === typed.toLowerCase());
+  return loose.length === 1 ? loose[0] : null;
 }
 
 function focusableElements(container) {
@@ -2537,6 +2544,7 @@ function renderLineSelector() {
 }
 
 function resetQuizTracking() {
+  quizTimerGeneration++;
   quizAttempts = 0;
   quizSessionMisses = 0;
   quizMissedMoves = [];
@@ -2629,6 +2637,13 @@ function loadQuizReviewPosition() {
 // ─────────────────────────────────────────────
 function getUserColor() {
   if (!currentOpening) return 'white';
+  // The side that owns the selected line: traps and gambits are played by the
+  // side that springs them (Fool's Mate, Stafford, Slav are Black's), which
+  // opponents.js already records. It loads after app.js, so look it up here.
+  if (typeof OpponentPersonas !== 'undefined' && OpponentPersonas.lineSide) {
+    const lineId = currentLine && currentLine.id !== 'main' ? currentLine.id : currentOpening.id;
+    return OpponentPersonas.lineSide(lineId, currentOpening) === 'b' ? 'black' : 'white';
+  }
   return currentOpening.category === 'black' ? 'black' : 'white';
 }
 
@@ -2667,8 +2682,11 @@ function autoPlayOpponent() {
   }
   if (isUserTurn(nextIdx)) return; // user's move, wait for them
 
-  // Play opponent's move after a short pause
+  // Play opponent's move after a short pause, unless the quiz restarted
+  // (another opening, line or mode) in the meantime.
+  const generation = quizTimerGeneration;
   setTimeout(function () {
+    if (generation !== quizTimerGeneration) return;
     if (!quizMode) return;
     if (quizReviewMode) return;
     game.move(moves[nextIdx]);
@@ -2751,7 +2769,9 @@ function handleQuizDrop(source, target, promotion) {
     quizAttempts = 0;
     const exp = explanations[nextIdx];
     showFeedback('correct', '✓ ' + (exp ? exp.text : moveLabelForIndex(nextIdx)));
+    const generation = quizTimerGeneration;
     setTimeout(() => {
+      if (generation !== quizTimerGeneration) return;
       board.position(game.fen());
       librarySyncLastMove(game);
       renderMoveList();
@@ -2861,6 +2881,9 @@ function loadOpening(id, lineId) {
   clearFeedback();
   updateSRPanel();
   updateURL();
+  // A quiz carries over to the new opening: orient the board for the side
+  // that owns the line and start the opponent's moves.
+  if (quizMode) setMode('quiz');
 }
 
 // ─────────────────────────────────────────────
@@ -3682,7 +3705,7 @@ $(function () {
         $btn.prop('disabled', false).text('Connect');
         const msg = xhr.status === 401
           ? 'Invalid token — check you copied it correctly.'
-          : 'Could not reach Lichess. Try again.';
+          : (xhr.status === 429 ? LICHESS_RATE_LIMIT_MESSAGE : 'Could not reach Lichess. Try again.');
         $('#token-error').text(msg).show();
       }
     });

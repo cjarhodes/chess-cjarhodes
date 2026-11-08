@@ -83,6 +83,44 @@ async function main() {
     check(client.status === 'idle' && client.worker === null && worker.terminated, 'cancel resets and terminates the worker');
   }
 
+  // ── engine.js: the safety timeout covers the search, not its time in the queue ──
+  {
+    const fakeWorkers = [];
+    const timers = [];
+    const ctx = sandbox(['src/core/engine.js'], {
+      Worker: function FakeWorker() { this.posted = []; this.postMessage = m => this.posted.push(m); this.terminate = () => {}; fakeWorkers.push(this); },
+      setTimeout: (fn, ms) => { if (ms === 30000 || ms === 5000) { timers.push({ fn, ms }); return timers.length; } return setTimeout(fn, ms); },
+      clearTimeout: id => { if (typeof id === 'number' && timers[id - 1]) timers[id - 1].cleared = true; else clearTimeout(id); },
+    });
+    const client = vm.runInContext('engineClient', ctx);
+    const fen = '8/8/8/8/8/8/8/K6k w - - 0 1';
+    const tick = () => new Promise(r => setTimeout(r, 0));
+    const live = () => timers.filter(t => t.ms === 30000 && !t.cleared);
+    const long = client.evaluate(fen, 20);
+    const queued = client.evaluate(fen, 12);
+    let queuedResult = null;
+    queued.then(r => { queuedResult = r; });
+    const worker = fakeWorkers[0];
+    worker.onmessage({ data: 'uciok' });
+    worker.onmessage({ data: 'readyok' });
+    await tick();
+    check(live().length === 1, `only the running search has a safety timer while another waits (found ${live().length})`);
+    // Every pending safety timer fires (the long search took 30s): only the
+    // running search may give up; the queued one has not started.
+    live().forEach(t => { t.cleared = true; t.fn(); });
+    await long;
+    await tick();
+    check(queuedResult === null, 'a queued search is not resolved empty before it has run');
+    worker.onmessage({ data: 'bestmove a1a2' }); // the stopped search's late answer
+    await tick();
+    check(worker.posted.filter(m => m === 'go depth 12').length === 1 && live().length === 1, 'the queued search starts after the stopped one answers, with its own timer');
+    worker.onmessage({ data: 'info depth 12 score cp 42 pv a1b1' });
+    worker.onmessage({ data: 'bestmove a1b1' });
+    const answered = await queued;
+    check(answered.bestmove === 'a1b1' && answered.info.cp === 42, 'the queued search resolves with its own answer');
+    check(live().length === 0, 'a finished search clears its safety timer');
+  }
+
   // ── opponent.js ──
   {
     const ctx = sandbox(['src/core/opponent.js', 'src/core/engine.js']);
@@ -106,7 +144,8 @@ async function main() {
   // ── classify.js ──
   {
     const ctx = sandbox(['src/core/engine.js', 'src/core/classify.js']);
-    check(ctx.classifyRankLoss(1, 0).tier === 'best' && ctx.classifyRankLoss(3, 80).tier === 'excellent', 'top-three engine moves are best or excellent');
+    check(ctx.classifyRankLoss(1, 0).tier === 'best' && ctx.classifyRankLoss(3, 59).tier === 'excellent', 'top-three engine moves within 60cp are best or excellent');
+    check(ctx.classifyRankLoss(2, 400).tier === 'blunder' && ctx.classifyRankLoss(3, 80).tier === 'inaccuracy', 'a top-three move that loses material is graded by its loss, not its rank');
     check(ctx.classifyRankLoss(5, 59).tier === 'good' && ctx.classifyRankLoss(5, 60).tier === 'inaccuracy', 'good/inaccuracy boundary is 60cp');
     check(ctx.classifyRankLoss(5, 120).tier === 'mistake' && ctx.classifyRankLoss(5, 250).tier === 'blunder', 'mistake and blunder boundaries are 120cp and 250cp');
     check(ctx.accuracyFromTallies({}, 0) === null, 'no moves means no accuracy');
@@ -120,6 +159,22 @@ async function main() {
     check(hanging.some(h => h.square === 'g5' && h.piece === 'q'), 'a queen attacked by an undefended bishop line is reported as hanging');
     const safe = ctx.detectHangingPieces(new ctx.Chess(), 'white');
     check(safe.length === 0, 'nothing hangs in the starting position');
+    const after = sans => { const g = new ctx.Chess(); sans.forEach(san => g.move(san)); return g; };
+    const checked = ctx.detectHangingPieces(after(['e4', 'd5', 'Bb5+']), 'black');
+    check(!checked.some(h => h.piece === 'k'), 'the king in check is never reported as hanging');
+    let threw = null;
+    try { check(ctx.detectHangingPieces(after(['e4', 'e5', 'Bc4', 'Bc5', 'Bxf7+']), 'black').length === 0, 'in check, no hanging pieces are listed'); }
+    catch (error) { threw = error; }
+    check(!threw, 'scanning a position in check does not throw' + (threw ? ': ' + threw.message : ''));
+
+    // The mate scan passes the move to the opponent; in check that position
+    // would be illegal, so the engine must not be asked.
+    const asked = [];
+    const scan = sandbox(['src/core/tactics.js'], { engineClient: { evaluate: fen => { asked.push(fen); return Promise.resolve({ bestmove: null, info: { cp: 0, mate: null, pv: [] } }); } } });
+    const inCheck = await scan.detectMateThreat(after(['e4', 'd5', 'Bb5+']).fen());
+    check(asked.length === 0 && inCheck.status === 'ok' && inCheck.mateIn === null, 'the mate scan never sends a position with the side not to move in check');
+    await scan.detectMateThreat(after(['e4', 'd5']).fen());
+    check(asked.length === 1 && / b /.test(asked[0]), 'outside check the mate scan still asks the engine with the move passed');
   }
 
   // ── opening-book.js ──
@@ -130,18 +185,32 @@ async function main() {
     const offBook = ctx.identifyOpening(['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'a5', 'h4']);
     check(offBook.match && !offBook.exact && offBook.matchedPlies <= 5, 'leaving the book keeps the last named opening');
     check(ctx.identifyOpening([]).match === null, 'no moves means no opening');
+    // Book moves past the last named node still count: 5.Nc3 is in the book
+    // (on the way to the Najdorf), so the game left theory after move 5.
+    const najdorfMiss = ctx.identifyOpening(['e4', 'c5', 'Nf3', 'd6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'e5', 'Nf5']);
+    check(najdorfMiss.matchedPlies === 5 && najdorfMiss.bookPlies === 9 && !najdorfMiss.exact, 'bookPlies is where the game left the book, matchedPlies the last named opening');
   }
 
   // ── library-sr.js ──
   {
     const ctx = sandbox(['src/core/library-sr.js']);
     check(ctx.srStatus('italian') === 'new', 'an unseen line is new');
-    ctx.srRecordQuiz('italian', 5);
-    ctx.srRecordQuiz('italian', 5);
-    const rec = ctx.getSRRecord('italian');
-    check(rec.reps === 2 && rec.interval === 3 && rec.attempts === 2, 'two perfect runs schedule the line three days out');
-    ctx.srRecordQuiz('italian', 0);
-    check(ctx.getSRRecord('italian').reps === 0 && ctx.getSRRecord('italian').interval === 1, 'a failed run resets the line');
+    const day = (d, h) => new Date(2026, 10, d, h, 0, 0).getTime(); // local time, November 2026
+    ctx.srRecordQuiz('italian', 5, day(10, 23));
+    check(ctx.getSRRecord('italian').nextDue === day(11, 0), 'a one-day interval is due at the next local midnight, not 24 hours later');
+    check(ctx.srNextReviewLabel(ctx.getSRRecord('italian').nextDue, day(10, 23)) === '1d', 'one hour before a review due tomorrow, the panel says 1d, not now');
+    check(ctx.srNextReviewLabel(day(13, 0), day(10, 13)) === '3d' && ctx.srNextReviewLabel(day(11, 0), day(11, 0)) === 'now', 'the next-review label counts calendar days');
+    check(ctx.srNextReviewLabel(day(10, 20), day(10, 9)) === 'today', 'a legacy due time later today is not shown as now');
+    // Repeating the line before it is due counts as an attempt only.
+    ctx.srRecordQuiz('italian', 5, day(10, 23) + 60000);
+    ctx.srRecordQuiz('italian', 5, day(10, 23) + 120000);
+    let rec = ctx.getSRRecord('italian');
+    check(rec.reps === 1 && rec.interval === 1 && rec.attempts === 3 && ctx.srStatus('italian', day(10, 23) + 180000) === 'learning', 'extra runs before the line is due do not advance its schedule');
+    ctx.srRecordQuiz('italian', 5, day(11, 9));
+    rec = ctx.getSRRecord('italian');
+    check(rec.reps === 2 && rec.interval === 3 && rec.attempts === 4 && rec.nextDue === day(14, 0), 'two perfect runs on due days schedule the line three days out');
+    ctx.srRecordQuiz('italian', 0, day(11, 10));
+    check(ctx.getSRRecord('italian').reps === 0 && ctx.getSRRecord('italian').interval === 1, 'a failed run resets the line, even before it is due');
     const failing = sandbox(['src/core/library-sr.js'], { localStorage: memoryStorage(true) });
     check(failing.saveSR({}).ok === false, 'saveSR reports a storage failure instead of throwing');
   }

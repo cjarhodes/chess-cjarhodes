@@ -161,6 +161,28 @@ async page => {
     return problems;
   }));
 
+  await check('in check, the threat panel says so instead of calling the king hanging', () => page.evaluate(async () => {
+    const problems = [];
+    const realGame = coachGame;
+    const realEvaluate = engineClient.evaluate;
+    const asked = [];
+    try {
+      engineClient.evaluate = fen => { asked.push(fen); return Promise.resolve({ bestmove: null, info: { cp: 0, mate: null, pv: [] } }); };
+      coachGame = new Chess();
+      ['e4', 'e5', 'd4', 'Bb4+'].forEach(san => coachGame.move(san));
+      await showThreats();
+      await new Promise(resolve => setTimeout(resolve, 20));
+      const text = $('#threats-list').text();
+      if (/King/.test(text) || /No immediate threats/.test(text)) problems.push('the panel misdescribed a check: ' + text);
+      if (!/in check/i.test(text)) problems.push('the panel did not say the king is in check: ' + text);
+      if (asked.length) problems.push('the mate scan sent a position with the side not to move in check');
+    } finally {
+      coachGame = realGame;
+      engineClient.evaluate = realEvaluate;
+    }
+    return problems;
+  }));
+
   // ── Sign-in: the magic-link fragment survives URL syncing until consumed ──
   await check('magic-link fragment is kept until the session is read, then stripped', () => page.evaluate(() => {
     const problems = [];
@@ -1331,6 +1353,93 @@ async page => {
     if ((await shown()).length !== await page.locator('#move-list .move-chip').count()) problems.push('Study mode did not show the whole line');
     return problems;
   });
+
+  await check('Library quiz plays the side that owns the line', async () => {
+    const problems = [];
+    await page.goto(base + '/?opening=fools-mate&mode=quiz');
+    await page.waitForFunction(() => quizMode && currentOpening && currentOpening.id === 'fools-mate');
+    await page.waitForFunction(() => game.history().length >= 1, null, { timeout: 3000 }).catch(() => {});
+    let state = await page.evaluate(() => ({ side: getUserColor(), orientation: board.orientation(), history: game.history() }));
+    if (state.side !== 'black' || state.orientation !== 'black' || state.history[0] !== 'f3') problems.push('Fool\'s Mate should be quizzed as Black after White\'s f3: ' + JSON.stringify(state));
+    // A Black-owned variation of a White opening.
+    await page.goto(base + '/?opening=italian&mode=quiz');
+    await page.waitForFunction(() => quizMode && currentOpening && currentOpening.id === 'italian');
+    await page.locator('.line-btn[data-line="blackburne-shilling"]').click();
+    await page.waitForFunction(() => game.history().length >= 1, null, { timeout: 3000 }).catch(() => {});
+    state = await page.evaluate(() => ({ side: getUserColor(), orientation: board.orientation(), history: game.history() }));
+    if (state.side !== 'black' || state.orientation !== 'black' || state.history[0] !== 'e4') problems.push('the Blackburne Shilling line should be quizzed as Black: ' + JSON.stringify(state));
+    return problems;
+  });
+
+  await check('choosing another opening mid-quiz restarts the quiz for that opening', async () => {
+    const problems = [];
+    await page.goto(base + '/?opening=italian&mode=quiz');
+    await page.waitForFunction(() => quizMode && currentOpening && currentOpening.id === 'italian');
+    await page.evaluate(() => $('.opening-btn[data-id="sicilian"]').first().trigger('click'));
+    await page.waitForFunction(() => currentOpening.id === 'sicilian' && game.history().length >= 1, null, { timeout: 3000 }).catch(() => {});
+    const state = await page.evaluate(() => ({ quizMode, orientation: board.orientation(), history: game.history(), idx: currentMoveIdx }));
+    if (!state.quizMode || state.orientation !== 'black' || state.history.join(' ') !== 'e4' || state.idx !== 0) problems.push('the Sicilian quiz should face Black with 1.e4 played: ' + JSON.stringify(state));
+    return problems;
+  });
+
+  await check('a pending quiz reply is dropped when the opening or line changes', async () => {
+    const problems = [];
+    await page.goto(base + '/?opening=sicilian&mode=quiz');
+    await page.waitForFunction(() => quizMode && currentOpening && currentOpening.id === 'sicilian' && game.history().length === 1);
+    // Restarting the line queues White's 1.e4; switch to a White opening before it plays.
+    await page.evaluate(() => { switchOpeningLine('main'); loadOpening('italian'); });
+    await page.waitForTimeout(1000);
+    const state = await page.evaluate(() => ({ id: currentOpening.id, history: game.history(), idx: currentMoveIdx, orientation: board.orientation() }));
+    if (state.id !== 'italian' || state.history.length || state.idx !== -1 || state.orientation !== 'white') problems.push('the old line\'s reply was played into the new quiz: ' + JSON.stringify(state));
+    return problems;
+  });
+
+  await check('typed SAN respects piece case', () => page.evaluate(() => {
+    const problems = [];
+    const position = new Chess('4k3/8/8/8/8/2n5/1P1B4/4K3 w - - 0 1');
+    const pick = text => { const m = resolveAccessibleMove(position, text); return m ? m.piece + m.from : null; };
+    if (pick('Bxc3') !== 'bd2') problems.push('Bxc3 should move the bishop, got ' + pick('Bxc3'));
+    if (pick('bxc3') !== 'pb2') problems.push('bxc3 should move the pawn, got ' + pick('bxc3'));
+    if (pick('BXC3') !== null) problems.push('an ambiguous case-insensitive entry should not guess');
+    if (pick('kf2') !== 'ke1') problems.push('a unique lower-case entry should still work');
+    return problems;
+  }));
+
+  await check('Explore explains a Lichess rate limit', async () => {
+    const problems = [];
+    await page.evaluate(key => sessionStorage.setItem(key, 'behaviour-test-token'), await page.evaluate(() => LICHESS_TOKEN_KEY));
+    await page.goto(base + '/?opening=italian&mode=explore');
+    await page.waitForFunction(() => exploreMode && exploreGame);
+    await page.evaluate(() => {
+      window.__realAjax = $.ajax;
+      $.ajax = options => { setTimeout(() => options.error && options.error({ status: 429 }), 0); return { abort() {} }; };
+      exploreCache.clear();
+      fetchExploreData();
+    });
+    await page.waitForFunction(() => !/Fetching/.test($('#continuations-list').text()), null, { timeout: 3000 }).catch(() => {});
+    const text = await page.evaluate(() => $('#continuations-list').text());
+    if (!/limiting requests/.test(text) || /Could not reach/.test(text)) problems.push('a 429 was shown as: ' + text);
+    await page.evaluate(() => { $.ajax = window.__realAjax; sessionStorage.removeItem(LICHESS_TOKEN_KEY); });
+    return problems;
+  });
+
+  await check('Coach opening label says where the game left the book', () => page.evaluate(() => {
+    const problems = [];
+    const saved = { game: coachGame, transfer: coachOpeningTransfer, cursor: coachReviewCursor };
+    try {
+      coachGame = new Chess();
+      ['e4', 'c5', 'Nf3', 'd6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'e5', 'Nf5'].forEach(san => coachGame.move(san));
+      coachOpeningTransfer = null;
+      coachReviewCursor = null;
+      updateOpeningLabel();
+      const text = $('#coach-opening-name').text();
+      if (!/out of book after move 5$/.test(text)) problems.push('5.Nc3 is a book move, so the label should say move 5: ' + text);
+    } finally {
+      coachGame = saved.game; coachOpeningTransfer = saved.transfer; coachReviewCursor = saved.cursor;
+      updateOpeningLabel();
+    }
+    return problems;
+  }));
 
   if (pageErrors.length) failures.push('page errors: ' + pageErrors.join(' | '));
   if (failures.length) throw new Error(failures.join('\n'));
