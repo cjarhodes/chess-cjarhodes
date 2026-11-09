@@ -20,7 +20,7 @@ async browserPage=>{
  const capture=async(name,action)=>{
   await page.locator('#coach-keyboard-move').evaluate(e=>{e.open=true;});
   for(const [width,height]of [[1280,800],[1440,900],[1920,1080]]){
-   await page.setViewportSize({width,height});await page.waitForFunction(()=>!jQuery(':animated').length);await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+   await page.setViewportSize({width,height});await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
    const m=await page.evaluate(action=>{const b=document.getElementById('coachBoard').getBoundingClientRect(),a=document.querySelector(action).getBoundingClientRect();return{width:innerWidth,height:innerHeight,documentWidth:document.documentElement.scrollWidth,boardSize:b.width,boardBottom:b.bottom,boardX:b.x,boardRight:b.right,actionTop:a.y,actionBottom:a.bottom,primary:[...document.querySelectorAll('#coach-view [data-primary-action="true"]')].filter(e=>e.checkVisibility()).map(e=>e.id||'keyboard-submit')};},action);
    assert(m.documentWidth<=width&&m.boardX>=0&&m.boardRight<=width&&m.boardBottom<=height&&m.boardSize>=320,name+': board/overflow at '+width);
    assert(m.actionTop>=0&&m.actionBottom<=height,name+': action below fold at '+width);

@@ -220,7 +220,7 @@ const BOARD_THEMES = ['green', 'walnut', 'blue', 'contrast'];
 function applyBoardTheme(name) {
   const theme = BOARD_THEMES.includes(name) ? name : (name === 'ivory' ? 'walnut' : 'green');
   document.documentElement.setAttribute('data-board-theme', theme);
-  $('#board-theme').val(theme);
+  byId('board-theme').value = theme;
   try { localStorage.setItem(BOARD_THEME_KEY, theme); } catch (e) { /* preference stays for this page */ }
 }
 
@@ -228,7 +228,7 @@ function initBoardTheme() {
   let saved = null;
   try { saved = localStorage.getItem(BOARD_THEME_KEY); } catch (e) { /* default */ }
   applyBoardTheme(saved || 'green');
-  $('#board-theme').on('change', function() { applyBoardTheme($(this).val()); });
+  on(byId('board-theme'), 'change', function() { applyBoardTheme(this.value); });
 }
 
 // Light/dark follows the device unless the player picks one; theme-init.js
@@ -239,7 +239,7 @@ function applyColorTheme(name) {
   const theme = name === 'light' || name === 'dark' ? name : 'auto';
   if (theme === 'auto') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', theme);
-  $('#color-theme').val(theme);
+  byId('color-theme').value = theme;
   try {
     if (theme === 'auto') localStorage.removeItem(COLOR_THEME_KEY);
     else localStorage.setItem(COLOR_THEME_KEY, theme);
@@ -250,7 +250,7 @@ function initColorTheme() {
   let saved = null;
   try { saved = localStorage.getItem(COLOR_THEME_KEY); } catch (e) { /* follow the device */ }
   applyColorTheme(saved);
-  $('#color-theme').on('change', function() { applyColorTheme($(this).val()); });
+  on(byId('color-theme'), 'change', function() { applyColorTheme(this.value); });
 }
 
 const DESKTOP_NOTICE_KEY = 'ui:desktop-notice-dismissed';
@@ -267,7 +267,7 @@ function initDesktopNotice() {
   const narrowAtLoad = !!(window.matchMedia && window.matchMedia('(max-width: 759.98px)').matches);
   if (dismissed || !narrowAtLoad) document.documentElement.classList.add('desktop-notice-dismissed');
   else setTimeout(() => { const btn = document.getElementById('btn-desktop-notice-continue'); if (btn && btn.offsetParent) btn.focus(); }, 0);
-  $('#btn-desktop-notice-continue').on('click', function() {
+  on(byId('btn-desktop-notice-continue'), 'click', function() {
     try { sessionStorage.setItem(DESKTOP_NOTICE_KEY, '1'); } catch (e) { /* session only */ }
     document.documentElement.classList.add('desktop-notice-dismissed');
   });
@@ -358,7 +358,10 @@ const APP_VIEWS = ['library', 'coach', 'puzzles'];
 function setNavSelection(view) {
   APP_VIEWS.forEach(name => {
     const active = name === view;
-    $('#nav-' + name).toggleClass('active', active).attr({ 'aria-selected': active ? 'true' : 'false', tabindex: active ? '0' : '-1' });
+    const tab = byId('nav-' + name);
+    tab.classList.toggle('active', active);
+    tab.setAttribute('aria-selected', active ? 'true' : 'false');
+    tab.setAttribute('tabindex', active ? '0' : '-1');
   });
 }
 
@@ -371,8 +374,8 @@ function switchView(view) {
     // analysis line before the library view takes over.
     if (coachPracticeSession) {
       if (coachPracticeSession.grading || coachPracticeSession.pendingMove) {
-        $('#coach-practice-status').text('That move was interrupted. Choose your move again.');
-        $('#coach-keyboard-move-status').text('');
+        byId('coach-practice-status').textContent = 'That move was interrupted. Choose your move again.';
+        byId('coach-keyboard-move-status').textContent = '';
       }
       saveCoachPracticeState();
     }
@@ -381,28 +384,34 @@ function switchView(view) {
   if (wasPuzzles && view !== 'puzzles' && window.PuzzlesView) window.PuzzlesView.hide();
   appView = view;
   coachMode = (view === 'coach');
-  const $app = $('.app');
-  const $coach = $('#coach-view');
-  const $puzzles = $('#puzzles-view');
+  const library = qsa('.app');
+  const coach = byId('coach-view');
+  const puzzles = byId('puzzles-view');
+  // Hidden views are display:none and aria-hidden; Coach and Puzzles show as grids.
+  const setShown = (els, shown, display) => domList(els).forEach(el => {
+    if (shown) showEl(el); else hideEl(el);
+    if (shown && display) el.style.display = display;
+    el.setAttribute('aria-hidden', shown ? 'false' : 'true');
+  });
   setNavSelection(view);
   if (view === 'puzzles') {
-    $app.hide().attr('aria-hidden', 'true');
-    $coach.hide().attr('aria-hidden', 'true');
-    $puzzles.show().css('display', 'grid').attr('aria-hidden', 'false');
+    setShown(library, false);
+    setShown(coach, false);
+    setShown(puzzles, true, 'grid');
     if (window.PuzzlesView) window.PuzzlesView.show();
     updateURL();
     return;
   }
-  $puzzles.hide().attr('aria-hidden', 'true');
+  setShown(puzzles, false);
   if (view === 'coach') {
-    $app.hide().attr('aria-hidden', 'true');
-    $coach.show().css('display', 'grid').attr('aria-hidden', 'false');
+    setShown(library, false);
+    setShown(coach, true, 'grid');
     // Pre-warm Stockfish in the background so the first New Game starts faster.
     // Errors here are swallowed; the real load gate is inside startCoachGame.
     if (engineClient.status === 'idle') { engineClient.init().catch(() => {}); }
     // Initialize strength display
-    $('#coach-strength-value').text(coachEngineElo);
-    $('#coach-strength-tier').text(strengthTierLabel(coachEngineElo));
+    byId('coach-strength-value').textContent = coachEngineElo;
+    byId('coach-strength-tier').textContent = strengthTierLabel(coachEngineElo);
     renderCoachAuth();
     // Show lifetime stats if any are recorded.
     renderLifetime();
@@ -414,9 +423,9 @@ function switchView(view) {
       if (!restore.restored && practice.warning) restore.warning = practice.warning;
       if (restore.restored && practice.warning) setCoachStatus(practice.warning + ' Your saved game is restored.');
       if (!restore.restored) {
-        $('#coach-view').removeClass('game-active');
+        byId('coach-view').classList.remove('game-active');
         // Show an idle board so the user has visual context
-        $('#coachBoard-placeholder').hide();
+        hideEl(byId('coachBoard-placeholder'));
         createCoachBoard('start', 'white');
         setCoachStatus(restore.warning || 'Choose Start training when you’re ready.');
       }
@@ -446,8 +455,8 @@ function switchView(view) {
     }
     updateCoachControlsState();
   } else {
-    $coach.hide().attr('aria-hidden', 'true');
-    $app.show().attr('aria-hidden', 'false');
+    setShown(coach, false);
+    setShown(library, true);
     // If library board exists, kick it into life via a resize so it redraws correctly
     if (board) setTimeout(() => board.resize(), 0);
     scheduleLibraryBoardFit();
@@ -456,19 +465,24 @@ function switchView(view) {
 }
 
 function updateNetworkStatus(announce) {
-  const $status = $('#network-status');
-  if (!$status.length) return;
+  const status = byId('network-status');
+  if (!status) return;
   if (navigator.onLine) {
     if (announce) {
-      $status.removeAttr('hidden').removeClass('offline').text('Back online — local progress will sync when available.');
+      status.hidden = false;
+      status.classList.remove('offline');
+      status.textContent = 'Back online — local progress will sync when available.';
       clearTimeout(updateNetworkStatus.onlineTimer);
-      updateNetworkStatus.onlineTimer = setTimeout(() => $status.attr('hidden', true), 4500);
+      updateNetworkStatus.onlineTimer = setTimeout(() => { status.hidden = true; }, 4500);
     } else {
-      $status.attr('hidden', true).text('');
+      status.hidden = true;
+      status.textContent = '';
     }
   } else {
     clearTimeout(updateNetworkStatus.onlineTimer);
-    $status.removeAttr('hidden').addClass('offline').text('Offline mode — your Coach progress is saved locally and will sync when you reconnect.');
+    status.hidden = false;
+    status.classList.add('offline');
+    status.textContent = 'Offline mode — your Coach progress is saved locally and will sync when you reconnect.';
   }
 }
 
@@ -543,17 +557,21 @@ function showPromotionPicker(color, onPick) {
     : { q: '♕', r: '♖', b: '♗', n: '♘' };
   pendingPromotionChoice = onPick;
   promotionReturnFocus = document.activeElement;
-  $('#promotion-picker .promotion-choice').each(function() {
-    const piece = $(this).attr('data-promotion');
-    $(this).text(glyphs[piece] || piece.toUpperCase());
+  qsa('#promotion-picker .promotion-choice').forEach(choice => {
+    const piece = choice.getAttribute('data-promotion');
+    choice.textContent = glyphs[piece] || piece.toUpperCase();
   });
-  $('#promotion-picker').css('display', 'flex').attr('aria-hidden', 'false');
-  $('#promotion-picker .promotion-choice[data-promotion="q"]').trigger('focus');
+  const picker = byId('promotion-picker');
+  picker.style.display = 'flex';
+  picker.setAttribute('aria-hidden', 'false');
+  qsa('#promotion-picker .promotion-choice[data-promotion="q"]').forEach(el => el.focus());
 }
 
 function closePromotionPicker() {
   pendingPromotionChoice = null;
-  $('#promotion-picker').hide().attr('aria-hidden', 'true');
+  const picker = byId('promotion-picker');
+  hideEl(picker);
+  picker.setAttribute('aria-hidden', 'true');
   if (promotionReturnFocus && typeof promotionReturnFocus.focus === 'function') {
     promotionReturnFocus.focus();
   }

@@ -1,4 +1,4 @@
-// Startup: the jQuery ready handler. It binds every Library, Coach,
+// Startup: the ready handler (onReady, src/ui/dom.js). It binds every Library, Coach,
 // Explore and global input event, lays out the boards, applies the route
 // the page loaded with and starts the router. It must load after the
 // other view scripts and before growth.js and the feature modules, whose
@@ -7,7 +7,7 @@
 // ─────────────────────────────────────────────
 // EVENT HANDLERS
 // ─────────────────────────────────────────────
-$(function () {
+onReady(function () {
   // Board is initialized lazily on first opening selection
   initDesktopNotice();
   initBoardTheme();
@@ -20,75 +20,75 @@ $(function () {
   function bindLibraryEvents() {
 
   // Promotion picker
-  $('#promotion-picker .promotion-choice').on('click', function() {
-    const promotion = $(this).attr('data-promotion');
+  on(qsa('#promotion-picker .promotion-choice'), 'click', function() {
+    const promotion = this.getAttribute('data-promotion');
     const cb = pendingPromotionChoice;
     closePromotionPicker();
     if (cb) cb(promotion);
   });
-  $('#promotion-picker').on('click', function(e) {
+  on(byId('promotion-picker'), 'click', function(e) {
     if (e.target === this) closePromotionPicker();
   });
 
   // Library buttons
-  $('.opening-btn').on('click', function () {
-    loadOpening($(this).data('id'));
+  on(qsa('.opening-btn'), 'click', function () {
+    loadOpening(this.dataset.id);
   });
 
   // Category tab filtering
-  $('.cat-tab').on('click', function () {
-    $('.cat-tab').removeClass('active');
-    $(this).addClass('active');
-    applySearch($('#library-search-input').val());
+  on(qsa('.cat-tab'), 'click', function () {
+    qsa('.cat-tab').forEach(el => { el.classList.remove('active'); });
+    this.classList.add('active');
+    applySearch(byId('library-search-input').value);
   });
 
   // Navigation
-  $('#btn-prev').on('click', () => goToMove(currentMoveIdx - 1));
-  $('#btn-next').on('click', () => goToMove(currentMoveIdx + 1));
-  $('#btn-start').on('click', () => goToMove(-1));
-  $('#btn-end').on('click', () => { if (currentOpening) goToMove(activeMoves().length - 1); });
-  $('#btn-review-misses').on('click', startQuizMistakeReview);
+  on(byId('btn-prev'), 'click', () => goToMove(currentMoveIdx - 1));
+  on(byId('btn-next'), 'click', () => goToMove(currentMoveIdx + 1));
+  on(byId('btn-start'), 'click', () => goToMove(-1));
+  on(byId('btn-end'), 'click', () => { if (currentOpening) goToMove(activeMoves().length - 1); });
+  on(byId('btn-review-misses'), 'click', startQuizMistakeReview);
 
   // Opening line selector
-  $(document).on('click', '.line-btn', function () {
-    const lineId = $(this).attr('data-line');
+  on(document, 'click', '.line-btn', function () {
+    const lineId = this.getAttribute('data-line');
     if (lineId && lineId !== currentLineId) switchOpeningLine(lineId);
   });
 
   // Flip board
-  $('#btn-flip').on('click', function () {
+  on(byId('btn-flip'), 'click', function () {
     if (!currentOpening) return;
     boardFlipped = !boardFlipped;
     board.flip();
   });
 
   // Mode toggle
-  $('#btn-study').on('click', () => setMode('study'));
-  $('#btn-quiz').on('click', () => { if (currentOpening) setMode('quiz'); });
-  $('#btn-explore').on('click', () => setMode('explore'));
+  on(byId('btn-study'), 'click', () => setMode('study'));
+  on(byId('btn-quiz'), 'click', () => { if (currentOpening) setMode('quiz'); });
+  on(byId('btn-explore'), 'click', () => setMode('explore'));
 
-  $('#library-keyboard-move-form').on('submit', function(event) {
+  on(byId('library-keyboard-move-form'), 'submit', function(event) {
     event.preventDefault();
-    const $status = $('#library-keyboard-move-status');
+    const status = byId('library-keyboard-move-status');
     if (!quizMode && !exploreMode) {
-      $status.text('Switch to Quiz or Explore mode to play a move.');
+      status.textContent = 'Switch to Quiz or Explore mode to play a move.';
       return;
     }
     const activeGame = exploreMode ? exploreGame : game;
-    const move = resolveAccessibleMove(activeGame, $('#library-keyboard-move-input').val());
+    const move = resolveAccessibleMove(activeGame, byId('library-keyboard-move-input').value);
     if (!move) {
-      $status.text('That move is not legal here. Try SAN such as Nf3 or coordinates such as g1f3.');
+      status.textContent = 'That move is not legal here. Try SAN such as Nf3 or coordinates such as g1f3.';
       return;
     }
     const result = exploreMode
       ? applyExploreMove(move.from, move.to, move.promotion || 'q', { updateBoard: true })
       : handleQuizDrop(move.from, move.to, move.promotion || 'q');
     if (!exploreMode && result === 'snapback') {
-      $status.text('Legal move, but not the quiz answer. Try again.');
+      status.textContent = 'Legal move, but not the quiz answer. Try again.';
       return;
     }
-    $('#library-keyboard-move-input').val('');
-    $status.text('Move played: ' + move.san);
+    byId('library-keyboard-move-input').value = '';
+    status.textContent = 'Move played: ' + move.san;
     updateLibraryBoardAccessibility();
   });
   }
@@ -96,10 +96,10 @@ $(function () {
   function bindCoachEvents() {
 
   // ─── Header nav (Library / Coach) ───────
-  $('#nav-library').on('click', () => switchView('library'));
-  $('#nav-coach').on('click', () => switchView('coach'));
-  $('#nav-puzzles').on('click', () => switchView('puzzles'));
-  $('.top-nav-btn').on('keydown', function(event) {
+  on(byId('nav-library'), 'click', () => switchView('library'));
+  on(byId('nav-coach'), 'click', () => switchView('coach'));
+  on(byId('nav-puzzles'), 'click', () => switchView('puzzles'));
+  on(qsa('.top-nav-btn'), 'keydown', function(event) {
     const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
     if (!keys.includes(event.key)) return;
     event.preventDefault();
@@ -111,42 +111,46 @@ $(function () {
     else index = Math.min(APP_VIEWS.length - 1, index + 1);
     const nextView = APP_VIEWS[index];
     switchView(nextView);
-    $('#nav-' + nextView).trigger('focus');
+    byId('nav-' + nextView).focus();
   });
 
   // ─── Coach settings ─────────────────────
-  $('#coach-strength').on('input', function() {
-    coachEngineElo = parseInt($(this).val(), 10);
-    $('#coach-strength-value').text(coachEngineElo);
-    $('#coach-strength-tier').text(strengthTierLabel(coachEngineElo));
+  on(byId('coach-strength'), 'input', function() {
+    coachEngineElo = parseInt(this.value, 10);
+    byId('coach-strength-value').textContent = coachEngineElo;
+    byId('coach-strength-tier').textContent = strengthTierLabel(coachEngineElo);
     renderCoachPresentation();
   });
 
-  $('.side-toggle button').on('click', function() {
-    $('.side-toggle button').removeClass('active').attr('aria-pressed', 'false');
-    $(this).addClass('active').attr('aria-pressed', 'true');
-    const side = $(this).data('side');
+  on(qsa('.side-toggle button'), 'click', function() {
+    qsa('.side-toggle button').forEach(btn => {
+      btn.classList.remove('active');
+      btn.setAttribute('aria-pressed', 'false');
+    });
+    this.classList.add('active');
+    this.setAttribute('aria-pressed', 'true');
+    const side = this.dataset.side;
     coachUserSide = side; // 'white' | 'black' | 'random'
     renderCoachPresentation();
   });
 
-  $('#coach-fen').on('input', function() {
-    $('#coach-fen-error').hide();
+  on(byId('coach-fen'), 'input', function() {
+    hideEl(byId('coach-fen-error'));
   });
 
-  $('#coach-auth-email-form').on('submit', function(event) {
+  on(byId('coach-auth-email-form'), 'submit', function(event) {
     event.preventDefault();
     sendCoachLoginLink().catch(handleCoachDbError);
   });
-  $('#coach-auth-code-form').on('submit', function(event) {
+  on(byId('coach-auth-code-form'), 'submit', function(event) {
     event.preventDefault();
     verifyCoachLoginCode().catch(handleCoachDbError);
   });
-  $('#btn-coach-logout').on('click', function() {
+  on(byId('btn-coach-logout'), 'click', function() {
     signOutCoach().catch(handleCoachDbError);
   });
-  $('#btn-coach-reconnect').on('click', () => location.reload());
-  $('#btn-coach-sync').on('click', async function() {
+  on(byId('btn-coach-reconnect'), 'click', () => location.reload());
+  on(byId('btn-coach-sync'), 'click', async function() {
     if (!hasCoachDbSession()) {
       setCoachDbStatus('Sign in to sync games.');
       return;
@@ -173,26 +177,26 @@ $(function () {
   });
 
   // Lifetime stats reset.
-  $('#btn-coach-lifetime-reset').on('click', function() {
+  on(byId('btn-coach-lifetime-reset'), 'click', function() {
     if (!confirm('Reset all lifetime stats? This cannot be undone.')) return;
     saveLifetime(emptyLifetime());
     renderLifetime();
   });
 
-  $('#btn-coach-insights-reset').on('click', function() {
+  on(byId('btn-coach-insights-reset'), 'click', function() {
     if (!confirm('Reset coach insights for this browser? This cannot be undone.')) return;
     clearInsights();
     renderInsights();
   });
 
-  $('#btn-practice-progress-reset').on('click', function() {
+  on(byId('btn-practice-progress-reset'), 'click', function() {
     if (!confirm('Reset all practice attempts and scheduling for this browser?')) return;
     clearPracticeProgress();
     renderInsights();
   });
 
-  $(document).on('click', '.practice-load', function() {
-    const item = renderedPracticeItems.get($(this).attr('data-practice-id'));
+  on(document, 'click', '.practice-load', function() {
+    const item = renderedPracticeItems.get(this.getAttribute('data-practice-id'));
     if (!item) {
       setCoachStatus('Practice position is no longer valid.');
       return;
@@ -201,15 +205,15 @@ $(function () {
     startCoachPracticeSession(due, item);
   });
 
-  $('#btn-practice-session-start').on('click', function() {
+  on(byId('btn-practice-session-start'), 'click', function() {
     const recommendation = practiceRecommendation();
     if (!recommendation || coachThinking) return;
     if (recommendation.items[0].id.startsWith('drill-')) startCoachPracticeSession(recommendation.items, recommendation.items[0]);
     else startCoachPractice(recommendation.items[0]);
   });
 
-  $('#btn-coach-next-action').on('click', function() {
-    const action = $(this).attr('data-action');
+  on(byId('btn-coach-next-action'), 'click', function() {
+    const action = this.getAttribute('data-action');
     if (action === 'progress') {
       if (coachPracticeSession) exitCoachPractice();
       document.querySelector('.panel-tab[data-panel="progress"]')?.click();
@@ -230,20 +234,20 @@ $(function () {
     }
     startCoachGame();
   });
-  $('#btn-coach-practice-answer').on('click', revealCoachPracticeAnswer);
-  $('#btn-coach-practice-hint').on('click', showCoachPracticeHint);
-  $('#btn-coach-practice-next').on('click', advanceCoachPractice);
-  $('#btn-coach-practice-exit').on('click', function() { exitCoachPractice(); });
-  $('#btn-coach-review-practice').on('click', function() {
+  on(byId('btn-coach-practice-answer'), 'click', revealCoachPracticeAnswer);
+  on(byId('btn-coach-practice-hint'), 'click', showCoachPracticeHint);
+  on(byId('btn-coach-practice-next'), 'click', advanceCoachPractice);
+  on(byId('btn-coach-practice-exit'), 'click', function() { exitCoachPractice(); });
+  on(byId('btn-coach-review-practice'), 'click', function() {
     const item = practiceItemFromReview(coachLastReview);
     if (!item || !practiceIsDue(item)) {
-      $(this).hide();
+      hideEl(this);
       setCoachStatus('This move is already scheduled for later practice.');
       return;
     }
     startCoachPracticeSession([item], item);
   });
-  $('#btn-coach-opening-study').on('click', function() {
+  on(byId('btn-coach-opening-study'), 'click', function() {
     if (!coachOpeningId || !OPENINGS.some(opening => opening.id === coachOpeningId)) {
       setCoachStatus('This opening is not in the local study library yet.');
       return;
@@ -256,8 +260,8 @@ $(function () {
   // Sound toggle — restore prior preference, persist on change. The first
   // change is also a user gesture so we can prime the AudioContext here.
   coachSoundEnabled = readSoundPref();
-  $('#coach-sound-toggle').prop('checked', coachSoundEnabled);
-  $('#coach-sound-toggle').on('change', function() {
+  byId('coach-sound-toggle').checked = coachSoundEnabled;
+  on(byId('coach-sound-toggle'), 'change', function() {
     coachSoundEnabled = this.checked;
     writeSoundPref(coachSoundEnabled);
     if (coachSoundEnabled) {
@@ -269,24 +273,24 @@ $(function () {
     }
   });
 
-  $('#btn-coach-newgame').on('click', function() {
+  on(byId('btn-coach-newgame'), 'click', function() {
     startCoachGame();
   });
 
-  $('#coach-keyboard-move-form').on('submit', async function(event) {
+  on(byId('coach-keyboard-move-form'), 'submit', async function(event) {
     event.preventDefault();
-    const $status = $('#coach-keyboard-move-status');
+    const status = byId('coach-keyboard-move-status');
     if (!coachGameActive || !coachGame) {
-      $status.text('Start a Coach game first.');
+      status.textContent = 'Start a Coach game first.';
       return;
     }
     if (!coachIsUserTurn() || coachThinking || coachIsReviewing()) {
-      $status.text(coachIsReviewing() ? 'Return to the live position first.' : 'Wait until it is your turn.');
+      status.textContent = coachIsReviewing() ? 'Return to the live position first.' : 'Wait until it is your turn.';
       return;
     }
-    const move = resolveAccessibleMove(coachGame, $('#coach-keyboard-move-input').val());
+    const move = resolveAccessibleMove(coachGame, byId('coach-keyboard-move-input').value);
     if (!move) {
-      $status.text('That move is not legal here. Try SAN such as Nf3 or coordinates such as g1f3.');
+      status.textContent = 'That move is not legal here. Try SAN such as Nf3 or coordinates such as g1f3.';
       return;
     }
     const inputGeneration = coachGameGeneration;
@@ -296,24 +300,28 @@ $(function () {
       : await coachHandleUserMove(move.from, move.to, move.promotion || 'q', { updateBoard: true });
     if (!coachMode || inputGeneration !== coachGameGeneration || inputPractice !== coachPracticeSession) return;
     if (result === 'snapback') {
-      $status.text(coachPracticeSession ? 'Position reset. Read the feedback, then try another move.' : 'That move could not be played.');
-      if (coachPracticeSession) $('#coach-keyboard-move-input').trigger('focus').trigger('select');
+      status.textContent = coachPracticeSession ? 'Position reset. Read the feedback, then try another move.' : 'That move could not be played.';
+      if (coachPracticeSession) {
+        const input = byId('coach-keyboard-move-input');
+        input.focus();
+        input.select();
+      }
       return;
     }
     if (result === 'stale') {
-      $status.text('The position changed before analysis finished.');
+      status.textContent = 'The position changed before analysis finished.';
       return;
     }
     if (result === 'ungraded' || result === 'pending') {
-      $status.text(result === 'ungraded' ? 'Engine did not score that move.' : 'Checking the position…');
+      status.textContent = result === 'ungraded' ? 'Engine did not score that move.' : 'Checking the position…';
       return;
     }
-    $('#coach-keyboard-move-input').val('');
-    $status.text(coachPracticeSession ? 'Practice move played: ' + move.san : 'Move played: ' + move.san);
+    byId('coach-keyboard-move-input').value = '';
+    status.textContent = coachPracticeSession ? 'Practice move played: ' + move.san : 'Move played: ' + move.san;
     updateCoachBoardAccessibility();
   });
 
-  $(document).on('click', '#btn-coach-retry-opponent', function() {
+  on(document, 'click', '#btn-coach-retry-opponent', function() {
     if (!coachMode || !coachGameActive || !coachGame) return;
     if (coachIsUserTurn()) {
       setCoachStatus('Your move.');
@@ -322,7 +330,7 @@ $(function () {
     coachOpponentRespond();
   });
 
-  $('#btn-coach-resign').on('click', function() {
+  on(byId('btn-coach-resign'), 'click', function() {
     if (!coachGameActive) return;
     const loser = coachUserColor() === 'white' ? 'White' : 'Black';
     const winner = loser === 'White' ? 'Black' : 'White';
@@ -331,7 +339,7 @@ $(function () {
   });
 
   // Coach: flip board
-  $('#btn-coach-flip').on('click', function() {
+  on(byId('btn-coach-flip'), 'click', function() {
     if (!coachBoard) return;
     coachBoardFlipped = !coachBoardFlipped;
     coachBoard.flip();
@@ -339,7 +347,7 @@ $(function () {
   });
 
   // Coach: take back (undo user move + opponent reply if present)
-  $('#btn-coach-takeback').on('click', function() {
+  on(byId('btn-coach-takeback'), 'click', function() {
     if (!coachMode || !coachGame) return;
     const removedReview = coachLastReview;
     invalidateCoachAsyncWork('The position was taken back.');
@@ -354,7 +362,7 @@ $(function () {
     // If the game just ended and the post-game summary is pending, abort it —
     // taking back un-ends the game.
     if (coachSummaryTimer) { clearTimeout(coachSummaryTimer); coachSummaryTimer = null; }
-    $('#coach-status').removeClass('status-ended');
+    byId('coach-status').classList.remove('status-ended');
     // Undo opponent reply if it was played
     if (coachLastReview && coachGame.fen() !== coachLastReview.fenAfter) {
       coachGame.undo();
@@ -378,9 +386,9 @@ $(function () {
     // Also remove the rolled-back review from the log so rolling accuracy and
     // the move list's tier coloring reflect the takeback.
     if (coachReviewLog && coachReviewLog.length > 0) coachReviewLog.pop();
-    $('#coach-review').hide();
-    $('#threats-section').hide();
-    $('#candidates-section').hide();
+    hideEl(byId('coach-review'));
+    hideEl(byId('threats-section'));
+    hideEl(byId('candidates-section'));
     updateCoachSummary();
     updateMoveList();
     updateOpeningLabel();
@@ -400,41 +408,41 @@ $(function () {
 
   // Coach: show why — display the recommended continuation on the main board.
   // The actual game object and review log remain untouched.
-  $('#btn-coach-showbest').on('click', function() {
+  on(byId('btn-coach-showbest'), 'click', function() {
     startCoachReviewAnalysis(coachLastReview);
   });
-  $('#btn-coach-showwhy').on('click', function() {
+  on(byId('btn-coach-showwhy'), 'click', function() {
     startCoachReviewAnalysis(coachLastReview);
   });
-  $('#btn-coach-consequence').on('click', function() { startCoachConsequenceAnalysis(coachLastReview); });
-  $('#btn-coach-review-analysis-prev').on('click', function() { stepCoachReviewAnalysis(-1); });
-  $('#btn-coach-review-analysis-next').on('click', function() { stepCoachReviewAnalysis(1); });
-  $('#btn-coach-backtogame').on('click', function() {
+  on(byId('btn-coach-consequence'), 'click', function() { startCoachConsequenceAnalysis(coachLastReview); });
+  on(byId('btn-coach-review-analysis-prev'), 'click', function() { stepCoachReviewAnalysis(-1); });
+  on(byId('btn-coach-review-analysis-next'), 'click', function() { stepCoachReviewAnalysis(1); });
+  on(byId('btn-coach-backtogame'), 'click', function() {
     clearCoachReviewAnalysis();
     coachGotoLive();
   });
 
   // Coach: show top-3 candidate moves
-  $('#btn-coach-candidates').on('click', function() {
+  on(byId('btn-coach-candidates'), 'click', function() {
     if (!coachMode || !coachGame) return;
     if (coachIsReviewing()) return;
     showCandidates();
   });
 
   // Coach: history navigation
-  $('#btn-coach-prev').on('click', function() {
+  on(byId('btn-coach-prev'), 'click', function() {
     if (!coachGame) return;
     const total = coachGame.history().length;
     const cur = coachReviewCursor === null ? total : coachReviewCursor;
     if (cur > 0) coachGotoPly(cur - 1);
   });
-  $('#btn-coach-next').on('click', function() {
+  on(byId('btn-coach-next'), 'click', function() {
     if (!coachGame) return;
     const total = coachGame.history().length;
     const cur = coachReviewCursor === null ? total : coachReviewCursor;
     if (cur < total) coachGotoPly(cur + 1);
   });
-  $('#btn-coach-live').on('click', function() {
+  on(byId('btn-coach-live'), 'click', function() {
     if (!coachGame) return;
     coachGotoLive();
   });
@@ -448,22 +456,23 @@ $(function () {
     throw new Error('Clipboard API unavailable');
   }
   // Coach: Copy PGN to clipboard
-  $('#btn-coach-copypgn').on('click', async function() {
-    const $btn = $(this);
+  on(byId('btn-coach-copypgn'), 'click', async function() {
+    const btn = this;
     const pgn = coachGetPgn();
     if (!pgn) return;
     try {
       await copyToClipboard(pgn);
-      $btn.addClass('copied').text('Copied!');
-      setTimeout(() => $btn.removeClass('copied').text('Copy PGN'), 1500);
+      btn.classList.add('copied');
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.classList.remove('copied'); btn.textContent = 'Copy PGN'; }, 1500);
     } catch (e) {
-      $btn.text('Copy unavailable');
-      setTimeout(() => $btn.text('Copy PGN'), 1500);
+      btn.textContent = 'Copy unavailable';
+      setTimeout(() => { btn.textContent = 'Copy PGN'; }, 1500);
     }
   });
   // Coach: Copy FEN of the position currently displayed (respects review cursor).
-  $('#btn-coach-copyfen').on('click', async function() {
-    const $btn = $(this);
+  on(byId('btn-coach-copyfen'), 'click', async function() {
+    const btn = this;
     if (!coachGame) return;
     let fen;
     if (coachReviewCursor !== null) {
@@ -477,17 +486,18 @@ $(function () {
     }
     try {
       await copyToClipboard(fen);
-      $btn.addClass('copied').text('Copied!');
-      setTimeout(() => $btn.removeClass('copied').text('Copy FEN'), 1500);
+      btn.classList.add('copied');
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.classList.remove('copied'); btn.textContent = 'Copy FEN'; }, 1500);
     } catch (e) {
-      $btn.text('Copy unavailable');
-      setTimeout(() => $btn.text('Copy FEN'), 1500);
+      btn.textContent = 'Copy unavailable';
+      setTimeout(() => { btn.textContent = 'Copy FEN'; }, 1500);
     }
   });
 
   // Coach: click a ply in the move list to jump to that position.
-  $(document).on('click', '#movelist .ply', function() {
-    const ply = parseInt($(this).attr('data-ply'), 10);
+  on(document, 'click', '#movelist .ply', function() {
+    const ply = parseInt(this.getAttribute('data-ply'), 10);
     if (!isNaN(ply)) coachGotoPly(ply);
   });
 
@@ -503,9 +513,9 @@ $(function () {
   // Coach: keyboard shortcuts for history navigation.
   // ← previous ply, → next ply, End returns to the live position. Only
   // fire in coach mode and never while the user is typing in a form field.
-  $(document).on('keydown', function(e) {
-    if (!coachMode || !coachGame || coachPracticeSession || e.isDefaultPrevented() ||
-        $('#summary-overlay, #promotion-picker, #desktop-notice').is(':visible')) return;
+  on(document, 'keydown', function(e) {
+    if (!coachMode || !coachGame || coachPracticeSession || e.defaultPrevented ||
+        isVisible(qsa('#summary-overlay, #promotion-picker, #desktop-notice'))) return;
     // Ignore if the user is typing (inputs, textareas, contenteditable).
     const tag = (e.target && e.target.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
@@ -526,40 +536,40 @@ $(function () {
   });
 
   // Summary overlay buttons
-  $('#btn-summary-newgame').on('click', function() {
+  on(byId('btn-summary-newgame'), 'click', function() {
     closeSummaryOverlay();
     startCoachGame();
   });
-  $('#btn-summary-practice').on('click', function() {
+  on(byId('btn-summary-practice'), 'click', function() {
     const item = summaryPracticeItems[0];
     if (!item) return;
     closeSummaryOverlay();
     startCoachPracticeSession(summaryPracticeItems, item);
   });
-  $('#btn-summary-close').on('click', function() {
+  on(byId('btn-summary-close'), 'click', function() {
     closeSummaryOverlay();
   });
   // Reopen the review summary once the game has ended.
-  $('#btn-coach-openreview').on('click', function() {
+  on(byId('btn-coach-openreview'), 'click', function() {
     if (!coachLastEndMsg) return;
     showPostGameSummary(coachLastEndMsg);
   });
   // Copy PGN from within the summary — shares logic with the move-list copy button.
-  $('#btn-summary-copypgn').on('click', async function() {
-    const $btn = $(this);
+  on(byId('btn-summary-copypgn'), 'click', async function() {
+    const btn = this;
     const pgn = coachGetPgn();
     if (!pgn) return;
     try {
       await copyToClipboard(pgn);
-      $btn.text('Copied!');
-      setTimeout(() => $btn.text('Copy PGN'), 1500);
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = 'Copy PGN'; }, 1500);
     } catch (e) {
-      $btn.text('Copy unavailable');
-      setTimeout(() => $btn.text('Copy PGN'), 1500);
+      btn.textContent = 'Copy unavailable';
+      setTimeout(() => { btn.textContent = 'Copy PGN'; }, 1500);
     }
   });
   // Click a critical/best moment to close the overlay and jump to that position.
-  $(document).on('click', '.moment-row', function() {
+  on(document, 'click', '.moment-row', function() {
     const ply = parseInt(this.dataset.ply, 10);
     if (!Number.isInteger(ply)) return;
     closeSummaryOverlay();
@@ -568,9 +578,9 @@ $(function () {
     updateCoachControlsState();
   });
   // Allow pressing Escape to dismiss the summary overlay.
-  $(document).on('keydown.summary', function(e) {
+  on(document, 'keydown', function(e) {
     const summary = document.getElementById('summary-overlay');
-    if (!summary || !$('#summary-overlay').is(':visible')) return;
+    if (!summary || !isVisible(byId('summary-overlay'))) return;
     if (e.key === 'Escape') {
       e.preventDefault();
       closeSummaryOverlay();
@@ -583,58 +593,68 @@ $(function () {
   function bindExploreEvents() {
 
   // Explore: database toggle
-  $('.db-btn').on('click', function() {
-    currentDb = $(this).data('db');
-    $('.db-btn').removeClass('active').attr('aria-pressed', 'false');
-    $(this).addClass('active').attr('aria-pressed', 'true');
+  on(qsa('.db-btn'), 'click', function() {
+    currentDb = this.dataset.db;
+    qsa('.db-btn').forEach(btn => {
+      btn.classList.remove('active');
+      btn.setAttribute('aria-pressed', 'false');
+    });
+    this.classList.add('active');
+    this.setAttribute('aria-pressed', 'true');
     if (exploreMode) fetchExploreData();
   });
 
   // Explore: token save
-  $('#lichess-token-form').on('submit', function(event) {
+  on(byId('lichess-token-form'), 'submit', function(event) {
     event.preventDefault();
-    const token = $('#lichess-token-input').val().trim();
+    const token = byId('lichess-token-input').value.trim();
+    const tokenError = byId('token-error');
+    const showTokenError = message => {
+      tokenError.textContent = message;
+      showEl(tokenError);
+    };
     if (!token) {
-      $('#token-error').text('Paste a Lichess token first.').show();
-      $('#lichess-token-input').trigger('focus');
+      showTokenError('Paste a Lichess token first.');
+      byId('lichess-token-input').focus();
       return;
     }
-    $('#token-error').hide();
-    const $btn = $(this).prop('disabled', true).text('Checking…');
-    $.ajax({
-      url: 'https://explorer.lichess.ovh/lichess',
-      data: { fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', topGames: 0, recentGames: 0 },
-      dataType: 'json',
-      headers: { 'Authorization': 'Bearer ' + token },
-      success: function() {
-        $btn.prop('disabled', false).text('Connect');
-        if (!setLichessToken(token)) {
-          $('#token-error').text('Could not store token for this tab. Check browser storage settings.').show();
-          return;
-        }
-        showExploreTokenState();
-        fetchExploreData();
-      },
-      error: function(xhr) {
-        $btn.prop('disabled', false).text('Connect');
-        const msg = xhr.status === 401
-          ? 'Invalid token — check you copied it correctly.'
-          : (xhr.status === 429 ? LICHESS_RATE_LIMIT_MESSAGE : 'Could not reach Lichess. Try again.');
-        $('#token-error').text(msg).show();
+    hideEl(tokenError);
+    // `this` is the form, as it always was here: while the token is checked
+    // the form's contents are replaced by "Checking…" and then "Connect".
+    const form = this;
+    const setBusy = busy => {
+      form.disabled = busy;
+      form.textContent = busy ? 'Checking…' : 'Connect';
+    };
+    setBusy(true);
+    lichessExplorerGet('https://explorer.lichess.ovh/lichess',
+      { fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', topGames: 0, recentGames: 0 }, token).then(() => {
+      setBusy(false);
+      if (!setLichessToken(token)) {
+        showTokenError('Could not store token for this tab. Check browser storage settings.');
+        return;
       }
+      showExploreTokenState();
+      fetchExploreData();
+    }, error => {
+      setBusy(false);
+      const msg = error.status === 401
+        ? 'Invalid token — check you copied it correctly.'
+        : (error.status === 429 ? LICHESS_RATE_LIMIT_MESSAGE : 'Could not reach Lichess. Try again.');
+      showTokenError(msg);
     });
   });
 
   // Explore: disconnect Lichess
-  $('#btn-disconnect-lichess').on('click', function() {
+  on(byId('btn-disconnect-lichess'), 'click', function() {
     clearLichessToken();
     exploreCache.clear();
-    $('#lichess-token-input').val('');
+    byId('lichess-token-input').value = '';
     showExploreTokenState();
   });
 
   // Explore: undo last move
-  $('#btn-explore-undo').on('click', function() {
+  on(byId('btn-explore-undo'), 'click', function() {
     if (!exploreMode || !exploreGame) return;
     if (exploreGame.fen() === exploreStartFen) return; // already at start
     exploreGame.undo();
@@ -644,7 +664,7 @@ $(function () {
   });
 
   // Explore: reset to opening end position (or initial if no opening)
-  $('#btn-explore-reset').on('click', function() {
+  on(byId('btn-explore-reset'), 'click', function() {
     if (!exploreMode) return;
     exploreGame = new Chess(exploreStartFen);
     board.position(exploreStartFen);
@@ -658,7 +678,7 @@ $(function () {
   // responsive layout changes so desktop-to-mobile resizing and device
   // rotation cannot leave a 440px grid clipped inside a smaller shell.
   let boardResizeTimer = null;
-  $(window).on('resize', function() {
+  on(window, 'resize', function() {
     if (boardResizeTimer) clearTimeout(boardResizeTimer);
     boardResizeTimer = setTimeout(() => {
       boardResizeTimer = null;
@@ -675,56 +695,57 @@ $(function () {
   // ─── SEARCH ─────────────────────────────
   applySearch = function(q) {
     q = (q || '').trim().toLowerCase();
-    const activeCat = $('.cat-tab.active').data('cat') || 'all';
+    const activeTab = qs('.cat-tab.active');
+    const activeCat = (activeTab && activeTab.dataset.cat) || 'all';
     let visibleCount = 0;
     // When searching, ignore category filter and flatten view
-    $('.library > .library-section').each(function() {
-      const $sec = $(this);
+    qsa('.library > .library-section').forEach(sec => {
       let secVisible = 0;
-      $sec.find('.opening-btn').each(function() {
-        const id = $(this).data('id');
+      qsa('.opening-btn', sec).forEach(btn => {
+        const id = btn.dataset.id;
         const op = OPENINGS.find(o => o.id === id);
-        const hay = (($(this).text() || '') + ' ' + (op ? op.moves.join(' ') : '')).toLowerCase();
+        const hay = ((btn.textContent || '') + ' ' + (op ? op.moves.join(' ') : '')).toLowerCase();
         const matchesQuery = !q || hay.includes(q);
         const matchesCat = q ? true : (activeCat === 'all' || op?.category === activeCat);
         const show = matchesQuery && matchesCat;
-        $(this).toggle(show);
+        toggleEl(btn, show);
         if (show) { secVisible++; visibleCount++; }
       });
-      $sec.toggle(secVisible > 0);
+      toggleEl(sec, secVisible > 0);
     });
-    $('#library-empty').toggle(visibleCount === 0);
-    $('.cat-tabs').toggle(!q);
+    toggleEl(byId('library-empty'), visibleCount === 0);
+    toggleEl(qsa('.cat-tabs'), !q);
     // Hide the SR due section while searching
-    if (q) $('#sr-due-section').hide();
+    if (q) hideEl(byId('sr-due-section'));
     else updateSRSidebar();
   };
-  $('#library-search-input').on('input', function() { applySearch($(this).val()); });
+  on(byId('library-search-input'), 'input', function() { applySearch(this.value); });
 
   // ─── SHARE LINK ─────────────────────────
-  $('#btn-share').on('click', function() {
-    const $btn = $(this);
+  on(byId('btn-share'), 'click', function() {
+    const btn = this;
     if (!navigator.clipboard || !navigator.clipboard.writeText) {
-      const original = $btn.text();
-      $btn.text('Copy unavailable');
-      setTimeout(() => $btn.text(original), 1500);
+      const original = btn.textContent;
+      btn.textContent = 'Copy unavailable';
+      setTimeout(() => { btn.textContent = original; }, 1500);
       return;
     }
     navigator.clipboard.writeText(location.href).then(() => {
-      const orig = $btn.text();
-      $btn.text('Copied ✓').addClass('copied');
-      setTimeout(() => $btn.text(orig).removeClass('copied'), 1500);
+      const orig = btn.textContent;
+      btn.textContent = 'Copied ✓';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 1500);
     }).catch(() => {
-      const original = $btn.text();
-      $btn.text('Copy unavailable');
-      setTimeout(() => $btn.text(original), 1500);
+      const original = btn.textContent;
+      btn.textContent = 'Copy unavailable';
+      setTimeout(() => { btn.textContent = original; }, 1500);
     });
   });
 
   // ─── KEYBOARD SHORTCUTS ─────────────────
-  $(document).on('keydown', function (e) {
-    if (e.isDefaultPrevented() || $('#summary-overlay').is(':visible') || $('#desktop-notice').is(':visible')) return;
-    if ($('#promotion-picker').is(':visible')) {
+  on(document, 'keydown', function (e) {
+    if (e.defaultPrevented || isVisible(byId('summary-overlay')) || isVisible(byId('desktop-notice'))) return;
+    if (isVisible(byId('promotion-picker'))) {
       if (e.key === 'Escape') {
         e.preventDefault();
         closePromotionPicker();
@@ -746,22 +767,22 @@ $(function () {
     // Coach: F flips; arrows step through the game like the nav buttons,
     // Home goes to the first position and End back to live.
     if (coachMode) {
-      const usable = id => { const $b = $(id); return $b.length && $b.is(':visible') && !$b.prop('disabled'); };
+      const usable = id => { const b = qs(id); return !!b && isVisible(b) && !b.disabled; };
       if (e.key.toLowerCase() === 'f') {
         e.preventDefault();
-        $('#btn-coach-flip').trigger('click');
+        byId('btn-coach-flip').click();
       } else if (e.key === 'ArrowLeft' && usable('#btn-coach-prev')) {
         e.preventDefault();
-        $('#btn-coach-prev').trigger('click');
+        byId('btn-coach-prev').click();
       } else if (e.key === 'ArrowRight' && usable('#btn-coach-next')) {
         e.preventDefault();
-        $('#btn-coach-next').trigger('click');
+        byId('btn-coach-next').click();
       } else if (e.key === 'Home' && usable('#btn-coach-prev') && coachGame && coachGame.history().length) {
         e.preventDefault();
         coachGotoPly(0);
       } else if (e.key === 'End' && usable('#btn-coach-live')) {
         e.preventDefault();
-        $('#btn-coach-live').trigger('click');
+        byId('btn-coach-live').click();
       }
       return;
     }
@@ -770,31 +791,31 @@ $(function () {
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
       if (quizMode || exploreMode) return;
       e.preventDefault();
-      if (!$('#btn-next').prop('disabled')) goToMove(currentMoveIdx + 1);
+      if (!byId('btn-next').disabled) goToMove(currentMoveIdx + 1);
       return;
     }
     if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
       if (quizMode || exploreMode) return;
       e.preventDefault();
-      if (!$('#btn-prev').prop('disabled')) goToMove(currentMoveIdx - 1);
+      if (!byId('btn-prev').disabled) goToMove(currentMoveIdx - 1);
       return;
     }
 
     const k = e.key.toLowerCase();
     // Focus search
-    if (k === '/' ) { e.preventDefault(); $('#library-search-input').trigger('focus').select(); return; }
+    if (k === '/' ) { e.preventDefault(); byId('library-search-input').focus(); byId('library-search-input').select(); return; }
     // Flip board
     if (k === 'f') {
       if (!currentOpening && !exploreMode) return;
       e.preventDefault();
       if (exploreMode) { boardFlipped = !boardFlipped; board.flip(); return; }
-      $('#btn-flip').trigger('click');
+      byId('btn-flip').click();
       return;
     }
     // Reset
     if (k === 'r') {
       e.preventDefault();
-      if (exploreMode) { $('#btn-explore-reset').trigger('click'); return; }
+      if (exploreMode) { byId('btn-explore-reset').click(); return; }
       if (quizMode) { setMode('quiz'); return; }
       if (currentOpening) goToMove(-1);
       return;
@@ -812,23 +833,24 @@ $(function () {
   // ─── SWIPE FOR PREV/NEXT (mobile, study only) ───
   let touchStartX = null;
   let touchStartY = null;
-  $('.board-area').on('touchstart', function(e) {
+  on(qsa('.board-area'), 'touchstart', function(e) {
     if (quizMode || exploreMode) return;
     if (e.touches.length !== 1) return;
     // The phone layout puts the notation strip here; swiping it scrolls it.
-    if ($(e.target).closest('#library-moves, .notation-strip').length) { touchStartX = touchStartY = null; return; }
+    const target = e.target.nodeType === 1 ? e.target : e.target.parentElement;
+    if (target && target.closest('#library-moves, .notation-strip')) { touchStartX = touchStartY = null; return; }
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
   });
-  $('.board-area').on('touchend', function(e) {
+  on(qsa('.board-area'), 'touchend', function(e) {
     if (touchStartX === null) return;
     const dx = e.changedTouches[0].clientX - touchStartX;
     const dy = e.changedTouches[0].clientY - touchStartY;
     touchStartX = touchStartY = null;
     if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return;
     if (quizMode || exploreMode) return;
-    if (dx < 0) { if (!$('#btn-next').prop('disabled')) goToMove(currentMoveIdx + 1); }
-    else { if (!$('#btn-prev').prop('disabled')) goToMove(currentMoveIdx - 1); }
+    if (dx < 0) { if (!byId('btn-next').disabled) goToMove(currentMoveIdx + 1); }
+    else { if (!byId('btn-prev').disabled) goToMove(currentMoveIdx - 1); }
   });
   }
 

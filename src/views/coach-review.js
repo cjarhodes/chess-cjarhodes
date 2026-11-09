@@ -85,11 +85,15 @@ function renderCoachReviewAnalysis() {
   updateCoachAnalysisAccessibility(step.fen, step.label);
   const moveLabel = step.san ? ` · ${step.san}` : '';
   const lineLabel = `Analysis position · ${analysis.kind === 'consequence' ? 'possible consequence of your move' : 'recommended continuation'} (${analysis.index + 1}/${analysis.steps.length})${moveLabel}`;
-  $('#coach-review-analysis').text(lineLabel).show();
-  $('#btn-coach-review-analysis-prev').prop('disabled', analysis.index <= 0);
-  $('#btn-coach-review-analysis-next').prop('disabled', analysis.index >= analysis.steps.length - 1);
-  $('#btn-coach-backtogame').show().prop('disabled', false);
-  $('#btn-coach-review-analysis-prev, #btn-coach-review-analysis-next').show();
+  const analysisLabel = byId('coach-review-analysis');
+  analysisLabel.textContent = lineLabel;
+  showEl(analysisLabel);
+  byId('btn-coach-review-analysis-prev').disabled = analysis.index <= 0;
+  byId('btn-coach-review-analysis-next').disabled = analysis.index >= analysis.steps.length - 1;
+  const backToGame = byId('btn-coach-backtogame');
+  showEl(backToGame);
+  backToGame.disabled = false;
+  showEl(qsa('#btn-coach-review-analysis-prev, #btn-coach-review-analysis-next'));
   setCoachStatus('Analysis position shown — your actual game is unchanged.');
 }
 
@@ -97,8 +101,10 @@ function clearCoachReviewAnalysis(opts = {}) {
   coachReviewAnalysisToken++;
   const oldAnalysisFen = coachAnalysisFen();
   coachReviewAnalysis = null;
-  $('#coach-review-analysis').hide().empty();
-  $('#btn-coach-review-analysis-prev, #btn-coach-review-analysis-next, #btn-coach-backtogame').hide();
+  const analysisLabel = byId('coach-review-analysis');
+  hideEl(analysisLabel);
+  analysisLabel.replaceChildren();
+  hideEl(qsa('#btn-coach-review-analysis-prev, #btn-coach-review-analysis-next, #btn-coach-backtogame'));
   if (!coachBoard) return;
   const fen = coachGame
     ? (coachReviewCursor === null ? coachGame.fen() : coachFenAtPly(coachReviewCursor))
@@ -195,7 +201,9 @@ function stepCoachReviewAnalysis(delta) {
 
 function renderCoachReviewEvidence(review) {
   if (!review || !review.fenBefore || !review.fenAfter) {
-    $('#coach-review-evidence').hide().empty();
+    const evidence = byId('coach-review-evidence');
+    hideEl(evidence);
+    evidence.replaceChildren();
     return;
   }
   const replyUci = review.evalAfter && review.evalAfter.pv && review.evalAfter.pv[0];
@@ -214,34 +222,38 @@ function renderCoachReviewEvidence(review) {
   const recommendedLabel = recommendedReply
     ? `Recommended continuation: ${recommendedReply.san}`
     : 'Recommended continuation is shown on the main board';
-  $('#coach-review-evidence').html(
+  const evidence = byId('coach-review-evidence');
+  evidence.innerHTML =
     `<div class="coach-review-evidence-head">Your move vs recommendation <span>${escapeHtml(review.userSan || 'Your move')} → ${escapeHtml(review.bestSan || 'Recommended move')}</span></div>` +
     `<div class="coach-review-evidence-boards">` +
       `<div><div class="review-board-label">After your move · ${escapeHtml(actualLabel)}</div><div class="review-board">${reviewBoardMarkup(review.fenAfter)}</div></div>` +
       `<div><div class="review-board-label">Analysis · ${escapeHtml(recommendedLabel)}</div><div class="review-board">${reviewBoardMarkup(bestFen)}</div></div>` +
-    `</div>`
-  ).show();
+    `</div>`;
+  showEl(evidence);
 }
 
 function renderCoachReview(review) {
-  if (!review) { $('#coach-review').hide(); return; }
-  const $badge = $('#coach-classification');
+  if (!review) { hideEl(byId('coach-review')); return; }
+  const badge = byId('coach-classification');
   const flair = review.flair === 'brilliant' || review.flair === 'great' ? review.flair : null;
-  $badge.text(flair === 'brilliant' ? '!! Brilliant' : flair === 'great' ? '! Great move' : review.emoji + ' ' + review.label);
-  $badge.attr('class', 'coach-classification coach-class-' + (flair || review.tier));
-  $('#coach-loss').text(review.loss > 0 ? '−' + (review.loss / 100).toFixed(2) : '0.00');
-  $('#coach-user-move').text(review.userSan || '—');
-  $('#coach-best-move').text(review.bestSan || '—');
+  badge.textContent = flair === 'brilliant' ? '!! Brilliant' : flair === 'great' ? '! Great move' : review.emoji + ' ' + review.label;
+  badge.className = 'coach-classification coach-class-' + (flair || review.tier);
+  byId('coach-loss').textContent = review.loss > 0 ? '−' + (review.loss / 100).toFixed(2) : '0.00';
+  byId('coach-user-move').textContent = review.userSan || '—';
+  byId('coach-best-move').textContent = review.bestSan || '—';
   const isBest = review.tier === 'best';
   const isExcellent = review.tier === 'excellent';
   const isUnknown = review.tier === 'unknown';
   const teaching = !isUnknown && review.fenBefore && review.fenAfter && review.bestUci
     ? coachExplanationContext(review.fenBefore, review.userUci, review.bestUci, review.fenAfter, review.evalAfter)
     : null;
-  $('#coach-review-consequence').text(teaching ? teaching.consequence : '').toggle(!!(teaching && teaching.consequence));
+  const consequence = byId('coach-review-consequence');
+  consequence.textContent = (teaching && teaching.consequence) || '';
+  toggleEl(consequence, !!(teaching && teaching.consequence));
   const summary = review.reviewSummary || reviewPositionSummary(review);
-  $('#coach-review-summary, #coach-explanation').first().text(summary);
-  $('#coach-review-details').attr('aria-label', 'Deeper engine review');
+  const summaryEl = qs('#coach-review-summary, #coach-explanation');
+  if (summaryEl) summaryEl.textContent = summary;
+  byId('coach-review-details').setAttribute('aria-label', 'Deeper engine review');
   let msg;
   if (isUnknown) {
     msg = 'Engine timed out on this move — skipping classification. The game continues.';
@@ -255,21 +267,24 @@ function renderCoachReview(review) {
   }
   // Keep the existing explanation field useful on older markup, while newer
   // markup gets the concise position-linked summary above.
-  if (!$('#coach-review-summary').length) $('#coach-explanation').text(msg);
-  $('#coach-review-deep-explanation').text(msg);
-  $('#coach-review-lesson')
-    .text(review.lesson ? 'Lesson · ' + review.lesson : '')
-    .toggle(!!review.lesson);
-  $('#coach-review-threat')
-    .text(review.opponentThreat || '')
-    .toggle(!!review.opponentThreat);
+  if (!byId('coach-review-summary') && byId('coach-explanation')) byId('coach-explanation').textContent = msg;
+  byId('coach-review-deep-explanation').textContent = msg;
+  const lesson = byId('coach-review-lesson');
+  lesson.textContent = review.lesson ? 'Lesson · ' + review.lesson : '';
+  toggleEl(lesson, !!review.lesson);
+  const threat = byId('coach-review-threat');
+  threat.textContent = review.opponentThreat || '';
+  toggleEl(threat, !!review.opponentThreat);
   renderCoachReviewEvidence(review);
-  $('#btn-coach-consequence').toggle(!isUnknown && !isBest && !!review.userUci);
+  toggleEl(byId('btn-coach-consequence'), !isUnknown && !isBest && !!review.userUci);
   const evalText = [
     review.evalBefore ? `Position before: ${reviewEvalLabel(review.evalBefore)}` : '',
     review.evalAfter ? `After your move: ${reviewEvalLabel(review.evalAfter)}` : ''
   ].filter(Boolean).join(' · ');
-  $('#coach-review-eval, #coach-review-eval-deep').text(evalText).toggle(!!evalText);
+  qsa('#coach-review-eval, #coach-review-eval-deep').forEach(el => {
+    el.textContent = evalText;
+    toggleEl(el, !!evalText);
+  });
   const cue = isUnknown
     ? 'Coach cue: Keep playing — this move was not scored, so there is no lesson to carry forward yet.'
     : isBest
@@ -277,46 +292,55 @@ function renderCoachReview(review) {
       : isExcellent
         ? 'Keep this habit: your move was in the engine’s top three.'
         : `Next time: ${teaching ? teaching.cue : 'compare checks, captures, and the opponent’s strongest reply before committing.'}`;
-  $('#coach-review-cue').text(cue);
+  byId('coach-review-cue').textContent = cue;
   const practiceItem = practiceItemFromReview(review);
-  $('#btn-coach-review-practice')
-    .text('Practice this move')
-    .attr('data-practice-id', practiceItem ? practiceItem.id : '')
-    .toggle(!!practiceItem && practiceIsDue(practiceItem));
+  const practiceBtn = byId('btn-coach-review-practice');
+  practiceBtn.textContent = 'Practice this move';
+  practiceBtn.setAttribute('data-practice-id', practiceItem ? practiceItem.id : '');
+  toggleEl(practiceBtn, !!practiceItem && practiceIsDue(practiceItem));
   if (review.pvSan && review.pvSan.length > 1) {
-    $('#coach-pv').show().text('Engine line: ' + review.pvSan.join(' '));
+    const pv = byId('coach-pv');
+    showEl(pv);
+    pv.textContent = 'Engine line: ' + review.pvSan.join(' ');
   } else {
-    $('#coach-pv').hide();
+    hideEl(byId('coach-pv'));
   }
   // Keep the stored top alternatives in the deeper review details. They are
   // useful even for a good move when the user wants to compare plans.
   const showAlts = !isUnknown && review.topAlternatives && review.topAlternatives.length > 0;
   if (showAlts) {
-    const $list = $('#coach-alts-list').empty();
+    const list = byId('coach-alts-list');
+    list.replaceChildren();
     review.topAlternatives.forEach((alt, i) => {
       const cont = (alt.pvSan || []).slice(1).join(' ');
       const cp = alt.cp == null ? '' : (alt.cp >= 10000 ? '#'
                                        : alt.cp <= -10000 ? '−#'
                                        : (alt.cp >= 0 ? '+' : '') + (alt.cp / 100).toFixed(2));
-      const $row = $('<div class="coach-review-alts-row"></div>');
-      $row.append(`<span class="alt-rank">#${i + 1}</span>`);
-      const $line = $('<span class="alt-line"></span>');
-      $line.append(`<span class="alt-san">${alt.san}</span>`);
-      if (cont) $line.append(` <span class="alt-cont">${cont}</span>`);
-      $row.append($line);
-      $row.append(`<span class="alt-cp">${cp}</span>`);
-      $list.append($row);
+      const row = makeEl('div', 'coach-review-alts-row');
+      row.insertAdjacentHTML('beforeend', `<span class="alt-rank">#${i + 1}</span>`);
+      const line = makeEl('span', 'alt-line');
+      line.insertAdjacentHTML('beforeend', `<span class="alt-san">${alt.san}</span>`);
+      if (cont) line.insertAdjacentHTML('beforeend', ` <span class="alt-cont">${cont}</span>`);
+      row.append(line);
+      row.insertAdjacentHTML('beforeend', `<span class="alt-cp">${cp}</span>`);
+      list.append(row);
     });
-    $('#coach-alts').show().css('display', 'flex');
+    const alts = byId('coach-alts');
+    showEl(alts);
+    alts.style.display = 'flex';
   } else {
-    $('#coach-alts').hide();
+    hideEl(byId('coach-alts'));
   }
-  $('#coach-review').show().css('display', 'flex');
+  const reviewPanel = byId('coach-review');
+  showEl(reviewPanel);
+  reviewPanel.style.display = 'flex';
   const canExplain = !isBest && !isUnknown && !!review.bestUci && coachMode &&
     !coachThinking && (!coachGameActive || coachIsUserTurn()) && !coachIsReviewing();
-  $('#btn-coach-showbest').prop('disabled', !canExplain);
-  $('#btn-coach-showwhy').toggle(!isBest && !isUnknown && !!review.bestUci).prop('disabled', !canExplain);
-  $('#btn-coach-consequence').prop('disabled', !canExplain);
+  byId('btn-coach-showbest').disabled = !canExplain;
+  const showWhy = byId('btn-coach-showwhy');
+  toggleEl(showWhy, !isBest && !isUnknown && !!review.bestUci);
+  showWhy.disabled = !canExplain;
+  byId('btn-coach-consequence').disabled = !canExplain;
 }
 
 // ─────────────────────────────────────────────
@@ -365,13 +389,13 @@ function coachGotoPly(n) {
   coachSyncLastMove();
   if (coachIsReviewing()) {
     CoachController.setPhase('reviewing');
-    $('#threats-section').hide();
-    $('#candidates-section').hide();
+    hideEl(byId('threats-section'));
+    hideEl(byId('candidates-section'));
     setCoachStatus(`Reviewing move ${n} of ${total} — click Live to return.`);
     // Show the review card for the move at/before this cursor. If nothing has
     // been reviewed yet (n==0 or only opponent moves so far), hide the card.
     const r = reviewAtCursor(n);
-    if (r) renderCoachReview(r); else $('#coach-review').hide();
+    if (r) renderCoachReview(r); else hideEl(byId('coach-review'));
   } else {
     // Back to live — restore the latest review.
     CoachController.setPhase(coachGameActive
@@ -455,8 +479,8 @@ function capturedFromHistory() {
 
 function updateCapturedDisplay(fen) {
   if (!fen || !coachGame) {
-    $('#captured-top-pieces, #captured-bottom-pieces').empty();
-    $('#captured-top-lead, #captured-bottom-lead').text('');
+    qsa('#captured-top-pieces, #captured-bottom-pieces').forEach(el => { el.replaceChildren(); });
+    qsa('#captured-top-lead, #captured-bottom-lead').forEach(el => { el.textContent = ''; });
     return;
   }
   // Captured rows come from the move history (accurate under promotions).
@@ -477,10 +501,10 @@ function updateCapturedDisplay(fen) {
   const userGlyphs = userIsWhite ? PIECE_GLYPH_BLACK : PIECE_GLYPH_WHITE;
   const oppGlyphs = userIsWhite ? PIECE_GLYPH_WHITE : PIECE_GLYPH_BLACK;
   const userLead = userIsWhite ? (whiteMat - blackMat) : (blackMat - whiteMat);
-  $('#captured-bottom-pieces').html(renderCapturedRow(userTook, userGlyphs));
-  $('#captured-top-pieces').html(renderCapturedRow(oppTook, oppGlyphs));
-  $('#captured-bottom-lead').text(userLead > 0 ? '+' + userLead : '');
-  $('#captured-top-lead').text(userLead < 0 ? '+' + (-userLead) : '');
+  byId('captured-bottom-pieces').innerHTML = renderCapturedRow(userTook, userGlyphs);
+  byId('captured-top-pieces').innerHTML = renderCapturedRow(oppTook, oppGlyphs);
+  byId('captured-bottom-lead').textContent = userLead > 0 ? '+' + userLead : '';
+  byId('captured-top-lead').textContent = userLead < 0 ? '+' + (-userLead) : '';
 }
 
 // ─────────────────────────────────────────────
@@ -548,14 +572,14 @@ function updateMoveList() {
   // Refresh the live eval sparkline alongside the move list — both reflect the same data.
   updateLiveEvalChart();
   updateCoachBoardAccessibility();
-  const $section = $('#movelist-section');
-  const $list = $('#movelist');
+  const section = byId('movelist-section');
+  const list = byId('movelist');
   if (!coachGame || coachGame.history().length === 0) {
-    $section.hide();
-    $list.empty();
+    hideEl(section);
+    list.replaceChildren();
     return;
   }
-  $section.show();
+  showEl(section);
   const sans = coachGame.history();
   const total = sans.length;
   const cursor = coachReviewCursor === null ? total : coachReviewCursor;
@@ -590,12 +614,11 @@ function updateMoveList() {
       html += `<span class="ply-empty">…</span>`;
     }
   }
-  $list.html(html);
+  list.innerHTML = html;
   // Scroll the current ply into view.
-  const $cur = $list.find('.ply.current');
-  if ($cur.length) {
-    const cEl = $cur[0];
-    const lEl = $list[0];
+  const cEl = list.querySelector('.ply.current');
+  if (cEl) {
+    const lEl = list;
     const top = cEl.offsetTop - lEl.offsetTop;
     if (top < lEl.scrollTop || top > lEl.scrollTop + lEl.clientHeight - cEl.clientHeight) {
       lEl.scrollTop = top - lEl.clientHeight / 2;

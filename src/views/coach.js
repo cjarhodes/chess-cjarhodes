@@ -66,12 +66,16 @@ function setPremove(from, to, promotion) {
   const suffix = coachPremove.promotion && coachPremove.promotion !== 'q'
     ? '=' + coachPremove.promotion.toUpperCase()
     : '';
-  $('#coach-premove-hint').text(`Premove queued: ${from}–${to}${suffix} (click board to cancel)`).show();
+  const hint = byId('coach-premove-hint');
+  hint.textContent = `Premove queued: ${from}–${to}${suffix} (click board to cancel)`;
+  showEl(hint);
 }
 function clearPremove() {
   coachPremove = null;
   setPremoveSquares(null, null);
-  $('#coach-premove-hint').hide().text('');
+  const hint = byId('coach-premove-hint');
+  hideEl(hint);
+  hint.textContent = '';
 }
 // Called after the opponent's move applies. If the queued premove is still
 // legal, dispatch it through the normal user-move pipeline.
@@ -91,28 +95,28 @@ function tryApplyPremove() {
 function updateCoachSummary() {
   if (!coachStats) return;
   const total = coachStats.moves;
-  $('#coach-moves-count').text(total);
-  $('#coach-tally-best').text(coachStats.best);
-  $('#coach-tally-excellent').text(coachStats.excellent);
-  $('#coach-tally-good').text(coachStats.good);
-  $('#coach-tally-inacc').text(coachStats.inaccuracy);
-  $('#coach-tally-mistake').text(coachStats.mistake);
-  $('#coach-tally-blunder').text(coachStats.blunder);
+  byId('coach-moves-count').textContent = total;
+  byId('coach-tally-best').textContent = coachStats.best;
+  byId('coach-tally-excellent').textContent = coachStats.excellent;
+  byId('coach-tally-good').textContent = coachStats.good;
+  byId('coach-tally-inacc').textContent = coachStats.inaccuracy;
+  byId('coach-tally-mistake').textContent = coachStats.mistake;
+  byId('coach-tally-blunder').textContent = coachStats.blunder;
   if (total === 0) {
-    $('#coach-accuracy').text('—');
-    $('#coach-accuracy-recent').text('—');
-    $('#coach-accuracy-recent-label').text('Recent accuracy');
+    byId('coach-accuracy').textContent = '—';
+    byId('coach-accuracy-recent').textContent = '—';
+    byId('coach-accuracy-recent-label').textContent = 'Recent accuracy';
     return;
   }
   const pct = accuracyFromTallies(coachStats, total);
-  $('#coach-accuracy').text((pct === null ? '—' : pct + '%'));
+  byId('coach-accuracy').textContent = (pct === null ? '—' : pct + '%');
   const roll = rollingAccuracy(10);
   if (roll && roll.pct !== null) {
-    $('#coach-accuracy-recent').text(roll.pct + '%');
-    $('#coach-accuracy-recent-label').text(`Last ${roll.n} move${roll.n === 1 ? '' : 's'}`);
+    byId('coach-accuracy-recent').textContent = roll.pct + '%';
+    byId('coach-accuracy-recent-label').textContent = `Last ${roll.n} move${roll.n === 1 ? '' : 's'}`;
   } else {
-    $('#coach-accuracy-recent').text('—');
-    $('#coach-accuracy-recent-label').text('Recent accuracy');
+    byId('coach-accuracy-recent').textContent = '—';
+    byId('coach-accuracy-recent-label').textContent = 'Recent accuracy';
   }
 }
 
@@ -125,7 +129,7 @@ function setCoachStatus(msg) {
     'Opponent thinking…': 'Choosing a reply. You can queue a premove.',
     'Analyzing your move…': 'Checking your move before the opponent replies.'
   };
-  $('#coach-status').text(guidance[msg] || msg);
+  byId('coach-status').textContent = guidance[msg] || msg;
   renderCoachPresentation();
 }
 
@@ -151,39 +155,45 @@ function renderCoachPresentation() {
   }
   view.dataset.uiState = state;
   const canEnterMove = state === 'user-turn' || state === 'practice';
-  $('#coach-keyboard-move-input, #coach-keyboard-move-form button').prop('disabled', !canEnterMove);
-  $('#coachBoard-wrap').attr('aria-busy', ['analyzing', 'opponent-turn', 'practice-checking'].includes(state) ? 'true' : 'false');
-  $('#coachBoard').attr('aria-describedby', practicing ? 'coach-status coach-practice-prompt' : 'coach-status');
-  $('#coach-review-empty').toggle(!coachLastReview && !practicing);
+  qsa('#coach-keyboard-move-input, #coach-keyboard-move-form button').forEach(el => { el.disabled = !canEnterMove; });
+  byId('coachBoard-wrap').setAttribute('aria-busy', ['analyzing', 'opponent-turn', 'practice-checking'].includes(state) ? 'true' : 'false');
+  byId('coachBoard').setAttribute('aria-describedby', practicing ? 'coach-status coach-practice-prompt' : 'coach-status');
+  toggleEl(byId('coach-review-empty'), !coachLastReview && !practicing);
 
   const selecting = !practicing && document.getElementById('panel-practice').classList.contains('active');
-  $('#coach-phase-label').text(selecting && state === 'ready' ? 'Practice · choose a lesson' : labels[state]);
-  $('#practice-selection-guidance').toggle(selecting && state === 'ready');
-  $('#coach-daily-plan-label').text(practicing ? 'Practice session' : 'Adaptive session · 5–10 min');
-  $('.daily-sprint-progress').attr('aria-label', practicing ? 'Practice progress' : 'Adaptive session progress');
-  $('#coach-game-options-label').text((coachUserSide === 'random' ? 'Random' : coachUserColor() === 'white' ? 'White' : 'Black') + ' · ' + coachEngineElo);
+  byId('coach-phase-label').textContent = selecting && state === 'ready' ? 'Practice · choose a lesson' : labels[state];
+  toggleEl(byId('practice-selection-guidance'), selecting && state === 'ready');
+  byId('coach-daily-plan-label').textContent = practicing ? 'Practice session' : 'Adaptive session · 5–10 min';
+  qsa('.daily-sprint-progress').forEach(el => { el.setAttribute('aria-label', practicing ? 'Practice progress' : 'Adaptive session progress'); });
+  byId('coach-game-options-label').textContent = (coachUserSide === 'random' ? 'Random' : coachUserColor() === 'white' ? 'White' : 'Black') + ' · ' + coachEngineElo;
   const managed = '#btn-practice-session-start, #btn-opening-transfer-review, #btn-progress-next, #btn-coach-next-action, #btn-coach-showwhy, #btn-coach-backtogame, #btn-coach-live, #btn-coach-practice-next, #btn-coach-practice-exit, #coach-keyboard-move-form button';
-  $(managed).removeClass('primary').removeAttr('data-primary-action');
+  qsa(managed).forEach(el => {
+    el.classList.remove('primary');
+    el.removeAttribute('data-primary-action');
+  });
   const progressActive = document.getElementById('panel-progress').classList.contains('active');
-  $('#btn-progress-next').prop('disabled', ['analyzing', 'opponent-turn', 'practice-checking'].includes(state) || (typeof importedGameAnalysisActive !== 'undefined' && importedGameAnalysisActive));
+  byId('btn-progress-next').disabled = ['analyzing', 'opponent-turn', 'practice-checking'].includes(state) || (typeof importedGameAnalysisActive !== 'undefined' && importedGameAnalysisActive);
   const practiceSelection = !practicing && document.getElementById('panel-practice').classList.contains('active');
   view.classList.toggle('practice-browsing', practiceSelection);
   renderPracticeRecommendation();
   let action = null;
   if (practiceSelection && !coachThinking) action = '#btn-practice-session-start';
-  else if (progressActive && !$('#btn-progress-next').prop('disabled') && !['analyzing', 'opponent-turn', 'practice-checking', 'practice', 'practice-complete', 'review'].includes(state)) action = '#btn-progress-next';
+  else if (progressActive && !byId('btn-progress-next').disabled && !['analyzing', 'opponent-turn', 'practice-checking', 'practice', 'practice-complete', 'review'].includes(state)) action = '#btn-progress-next';
   else if (state === 'ended' && coachOpeningTransfer && coachStats.moves > 0 && !document.getElementById('panel-game').hidden) action = '#btn-opening-transfer-review';
   else if (state === 'ready' || state === 'complete' || state === 'ended') action = '#btn-coach-next-action';
   else if (state === 'review') action = coachReviewAnalysis ? '#btn-coach-backtogame' : '#btn-coach-live';
-  else if (state === 'practice-complete') action = $('#btn-coach-practice-next').is(':visible') && !$('#btn-coach-practice-next').prop('disabled') ? '#btn-coach-practice-next' : '#btn-coach-practice-exit';
+  else if (state === 'practice-complete') action = isVisible(byId('btn-coach-practice-next')) && !byId('btn-coach-practice-next').disabled ? '#btn-coach-practice-next' : '#btn-coach-practice-exit';
   else if (state === 'user-turn' && !document.getElementById('panel-game').hidden && coachOpeningTransfer && coachStats.moves >= 4) action = '#btn-opening-transfer-review';
-  else if (state === 'user-turn' && $('#coach-review').is(':visible') && !$('#btn-coach-showwhy').prop('disabled')) action = '#btn-coach-showwhy';
+  else if (state === 'user-turn' && isVisible(byId('coach-review')) && !byId('btn-coach-showwhy').disabled) action = '#btn-coach-showwhy';
   else if ((state === 'user-turn' || state === 'practice') && document.getElementById('coach-keyboard-move')?.open) action = '#coach-keyboard-move-form button';
-  if (action) $(action).addClass('primary').attr('data-primary-action', 'true');
-  $('#coachBoard-wrap').attr('data-primary-target', !action && canEnterMove ? 'true' : 'false');
-  $('#btn-coach-practice-exit').text(practicing && coachPracticeReturnState ? 'Return to saved game' : 'Exit practice');
-  $('#btn-coach-practice-exit').toggle(state !== 'practice-complete' || !!(coachPracticeRun && coachPracticeRun.index + 1 < coachPracticeRun.items.length));
-  $('#btn-coach-practice-hint, #btn-coach-practice-answer').toggle(state !== 'practice-complete');
+  if (action) qsa(action).forEach(el => {
+    el.classList.add('primary');
+    el.setAttribute('data-primary-action', 'true');
+  });
+  byId('coachBoard-wrap').setAttribute('data-primary-target', !action && canEnterMove ? 'true' : 'false');
+  byId('btn-coach-practice-exit').textContent = practicing && coachPracticeReturnState ? 'Return to saved game' : 'Exit practice';
+  toggleEl(byId('btn-coach-practice-exit'), state !== 'practice-complete' || !!(coachPracticeRun && coachPracticeRun.index + 1 < coachPracticeRun.items.length));
+  toggleEl(qsa('#btn-coach-practice-hint, #btn-coach-practice-answer'), state !== 'practice-complete');
   renderPracticeBoardCue();
   if (typeof renderOpeningTransfer === 'function') renderOpeningTransfer();
   if (typeof renderLearningTransfer === 'function') renderLearningTransfer();
@@ -192,10 +202,11 @@ function renderCoachPresentation() {
 
 
 function showCoachRetryStatus(msg) {
-  const $status = $('#coach-status').empty();
-  $status.append(document.createTextNode(msg + ' '));
-  $('<button type="button" class="movelist-copy" id="btn-coach-retry-opponent">Retry</button>')
-    .appendTo($status);
+  const status = byId('coach-status');
+  const retry = makeEl('button', 'movelist-copy', 'Retry');
+  retry.type = 'button';
+  retry.id = 'btn-coach-retry-opponent';
+  status.replaceChildren(document.createTextNode(msg + ' '), retry);
 }
 
 function invalidateCoachAsyncWork(reason) {
@@ -238,16 +249,18 @@ function resetCoachState(fen, opts = {}) {
   coachLifetimeRolledForThisGame = false;
   if (coachSummaryTimer) { clearTimeout(coachSummaryTimer); coachSummaryTimer = null; }
   clearPremove();
-  $('#coach-status').removeClass('status-ended');
-  $('#summary-overlay').hide().attr('aria-hidden', 'true');
-  $('#coach-practice-banner').hide();
-  $('#coach-review').hide();
-  $('#coach-review-analysis').hide().empty();
-  $('#threats-section').hide();
-  $('#candidates-section').hide();
-  $('#opening-section').hide();
-  $('#movelist-section').hide();
-  $('#liveeval-section').hide();
+  byId('coach-status').classList.remove('status-ended');
+  hideSummaryOverlay();
+  hideEl(byId('coach-practice-banner'));
+  hideEl(byId('coach-review'));
+  const analysis = byId('coach-review-analysis');
+  hideEl(analysis);
+  analysis.replaceChildren();
+  hideEl(byId('threats-section'));
+  hideEl(byId('candidates-section'));
+  hideEl(byId('opening-section'));
+  hideEl(byId('movelist-section'));
+  hideEl(byId('liveeval-section'));
   updateCoachSummary();
   updateCapturedDisplay(coachGame.fen());
   updateMoveList();
@@ -354,8 +367,8 @@ async function coachHandleUserMove(source, target, promotion, opts) {
   playSound(soundForMove(userMv, coachGame));
 
   // Clear threats/candidates on new move
-  $('#threats-section').hide();
-  $('#candidates-section').hide();
+  hideEl(byId('threats-section'));
+  hideEl(byId('candidates-section'));
 
   coachThinking = true;
   CoachController.setPhase('analyzing');
@@ -422,7 +435,7 @@ let coachSummaryTimer = null;
 function scheduleSummaryReveal(msg, delayMs) {
   if (coachSummaryTimer) { clearTimeout(coachSummaryTimer); coachSummaryTimer = null; }
   // Flag the status line so it pulses while the user takes in the final position.
-  $('#coach-status').addClass('status-ended');
+  byId('coach-status').classList.add('status-ended');
   coachSummaryTimer = setTimeout(() => {
     coachSummaryTimer = null;
     showPostGameSummary(msg);
@@ -483,7 +496,7 @@ function coachHandleGameOver() {
 // BOARD, PANELS AND NEW GAME
 // ─────────────────────────────────────────────
 function updateCoachBoardAccessibility() {
-  $('#coachBoard').attr('aria-label', describeChessPosition(coachGame));
+  byId('coachBoard').setAttribute('aria-label', describeChessPosition(coachGame));
 }
 
 const COACH_PANEL_TAB_KEY = 'ui:coach-panel-tab';
@@ -491,13 +504,28 @@ const COACH_PANEL_TAB_KEY = 'ui:coach-panel-tab';
 // Right-rail tabs: Game (live review), Practice (queue and drills), Progress.
 function showCoachPanel(name, opts) {
   opts = opts || {};
-  const $tab = $('.panel-tab[data-panel="' + name + '"]');
-  if (!$tab.length) return;
-  $('.panel-tab').removeClass('active').attr({ 'aria-selected': 'false', tabindex: '-1' });
-  $tab.addClass('active').attr({ 'aria-selected': 'true', tabindex: '0' });
-  $('.panel-page').removeClass('active').attr('hidden', true);
-  $('#panel-' + name).addClass('active').removeAttr('hidden');
-  if (opts.focus) $tab.trigger('focus');
+  const tabs = qsa('.panel-tab[data-panel="' + name + '"]');
+  if (!tabs.length) return;
+  qsa('.panel-tab').forEach(tab => {
+    tab.classList.remove('active');
+    tab.setAttribute('aria-selected', 'false');
+    tab.setAttribute('tabindex', '-1');
+  });
+  tabs.forEach(tab => {
+    tab.classList.add('active');
+    tab.setAttribute('aria-selected', 'true');
+    tab.setAttribute('tabindex', '0');
+  });
+  qsa('.panel-page').forEach(page => {
+    page.classList.remove('active');
+    page.hidden = true;
+  });
+  const page = byId('panel-' + name);
+  if (page) {
+    page.classList.add('active');
+    page.hidden = false;
+  }
+  if (opts.focus) tabs.forEach(tab => tab.focus());
   try { sessionStorage.setItem(COACH_PANEL_TAB_KEY, name); } catch (e) { /* session only */ }
   renderCoachPresentation();
 }
@@ -505,23 +533,23 @@ function showCoachPanel(name, opts) {
 function initCoachPanelTabs() {
   let remembered = null;
   try { remembered = sessionStorage.getItem(COACH_PANEL_TAB_KEY); } catch (e) { /* default */ }
-  if (remembered && $('.panel-tab[data-panel="' + remembered + '"]').length) showCoachPanel(remembered);
-  $('.panel-tab').on('click', function() { showCoachPanel($(this).data('panel')); });
-  $('.panel-tab').on('keydown', function(event) {
+  if (remembered && qs('.panel-tab[data-panel="' + remembered + '"]')) showCoachPanel(remembered);
+  on(qsa('.panel-tab'), 'click', function() { showCoachPanel(this.dataset.panel); });
+  on(qsa('.panel-tab'), 'keydown', function(event) {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
     event.preventDefault();
-    const tabs = $('.panel-tab').toArray();
+    const tabs = qsa('.panel-tab');
     const index = tabs.indexOf(this);
     const next = tabs[(index + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
-    showCoachPanel($(next).data('panel'), { focus: true });
+    showCoachPanel(next.dataset.panel, { focus: true });
   });
 }
 
 function updatePracticeTabBadge(dueCount) {
-  const $badge = $('#tab-practice-badge');
-  if (!$badge.length) return;
-  $badge.text(String(dueCount));
-  if (dueCount > 0) $badge.removeAttr('hidden'); else $badge.attr('hidden', true);
+  const badge = byId('tab-practice-badge');
+  if (!badge) return;
+  badge.textContent = String(dueCount);
+  badge.hidden = !(dueCount > 0);
 }
 
 function placeDailySprintCard() {
@@ -637,20 +665,23 @@ function startCoachGame(options = {}) {
   }
   if (typeof applyAdaptiveCoachElo === 'function') applyAdaptiveCoachElo();
   const transfer = options.openingTransfer || null;
-  const fenRaw = transfer ? transfer.sourceFen : ($('#coach-fen').val() || '').trim();
+  const fenRaw = transfer ? transfer.sourceFen : (byId('coach-fen').value || '').trim();
   let startFen = null;
   if (fenRaw) {
     if (!isValidFen(fenRaw)) {
-      $('#coach-fen-error').text('Invalid FEN — check the position string.').show();
+      const fenError = byId('coach-fen-error');
+      fenError.textContent = 'Invalid FEN — check the position string.';
+      showEl(fenError);
       return;
     }
     startFen = fenRaw;
   }
-  $('#coach-fen-error').hide();
+  hideEl(byId('coach-fen-error'));
   beginDailyMoveSprint();
 
   // Resolve "random" side
-  const chosenSide = transfer ? transfer.side : $('.side-toggle button.active').data('side') || 'white';
+  const activeSide = qs('.side-toggle button.active');
+  const chosenSide = transfer ? transfer.side : (activeSide && activeSide.dataset.side) || 'white';
   coachUserSide = chosenSide === 'random'
     ? (Math.random() < 0.5 ? 'white' : 'black')
     : chosenSide;
@@ -660,7 +691,7 @@ function startCoachGame(options = {}) {
   const generation = coachGameGeneration;
   coachGameActive = true;
   CoachController.setPhase(coachIsUserTurn() ? 'userTurn' : 'opponentThinking');
-  $('#summary-overlay').hide().attr('aria-hidden', 'true');
+  hideSummaryOverlay();
   // Replace any saved state from a prior game so a refresh before the first
   // move doesn't restore the old session.
   clearCoachState();
@@ -668,7 +699,7 @@ function startCoachGame(options = {}) {
   // Orient board so user plays from bottom
   coachBoardFlipped = (coachUserColor() === 'black');
   createCoachBoard(coachGame.fen(), coachBoardFlipped ? 'black' : 'white');
-  $('#coach-view').addClass('game-active');
+  byId('coach-view').classList.add('game-active');
 
   document.getElementById('coach-game-options').open = false;
   showCoachPanel('game');
@@ -706,11 +737,11 @@ function showEngineLoadError(err) {
   const msg = (err && err.message) || 'Engine could not load.';
   setCoachStatus(msg + ' — refresh to retry.');
   // Also disable in-game actions that require the engine.
-  $('#btn-coach-resign').prop('disabled', true);
-  $('#btn-coach-takeback').prop('disabled', true);
-  $('#btn-coach-showbest').prop('disabled', true);
-  $('#btn-coach-showwhy').prop('disabled', true);
-  $('#btn-coach-candidates').prop('disabled', true);
+  byId('btn-coach-resign').disabled = true;
+  byId('btn-coach-takeback').disabled = true;
+  byId('btn-coach-showbest').disabled = true;
+  byId('btn-coach-showwhy').disabled = true;
+  byId('btn-coach-candidates').disabled = true;
 }
 
 // ─────────────────────────────────────────────
@@ -720,30 +751,34 @@ function updateCoachControlsState() {
   const active = coachGameActive;
   const practicing = !!coachPracticeSession;
   const reviewing = coachIsReviewing();
-  $('#btn-coach-review-practice').prop('disabled', coachThinking && !practicing);
+  byId('btn-coach-review-practice').disabled = coachThinking && !practicing;
   const hasReview = !!coachLastReview;
   const canExplain = !!coachLastReview && !!coachLastReview.bestUci && coachLastReview.tier !== 'best' &&
     coachLastReview.tier !== 'unknown' && (!active || coachIsUserTurn()) && !reviewing && !coachThinking && !practicing;
   const total = coachGame ? coachGame.history().length : 0;
   const cur = coachReviewCursor === null ? total : coachReviewCursor;
-  $('#btn-coach-resign').prop('disabled', !active || reviewing || practicing);
+  byId('btn-coach-resign').disabled = !active || reviewing || practicing;
   // "Open review" only appears once the game has ended and we have a summary to reopen.
-  $('#btn-coach-openreview').toggle(!practicing && !active && !!coachLastEndMsg);
-  $('#btn-coach-takeback').prop('disabled', practicing || !hasReview || reviewing || coachThinking);
-  $('#btn-coach-showbest').prop('disabled', !canExplain);
-  $('#btn-coach-showwhy').prop('disabled', !canExplain);
-  $('#btn-coach-consequence').prop('disabled', !canExplain);
-  $('#btn-coach-candidates').prop('disabled', practicing || !active || !coachGame || !coachIsUserTurn() || reviewing || coachThinking);
-  $('#btn-coach-prev').prop('disabled', practicing || !coachGame || total === 0 || cur === 0);
-  $('#btn-coach-next').prop('disabled', practicing || !coachGame || total === 0 || cur === total);
-  $('#btn-coach-live').toggle(reviewing);
+  toggleEl(byId('btn-coach-openreview'), !practicing && !active && !!coachLastEndMsg);
+  byId('btn-coach-takeback').disabled = practicing || !hasReview || reviewing || coachThinking;
+  byId('btn-coach-showbest').disabled = !canExplain;
+  byId('btn-coach-showwhy').disabled = !canExplain;
+  byId('btn-coach-consequence').disabled = !canExplain;
+  byId('btn-coach-candidates').disabled = practicing || !active || !coachGame || !coachIsUserTurn() || reviewing || coachThinking;
+  byId('btn-coach-prev').disabled = practicing || !coachGame || total === 0 || cur === 0;
+  byId('btn-coach-next').disabled = practicing || !coachGame || total === 0 || cur === total;
+  toggleEl(byId('btn-coach-live'), reviewing);
   const openingPosition = coachOpeningTransfer && coachGame
     ? (reviewing ? coachFenAtPly(cur) : coachGame.fen()) : null;
-  $('#coach-nav-label').text(
-    practicing ? 'Practice' : openingPosition ? `Move ${openingPosition.split(/\s+/)[5]} • ${reviewing ? 'Review' : 'Live'}` :
-    !coachGame || total === 0 ? '' : reviewing ? `Move ${cur}/${total}` : `Move ${total} • Live`
-  );
+  byId('coach-nav-label').textContent = practicing ? 'Practice' : openingPosition ? `Move ${openingPosition.split(/\s+/)[5]} • ${reviewing ? 'Review' : 'Live'}` :
+    !coachGame || total === 0 ? '' : reviewing ? `Move ${cur}/${total}` : `Move ${total} • Live`;
   renderCoachPresentation();
+}
+
+function hideSummaryOverlay() {
+  const overlay = byId('summary-overlay');
+  hideEl(overlay);
+  overlay.setAttribute('aria-hidden', 'true');
 }
 
 function closeSummaryOverlay() {
@@ -754,7 +789,7 @@ function closeSummaryOverlay() {
   const returnTarget = canRestore
     ? requestedTarget
     : (document.getElementById('btn-coach-openreview') || document.getElementById('btn-coach-newgame'));
-  $('#summary-overlay').hide().attr('aria-hidden', 'true');
+  hideSummaryOverlay();
   updateCoachControlsState();
   summaryReturnFocus = null;
   if (returnTarget && typeof returnTarget.focus === 'function') returnTarget.focus();

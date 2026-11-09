@@ -34,10 +34,12 @@ function practiceRecommendation() {
 function renderPracticeRecommendation() {
   const recommendation = practiceRecommendation();
   if (!recommendation) return;
-  $('#practice-start-title').text(recommendation.title);
-  $('#practice-start-detail').text(recommendation.detail);
-  $('#practice-start-context').text(coachGameActive ? 'Your game will be saved while you practise.' : 'Play a move, get feedback, then choose your next step.');
-  $('#btn-practice-session-start').text(recommendation.label).prop('disabled', coachThinking);
+  byId('practice-start-title').textContent = recommendation.title;
+  byId('practice-start-detail').textContent = recommendation.detail;
+  byId('practice-start-context').textContent = coachGameActive ? 'Your game will be saved while you practise.' : 'Play a move, get feedback, then choose your next step.';
+  const start = byId('btn-practice-session-start');
+  start.textContent = recommendation.label;
+  start.disabled = coachThinking;
 }
 
 function orderedPracticeRunItems(items, firstItem) {
@@ -85,19 +87,22 @@ function practiceRunPositionText() {
 // not about the drill (play controls, setup groups, metrics, other tabs) and
 // the right rail shows only the practice queue with the current drill marked.
 function setPracticeFocus(active) {
-  const $view = $('#coach-view');
-  const wasActive = $view.hasClass('practice-active');
-  $view.toggleClass('practice-active', !!active);
+  const view = byId('coach-view');
+  const wasActive = view.classList.contains('practice-active');
+  view.classList.toggle('practice-active', !!active);
   if (active) showCoachPanel('practice');
   else if (wasActive) showCoachPanel('game');
   markActivePracticeRow();
 }
 
 function markActivePracticeRow() {
-  $('.practice-row').removeClass('is-active');
+  qsa('.practice-row').forEach(el => { el.classList.remove('is-active'); });
   const item = coachPracticeSession && coachPracticeSession.item;
   if (!item) return;
-  $('.practice-load[data-practice-id="' + item.id + '"]').closest('.practice-row').addClass('is-active');
+  qsa('.practice-load[data-practice-id="' + item.id + '"]').forEach(button => {
+    const row = button.closest('.practice-row');
+    if (row) row.classList.add('is-active');
+  });
 }
 
 function startCoachPractice(item, opts = {}) {
@@ -152,18 +157,27 @@ function startCoachPractice(item, opts = {}) {
   CoachController.setPhase('practice');
   coachBoardFlipped = coachUserColor() === 'black';
   createCoachBoard(coachGame.fen(), coachBoardFlipped ? 'black' : 'white');
-  $('#coach-view').addClass('game-active');
-  $('#coach-practice-title').text(item.meta.title);
-  $('#coach-practice-prompt').text(practicePromptForItem(item));
-  $('#coach-practice-session-status').text(practiceRunPositionText());
-  $('#coach-practice-status').text('Choose your move. You can ask for a hint at any time.');
-  $('#coach-practice-takeaway').hide().empty();
-  $('#btn-coach-practice-answer').prop('disabled', false);
-  $('#btn-coach-practice-answer').text('Show answer');
-  $('#btn-coach-practice-hint').text('Hint').prop('disabled', false).show();
-  $('#btn-coach-practice-next').hide().prop('disabled', true);
-  $('#coach-practice-banner').show().css('display', 'flex');
-  $('#coach-keyboard-move-status').text('');
+  byId('coach-view').classList.add('game-active');
+  byId('coach-practice-title').textContent = item.meta.title;
+  byId('coach-practice-prompt').textContent = practicePromptForItem(item);
+  byId('coach-practice-session-status').textContent = practiceRunPositionText();
+  byId('coach-practice-status').textContent = 'Choose your move. You can ask for a hint at any time.';
+  const takeaway = byId('coach-practice-takeaway');
+  hideEl(takeaway);
+  takeaway.replaceChildren();
+  byId('btn-coach-practice-answer').disabled = false;
+  byId('btn-coach-practice-answer').textContent = 'Show answer';
+  const hint = byId('btn-coach-practice-hint');
+  hint.textContent = 'Hint';
+  hint.disabled = false;
+  showEl(hint);
+  const next = byId('btn-coach-practice-next');
+  hideEl(next);
+  next.disabled = true;
+  const banner = byId('coach-practice-banner');
+  showEl(banner);
+  banner.style.display = 'flex';
+  byId('coach-keyboard-move-status').textContent = '';
   setCoachStatus('Play on the board or enter a move below.');
   updateCoachControlsState();
   renderCoachDailyPlan();
@@ -329,23 +343,25 @@ function finishCoachPracticeMove(session, played, quality, revealed) {
   }
   const sprint = recordDailySprintDrill(session.item, assisted, !assisted && session.misses === 0);
   const due = formatPracticeDue(record);
-  $('#coach-practice-status').text(`${quality}: ${played.san}. ${due}.`);
-  $('#coach-practice-prompt').text('Position solved. Carry the cue into your next game.');
+  byId('coach-practice-status').textContent = `${quality}: ${played.san}. ${due}.`;
+  byId('coach-practice-prompt').textContent = 'Position solved. Carry the cue into your next game.';
   setCoachStatus(`${quality}. Practice progress saved.`);
-  $('#coach-practice-takeaway').text(`Carry into your next game: ${practiceCarryForwardCue(session.item)}`).show();
-  $('#btn-coach-practice-answer').prop('disabled', true);
-  $('#btn-coach-practice-hint').prop('disabled', true);
+  const takeaway = byId('coach-practice-takeaway');
+  takeaway.textContent = `Carry into your next game: ${practiceCarryForwardCue(session.item)}`;
+  showEl(takeaway);
+  byId('btn-coach-practice-answer').disabled = true;
+  byId('btn-coach-practice-hint').disabled = true;
   if (coachPracticeRun) {
     coachPracticeRun.completed += 1;
     if (assisted) coachPracticeRun.assisted += 1;
     else if (session.misses === 0) coachPracticeRun.clean += 1;
     const hasNext = coachPracticeRun.index + 1 < coachPracticeRun.items.length;
     const transferNext = !hasNext && sprint && !sprint.completedAt && sprint.mode === 'adaptive' && sprint.phase === 'moves';
-    $('#btn-coach-practice-next')
-      .text(hasNext ? 'Next drill' : session.item.id.startsWith('opening-bridge:') ? 'Continue this opening in play' : (transferNext ? 'Continue to live play' : coachPracticeReturnState ? 'Return to saved game' : 'Choose another lesson'))
-      .show()
-      .prop('disabled', false);
-    if (!hasNext) $('#coach-practice-status').text(`${quality}: ${played.san}. Practice complete — ${coachPracticeRun.clean}/${coachPracticeRun.completed} first-try.${transferNext ? ' Next: use the same focus in live play.' : ''}`);
+    const next = byId('btn-coach-practice-next');
+    next.textContent = hasNext ? 'Next drill' : session.item.id.startsWith('opening-bridge:') ? 'Continue this opening in play' : (transferNext ? 'Continue to live play' : coachPracticeReturnState ? 'Return to saved game' : 'Choose another lesson');
+    showEl(next);
+    next.disabled = false;
+    if (!hasNext) byId('coach-practice-status').textContent = `${quality}: ${played.san}. Practice complete — ${coachPracticeRun.clean}/${coachPracticeRun.completed} first-try.${transferNext ? ' Next: use the same focus in live play.' : ''}`;
   }
   updateCoachControlsState();
   renderInsights();
@@ -377,10 +393,15 @@ function applyCoachPracticeMove(session, source, target, promotion, evaluation, 
       session.positionFen = coachGame.fen();
       session.requestId = coachGameGeneration;
       preparePracticeAnalysis(session);
-      $('#coach-practice-prompt').text('Good first move. Now find the follow-up that keeps the advantage.');
-      $('#coach-practice-status').text(`The opponent replies ${opponent.san}. Find your next move.`);
-      $('#btn-coach-practice-answer').prop('disabled', false).text('Show answer');
-      $('#btn-coach-practice-hint').prop('disabled', false).text('Hint').show();
+      byId('coach-practice-prompt').textContent = 'Good first move. Now find the follow-up that keeps the advantage.';
+      byId('coach-practice-status').textContent = `The opponent replies ${opponent.san}. Find your next move.`;
+      const answer = byId('btn-coach-practice-answer');
+      answer.disabled = false;
+      answer.textContent = 'Show answer';
+      const hint = byId('btn-coach-practice-hint');
+      hint.disabled = false;
+      hint.textContent = 'Hint';
+      showEl(hint);
     }
   } else {
     session.phase = 'complete';
@@ -420,7 +441,7 @@ function coachHandlePracticeMove(source, target, promotion, opts) {
   const evaluate = () => evaluatePracticeMove(session, actualUci).catch(() => ({ unknown: true })).then(result => {
     if (!practicePositionIsCurrent(session)) return 'stale';
     if (result.unknown) {
-      $('#coach-practice-status').text('Engine could not verify that candidate. Try again when analysis is ready.');
+      byId('coach-practice-status').textContent = 'Engine could not verify that candidate. Try again when analysis is ready.';
       setCoachStatus('Practice move was not scored.');
       return 'ungraded';
     }
@@ -430,7 +451,7 @@ function coachHandlePracticeMove(source, target, promotion, opts) {
     }
     session.misses += 1;
     recordPracticeAttempt(session.item, false, false);
-    $('#coach-practice-status').text(practiceMistakeFeedback(session, actualUci, result));
+    byId('coach-practice-status').textContent = practiceMistakeFeedback(session, actualUci, result);
     setCoachStatus('Board reset. Compare another candidate.');
     focusPracticeTarget();
     saveCoachPracticeState();
@@ -442,7 +463,7 @@ function coachHandlePracticeMove(source, target, promotion, opts) {
     session.grading = true;
     renderCoachPresentation();
     session.pendingMove = { source, target, promotion, opts: opts || {} };
-    $('#coach-practice-status').text('Checking the position…');
+    byId('coach-practice-status').textContent = 'Checking the position…';
     return session.analysisPromise.then(() => {
       if (!practicePositionIsCurrent(session)) return 'stale';
       session.pendingMove = null;
@@ -522,9 +543,9 @@ function revealCoachPracticeAnswer() {
     recordPracticeAttempt(session.item, false, true);
     renderInsights();
   }
-  $('#coach-practice-status').text(text);
-  $('#btn-coach-practice-answer').prop('disabled', true);
-  $('#btn-coach-practice-hint').prop('disabled', true);
+  byId('coach-practice-status').textContent = text;
+  byId('btn-coach-practice-answer').disabled = true;
+  byId('btn-coach-practice-hint').disabled = true;
   setCoachStatus('Practice answer revealed — now play the move.');
   saveCoachPracticeState();
 }
@@ -535,18 +556,18 @@ function showCoachPracticeHint() {
   session.hintUsed = true;
   session.hintStage = Math.min(4, (session.hintStage || 0) + 1);
   const text = practiceHintForSession(session, session.hintStage);
-  $('#coach-practice-status').text(text);
+  byId('coach-practice-status').textContent = text;
   if (session.hintStage >= 4) {
     if (!session.revealed) {
       session.revealed = true;
       recordPracticeAttempt(session.item, false, true);
       renderInsights();
     }
-    $('#btn-coach-practice-hint').prop('disabled', true);
-    $('#btn-coach-practice-answer').prop('disabled', true);
+    byId('btn-coach-practice-hint').disabled = true;
+    byId('btn-coach-practice-answer').disabled = true;
     setCoachStatus('Practice answer revealed — now play the move.');
   } else {
-    $('#btn-coach-practice-answer').text('Show answer');
+    byId('btn-coach-practice-answer').textContent = 'Show answer';
     setCoachStatus('Practice hint shown.');
   }
   saveCoachPracticeState();
@@ -585,7 +606,7 @@ function advanceCoachPractice() {
 
 function exitCoachPractice(message) {
   if (!coachPracticeSession) return;
-  $('#coach-keyboard-move-status').text('');
+  byId('coach-keyboard-move-status').textContent = '';
   clearCoachPracticeState(coachPracticeSession.owner || coachMemoryOwnerId());
   const returnState = coachPracticeReturnState;
   coachPracticeSession = null;
@@ -604,10 +625,10 @@ function exitCoachPractice(message) {
     coachGameActive = false;
     CoachController.setPhase('idle');
     createCoachBoard('start', 'white');
-    $('#coach-view').removeClass('game-active');
+    byId('coach-view').classList.remove('game-active');
     persistCoachPracticeReturnState(null);
   }
-  $('#coach-practice-banner').hide();
+  hideEl(byId('coach-practice-banner'));
   setPracticeFocus(false);
   if (!restoredLive) setCoachStatus(message || 'Practice closed. Start a game or choose another due drill.');
   updateCoachControlsState();

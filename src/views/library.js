@@ -44,16 +44,16 @@ function clearOpening() {
   game.reset();
   boardFlipped = false;
   librarySyncLastMove(null);
-  $('.opening-btn').removeClass('active');
-  $('.app').removeClass('has-opening');
-  $('#opening-content').hide();
-  $('#move-list, #key-ideas').empty();
+  qsa('.opening-btn').forEach(el => { el.classList.remove('active'); });
+  qsa('.app').forEach(el => { el.classList.remove('has-opening'); });
+  hideEl(byId('opening-content'));
+  qsa('#move-list, #key-ideas').forEach(el => { el.replaceChildren(); });
   if (!exploreMode) {
-    $('#myBoard').hide();
-    $('#board-placeholder').show();
-    $('#empty-state').show();
+    hideEl(byId('myBoard'));
+    showEl(byId('board-placeholder'));
+    showEl(byId('empty-state'));
   }
-  ['btn-prev', 'btn-start', 'btn-next', 'btn-end', 'btn-flip'].forEach(id => $('#' + id).prop('disabled', true));
+  ['btn-prev', 'btn-start', 'btn-next', 'btn-end', 'btn-flip'].forEach(id => { byId(id).disabled = true; });
   if (typeof renderRepertoireUI === 'function') renderRepertoireUI();
   updateProgress();
   clearFeedback();
@@ -66,7 +66,7 @@ function clearOpening() {
 // describeChessPosition lives in src/core/position-text.js.
 function updateLibraryBoardAccessibility() {
   const activeGame = exploreMode && exploreGame ? exploreGame : game;
-  $('#myBoard').attr('aria-label', describeChessPosition(activeGame));
+  byId('myBoard').setAttribute('aria-label', describeChessPosition(activeGame));
 }
 
 // Library board: interactive in Quiz and Explore. Only the side to move can
@@ -135,33 +135,33 @@ function activeKeyIdeas() {
 
 function renderOpeningDetails() {
   if (!currentOpening || !currentLine) return;
-  $('#opening-title').text(currentOpening.name);
+  byId('opening-title').textContent = currentOpening.name;
   if (currentLine.id === 'main') {
-    $('#opening-tagline').text(currentOpening.tagline || '');
-    $('#opening-desc').text(currentOpening.description || '');
+    byId('opening-tagline').textContent = currentOpening.tagline || '';
+    byId('opening-desc').textContent = currentOpening.description || '';
   } else {
     const note = currentLine.note || currentLine.tagline || '';
-    $('#opening-tagline').text(note ? `${currentLine.name} · ${note}` : currentLine.name);
-    $('#opening-desc').text(currentLine.description || currentOpening.description || '');
+    byId('opening-tagline').textContent = note ? `${currentLine.name} · ${note}` : currentLine.name;
+    byId('opening-desc').textContent = currentLine.description || currentOpening.description || '';
   }
 }
 
 function renderLineSelector() {
   const lines = getOpeningLines(currentOpening);
-  const $wrap = $('#line-selector-wrap');
-  const $sel = $('#line-selector').empty();
+  const wrap = byId('line-selector-wrap');
+  const selector = byId('line-selector');
+  selector.replaceChildren();
   if (!currentOpening || lines.length <= 1) {
-    $wrap.hide();
+    hideEl(wrap);
     return;
   }
   lines.forEach(line => {
-    $('<button class="line-btn"></button>')
-      .toggleClass('active', line.id === currentLineId)
-      .attr('data-line', line.id)
-      .text(line.name)
-      .appendTo($sel);
+    const button = makeEl('button', 'line-btn', line.name);
+    button.classList.toggle('active', line.id === currentLineId);
+    button.setAttribute('data-line', line.id);
+    selector.append(button);
   });
-  $wrap.show();
+  showEl(wrap);
 }
 
 function resetQuizTracking() {
@@ -172,7 +172,7 @@ function resetQuizTracking() {
   quizReviewMode = false;
   quizReviewQueue = [];
   quizReviewCursor = 0;
-  $('#btn-review-misses').hide();
+  hideEl(byId('btn-review-misses'));
 }
 
 function recordQuizMiss(idx) {
@@ -227,7 +227,7 @@ function startQuizMistakeReview() {
   quizReviewCursor = 0;
   quizReviewMode = true;
   quizAttempts = 0;
-  $('#btn-review-misses').hide();
+  hideEl(byId('btn-review-misses'));
   loadQuizReviewPosition();
 }
 
@@ -292,7 +292,7 @@ function finishQuiz() {
     ? ' Progress could not be saved in this browser.'
     : '';
   showFeedback('correct', summary + saveWarning);
-  if (quizMissedMoves.length > 0) $('#btn-review-misses').show();
+  if (quizMissedMoves.length > 0) showEl(byId('btn-review-misses'));
   updateSRSidebar();
   updateSRPanel();
   if (typeof renderOpeningTransferEntry === 'function') renderOpeningTransferEntry();
@@ -466,11 +466,10 @@ function loadOpening(id, lineId) {
   // Exit explore mode when user picks an opening
   if (exploreMode) {
     exploreMode = false;
-    $('#btn-study, #btn-quiz, #btn-explore').removeClass('active').attr('aria-pressed', 'false');
-    $('#btn-study').addClass('active').attr('aria-pressed', 'true');
-    $('#btn-start, #btn-prev, #btn-next, #btn-end').show();
-    $('#btn-explore-undo, #btn-explore-reset').hide();
-    $('#explore-content').hide();
+    markLibraryMode('study');
+    showEl(qsa('#btn-start, #btn-prev, #btn-next, #btn-end'));
+    hideEl(qsa('#btn-explore-undo, #btn-explore-reset'));
+    hideEl(byId('explore-content'));
   }
 
   currentMoveIdx = -1;
@@ -479,23 +478,23 @@ function loadOpening(id, lineId) {
   boardFlipped = false;
 
   // Show board element first so the board measures its real size
-  $('#board-placeholder').hide();
-  $('#myBoard').show();
+  hideEl(byId('board-placeholder'));
+  showEl(byId('myBoard'));
   createBoard('start', quizMode, 'white');
 
   // Enable controls
-  ['btn-prev', 'btn-start', 'btn-flip'].forEach(id => $('#' + id).prop('disabled', true));
-  ['btn-next', 'btn-end'].forEach(id => $('#' + id).prop('disabled', false));
-  $('#btn-flip').prop('disabled', false);
+  ['btn-prev', 'btn-start', 'btn-flip'].forEach(id => { byId(id).disabled = true; });
+  ['btn-next', 'btn-end'].forEach(id => { byId(id).disabled = false; });
+  byId('btn-flip').disabled = false;
 
   // Update library
-  $('.opening-btn').removeClass('active');
-  $(`.opening-btn[data-id="${currentOpening.id}"]`).addClass('active');
+  qsa('.opening-btn').forEach(el => { el.classList.remove('active'); });
+  qsa(`.opening-btn[data-id="${currentOpening.id}"]`).forEach(btn => btn.classList.add('active'));
 
   // Update info panel
-  $('#empty-state').hide();
-  $('#opening-content').show();
-  $('.app').addClass('has-opening');
+  hideEl(byId('empty-state'));
+  showEl(byId('opening-content'));
+  qsa('.app').forEach(el => { el.classList.add('has-opening'); });
   renderOpeningDetails();
   if (typeof renderRepertoireUI === 'function') renderRepertoireUI();
 
@@ -540,10 +539,10 @@ function updateControls() {
   const moves = activeMoves();
   const atStart = currentMoveIdx <= -1;
   const atEnd = currentOpening && currentMoveIdx >= moves.length - 1;
-  $('#btn-prev').prop('disabled', atStart);
-  $('#btn-start').prop('disabled', atStart);
-  $('#btn-next').prop('disabled', atEnd || !currentOpening);
-  $('#btn-end').prop('disabled', atEnd || !currentOpening);
+  byId('btn-prev').disabled = atStart;
+  byId('btn-start').disabled = atStart;
+  byId('btn-next').disabled = atEnd || !currentOpening;
+  byId('btn-end').disabled = atEnd || !currentOpening;
 }
 
 // ─────────────────────────────────────────────
@@ -575,43 +574,43 @@ function renderMoveList() {
     }
     html += `</div>`;
   }
-  $('#move-list').html(html);
+  byId('move-list').innerHTML = html;
 
   // Click handlers for move chips
-  $('.move-chip').on('click', function () {
+  on(qsa('.move-chip'), 'click', function () {
     if (quizMode) return; // no clicking in quiz mode
-    const idx = parseInt($(this).data('idx'));
+    const idx = parseInt(this.dataset.idx);
     goToMove(idx);
   });
 }
 
 function renderExplanation(idx) {
-  const box = $('#explanation-box');
+  const box = byId('explanation-box');
   if (idx < 0 || !currentOpening) {
     if (quizMode) {
-      box.html(`<span class="move-label">Quiz Mode Active</span><p>Find the correct move on the board. Drag the right piece to the right square.</p>`);
+      box.innerHTML = `<span class="move-label">Quiz Mode Active</span><p>Find the correct move on the board. Drag the right piece to the right square.</p>`;
     } else {
-      box.html(`<p>Click a move or use <strong>Next →</strong> to step through the opening.</p>`);
+      box.innerHTML = `<p>Click a move or use <strong>Next →</strong> to step through the opening.</p>`;
     }
     return;
   }
   const exp = activeExplanations()[idx] || { label: moveLabelForIndex(idx), text: 'Continue the selected line from this position.' };
-  box.html(`<span class="move-label">${escapeHtml(exp.label)}</span><p>${escapeHtml(exp.text)}</p>`);
+  box.innerHTML = `<span class="move-label">${escapeHtml(exp.label)}</span><p>${escapeHtml(exp.text)}</p>`;
 }
 
 function renderKeyIdeas() {
   if (!currentOpening) return;
   const html = activeKeyIdeas().map(idea => `<div class="key-idea">${escapeHtml(idea)}</div>`).join('');
-  $('#key-ideas').html(html);
+  byId('key-ideas').innerHTML = html;
 }
 
 function updateProgress() {
   if (board) updateLibraryBoardAccessibility();
   if (typeof renderOpeningTransferEntry === 'function') renderOpeningTransferEntry();
-  if (!currentOpening) { $('#progress-fill').css('width', '0%'); return; }
+  if (!currentOpening) { byId('progress-fill').style.width = '0%'; return; }
   const moves = activeMoves();
   const pct = moves.length ? ((currentMoveIdx + 1) / moves.length) * 100 : 0;
-  $('#progress-fill').css('width', pct + '%');
+  byId('progress-fill').style.width = pct + '%';
 }
 
 // ─────────────────────────────────────────────
@@ -622,38 +621,48 @@ function updateBoardDraggable() {
   createBoard(game.fen(), quizMode, boardFlipped ? 'black' : 'white');
 }
 
+// Mark the Study / Quiz / Explore button for mode as pressed.
+function markLibraryMode(mode) {
+  qsa('#btn-study, #btn-quiz, #btn-explore').forEach(btn => {
+    const active = btn.id === 'btn-' + mode;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+}
+
 function setMode(mode) {
   quizMode = (mode === 'quiz');
   exploreMode = (mode === 'explore');
 
-  $('#btn-study, #btn-quiz, #btn-explore').removeClass('active').attr('aria-pressed', 'false');
-  $(`#btn-${mode}`).addClass('active').attr('aria-pressed', 'true');
+  markLibraryMode(mode);
 
   if (exploreMode) {
     // Hide study nav, show explore nav
-    $('#btn-start, #btn-prev, #btn-next, #btn-end').hide();
-    $('#btn-explore-undo, #btn-explore-reset').show();
-    $('#btn-flip').prop('disabled', false);
+    hideEl(qsa('#btn-start, #btn-prev, #btn-next, #btn-end'));
+    showEl(qsa('#btn-explore-undo, #btn-explore-reset'));
+    byId('btn-flip').disabled = false;
 
     // Swap info panel to explore view
-    $('#empty-state, #opening-content').hide();
-    $('#explore-content').show().css('display', 'flex');
+    hideEl(qsa('#empty-state, #opening-content'));
+    const exploreContent = byId('explore-content');
+    showEl(exploreContent);
+    exploreContent.style.display = 'flex';
 
     // Build explore game from end of current opening (or start position)
     exploreGame = new Chess();
     if (currentOpening) {
       activeMoves().forEach(m => exploreGame.move(m));
-      $('#explore-title').text(currentLineId === 'main' ? currentOpening.name : `${currentOpening.name}: ${currentLine.name}`);
-      $('#explore-tagline').text('Exploring from end of line · move freely');
+      byId('explore-title').textContent = currentLineId === 'main' ? currentOpening.name : `${currentOpening.name}: ${currentLine.name}`;
+      byId('explore-tagline').textContent = 'Exploring from end of line · move freely';
     } else {
-      $('#explore-title').text('Free Exploration');
-      $('#explore-tagline').text('Move freely from the starting position');
+      byId('explore-title').textContent = 'Free Exploration';
+      byId('explore-tagline').textContent = 'Move freely from the starting position';
     }
     exploreStartFen = exploreGame.fen();
 
     // Show board in free-play mode
-    $('#board-placeholder').hide();
-    $('#myBoard').show();
+    hideEl(byId('board-placeholder'));
+    showEl(byId('myBoard'));
     createBoard(exploreStartFen, true, boardFlipped ? 'black' : 'white');
     clearFeedback();
     showExploreTokenState();
@@ -661,14 +670,14 @@ function setMode(mode) {
 
   } else if (quizMode) {
     // Back to study nav
-    $('#btn-start, #btn-prev, #btn-next, #btn-end').show();
-    $('#btn-explore-undo, #btn-explore-reset').hide();
-    $('#explore-content').hide();
+    showEl(qsa('#btn-start, #btn-prev, #btn-next, #btn-end'));
+    hideEl(qsa('#btn-explore-undo, #btn-explore-reset'));
+    hideEl(byId('explore-content'));
     if (currentOpening) {
-      $('#empty-state').hide();
-      $('#opening-content').show();
+      hideEl(byId('empty-state'));
+      showEl(byId('opening-content'));
     }
-    $('#btn-next, #btn-prev, #btn-start, #btn-end').prop('disabled', true);
+    qsa('#btn-next, #btn-prev, #btn-start, #btn-end').forEach(el => { el.disabled = true; });
     if (currentOpening) {
       game.reset();
       currentMoveIdx = -1;
@@ -688,12 +697,12 @@ function setMode(mode) {
 
   } else {
     // Study mode
-    $('#btn-start, #btn-prev, #btn-next, #btn-end').show();
-    $('#btn-explore-undo, #btn-explore-reset').hide();
-    $('#explore-content').hide();
+    showEl(qsa('#btn-start, #btn-prev, #btn-next, #btn-end'));
+    hideEl(qsa('#btn-explore-undo, #btn-explore-reset'));
+    hideEl(byId('explore-content'));
     if (currentOpening) {
-      $('#empty-state').hide();
-      $('#opening-content').show();
+      hideEl(byId('empty-state'));
+      showEl(byId('opening-content'));
       updateControls();
       createBoard(game.fen(), false, boardFlipped ? 'black' : 'white');
       // Reveal the whole line again after a quiz.
@@ -712,8 +721,10 @@ function setMode(mode) {
 // FEEDBACK
 // ─────────────────────────────────────────────
 function showFeedback(type, message) {
-  const bar = $('#feedback-bar');
-  bar.removeClass('correct incorrect hint').addClass(type + ' show').text(message);
+  const bar = byId('feedback-bar');
+  bar.classList.remove('correct', 'incorrect', 'hint');
+  bar.classList.add(type, 'show');
+  bar.textContent = message;
   if (feedbackTimeout) clearTimeout(feedbackTimeout);
   if (type === 'correct') {
     feedbackTimeout = setTimeout(clearFeedback, 5000);
@@ -721,5 +732,5 @@ function showFeedback(type, message) {
 }
 
 function clearFeedback() {
-  $('#feedback-bar').removeClass('show correct incorrect hint');
+  byId('feedback-bar').classList.remove('show', 'correct', 'incorrect', 'hint');
 }
