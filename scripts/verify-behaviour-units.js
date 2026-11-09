@@ -3104,6 +3104,65 @@ async page => {
     });
   });
 
+  await check('emailed-code sign-in: the code field appears only when enabled, and a wrong or short code is refused', async () => {
+    await freshCoach();
+    return page.evaluate(async () => {
+      const problems = [];
+      const saved = { client: coachDbClient, config: window.COACH_SUPABASE_CONFIG };
+      const calls = [];
+      const fake = {
+        auth: {
+          signInWithOtp: async args => { calls.push(['send', args.email]); return { error: null }; },
+          verifyOtp: async args => { calls.push(['verify', args]); return args.token === '424242' ? { data: {}, error: null } : { data: null, error: { message: 'Token has expired or is invalid' } }; },
+          getSession: async () => ({ data: { session: null }, error: null }),
+          onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+          signOut: async () => ({ error: null })
+        },
+        from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) })
+      };
+      const submit = id => new Promise(resolve => { document.getElementById(id).requestSubmit(); setTimeout(resolve, 150); });
+      const status = () => document.getElementById('coach-auth-status').textContent;
+      const codeShown = () => getComputedStyle(document.getElementById('coach-auth-code-form')).display !== 'none';
+      try {
+        coachDbClient = fake;
+        document.getElementById('coach-auth-form').style.display = '';
+        const group = document.getElementById('coach-auth-form').closest('details');
+        if (group) group.open = true;
+        // Off (the shipped default): the link is sent and no code field appears.
+        window.COACH_SUPABASE_CONFIG = Object.assign({}, saved.config, { emailCodeEnabled: false });
+        $('#coach-auth-code-form').hide();
+        $('#coach-auth-email').val('player@example.com');
+        await submit('coach-auth-email-form');
+        if (codeShown()) problems.push('with codes off, the code field appeared');
+        if (!/Open it in this browser to finish/.test(status())) problems.push('with codes off, the status should point to the link: ' + status());
+        // On: the code field appears, takes focus, and only the right code signs in.
+        window.COACH_SUPABASE_CONFIG = Object.assign({}, saved.config, { emailCodeEnabled: true });
+        await submit('coach-auth-email-form');
+        if (!codeShown()) problems.push('with codes on, the code field did not appear after sending');
+        if (document.activeElement !== document.getElementById('coach-auth-code')) problems.push('the code field did not take focus');
+        $('#coach-auth-code').val('123');
+        await submit('coach-auth-code-form');
+        if (status() !== 'Enter the 6-digit code from the sign-in email.' || calls.some(c => c[0] === 'verify')) problems.push('a short code was sent or not refused: ' + status());
+        // Codes are often pasted with a space ("111 111"); the space is ignored.
+        $('#coach-auth-code').val('111 111');
+        await submit('coach-auth-code-form');
+        if (!/invalid or has expired/.test(status())) problems.push('a wrong code was not refused: ' + status());
+        const wrong = calls.filter(c => c[0] === 'verify').pop();
+        if (!wrong || wrong[1].token !== '111111') problems.push('a code pasted with a space was not sent as six digits: ' + JSON.stringify(wrong));
+        $('#coach-auth-code').val('424 242');
+        await submit('coach-auth-code-form');
+        const last = calls.filter(c => c[0] === 'verify').pop();
+        if (!last || last[1].email !== 'player@example.com' || last[1].token !== '424242' || last[1].type !== 'email') problems.push('verifyOtp got the wrong arguments: ' + JSON.stringify(last));
+        if (status() !== 'Signed in.') problems.push('the right code did not sign in: ' + status());
+      } finally {
+        coachDbClient = saved.client;
+        window.COACH_SUPABASE_CONFIG = saved.config;
+        $('#coach-auth-code-form').hide();
+      }
+      return problems;
+    });
+  });
+
   if (pageErrors.length) failures.push('page errors: ' + pageErrors.join(' | '));
   if (failures.length) throw new Error(failures.join('\n'));
   return { passed: passed.length, checks: passed };
