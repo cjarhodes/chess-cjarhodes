@@ -3064,6 +3064,29 @@ async page => {
     return problems;
   });
 
+  await check('an endgame lesson is marked done only after an unaided solve', async () => {
+    await freshCoach();
+    return page.evaluate(() => {
+      const problems = [];
+      const lesson = ENDGAME_LESSONS[0];
+      const item = endgamePracticeItem(lesson);
+      const row = () => {
+        renderEndgameTrack();
+        const el = document.querySelectorAll('#endgame-track-list .endgame-item')[0];
+        return { done: el.classList.contains('is-complete'), title: el.querySelector('strong').textContent,
+          button: el.querySelector('button').textContent, progress: document.getElementById('endgame-track-progress').textContent };
+      };
+      recordPracticeAttempt(item, true, true);   // solved with the answer shown
+      let r = row();
+      if (r.done || r.title.startsWith('✓') || r.progress.startsWith('1/')) problems.push('a helped solve marked the lesson done: ' + JSON.stringify(r));
+      if (r.button !== 'Try unaided') problems.push('a helped-only lesson should offer an unaided try: ' + r.button);
+      recordPracticeAttempt(item, true, false);  // solved unaided
+      r = row();
+      if (!r.done || !r.title.startsWith('✓') || !r.progress.startsWith('1/') || r.button !== 'Review') problems.push('an unaided solve did not mark the lesson done: ' + JSON.stringify(r));
+      return problems;
+    });
+  });
+
   if (pageErrors.length) failures.push('page errors: ' + pageErrors.join(' | '));
   if (failures.length) throw new Error(failures.join('\n'));
   return { passed: passed.length, checks: passed };

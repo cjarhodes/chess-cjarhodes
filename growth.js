@@ -1429,15 +1429,19 @@ function renderEndgameTrack() {
   ENDGAME_LESSONS.forEach(lesson => {
     const item = endgamePracticeItem(lesson);
     const record = practiceRecordFor(item);
-    const done = !!(record && record.correct > 0);
+    // Done means solved unaided at least once; a solve with a hint or the
+    // answer shown is progress, but not yet the lesson learned.
+    const counts = practiceSolveCounts(item, record);
+    const done = counts.clean > 0;
+    const helpedOnly = !done && counts.assisted > 0;
     if (done) complete += 1;
     const $row = $('<div class="endgame-item"></div>').toggleClass('is-complete', done);
     const $copy = $('<div></div>').append(
       $('<strong></strong>').text((done ? '✓ ' : '') + lesson.title),
-      $('<span></span>').text(lesson.detail)
+      $('<span></span>').text(helpedOnly ? `${lesson.detail} Solved with help so far.` : lesson.detail)
     );
     const $button = $('<button class="movelist-copy" type="button"></button>')
-      .text(done ? 'Review' : 'Train')
+      .text(done ? 'Review' : helpedOnly ? 'Try unaided' : 'Train')
       .on('click', () => {
         switchView('coach');
         startCoachPractice(item);
