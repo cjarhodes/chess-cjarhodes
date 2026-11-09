@@ -83,36 +83,41 @@ function openingTransferReflectionLabel(value) {
 }
 
 function renderOpeningTransferEntry() {
-  const $entry = $('#opening-transfer-entry');
+  const entry = byId('opening-transfer-entry');
   if (!currentOpening || !currentLine || exploreMode || (quizMode && currentMoveIdx < activeMoves().length - 1)) {
-    $entry.hide(); return;
+    hideEl(entry); return;
   }
   const target = openingTransferTarget(currentOpening, currentLine, currentMoveIdx + 1);
-  if (!target) { $entry.hide(); return; }
-  const $select = $('#opening-transfer-cue');
+  if (!target) { hideEl(entry); return; }
+  const select = byId('opening-transfer-cue');
   const key = `${currentOpening.id}|${currentLineId}`;
-  if ($select.attr('data-line-key') !== key) {
-    $select.empty().attr('data-line-key', key);
-    target.ideas.forEach((idea, index) => $('<option></option>').val(index).text(idea).appendTo($select));
+  if (select.getAttribute('data-line-key') !== key) {
+    select.replaceChildren();
+    select.setAttribute('data-line-key', key);
+    target.ideas.forEach((idea, index) => {
+      const option = makeEl('option', '', idea);
+      option.value = index;
+      select.append(option);
+    });
     // Prefer an explicitly named plan for the side being studied. Other
     // lesson ideas remain selectable; none is treated as a move requirement.
     const preferred = target.ideas.findIndex(idea => new RegExp(`^${target.side}.*(?:plan|goal|counterplay)`, 'i').test(idea));
     const practical = target.ideas.findIndex(idea => /key (break|tension)|central (plan|break)/i.test(idea));
-    $select.val(preferred >= 0 ? preferred : Math.max(0, practical));
+    select.value = preferred >= 0 ? preferred : Math.max(0, practical);
   }
   const existing = coachOpeningTransfer;
   const waiting = coachThinking || (coachGameActive && !coachIsUserTurn());
-  $('#btn-library-transfer').text(coachPracticeSession ? 'Resume current drill'
+  byId('btn-library-transfer').textContent = coachPracticeSession ? 'Resume current drill'
     : existing ? 'Resume opening game' : waiting ? 'Return to current game'
-      : target.adjusted ? 'Play before the finish' : currentMoveIdx < 0 ? 'Play after this line' : 'Play this position');
+      : target.adjusted ? 'Play before the finish' : currentMoveIdx < 0 ? 'Play after this line' : 'Play this position';
   const move = target.sourceFen.split(' ')[5];
-  $select.prop('disabled', !!coachPracticeSession || !!existing || waiting);
-  $('#opening-transfer-detail').text(coachPracticeSession
+  select.disabled = !!coachPracticeSession || !!existing || waiting;
+  byId('opening-transfer-detail').textContent = coachPracticeSession
     ? `Your ${coachPracticeSession.item.meta.title} lesson is still in progress. Resume it before starting an opening game.`
     : waiting ? 'A move is in progress in Coach. Return to your game before starting an opening position.'
     : existing ? `Opening session in progress: ${existing.title}. Finish or return from it before starting another.`
-    : `Start at move ${move} as ${target.side === 'black' ? 'Black' : 'White'}. ${target.adjusted ? 'The final position is over, so this starts at your last decision. ' : ''}The opponent chooses its own moves. Any unfinished Coach game is kept for your return.`);
-  $entry.show();
+    : `Start at move ${move} as ${target.side === 'black' ? 'Black' : 'White'}. ${target.adjusted ? 'The final position is over, so this starts at your last decision. ' : ''}The opponent chooses its own moves. Any unfinished Coach game is kept for your return.`;
+  showEl(entry);
 }
 
 function beginOpeningTransfer(id, lineId, ply, cueIndex = 0) {
@@ -136,33 +141,39 @@ function beginOpeningTransfer(id, lineId, ply, cueIndex = 0) {
 
 function renderOpeningTransfer() {
   const context = coachOpeningTransfer;
-  $('#coach-opening-transfer').toggle(!!context && !coachPracticeSession);
-  $('#btn-coach-newgame').text(context ? 'Return from opening' : '▶ New game');
+  toggleEl(byId('coach-opening-transfer'), !!context && !coachPracticeSession);
+  byId('btn-coach-newgame').textContent = context ? 'Return from opening' : '▶ New game';
   renderOpeningTransferEntry();
   if (!context || coachPracticeSession) return;
   const reviewed = coachStats ? coachStats.moves : 0;
-  $('#opening-transfer-title').text(`${context.title}${context.lineId === 'main' ? '' : ' · ' + context.lineName}`);
-  $('#opening-transfer-plan').text(context.cue);
-  $('#opening-transfer-count').text(reviewed >= OPENING_TRANSFER_REVIEW_TARGET ? `${reviewed} reviewed moves. Review what changed, or keep playing.` : `${reviewed}/${OPENING_TRANSFER_REVIEW_TARGET} reviewed moves to explore the idea. Use it when it fits; answer threats first.`);
-  $('#btn-opening-transfer-review').prop('disabled', reviewed < 1 || coachThinking || coachIsReviewing()).text(reviewed >= OPENING_TRANSFER_REVIEW_TARGET ? 'Review opening session' : 'Review so far');
-  $('#btn-opening-transfer-return').text(context.returnState ? 'Return to saved game' : 'Back to lesson').prop('disabled', coachThinking || openingTransferFinishPending);
+  byId('opening-transfer-title').textContent = `${context.title}${context.lineId === 'main' ? '' : ' · ' + context.lineName}`;
+  byId('opening-transfer-plan').textContent = context.cue;
+  byId('opening-transfer-count').textContent = reviewed >= OPENING_TRANSFER_REVIEW_TARGET ? `${reviewed} reviewed moves. Review what changed, or keep playing.` : `${reviewed}/${OPENING_TRANSFER_REVIEW_TARGET} reviewed moves to explore the idea. Use it when it fits; answer threats first.`;
+  const review = byId('btn-opening-transfer-review');
+  review.disabled = reviewed < 1 || coachThinking || coachIsReviewing();
+  review.textContent = reviewed >= OPENING_TRANSFER_REVIEW_TARGET ? 'Review opening session' : 'Review so far';
+  const back = byId('btn-opening-transfer-return');
+  back.textContent = context.returnState ? 'Return to saved game' : 'Back to lesson';
+  back.disabled = coachThinking || openingTransferFinishPending;
 }
 
 function renderOpeningTransferSummary() {
   const context = coachOpeningTransfer;
-  $('#summary-opening-transfer, #btn-summary-opening-return').toggle(!!context);
-  $('#summary-overlay').toggleClass('opening-transfer-summary', !!context);
-  $('#btn-summary-newgame').toggle(!context);
-  $('#btn-summary-close').text(context && coachGameActive ? 'Keep playing' : 'Close');
-  if (!context) { $('#btn-summary-opening-return').removeClass('primary'); return; }
+  toggleEl(qsa('#summary-opening-transfer, #btn-summary-opening-return'), !!context);
+  byId('summary-overlay').classList.toggle('opening-transfer-summary', !!context);
+  toggleEl(byId('btn-summary-newgame'), !context);
+  byId('btn-summary-close').textContent = context && coachGameActive ? 'Keep playing' : 'Close';
+  if (!context) { byId('btn-summary-opening-return').classList.remove('primary'); return; }
   const record = openingTransferSummary();
-  $('#summary-transfer-cue').text(`${context.title} · ${context.cue}`);
-  $('#summary-transfer-observation').text(`${record.reviewed} reviewed moves; ${record.problems} flagged as inaccuracies, mistakes, or blunders. The engine grades move quality, not whether you applied the opening plan. This short exercise does not establish learning.`);
-  $('#summary-opening-section').show();
-  $('#summary-opening-line').text(`${context.title} · ${context.lineName} · free play from move ${context.sourceFen.split(' ')[5]}.`);
-  $('#summary-transfer-reflection').val(context.reflection);
-  $('.summary-actions .primary').removeClass('primary');
-  $('#btn-summary-opening-return').addClass('primary').text(context.returnState ? 'Save & return to your game' : 'Save & return to lesson');
+  byId('summary-transfer-cue').textContent = `${context.title} · ${context.cue}`;
+  byId('summary-transfer-observation').textContent = `${record.reviewed} reviewed moves; ${record.problems} flagged as inaccuracies, mistakes, or blunders. The engine grades move quality, not whether you applied the opening plan. This short exercise does not establish learning.`;
+  showEl(byId('summary-opening-section'));
+  byId('summary-opening-line').textContent = `${context.title} · ${context.lineName} · free play from move ${context.sourceFen.split(' ')[5]}.`;
+  byId('summary-transfer-reflection').value = context.reflection;
+  qsa('.summary-actions .primary').forEach(el => { el.classList.remove('primary'); });
+  const saveReturn = byId('btn-summary-opening-return');
+  saveReturn.classList.add('primary');
+  saveReturn.textContent = context.returnState ? 'Save & return to your game' : 'Save & return to lesson';
   saveOpeningTransferReview();
 }
 
@@ -210,42 +221,44 @@ async function finishOpeningTransfer() {
 
 function renderOpeningTransferHistory() {
   const records = loadGrowthState().openingTransfers;
-  const $section = $('#opening-transfer-history').toggle(records.length > 0);
-  const $list = $('#opening-transfer-history-list').empty();
+  const section = byId('opening-transfer-history');
+  toggleEl(section, records.length > 0);
+  const list = byId('opening-transfer-history-list');
+  list.replaceChildren();
   records.forEach(record => {
     const definition = openingTransferDefinition(record.openingId, record.lineId, record.sourcePly);
     if (!definition) return;
-    const $row = $('<details class="opening-transfer-history-item"></details>');
-    $row.append($('<summary></summary>').text(`${definition.title}${definition.lineId === 'main' ? '' : ' · ' + definition.lineName} · ${record.reviewed} reviewed moves`));
-    $row.append($('<p></p>').text(`Idea: ${record.cue}`));
-    $row.append($('<p></p>').text(`${record.problems} engine-flagged moves. ${openingTransferReflectionLabel(record.reflection)} Reflection is self-reported; this is not a mastery score.`));
-    record.examples.forEach(example => $row.append($('<p></p>').text(`${example.move} · ${example.lesson}`)));
-    const $actions = $('<div class="opening-transfer-actions"></div>');
-    $('<button type="button" class="movelist-copy">Study this line</button>').on('click', () => {
+    const row = makeEl('details', 'opening-transfer-history-item');
+    row.append(makeEl('summary', '', `${definition.title}${definition.lineId === 'main' ? '' : ' · ' + definition.lineName} · ${record.reviewed} reviewed moves`));
+    row.append(makeEl('p', '', `Idea: ${record.cue}`));
+    row.append(makeEl('p', '', `${record.problems} engine-flagged moves. ${openingTransferReflectionLabel(record.reflection)} Reflection is self-reported; this is not a mastery score.`));
+    record.examples.forEach(example => row.append(makeEl('p', '', `${example.move} · ${example.lesson}`)));
+    const actions = makeEl('div', 'opening-transfer-actions');
+    actions.append(makeRowButton('Study this line', () => {
       loadOpening(record.openingId, record.lineId); goToMove(record.sourcePly - 1);
-    }).appendTo($actions);
-    $('<button type="button" class="movelist-copy">Try the idea again</button>').on('click', () =>
+    }));
+    actions.append(makeRowButton('Try the idea again', () =>
       beginOpeningTransfer(record.openingId, record.lineId, record.sourcePly, Math.max(0, definition.ideas.indexOf(record.cue)))
-    ).appendTo($actions);
-    $row.append($actions);$list.append($row);
+    ));
+    row.append(actions);list.append(row);
   });
-  $section.toggle($list.children().length > 0);
+  toggleEl(section, list.children.length > 0);
 }
 
 function initOpeningTransfer() {
-  $('#btn-library-transfer').on('click', () => {
-    if (currentOpening && currentLine) beginOpeningTransfer(currentOpening.id, currentLineId, currentMoveIdx + 1, Number($('#opening-transfer-cue').val()) || 0);
+  on(byId('btn-library-transfer'), 'click', () => {
+    if (currentOpening && currentLine) beginOpeningTransfer(currentOpening.id, currentLineId, currentMoveIdx + 1, Number(byId('opening-transfer-cue').value) || 0);
   });
-  $('#btn-opening-transfer-review').on('click', () => {
+  on(byId('btn-opening-transfer-review'), 'click', () => {
     if (!coachOpeningTransfer || coachThinking || coachIsReviewing() || !coachStats.moves) return;
     saveCoachState();showPostGameSummary('Opening transfer review');
   });
-  $('#btn-opening-transfer-return, #btn-summary-opening-return').on('click', finishOpeningTransfer);
-  $('#summary-transfer-reflection').on('change', function() {
+  on(qsa('#btn-opening-transfer-return, #btn-summary-opening-return'), 'click', finishOpeningTransfer);
+  on(byId('summary-transfer-reflection'), 'change', function() {
     if (!coachOpeningTransfer) return;
     coachOpeningTransfer.reflection = this.value;
     saveOpeningTransferReview();saveCoachState();
   });
   renderOpeningTransfer();renderOpeningTransferHistory();
 }
-$(initOpeningTransfer);
+onReady(initOpeningTransfer);

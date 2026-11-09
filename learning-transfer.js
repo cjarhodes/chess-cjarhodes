@@ -117,11 +117,16 @@ function finishLearningTransferCheck(session, played) {
   session.completed = true; session.completionRecorded = true;
   if (coachPracticeRun) { coachPracticeRun.completed = 1; coachPracticeRun.clean = record.firstResult === 'sound' ? 1 : 0; }
   const position = LEARNING_TRANSFER_POSITIONS.find(row => row.id === record.challengeId);
-  $('#coach-practice-status').text(`${played.san}. ${learningTransferResultText(record)}`);
-  $('#coach-practice-prompt').text(position.explanation);
-  $('#coach-practice-takeaway').text(`Use in play: ${record.cue}`).show();
-  $('#btn-coach-practice-hint, #btn-coach-practice-answer').prop('disabled', true);
-  $('#btn-coach-practice-next').text('Use this cue in play').show().prop('disabled', false);
+  byId('coach-practice-status').textContent = `${played.san}. ${learningTransferResultText(record)}`;
+  byId('coach-practice-prompt').textContent = position.explanation;
+  const takeaway = byId('coach-practice-takeaway');
+  takeaway.textContent = `Use in play: ${record.cue}`;
+  showEl(takeaway);
+  qsa('#btn-coach-practice-hint, #btn-coach-practice-answer').forEach(el => { el.disabled = true; });
+  const next = byId('btn-coach-practice-next');
+  next.textContent = 'Use this cue in play';
+  showEl(next);
+  next.disabled = false;
   setCoachStatus('Different-position check saved. Try the cue in play.');
   updateCoachControlsState(); saveCoachPracticeState(); renderInsights(); focusPracticeTarget();
 }
@@ -157,43 +162,55 @@ function renderLearningTransfer() {
   const session = coachPracticeSession;
   const probe = session && session.item.learningTransfer;
   const offer = session && session.completed && !probe && learningTransferOffer(session.item);
-  $('#btn-learning-transfer-test').toggle(!!offer);
+  toggleEl(byId('btn-learning-transfer-test'), !!offer);
   const exhausted = session && session.completed && !probe && !session.item.id.startsWith('opening-bridge:');
-  $('#learning-transfer-note').toggle(!!offer || !!probe || !!exhausted).text(offer
+  const note = byId('learning-transfer-note');
+  toggleEl(note, !!offer || !!probe || !!exhausted);
+  note.textContent = (offer
     ? 'Optional: try the same decision process in a different position before returning to play.'
     : probe ? 'Try the idea without help first. You can use hints or retry; your first decision stays in your progress.'
       : exhausted ? 'No fresh authored check for this cue is available. Use it in play; repeating a known position is rehearsal.' : '');
   if (!probe) return;
-  $('#coach-practice-session-status').text('Different-position check');
-  if (session.completed) $('#btn-coach-practice-next').text('Use this cue in play');
+  byId('coach-practice-session-status').textContent = 'Different-position check';
+  if (session.completed) byId('btn-coach-practice-next').textContent = 'Use this cue in play';
 }
 
 function renderLearningTransferProgress() {
   const records = loadGrowthState().learningTransfers;
-  const $list = $('#learning-transfer-progress-list');
+  const list = byId('learning-transfer-progress-list');
   const owner = growthOwnerId() || 'local';
-  const open = new Set($list.attr('data-owner') === owner
-    ? $list.children('details[open]').toArray().map(row => row.getAttribute('data-record-id')) : []);
-  $list.empty().attr('data-owner', owner);
-  $('#learning-transfer-progress').toggle(records.length > 0);
+  const open = new Set(list.getAttribute('data-owner') === owner
+    ? Array.from(list.children).filter(row => row.matches('details[open]')).map(row => row.getAttribute('data-record-id')) : []);
+  list.replaceChildren();
+  list.setAttribute('data-owner', owner);
+  toggleEl(byId('learning-transfer-progress'), records.length > 0);
   records.slice(0, 3).forEach(record => {
-    const $row = $('<details class="learning-transfer-result"></details>').attr('data-record-id', record.id).prop('open', open.has(record.id));
-    $row.append($('<summary></summary>').text(`${record.title} · ${record.firstResult === 'pending' ? 'no graded decision' : record.firstResult === 'sound' ? 'sound first decision' : record.firstResult === 'assisted' ? 'assisted decision' : 'revisit the cue'}`));
-    $row.append($('<p></p>').text(learningTransferResultText(record)));
-    if (record.firstSan) $row.append($('<p></p>').text(`First move: ${record.firstSan}. ${record.completed ? 'Check completed.' : 'The check can still be rehearsed.'}`));
-    $row.append($('<p></p>').text(`Cue: ${record.cue}`));
+    const row = makeEl('details', 'learning-transfer-result');
+    row.setAttribute('data-record-id', record.id);
+    row.open = open.has(record.id);
+    const addLine = (text, className) => row.append(makeEl('p', className || '', text));
+    row.append(makeEl('summary', '', `${record.title} · ${record.firstResult === 'pending' ? 'no graded decision' : record.firstResult === 'sound' ? 'sound first decision' : record.firstResult === 'assisted' ? 'assisted decision' : 'revisit the cue'}`));
+    addLine(learningTransferResultText(record));
+    if (record.firstSan) addLine(`First move: ${record.firstSan}. ${record.completed ? 'Check completed.' : 'The check can still be rehearsed.'}`);
+    addLine(`Cue: ${record.cue}`);
     const n = record.observations.length, flags = record.observations.filter(row => row.flagged).length;
-    $row.append($('<p></p>').text(n
+    addLine(n
       ? `${n}/6 follow-up moves reviewed; ${flags} flagged this pattern. Reviews do not identify every opportunity to use the idea. No matching flag is not proof of transfer.`
-      : 'Next: use the cue in play. No follow-up moves reviewed yet.'));
-    $row.append($('<p class="progress-method"></p>').text('One different-position decision is a small sample, not a mastery or retention score. Repeated checks are rehearsal.'));
-    if (record.firstResult !== 'pending') $('<button type="button" class="ctrl-btn">Rehearse this position</button>').on('click', () => rehearseLearningTransfer(record.id)).appendTo($row);
-    if (record.completed) $('<button type="button" class="ctrl-btn">Use this cue in play</button>').on('click', () => continueLearningTransferPlay(record.id)).appendTo($row);
-    $list.append($row);
+      : 'Next: use the cue in play. No follow-up moves reviewed yet.');
+    addLine('One different-position decision is a small sample, not a mastery or retention score. Repeated checks are rehearsal.', 'progress-method');
+    const addButton = (text, onClick) => {
+      const button = makeEl('button', 'ctrl-btn', text);
+      button.type = 'button';
+      on(button, 'click', onClick);
+      row.append(button);
+    };
+    if (record.firstResult !== 'pending') addButton('Rehearse this position', () => rehearseLearningTransfer(record.id));
+    if (record.completed) addButton('Use this cue in play', () => continueLearningTransferPlay(record.id));
+    list.append(row);
   });
 }
 
-$(function() {
-  $('#btn-learning-transfer-test').on('click', startLearningTransferCheck);
+onReady(function() {
+  on(byId('btn-learning-transfer-test'), 'click', startLearningTransferCheck);
   renderLearningTransfer(); renderLearningTransferProgress();
 });

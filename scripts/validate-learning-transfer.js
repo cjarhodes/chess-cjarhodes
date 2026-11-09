@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 const fs=require('fs'),vm=require('vm'),path=require('path');
+const { domStub } = require('./lib/dom-stub');
 const {Chess}=require('../vendor/chess.js/chess-0.10.3.min.js');
 const root=path.resolve(__dirname,'..'),app=require('./lib/app-source').appSource();
-const store=new Map(),chain=new Proxy({}, {get:()=>()=>chain});
+const store=new Map();
 let owner=null,entries=[],checks=0;
-const context={Chess,window:{},$:()=>chain,localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v),removeItem:k=>store.delete(k)},
+const context={Chess,window:{},...domStub(),localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v),removeItem:k=>store.delete(k)},
  activePracticeOwnerId:()=>owner,coachMemoryOwnerId:()=>owner?'user:'+owner:'anon:test',currentInsightEntries:()=>entries,
  moveFromUci:(fen,uci)=>new Chess(fen).move({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]}),
  setCoachStatus:()=>{},isInsightProblem:t=>['mistake','blunder','inaccuracy'].includes(t),insightTagsForReview:r=>r.tags||[],

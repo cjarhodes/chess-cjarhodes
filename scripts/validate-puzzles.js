@@ -2,6 +2,7 @@
 // Puzzle trainer: replay every shipped puzzle as legal chess and exercise the
 // rating, selection, Rush, Vision and merge logic in puzzles-core.js.
 const path = require('path');
+const { domStub } = require('./lib/dom-stub');
 const { Chess } = require('../vendor/chess.js/chess-0.10.3.min.js');
 const core = require(path.join(__dirname, '..', 'puzzles-core.js'));
 const data = require(path.join(__dirname, '..', 'puzzle-data.js'));
@@ -171,8 +172,8 @@ assert(core.squareColor('a1') === 'dark' && core.squareColor('h1') === 'light' &
 {
   const fs = require('fs'), vm = require('vm');
   const root = path.join(__dirname, '..');
-  const store = new Map(), chain = new Proxy({}, { get: () => () => chain });
-  const context = { Chess, window: {}, $: () => chain, console,
+  const store = new Map();
+  const context = { Chess, window: {}, ...domStub(), console,
     localStorage: { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, v), removeItem: k => store.delete(k) },
     activePracticeOwnerId: () => null, coachMemoryOwnerId: () => 'anon:test', currentInsightEntries: () => [] };
   vm.createContext(context);

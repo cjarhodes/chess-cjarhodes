@@ -18,13 +18,13 @@
 //   practiceEventFromAttempt, recordPracticeAttempt, markPracticeEventSynced,
 //   hasCoachDbSession, queueRemotePracticeProgressSync (early-return path only).
 //
-// Functions skipped (cannot be isolated without heavy DOM/jQuery/Supabase
+// Functions skipped (cannot be isolated without heavy DOM/Supabase
 // stubbing, or exercise remote-sync plumbing rather than scheduling math):
 //   buildPracticeQueue, practiceItemsForEntries, currentGameDuePracticeItems,
 //   formatPracticeContext (need coachReviewLog, insightEntryFromReview,
 //   insightTagCounts, INSIGHT_TAG_META, isInsightProblem — insight-tagging
 //   concerns, not scheduling arithmetic);
-//   renderPracticeTrends (jQuery DOM rendering);
+//   renderPracticeTrends (DOM rendering);
 //   syncRemotePracticeEvent, mergeRemotePracticeRecords, handleCoachDbError,
 //   setCoachDbStatus, setCoachStatus (Supabase client + DOM status text).
 

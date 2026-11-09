@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 const fs=require('fs'),path=require('path'),vm=require('vm');
+const { domStub } = require('./lib/dom-stub');
 const {Chess}=require('../vendor/chess.js/chess-0.10.3.min.js');
 const root=path.resolve(__dirname,'..');
 const openings=fs.readFileSync(path.join(root,'openings.js'),'utf8');
 const growth=fs.readFileSync(path.join(root,'growth.js'),'utf8');
 const app=require('./lib/app-source').appSource();
-const context={Chess,window:{},$:()=>{},uciFromMove:m=>m.from+m.to+(m.promotion||'')};
+const context={Chess,window:{},...domStub(),uciFromMove:m=>m.from+m.to+(m.promotion||'')};
 vm.createContext(context);vm.runInContext(openings+'\n'+growth+'\nthis.openings=OPENINGS;',context);
 // Line ownership (traps are played by the side that springs them) comes from
 // opponents.js through openingLineSide (src/views/library.js), as in the browser.

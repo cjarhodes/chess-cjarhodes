@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const fs=require('fs'),path=require('path'),vm=require('vm');
+const { domStub } = require('./lib/dom-stub');
 const {Chess}=require('../vendor/chess.js/chess-0.10.3.min.js');
 const root=path.resolve(__dirname,'..'),app=require('./lib/app-source').appSource();
 let owner='account-a',checks=0,writes=0,failAt=0,blockFrom=0,gameSerial=0;
@@ -7,11 +8,10 @@ const storage=new Map(),session=new Map();
 const assert=(ok,message)=>{checks++;if(!ok)throw Error(message);};
 const clone=value=>JSON.parse(JSON.stringify(value));
 const extract=name=>{const start=app.indexOf('\nfunction '+name+'(')+1;if(!start)throw Error(name);return app.slice(start,app.indexOf('\n}',start)+2);};
-const chain=new Proxy({}, {get:()=>()=>chain});
 const context={console,Chess,TextEncoder,Date,Promise,setTimeout,clearTimeout,
  localStorage:{getItem:key=>storage.has(key)?storage.get(key):null,setItem:(key,value)=>{writes++;if((failAt&&writes===failAt)||(blockFrom&&writes>=blockFrom))throw Error('quota');storage.set(key,String(value));},removeItem:key=>storage.delete(key)},
  sessionStorage:{getItem:key=>session.get(key)||null,setItem:(key,value)=>session.set(key,String(value)),removeItem:key=>session.delete(key)},
- $:()=>chain,window:{addEventListener:()=>{}},navigator:{onLine:true},coachMemoryOwnerId:()=>owner?'user:'+owner:'anon:test',coachMemoryKey:key=>key+':'+(owner?'user:'+owner:'anon:test'),
+ ...domStub(),window:{addEventListener:()=>{}},navigator:{onLine:true},coachMemoryOwnerId:()=>owner?'user:'+owner:'anon:test',coachMemoryKey:key=>key+':'+(owner?'user:'+owner:'anon:test'),
  activePracticeOwnerId:()=>owner,coachDeviceId:()=> 'device-a',createCoachGameId:()=> 'new-game-'+(++gameSerial),
  coachAuthUser:{id:'account-a'},coachPracticeSession:null,coachGame:null,coachLastEndMsg:null,coachThinking:false,
  hasCoachDbSession:()=>false,saveCoachState:()=>{},saveCoachPracticeState:()=>{},
