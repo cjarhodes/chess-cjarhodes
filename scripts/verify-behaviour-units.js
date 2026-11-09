@@ -1202,11 +1202,17 @@ async page => {
     const plies = await page.evaluate(() => coachGame.history().length);
     if (plies !== 4) problems.push('one click played more than one move: ' + plies + ' plies');
     if (!(await boardMatchesGame())) problems.push('the board does not show the game after a clicked move');
-    await playMove('d4');
+    // The opponent's replies vary, and some make d4 illegal (2...Bb4 pins the
+    // d-pawn, ...Nd4 blocks it), so type a quiet pawn move that is legal here.
+    const keyMove = await page.evaluate(() => {
+      const legal = coachGame.moves({ verbose: true });
+      return ['d4', 'd3', 'h3', 'a3', 'b3'].map(san => legal.find(m => m.san === san)).find(Boolean) || legal.find(m => !m.captured) || legal[0];
+    });
+    await playMove(keyMove.san);
     await page.waitForFunction(() => coachGame.history().length >= 5, null, { timeout: 5000 }).catch(() => {});
     await page.waitForTimeout(250);
-    const typed = await page.evaluate(() => ({ fifth: coachGame.history()[4] || null, d4: coachBoard.position().d4 || null }));
-    if (typed.fifth !== 'd4' || typed.d4 !== 'wP') problems.push('a keyboard move did not reach the board: ' + JSON.stringify(typed));
+    const typed = await page.evaluate(to => ({ fifth: coachGame.history()[4] || null, piece: coachBoard.position()[to] || null }), keyMove.to);
+    if (typed.fifth !== keyMove.san || typed.piece !== 'w' + keyMove.piece.toUpperCase()) problems.push(`a keyboard move (${keyMove.san}) did not reach the board: ` + JSON.stringify(typed));
     await settle();
     return problems;
   });
