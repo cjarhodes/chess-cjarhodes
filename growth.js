@@ -1818,7 +1818,7 @@ function initGrowthFeatures() {
     if (!file) return;
     try {
       const count = await importTrainingBackupFile(file);
-      $('#training-data-status').removeClass('error').addClass('success').text(`Merged ${count} data sets. Your existing progress was kept.`);
+      $('#training-data-status').removeClass('error').addClass('success').text(`Merged ${count} data set${count === 1 ? "" : "s"}. Your existing progress was kept.`);
     } catch (error) {
       $('#training-data-status').removeClass('success').addClass('error').text((error && error.message) || 'That backup could not be imported.');
     } finally {
