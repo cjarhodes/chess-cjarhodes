@@ -619,12 +619,11 @@ onReady(function () {
       return;
     }
     hideEl(tokenError);
-    // `this` is the form, as it always was here: while the token is checked
-    // the form's contents are replaced by "Checking…" and then "Connect".
-    const form = this;
+    // While the token is checked the Connect button says so; the field stays.
+    const button = byId('btn-save-token');
     const setBusy = busy => {
-      form.disabled = busy;
-      form.textContent = busy ? 'Checking…' : 'Connect';
+      button.disabled = busy;
+      button.textContent = busy ? 'Checking…' : 'Connect';
     };
     setBusy(true);
     lichessExplorerGet('https://explorer.lichess.ovh/lichess',

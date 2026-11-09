@@ -3510,6 +3510,35 @@ async page => {
     });
   });
 
+  await check('a rejected Lichess token keeps the token field and says why', async () => {
+    const problems = [];
+    await page.goto(base + '/?opening=italian&mode=explore');
+    await page.waitForFunction(() => typeof exploreMode !== 'undefined' && exploreMode && !!document.getElementById('lichess-token-form'));
+    await page.evaluate(() => {
+      sessionStorage.removeItem(LICHESS_TOKEN_KEY);
+      showExploreTokenState();
+      window.__realFetch = window.fetch;
+      window.fetch = async () => new Response('{}', { status: 401, headers: { 'Content-Type': 'application/json' } });
+    });
+    try {
+      await page.evaluate(() => {
+        document.getElementById('lichess-token-input').value = 'lip_wrong';
+        document.getElementById('lichess-token-form').requestSubmit();
+      });
+      await page.waitForFunction(() => /Invalid token/.test(document.getElementById('token-error').textContent), null, { timeout: 5000 })
+        .catch(() => problems.push('a 401 did not say the token is invalid: ' + document.getElementById('token-error')));
+      const form = await page.evaluate(() => ({
+        input: !!document.getElementById('lichess-token-input'),
+        button: (document.getElementById('btn-save-token') || {}).textContent || null,
+        disabled: !!(document.getElementById('btn-save-token') || {}).disabled
+      }));
+      if (!form.input || form.button !== 'Connect' || form.disabled) problems.push('after a rejected token the form lost its field or button: ' + JSON.stringify(form));
+    } finally {
+      await page.evaluate(() => { window.fetch = window.__realFetch; });
+    }
+    return problems;
+  });
+
   if (pageErrors.length) failures.push('page errors: ' + pageErrors.join(' | '));
   if (failures.length) throw new Error(failures.join('\n'));
   return { passed: passed.length, checks: passed };
