@@ -1,6 +1,7 @@
 // Coach insights: local mistake memory and pattern tagging for reviews.
-// Classic script loaded before app.js (see index.html); its top-level
-// declarations are shared globals, as they were inside app.js.
+// Classic script loaded before the view scripts in src/views/ (see
+// index.html); its top-level declarations are shared globals, as they were
+// inside app.js.
 
 // ─────────────────────────────────────────────
 // COACH INSIGHTS — local-first mistake pattern memory

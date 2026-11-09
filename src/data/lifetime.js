@@ -1,6 +1,7 @@
 // Lifetime Coach statistics, rolled up once per completed game.
-// Classic script loaded before app.js (see index.html); its top-level
-// declarations are shared globals, as they were inside app.js.
+// Classic script loaded before the view scripts in src/views/ (see
+// index.html); its top-level declarations are shared globals, as they were
+// inside app.js.
 
 // ─────────────────────────────────────────────
 // LIFETIME STATS — accumulate across games in this browser

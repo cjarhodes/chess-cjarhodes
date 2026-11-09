@@ -1,6 +1,7 @@
 // Practice drills: queue, prompts and hints, scheduling, trends and events.
-// Classic script loaded before app.js (see index.html); its top-level
-// declarations are shared globals, as they were inside app.js.
+// Classic script loaded before the view scripts in src/views/ (see
+// index.html); its top-level declarations are shared globals, as they were
+// inside app.js.
 
 const PRACTICE_QUEUE_LIMIT = 10;
 

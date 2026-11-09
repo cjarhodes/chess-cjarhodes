@@ -1,6 +1,7 @@
 // Optional Supabase account: sign-in, storage fallback and game/insight sync.
-// Classic script loaded before app.js (see index.html); its top-level
-// declarations are shared globals, as they were inside app.js.
+// Classic script loaded before the view scripts in src/views/ (see
+// index.html); its top-level declarations are shared globals, as they were
+// inside app.js.
 
 // ─────────────────────────────────────────────
 // ACCOUNT SYNC — optional Supabase-backed coach history

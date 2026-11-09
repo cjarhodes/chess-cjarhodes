@@ -1,6 +1,7 @@
 // Coach dashboard rendering: daily plan, practice queue, theory cards, insights.
-// Classic script loaded before app.js (see index.html); its top-level
-// declarations are shared globals, as they were inside app.js.
+// Classic script loaded before the view scripts in src/views/ (see
+// index.html); its top-level declarations are shared globals, as they were
+// inside app.js.
 
 function renderCoachDailyPlan(queue, due, totals, entries) {
   const items = Array.isArray(queue) ? queue : Array.from(renderedPracticeItems.values());

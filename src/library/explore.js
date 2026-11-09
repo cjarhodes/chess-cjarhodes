@@ -1,6 +1,7 @@
 // Explore mode: Lichess token handling and the opening explorer API.
-// Classic script loaded before app.js (see index.html); its top-level
-// declarations are shared globals, as they were inside app.js.
+// Classic script loaded before the view scripts in src/views/ (see
+// index.html); its top-level declarations are shared globals, as they were
+// inside app.js.
 
 // ─────────────────────────────────────────────
 // EXPLORE MODE — LICHESS TOKEN + API

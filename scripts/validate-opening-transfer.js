@@ -8,7 +8,7 @@ const app=require('./lib/app-source').appSource();
 const context={Chess,window:{},$:()=>{},uciFromMove:m=>m.from+m.to+(m.promotion||'')};
 vm.createContext(context);vm.runInContext(openings+'\n'+growth+'\nthis.openings=OPENINGS;',context);
 // Line ownership (traps are played by the side that springs them) comes from
-// opponents.js through app.js's openingLineSide, as in the browser.
+// opponents.js through openingLineSide (src/views/library.js), as in the browser.
 vm.runInContext(fs.readFileSync(path.join(root,'opponents.js'),'utf8').replace(/typeof window !== 'undefined' \? window : globalThis/,'this')+'\nthis.OpponentPersonas=OpponentPersonas;',context);
 {const at=app.indexOf('\nfunction openingLineSide(')+1;if(!at)throw Error('Missing runtime function openingLineSide');vm.runInContext(app.slice(at,app.indexOf('\n}',at)+2),context);}
 let checks=0;const failures=[];

@@ -1,6 +1,7 @@
 // Candidate moves: the top engine lines for the current position.
-// Classic script loaded before app.js (see index.html); its top-level
-// declarations are shared globals, as they were inside app.js.
+// Classic script loaded before the view scripts in src/views/ (see
+// index.html); its top-level declarations are shared globals, as they were
+// inside app.js.
 
 // ─────────────────────────────────────────────
 // CANDIDATE MOVES (top-3)

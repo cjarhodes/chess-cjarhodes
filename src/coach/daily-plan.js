@@ -1,6 +1,7 @@
 // Adaptive daily session: practice progress storage, focus choice and plan state.
-// Classic script loaded before app.js (see index.html); its top-level
-// declarations are shared globals, as they were inside app.js.
+// Classic script loaded before the view scripts in src/views/ (see
+// index.html); its top-level declarations are shared globals, as they were
+// inside app.js.
 
 const PRACTICE_PROGRESS_KEY = 'coach:practice:v2';
 const LEGACY_PRACTICE_PROGRESS_KEY = 'coach:practice:v1';

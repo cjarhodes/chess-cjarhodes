@@ -1,7 +1,7 @@
 // Analysis board for Library → Explore: Stockfish's top three lines for the
 // position on the board, an evaluation bar and a best-move arrow, plus
 // loading any FEN or PGN. Works without a Lichess token. Uses the shared
-// engineClient and the Explore globals from app.js (exploreGame, board).
+// engineClient and the Explore globals from src/views/library.js (exploreGame, board).
 (function() {
   'use strict';
   const DEPTH = 14;

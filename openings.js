@@ -1,5 +1,5 @@
 // Opening content data — move lists, explanations, key ideas, and variations for the Library.
-// Loaded before app.js via a plain <script> tag; OPENINGS is a global consumed by app.js.
+// Loaded before src/ and src/views/ via a plain <script> tag; OPENINGS is a global they consume.
 // ─────────────────────────────────────────────
 // OPENING DATA
 // ─────────────────────────────────────────────

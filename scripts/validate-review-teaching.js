@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Focused executable checks for the Coach review teaching layer. The replay
-// builder is sliced from app.js and run with the same vendored chess.js used by
+// builder is sliced from the app source and run with the same vendored chess.js used by
 // the browser, so these checks exercise legal move generation rather than only
 // matching source text.
 
@@ -25,7 +25,7 @@ function findFunctionStart(name) {
     const index = app.indexOf(marker);
     if (index !== -1) return index + 1;
   }
-  throw new Error(`Could not locate function ${name} in app.js`);
+  throw new Error(`Could not locate function ${name} in the app source`);
 }
 
 function findMatchingBrace(source, openBrace) {
@@ -48,7 +48,7 @@ function findMatchingBrace(source, openBrace) {
     if (c === '{') depth += 1;
     if (c === '}' && --depth === 0) return i;
   }
-  throw new Error('Unmatched function brace in app.js');
+  throw new Error('Unmatched function brace in the app source');
 }
 
 function extractFunction(name) {
@@ -58,7 +58,7 @@ function extractFunction(name) {
 }
 
 const builderCode = ['buildCoachReviewAnalysisSteps', 'buildCoachConsequenceSteps', 'coachExplanationContext', 'moveFromUci', 'materialValue'].map(extractFunction).join('\n');
-new vm.Script(builderCode, { filename: 'app.js#review-teaching-slice' });
+new vm.Script(builderCode, { filename: 'app-source#review-teaching-slice' });
 const context = { Chess, PIECE_NAME: {p:'Pawn',n:'Knight',b:'Bishop',r:'Rook',q:'Queen',k:'King'} };
 vm.createContext(context);
 vm.runInContext(`${builderCode}\nthis.buildCoachReviewAnalysisSteps = buildCoachReviewAnalysisSteps;`, context);

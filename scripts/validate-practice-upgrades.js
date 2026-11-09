@@ -60,7 +60,7 @@ const code = [
   extract('practiceAfterMoveScore'), extract('practiceMoveIsMate'),
   extract('evaluatePracticeMove')
 ].join('\n\n') + '\nthis.evaluatePracticeMove = evaluatePracticeMove;';
-new vm.Script(code, { filename: 'app.js#practice-upgrades' });
+new vm.Script(code, { filename: 'app-source#practice-upgrades' });
 
 const context = {
   Chess,

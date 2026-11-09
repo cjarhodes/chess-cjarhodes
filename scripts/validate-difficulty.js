@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Focused, dependency-free behavioral checks for the calibrated Coach selector.
-// This deliberately extracts only the selector slice from app.js, so it can be
+// This deliberately extracts only the selector slice from the app source, so it can be
 // run without loading the browser UI or engine worker.
 const fs = require('fs');
 const path = require('path');

@@ -1,6 +1,7 @@
 // Coach opponent strength: difficulty keyframes and calibrated move selection.
-// Classic script loaded before app.js (see index.html); its top-level
-// declarations are shared globals, as they were inside app.js.
+// Classic script loaded before the view scripts in src/views/ (see
+// index.html); its top-level declarations are shared globals, as they were
+// inside app.js.
 
 // Opponent difficulty is controlled by a monotonic engine-compatible model.
 function strengthTierLabel(elo) {

@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-// Executable test of the Coach practice scheduling logic in app.js.
+// Executable test of the Coach practice scheduling logic (src/ and src/views/).
 //
 // Unlike the other scripts/validate-*.js files (which are regex "shape"
 // checks against app.js source text), this script follows the vm-slicing
 // approach used by validate-openings.js: it extracts real function/const
-// declarations out of app.js by name, runs them in a node:vm context with
+// declarations out of the app source by name, runs them in a node:vm context with
 // minimal stubs, and asserts on their actual runtime behavior.
 //
 // Functions tested (pure or near-pure — depend only on arguments, module
@@ -133,12 +133,12 @@ function findMatchingBrace(src, openBraceIdx) {
       continue;
     }
   }
-  throw new Error('Unmatched brace while scanning app.js');
+  throw new Error('Unmatched brace while scanning the app source');
 }
 
 function extractFunction(name) {
   const start = findFunctionStart(name);
-  if (start === -1) throw new Error(`Could not locate function ${name} in app.js`);
+  if (start === -1) throw new Error(`Could not locate function ${name} in the app source`);
   const openBrace = app.indexOf('{', start);
   const closeBrace = findMatchingBrace(app, openBrace);
   return app.slice(start, closeBrace + 1);
@@ -148,7 +148,7 @@ function extractFunction(name) {
 function extractConst(name) {
   const marker = `\nconst ${name} = `;
   const idx = app.indexOf(marker);
-  if (idx === -1) throw new Error(`Could not locate const ${name} in app.js`);
+  if (idx === -1) throw new Error(`Could not locate const ${name} in the app source`);
   const start = idx + 1;
   let mode = 'code';
   let i = start;
@@ -223,7 +223,7 @@ const sliceCode = slicedParts.join('\n\n');
 // try to run it (this is the "parses via new vm.Script" check called for
 // in the task: a syntax error here means the brace/statement scanner above
 // mis-sliced something).
-new vm.Script(sliceCode, { filename: 'app.js#practice-slice' });
+new vm.Script(sliceCode, { filename: 'app-source#practice-slice' });
 
 // --- vm context + stubs ---------------------------------------------------
 
@@ -263,7 +263,7 @@ const context = {
   renderedAdaptivePlan: null
 };
 vm.createContext(context);
-vm.runInContext(sliceCode, context, { filename: 'app.js#practice-slice' });
+vm.runInContext(sliceCode, context, { filename: 'app-source#practice-slice' });
 
 function resetStorage() {
   context.localStorage.clear();
