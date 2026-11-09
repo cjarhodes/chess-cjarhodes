@@ -90,14 +90,18 @@ function seeAtSquare(game, square, sideFirst) {
 function detectHangingPieces(game, userColor) {
   // A user piece is "hanging" iff the opponent can initiate captures on its
   // square and come out with at least a pawn's worth of material (SEE ≥ 100).
+  // The king is never "hanging": it cannot be captured. While the user is in
+  // check the side-to-move swap below would describe an illegal position, and
+  // answering the check is the only threat that matters, so nothing is listed.
   const userChar = userColor === 'white' ? 'w' : 'b';
+  if (game.in_check() && game.turn() === userChar) return [];
   const oppChar = userColor === 'white' ? 'b' : 'w';
   const hangs = [];
   const boardArr = game.board();
   for (let r = 0; r < 8; r++) {
     for (let f = 0; f < 8; f++) {
       const sq = boardArr[r][f];
-      if (!sq || sq.color !== userChar) continue;
+      if (!sq || sq.color !== userChar || sq.type === 'k') continue;
       const square = 'abcdefgh'[f] + (8 - r);
       const gain = seeAtSquare(game, square, oppChar);
       if (gain >= 100) {
@@ -122,6 +126,9 @@ function countAttackers(game, square, attackerColor) {
 async function detectMateThreat(fen) {
   // Is opponent threatening mate on their next move? Flip side-to-move.
   // Depth 12 catches ~6-move mate nets that depth 8 missed; still fast.
+  // In check, passing the move would leave the side not to move in check, an
+  // illegal position the engine must never see; the check is the threat.
+  if (new Chess(fen).in_check()) return { status: 'ok', mateIn: null, inCheck: true };
   const parts = fen.split(' ');
   parts[1] = parts[1] === 'w' ? 'b' : 'w';
   parts[3] = '-';
@@ -160,6 +167,10 @@ async function showThreats() {
   const fen = coachGame.fen();
   const hangs = detectHangingPieces(coachGame, coachUserColor());
   const items = [];
+  if (coachGame.in_check()) {
+    renderThreatItems([{ kind: 'mate', text: 'Your king is in check — answer the check first.' }]);
+    return;
+  }
   hangs.forEach(h => {
     const name = PIECE_NAME[h.piece];
     const glyph = PIECE_GLYPH[h.piece];

@@ -26,7 +26,7 @@ the `blend-*` and `phone-blend-*` mockups in `design-directions/`.
 | Question (from §6 of the plan) | Decision |
 |---|---|
 | Two serifs? | **Keep both, with a strict split.** Fraunces is used only at `--text-xl` and above (titles, big numbers). Newsreader is used for every coach sentence, prompt and explanation. The gallery's "Serif test" sets a long explanation in both: Fraunces' soft, wedge-shaped details are charming in a headline but busy over three or four lines, while Newsreader stays quiet. |
-| Brass on cream contrast | Brass `--accent` is only ever a fill, with `--accent-ink` text on top (8.5:1). Brass as text or icon uses `--accent-text` (`#8f620c`, 5.2:1 on surface). Verified by `check-contrast.js`. |
+| Brass on cream contrast | Brass `--accent` is only ever a fill, with `--accent-ink` text on top (8.5:1). Brass as text or icon uses `--accent-text` (`#845a0b`, 5.9:1 on surface; at least 4.5:1 on `--accent-soft` rows). Verified by `check-contrast.js`. |
 | Move-quality colours as text | They fail AA as small text (inaccuracy 3.8:1, mistake 4.2:1 on surface). **Chip words stay in `--text`**, and only the tint and the symbol (`?!`, `?`, `??` …) carry the colour, which needs just 3:1 as a graphic. Every quality colour also travels with its symbol, so colour blindness doesn't hide the meaning. |
 | Threat arrow colour | It was brass in the earlier blend, which made it hard to tell apart from hint arrows (identical in dark mode). **Threats are now blue-violet** (`--iris-500` / `--iris-300`). It's the only cool hue on the board, so a threat never reads as advice. |
 | Board themes | **Sage** (default), **Walnut** (close to the old board), **Slate**, and **High contrast** (squares ≥ 3:1 apart, for low vision and bright rooms). Switch with `<html data-board-theme="green|walnut|blue|contrast">`; the keys match the values already saved under `ui:board-theme`, and the retired Ivory theme falls back to Walnut. |
@@ -53,7 +53,7 @@ tokens.
 | `--text-3` | `#6e6452` | `#8d9587` | Labels, captions (≥ 4.5:1 on every surface) |
 | `--accent` | `#e9ac3f` | `#f0b84a` | Fills: primary button, current move, progress |
 | `--accent-ink` | `#261a05` | `#1f1607` | Text on accent |
-| `--accent-text` | `#8f620c` | `#f0b84a` | Accent as text or icon |
+| `--accent-text` | `#845a0b` | `#f0b84a` | Accent as text or icon |
 | `--accent-soft` | brass 18% | brass 15% | Selected rows, hover, highlights |
 | `--danger` / `--success` | `#c2412d` / `#2f7d4c` | `#ff6a5a` / `#8fdc6a` | Errors, confirmations |
 
@@ -97,6 +97,20 @@ an abbreviation is natural (ECO codes).
 
 Breakpoints are 760px and 1200px. They can't be custom properties inside
 media queries, so they live as constants in `components.css` and here.
+
+**Today (Phase 6a, before the new shell).** The current views follow this
+table with their existing markup, in the "RESPONSIVE LAYOUT" section at the
+end of `styles.css`: the left rail is still content (Coach setup, the opening
+list, puzzle modes) rather than a nav, so on tablets both rails narrow
+(`clamp(190px, 19vw, 240px)` and `clamp(280px, 29vw, 340px)`) and a 1024×768
+screen gets a 456–500px board. The one-column layout also covers tablets held
+upright and sideways phones (`(max-width: 759.98px), (max-width: 1199.98px)
+and (orientation: portrait), (max-width: 1199.98px) and (max-height:
+499.98px)`, mirrored as `LAYOUT_STACKED_QUERY` in `src/ui/layout.js`); there
+the top nav is the tab bar, the eval bar turns horizontal above the board,
+and upright tablets keep a framed board small enough for the controls to
+stay on screen. There is no Settings gear yet: settings stay in the Coach
+setup groups, stacked under the board.
 
 ---
 

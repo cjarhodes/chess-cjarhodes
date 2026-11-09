@@ -11,7 +11,7 @@ async browserPage => {
     if (page) await page.context().close();
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } }); contexts.push(context);
     page = await context.newPage();
-    page.on('pageerror', e => errors.push(e.message));
+    page.on('pageerror', e => errors.push((e.stack || e.message).split('\n').slice(0, 4).join(' <- ')));
     page.on('console', m => { if (m.type() === 'error' && !/favicon/.test(m.text())) errors.push(m.text()); });
     await page.goto(base + query);
   };
@@ -22,8 +22,8 @@ async browserPage => {
   });
   const ready = () => page.waitForFunction(() => { const s = PuzzlesView._debug().session; return s && s.phase === 'solving' && !s.busy; }, null, { timeout: 15000 });
   const click = async uci => {
-    await page.locator(`#puzzleBoard .square-${uci.slice(0, 2)}`).click();
-    await page.locator(`#puzzleBoard .square-${uci.slice(2, 4)}`).click();
+    await page.locator(`#puzzleBoard .square[data-square="${uci.slice(0, 2)}"]`).click();
+    await page.locator(`#puzzleBoard .square[data-square="${uci.slice(2, 4)}"]`).click();
     if (uci.length === 5) await page.locator(`#promotion-picker .promotion-choice[data-promotion="${uci[4]}"]`).click();
   };
   const type = async uci => {
@@ -32,8 +32,8 @@ async browserPage => {
     await page.locator('#puzzle-keyboard-move-form button[type=submit]').click();
   };
   const drag = async uci => {
-    const from = await page.locator(`#puzzleBoard .square-${uci.slice(0, 2)}`).boundingBox();
-    const to = await page.locator(`#puzzleBoard .square-${uci.slice(2, 4)}`).boundingBox();
+    const from = await page.locator(`#puzzleBoard .square[data-square="${uci.slice(0, 2)}"]`).boundingBox();
+    const to = await page.locator(`#puzzleBoard .square[data-square="${uci.slice(2, 4)}"]`).boundingBox();
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await page.mouse.down();
     await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 6 });
@@ -209,11 +209,11 @@ async browserPage => {
     await page.locator('#puzzle-mode-vision').click();
     await page.locator('#puzzle-vision-side button[data-side="black"]').click();
     await page.locator('#btn-puzzle-vision-start').click();
-    assert(await page.evaluate(() => document.querySelectorAll('#puzzleBoard .notation-322f9').length === 0), 'Vision hides coordinates');
+    assert(await page.evaluate(() => document.querySelectorAll('#puzzleBoard .board-coord').length === 0), 'Vision hides coordinates');
     assert(await fits(), 'the Vision prompt and board fit');
     for (let i = 0; i < 5; i++) {
       const target = await page.locator('#puzzle-vision-prompt').textContent();
-      await page.locator(`#puzzleBoard .square-${target}`).click();
+      await page.locator(`#puzzleBoard .square[data-square="${target}"]`).click();
     }
     const v = (await info()).vision;
     assert(v && v.score === 5 && v.mistakes === 0 && v.side === 'black', 'Vision scores correct clicks on a Black-side board');
@@ -236,7 +236,7 @@ async browserPage => {
       await type(uci); await egReady();
     }
     await page.waitForTimeout(500); // let the last move's animation finish
-    const won = await page.evaluate(() => ({ outcome: PuzzlesView._debug().session.outcome, best: JSON.parse(localStorage.getItem('chess_endgames_v1') || '{}')['kq-k'], shown: document.querySelectorAll('#puzzleBoard .piece-417db').length, want: PuzzlesView._debug().session.game.board().flat().filter(Boolean).length }));
+    const won = await page.evaluate(() => ({ outcome: PuzzlesView._debug().session.outcome, best: JSON.parse(localStorage.getItem('chess_endgames_v1') || '{}')['kq-k'], shown: document.querySelectorAll('#puzzleBoard .pieces g[data-piece]').length, want: PuzzlesView._debug().session.game.board().flat().filter(Boolean).length }));
     assert(won.outcome === 'win' && won.best >= 1 && won.best <= 10, 'the queen drill is won within its limit and sets a best: ' + JSON.stringify(won));
     assert(won.shown === won.want, 'the board shows exactly the pieces in the game after fast engine replies: ' + JSON.stringify(won));
     // An engine failure takes the move back instead of leaving the engine to move.

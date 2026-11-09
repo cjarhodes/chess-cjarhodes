@@ -7,13 +7,15 @@ function renderCoachDailyPlan(queue, due, totals, entries) {
   const dueItems = Array.isArray(due) ? due : items.filter(item => practiceIsDue(item));
   const progress = totals || practiceProgressTotals();
   const $action = $('#btn-coach-next-action');
+  settleSavedDailySprints();
   let sprint = dailySprintToday();
   if (sprint && !sprint.completedAt && !coachPracticeSession && !loadCoachPracticeState()) {
     if (sprint.mode === 'drills' && !dueItems.length) {
       sprint = updateDailySprint(day => upgradeLegacyDailySprint(day, renderedAdaptivePlan));
     }
     const recovered = recoverDailySprintPlan(sprint, dueItems.length);
-    if (recovered !== sprint) sprint = updateDailySprint(() => recovered);
+    // Removing unavailable drills can leave the day's work already done.
+    if (recovered !== sprint) sprint = updateDailySprint(() => settleDailySprintDay(recovered));
   }
   if (!sprint) renderedAdaptivePlan = adaptiveDailyPlan(entries || [], items, dueItems, progress);
   renderDailySprintChrome(sprint);

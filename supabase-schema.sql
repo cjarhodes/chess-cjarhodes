@@ -28,6 +28,8 @@ create table if not exists public.coach_games (
   accuracy integer check (accuracy is null or (accuracy between 0 and 100)),
   acpl integer,
   stats jsonb not null default '{}'::jsonb,
+  -- Content id of a pasted game (pgn-<side><hash>); one row per pasted game.
+  client_game_key text check (client_game_key is null or char_length(client_game_key) between 1 and 120),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -65,7 +67,7 @@ create table if not exists public.drill_queue (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   drill_key text not null,
-  source_move_id uuid references public.coach_moves(id) on delete cascade,
+  source_move_id uuid references public.coach_moves(id) on delete set null,
   tag text not null,
   fen text not null,
   best_uci text,
@@ -135,6 +137,10 @@ create table if not exists public.theory_cards (
 
 create index if not exists coach_games_user_started_idx
   on public.coach_games(user_id, started_at desc);
+
+-- Plain (not partial) so PostgREST on_conflict can use it; null keys stay distinct.
+create unique index if not exists coach_games_user_client_key_unique_idx
+  on public.coach_games(user_id, client_game_key);
 
 create index if not exists coach_moves_user_played_idx
   on public.coach_moves(user_id, played_at desc);

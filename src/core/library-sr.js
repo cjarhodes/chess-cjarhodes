@@ -26,18 +26,45 @@ function getSRRecord(id) {
   const data = loadSR();
   return data[id] || null;
 }
-function srStatus(id) {
+// Local midnight `days` calendar days after `ts`. Calendar arithmetic, not
+// 24-hour steps, so a review is due on a day (as repertoire-core.js does) and
+// a DST change never shifts it by an hour into the wrong day.
+function srAddDays(ts, days) {
+  const d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + days);
+  return d.getTime();
+}
+// When the next review falls, in calendar days: 'now' once it is due,
+// 'today' for a (legacy, timestamped) due time later today, else '3d'.
+function srNextReviewLabel(due, now) {
+  if (now === undefined) now = Date.now();
+  if (!(due > now)) return 'now';
+  const days = Math.round((srAddDays(due, 0) - srAddDays(now, 0)) / DAY_MS);
+  return days <= 0 ? 'today' : days + 'd';
+}
+function srStatus(id, now) {
+  if (now === undefined) now = Date.now();
   const rec = getSRRecord(id);
   if (!rec) return 'new';
-  if (Date.now() >= rec.nextDue) return 'due';
+  if (now >= rec.nextDue) return 'due';
   if (rec.reps >= 3) return 'mastered';
   return 'learning';
 }
-function srRecordQuiz(id, quality) {
+function srRecordQuiz(id, quality, now) {
   // quality: 5=perfect, 4=1-2 misses, 0=many misses (reset)
+  if (now === undefined) now = Date.now();
   const data = loadSR();
   let rec = data[id] || { ease: 2.5, interval: 0, reps: 0, attempts: 0 };
   rec.attempts = (rec.attempts || 0) + 1;
+  // Extra practice before the line is due counts as an attempt but does not
+  // advance the schedule, so repeating a line in one sitting cannot make it
+  // "Mastered". A failed run still resets it.
+  if (rec.nextDue && now < rec.nextDue && quality >= 3) {
+    rec.lastReviewed = now;
+    data[id] = rec;
+    return saveSR(data);
+  }
   rec.ease = Math.max(1.3, rec.ease + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
   if (quality < 3) {
     rec.reps = 0;
@@ -48,8 +75,8 @@ function srRecordQuiz(id, quality) {
     else if (rec.reps === 2) rec.interval = 3;
     else rec.interval = Math.round(rec.interval * rec.ease);
   }
-  rec.lastReviewed = Date.now();
-  rec.nextDue = Date.now() + rec.interval * DAY_MS;
+  rec.lastReviewed = now;
+  rec.nextDue = srAddDays(now, rec.interval);
   data[id] = rec;
   return saveSR(data);
 }
@@ -90,48 +117,12 @@ function updateSRPanel() {
     html += `<div class="sr-line"><span>Clean runs</span><strong>${rec.reps}</strong></div>`;
     html += `<div class="sr-line"><span>Attempts</span><strong>${rec.attempts}</strong></div>`;
     if (rec.nextDue) {
-      const days = Math.max(0, Math.round((rec.nextDue - Date.now()) / DAY_MS));
-      html += `<div class="sr-line"><span>Next review</span><strong>${days === 0 ? 'now' : days + 'd'}</strong></div>`;
+      html += `<div class="sr-line"><span>Next review</span><strong>${srNextReviewLabel(rec.nextDue)}</strong></div>`;
     }
   }
   $panel.html(html).show();
 }
 
-function validateOpeningData() {
-  const errors = [];
-  const seenIds = new Set();
-  OPENINGS.forEach(opening => {
-    if (!opening.id) errors.push('Opening missing id');
-    if (seenIds.has(opening.id)) errors.push(`Duplicate opening id: ${opening.id}`);
-    seenIds.add(opening.id);
-    if (!Array.isArray(opening.moves) || opening.moves.length === 0) {
-      errors.push(`${opening.id}: missing moves`);
-    }
-    if (!Array.isArray(opening.explanations) || opening.explanations.length !== opening.moves.length) {
-      errors.push(`${opening.id}: explanations length does not match moves length`);
-    }
-    const lineIds = new Set();
-    getOpeningLines(opening).forEach(line => {
-      const lineKey = `${opening.id}/${line.id}`;
-      if (lineIds.has(line.id)) errors.push(`${opening.id}: duplicate line id ${line.id}`);
-      lineIds.add(line.id);
-      if (!Array.isArray(line.moves) || line.moves.length === 0) {
-        errors.push(`${lineKey}: missing moves`);
-        return;
-      }
-      if (!Array.isArray(line.explanations) || line.explanations.length !== line.moves.length) {
-        errors.push(`${lineKey}: explanations length does not match moves length`);
-      }
-      const g = new Chess();
-      for (let i = 0; i < line.moves.length; i++) {
-        const san = line.moves[i];
-        if (!g.move(san)) {
-          errors.push(`${lineKey}: illegal SAN at ply ${i + 1}: ${san}`);
-          break;
-        }
-      }
-    });
-  });
-  if (errors.length) console.warn('Opening data validation failed:', errors);
-  return errors;
-}
+// Opening data (ids, move counts, legal SAN in every line) is checked by
+// scripts/validate-openings.js in CI. It used to be replayed here on every
+// page load, which blocked the main thread for about half a second.

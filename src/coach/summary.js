@@ -315,7 +315,7 @@ function showPostGameSummary(endMsg) {
   if (openingSans.length > 0 && typeof identifyOpening === 'function') {
     const info = identifyOpening(openingSans);
     if (info.match) {
-      const mNum = Math.ceil(info.matchedPlies / 2);
+      const mNum = Math.ceil(info.bookPlies / 2);
       const lineText = info.exact
         ? `Stayed in theory through move ${mNum}.`
         : `Left book after move ${mNum}.`;

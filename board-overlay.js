@@ -1,8 +1,9 @@
 // Board overlay: arrows, move-quality badges and an evaluation bar drawn over
-// a chessboard.js board. Square positions are read from the rendered squares
-// (data-square), so orientation, resizing and redraws need no extra state.
-// The overlay is a sibling of the board inside its positioned wrapper, so
-// chessboard.js rebuilding its own markup never removes it.
+// a board from src/ui/board.js (cm-chessboard). Square positions are read
+// from the rendered squares (`.square[data-square]`), so orientation, resizing
+// and redraws need no extra state. The overlay is a sibling of the board
+// inside its positioned wrapper, so the board redrawing its own markup never
+// removes it.
 (function(root) {
   'use strict';
   const NS = 'http://www.w3.org/2000/svg';
@@ -46,7 +47,8 @@
     const wrapRect = entry.wrap.getBoundingClientRect();
     const squares = {};
     let size = 0;
-    board.querySelectorAll('[data-square]').forEach(node => {
+    // Square rects only: pieces carry data-square too, but are smaller.
+    board.querySelectorAll('.square[data-square]').forEach(node => {
       const r = node.getBoundingClientRect();
       if (!r.width) return;
       size = r.width;
@@ -182,8 +184,8 @@
     entry.frame = requestAnimationFrame(() => draw(boardId));
   }
 
-  // Attach once per board. Redraws follow chessboard.js DOM rebuilds and
-  // window resizes.
+  // Attach once per board. Redraws follow the board's DOM rebuilds (resize,
+  // flip) and window resizes.
   function attach(boardId, wrapId) {
     if (boards.has(boardId)) return boards.get(boardId);
     const wrap = document.getElementById(wrapId);
@@ -193,8 +195,8 @@
     boards.set(boardId, entry);
     if (typeof MutationObserver !== 'undefined') {
       entry.observer = new MutationObserver(() => schedule(boardId));
-      // Flips and resize() rebuild the squares deep inside the container and
-      // set their sizes by inline style.
+      // Flips rebuild the squares deep inside the container; resizes set the
+      // container's size by inline style.
       entry.observer.observe(board, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
     }
     if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => schedule(boardId)).observe(wrap);

@@ -14,19 +14,19 @@
       openings: ['scholars-mate', 'fools-mate', 'legal-trap'] },
     { id: 'rosa', name: 'Rosa', initial: 'R', elo: 800, style: 'Gambits and traps',
       blurb: 'Gives pawns for fast attacks and loves a trap. Count the material before you grab.',
-      openings: ['kings-gambit', 'evans-gambit', 'fried-liver', 'stafford-gambit', 'budapest-gambit', 'blackburne-shilling', 'elephant-trap'] },
+      openings: ['kings-gambit', 'evans-gambit', 'fried-liver', 'stafford-gambit', 'budapest-gambit', 'blackburne-shilling', 'elephant-trap', 'lasker-trap', 'noahs-ark-trap'] },
     { id: 'theo', name: 'Theo', initial: 'T', elo: 1200, style: 'Classical development',
       blurb: 'Develops pieces, castles early and plays the old main lines.',
-      openings: ['italian', 'four-knights', 'queens-gambit', 'french'] },
+      openings: ['italian', 'four-knights', 'queens-gambit', 'french', 'vienna', 'petrov', 'scandinavian'] },
     { id: 'mira', name: 'Mira', initial: 'M', elo: 1600, style: 'Solid and positional',
       blurb: 'Builds a sound structure first and waits for you to overreach.',
-      openings: ['london', 'queens-gambit', 'caro-kann', 'slav', 'queens-indian'] },
+      openings: ['london', 'queens-gambit', 'caro-kann', 'slav', 'queens-indian', 'catalan', 'kings-indian-attack'] },
     { id: 'kasimir', name: 'Kasimir', initial: 'K', elo: 2000, style: 'Sharp and dynamic',
       blurb: 'Seeks imbalances and opposite-side attacks from the opening on.',
-      openings: ['ruy-lopez', 'scotch', 'sicilian-dragon', 'kings-indian', 'grunfeld'] },
+      openings: ['ruy-lopez', 'scotch', 'sicilian-dragon', 'kings-indian', 'grunfeld', 'pirc', 'dutch', 'alekhine'] },
     { id: 'ines', name: 'Ines', initial: 'I', elo: 2400, style: 'Universal',
       blurb: 'Comfortable in any structure, with deep preparation in the main lines.',
-      openings: ['english', 'reti', 'sicilian', 'sicilian-schev', 'nimzo-indian'] }
+      openings: ['english', 'reti', 'sicilian', 'sicilian-schev', 'nimzo-indian', 'catalan', 'sicilian-najdorf'] }
   ];
   const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
@@ -39,6 +39,7 @@
   const LINE_SIDE = {
     'scholars-mate': 'w', 'legal-trap': 'w', 'fried-liver': 'w', 'kings-gambit': 'w', 'evans-gambit': 'w',
     'fools-mate': 'b', 'elephant-trap': 'b', 'stafford-gambit': 'b', 'blackburne-shilling': 'b', 'budapest-gambit': 'b',
+    'lasker-trap': 'b', 'noahs-ark-trap': 'b',
     slav: 'b', 'sicilian-dragon': 'b', 'sicilian-schev': 'b'
   };
   function lineSide(id, opening) {

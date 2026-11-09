@@ -7,13 +7,17 @@ const growth=fs.readFileSync(path.join(root,'growth.js'),'utf8');
 const app=require('./lib/app-source').appSource();
 const context={Chess,window:{},$:()=>{},uciFromMove:m=>m.from+m.to+(m.promotion||'')};
 vm.createContext(context);vm.runInContext(openings+'\n'+growth+'\nthis.openings=OPENINGS;',context);
+// Line ownership (traps are played by the side that springs them) comes from
+// opponents.js through app.js's openingLineSide, as in the browser.
+vm.runInContext(fs.readFileSync(path.join(root,'opponents.js'),'utf8').replace(/typeof window !== 'undefined' \? window : globalThis/,'this')+'\nthis.OpponentPersonas=OpponentPersonas;',context);
+{const at=app.indexOf('\nfunction openingLineSide(')+1;if(!at)throw Error('Missing runtime function openingLineSide');vm.runInContext(app.slice(at,app.indexOf('\n}',at)+2),context);}
 let checks=0;const failures=[];
 const assert=(ok,message)=>{checks++;if(!ok)failures.push(message);};
 const move=(position,uci)=>position.move({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]});
 for(const opening of context.openings){
  const item=context.openingBridgeItem(opening);if(!item)continue;
  const position=new Chess(item.entry.fenBefore);
- assert(position.turn()===(opening.category==='black'?'b':'w'),opening.id+': bridge starts on the wrong side');
+ assert(position.turn()===context.openingLineSide(opening)[0],opening.id+': bridge starts on the wrong side');
  const solution=move(position,item.entry.bestUci);
  assert(solution&&solution.san===item.entry.bestSan,opening.id+': authored answer is illegal or mismatched');
  for(const step of item.entry.continuation){
@@ -37,7 +41,7 @@ for(const opening of context.openings)for(const line of context.getOpeningLines(
  lines++;
  const target=context.openingTransferTarget(opening,line);
  assert(target&&new Chess(target.sourceFen).moves().length>0,opening.id+'/'+line.id+': no playable transfer target');
- assert(target.side===(opening.category==='black'?'black':'white'),opening.id+'/'+line.id+': lesson side was lost');
+ assert(target.side===context.openingLineSide(opening,line.id),opening.id+'/'+line.id+': lesson side was lost');
  const quiz=new Chess();
  for(const san of line.moves){
   const played=new Chess(quiz.fen()).move(san);
@@ -52,7 +56,15 @@ for(const opening of context.openings)for(const line of context.getOpeningLines(
  assert(mid&&mid.sourceFen===middle.fen(),opening.id+'/'+line.id+': selected middle position moved unexpectedly');
  if(target.adjusted)assert(replay.turn()===target.side[0],opening.id+'/'+line.id+': terminal line did not back up to the student decision');
 }
-assert(lines===35,'all 35 authored lines must be validated');
+const authored=context.openings.reduce((n,o)=>n+1+(o.variations||[]).length,0);
+assert(lines===authored&&lines>=50,'all '+authored+' authored lines must be validated');
+// Black's traps are played from Black's side, inside White openings too.
+const byId=id=>context.openings.find(o=>o.id===id);
+[['fools-mate',null,'black'],['scholars-mate',null,'white'],['stafford-gambit',null,'black'],['sicilian',null,'black'],['italian','blackburne-shilling','black'],['italian','fried-liver','white'],['ruy-lopez','noahs-ark-trap','black'],['queens-gambit','lasker-trap','black']].forEach(([id,lineId,side])=>{
+ const opening=byId(id);assert(opening&&context.openingLineSide(opening,lineId)===side,id+'/'+(lineId||'main')+' should be played as '+side);
+ const line=lineId?opening.variations.find(v=>v.id===lineId):{id:'main',moves:opening.moves};
+ const target=context.openingTransferTarget(opening,line);assert(target&&target.side===side,id+'/'+(lineId||'main')+': transfer lesson should be played as '+side);
+});
 assert(context.openingTransferTarget(null,null)===null,'missing lesson should not create an exercise');
 assert(context.openingTransferTarget(context.openings[0],{moves:['not a move']})===null,'invalid line should not create an exercise');
 const target=context.openingTransferDefinition('italian','main',26);

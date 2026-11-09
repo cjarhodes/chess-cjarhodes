@@ -21,7 +21,7 @@ let quizMissedMoves = [];
 let quizReviewMode = false;
 let quizReviewQueue = [];
 let quizReviewCursor = 0;
-let tapSelected = null;      // square selected for tap-to-move, or null
+let quizTimerGeneration = 0; // invalidates pending quiz auto-play when the quiz restarts
 let pendingPromotionChoice = null;
 let promotionReturnFocus = null;
 let summaryReturnFocus = null;
@@ -39,7 +39,7 @@ let coachUserSide = 'white';       // 'white' | 'black'
 let coachEngineElo = 1200;         // displayed opponent level
 let coachOpeningTransfer = null;   // optional Library-to-play context, owned with the saved game
 let coachOpeningId = null;         // deepest identified opening in the current game
-let coachBoard = null;             // separate Chessboard.js instance
+let coachBoard = null;             // the Coach board (src/ui/board.js)
 let coachBoardFlipped = false;
 let coachGameActive = false;       // true once user hits New Game
 let coachGameGeneration = 0;       // invalidates async work from replaced/rewound games
@@ -137,10 +137,9 @@ window.COACH_SUPABASE_CONFIG = window.COACH_SUPABASE_CONFIG || {
 // PREMOVE — queue your move while the engine is thinking
 // ─────────────────────────────────────────────
 function setPremoveSquares(from, to) {
-  $('#coachBoard .coach-premove-from').removeClass('coach-premove-from');
-  $('#coachBoard .coach-premove-to').removeClass('coach-premove-to');
-  if (from) $('#coachBoard .square-' + from).addClass('coach-premove-from');
-  if (to)   $('#coachBoard .square-' + to).addClass('coach-premove-to');
+  if (!coachBoard) return;
+  coachBoard.setMarks('coach-premove-from', from ? [from] : []);
+  coachBoard.setMarks('coach-premove-to', to ? [to] : []);
 }
 function setPremove(from, to, promotion) {
   coachPremove = { from, to, promotion: promotion || 'q' };
@@ -598,6 +597,7 @@ function invalidateCoachAsyncWork(reason) {
 
 function resetCoachState(fen, opts = {}) {
   coachContinuityCopy = false;
+  coachTakebackUsed = false;
   coachOpeningTransfer = null;
   coachPendingReview = null;
   invalidateCoachAsyncWork('A new game replaced the previous analysis.');
@@ -759,10 +759,12 @@ async function coachHandleUserMove(source, target, promotion, opts) {
     }
     const ply = coachGame.history().length;
     const pairNum = Number(fenBefore.split(/\s+/)[5]) || Math.ceil(ply / 2);
+    const opponentPrevious = coachGame.history({ verbose: true })[ply - 2];
     const logged = Object.assign({}, review, {
       fenBefore,
       fenAfter,
       userUci,
+      previousCaptureSquare: opponentPrevious && opponentPrevious.captured ? opponentPrevious.to : null,
       ply,
       pairNum,
       gameGeneration: generation,
@@ -904,26 +906,19 @@ function readURL() {
 // ─────────────────────────────────────────────
 // Pieces: the cburnett vector set (Colin M.L. Burnett, CC BY-SA 3.0, as
 // shipped by Lichess). Strong outlines and interior shading keep white pieces
-// legible on light squares at every board size. Files live in vendor/pieces.
-function localPieceTheme(piece) {
-  return `vendor/pieces/cburnett/${piece}.svg`;
-}
+// legible on light squares at every board size. The board draws them from
+// vendor/pieces/cburnett/sprite.svg (scripts/build-piece-sprite.js).
 
-// Last-move highlight. chessboard.js rebuilds the square elements whenever a
-// position is drawn, so the highlight is re-applied by a mutation observer on
-// the board container rather than set once.
+// Last-move highlight, per board element id. The board keeps its marks
+// across redraws; the move is remembered here so a rebuilt board (new game,
+// new opening, retry) shows it again.
 const boardLastMove = { myBoard: null, coachBoard: null };
 
 function applyBoardLastMove(boardId) {
-  const root = document.getElementById(boardId);
-  if (!root) return;
-  root.querySelectorAll('.square-55d63.last-move').forEach(el => el.classList.remove('last-move'));
+  const board = typeof Chessboard === 'function' && Chessboard.get ? Chessboard.get(boardId) : null;
+  if (!board) return;
   const mv = boardLastMove[boardId];
-  if (!mv) return;
-  [mv.from, mv.to].forEach(sq => {
-    const el = root.querySelector('.square-' + sq);
-    if (el) el.classList.add('last-move');
-  });
+  board.setMarks('last-move', mv ? [mv.from, mv.to] : []);
 }
 
 function setBoardLastMove(boardId, move) {
@@ -931,15 +926,9 @@ function setBoardLastMove(boardId, move) {
   applyBoardLastMove(boardId);
 }
 
-function observeBoardLastMove(boardId) {
-  const root = document.getElementById(boardId);
-  if (!root || root.__lastMoveObserver || typeof MutationObserver === 'undefined') return;
-  const observer = new MutationObserver(() => {
-    applyBoardLastMove(boardId);
-    if (boardId === 'coachBoard') renderPracticeBoardCue();
-  });
-  observer.observe(root, { childList: true, subtree: true });
-  root.__lastMoveObserver = observer;
+// Call after building a board to show the remembered last move on it.
+function restoreBoardLastMove(boardId) {
+  applyBoardLastMove(boardId);
 }
 
 // Coach: highlight the move that produced the displayed position (live or
@@ -998,13 +987,7 @@ function initColorTheme() {
   $('#color-theme').on('change', function() { applyColorTheme($(this).val()); });
 }
 
-function describeChessPosition(gameObj) {
-  if (!gameObj) return 'Chess position unavailable.';
-  const turn = gameObj.turn() === 'w' ? 'White' : 'Black';
-  const state = gameObj.in_checkmate() ? ' Checkmate.' : (gameObj.in_check() ? ' In check.' : '');
-  return `${turn} to move.${state} FEN: ${gameObj.fen()}`;
-}
-
+// describeChessPosition lives in src/core/position-text.js.
 function updateLibraryBoardAccessibility() {
   const activeGame = exploreMode && exploreGame ? exploreGame : game;
   $('#myBoard').attr('aria-label', describeChessPosition(activeGame));
@@ -1016,8 +999,9 @@ function updateCoachBoardAccessibility() {
 
 const DESKTOP_NOTICE_KEY = 'ui:desktop-notice-dismissed';
 
-// Narrow screens get a desktop notice instead of a reflowed layout. Dismissal
-// lasts for the browser session so the page is still usable in a pinch.
+// Phones get the stacked layout behind a notice that says it is a preview
+// (sign-in links and Safari's storage limits; see index.html). Dismissal
+// lasts for the browser session.
 const COACH_PANEL_TAB_KEY = 'ui:coach-panel-tab';
 
 // Right-rail tabs: Game (live review), Practice (queue and drills), Progress.
@@ -1059,7 +1043,12 @@ function updatePracticeTabBadge(dueCount) {
 function initDesktopNotice() {
   let dismissed = false;
   try { dismissed = sessionStorage.getItem(DESKTOP_NOTICE_KEY) === '1'; } catch (e) { /* stays visible */ }
-  if (dismissed) document.documentElement.classList.add('desktop-notice-dismissed');
+  // The notice is a gate on arrival, not something to throw over a game in
+  // progress: a page that loads wider than a phone (a sideways phone, say)
+  // never shows it, even if the device is rotated later.
+  const narrowAtLoad = !!(window.matchMedia && window.matchMedia('(max-width: 759.98px)').matches);
+  if (dismissed || !narrowAtLoad) document.documentElement.classList.add('desktop-notice-dismissed');
+  else setTimeout(() => { const btn = document.getElementById('btn-desktop-notice-continue'); if (btn && btn.offsetParent) btn.focus(); }, 0);
   $('#btn-desktop-notice-continue').on('click', function() {
     try { sessionStorage.setItem(DESKTOP_NOTICE_KEY, '1'); } catch (e) { /* session only */ }
     document.documentElement.classList.add('desktop-notice-dismissed');
@@ -1084,7 +1073,8 @@ let libraryBoardFitFrame = null;
 function fitLibraryBoard() {
   const area = document.querySelector('#library-view .board-area');
   const view = document.getElementById('library-view');
-  if (!area || !area.clientWidth || !area.clientHeight) return;
+  // The stacked (phone) layout sizes the board from the width in CSS.
+  if (!area || !area.clientWidth || !area.clientHeight || layoutIsStacked()) return;
   const css = getComputedStyle(area);
   const children = Array.from(area.children).filter(el => el.id !== 'board-wrap' && getComputedStyle(el).display !== 'none');
   const gap = parseFloat(css.rowGap) || 0;
@@ -1121,7 +1111,8 @@ let coachBoardFitFrame = null;
 function fitCoachBoard() {
   const area = document.querySelector('.coach-board-area');
   const view = document.getElementById('coach-view');
-  if (!area || !view || !area.clientWidth || !area.clientHeight) return;
+  // The stacked (phone) layout sizes the board from the width in CSS.
+  if (!area || !view || !area.clientWidth || !area.clientHeight || layoutIsStacked()) return;
   const css = getComputedStyle(area);
   const children = Array.from(area.children).filter(el => el.id !== 'coachBoard-wrap' && getComputedStyle(el).display !== 'none');
   const gap = parseFloat(css.rowGap) || 0;
@@ -1193,7 +1184,12 @@ function orderedPracticeRunItems(items, firstItem) {
     seen.add(item.id);
     unique.push(item);
   });
-  const target = renderedAdaptivePlan ? renderedAdaptivePlan.drillTarget : DAILY_DRILL_TARGET;
+  // While today's drills phase is open, size the run from the saved day:
+  // the rendered plan is not rebuilt after a reload once a day exists.
+  const sprint = dailySprintToday();
+  const target = sprint && !sprint.completedAt && sprint.mode === 'adaptive' && sprint.phase === 'drills'
+    ? (Number(sprint.drillTarget) || 0) - (Number(sprint.drillsCompleted) || 0)
+    : renderedAdaptivePlan ? renderedAdaptivePlan.drillTarget : DAILY_DRILL_TARGET;
   return unique.slice(0, Math.max(1, target));
 }
 
@@ -1372,9 +1368,11 @@ function preparePracticeAnalysis(session) {
       if (!practicePositionIsCurrent(session) || session.analysisToken !== token || session.positionFen !== fen) return null;
       // A timed-out engine must not turn every legal move into a false error.
       // The saved solution remains playable; alternatives require a reliable
-      // score and therefore remain ungraded until a later retry.
+      // score and therefore remain ungraded until a later retry: clearing the
+      // promise lets the next attempt analyse the position again.
       session.analysis = { fen, bestUci: null, bestCp: null, known: {}, pv: [], error: err };
       session.analysisReady = true;
+      session.analysisPromise = null;
       return session.analysis;
     });
   return session.analysisPromise;
@@ -1540,6 +1538,15 @@ function coachHandlePracticeMove(source, target, promotion, opts) {
   const move = temp.move({ from: source, to: target, promotion: promotion || 'q' });
   if (!move) return 'snapback';
   const actualUci = uciFromMove(move);
+  // The last analysis failed: analyse again for this attempt, once (the
+  // marked opts stop a second failure from retrying in a loop).
+  if (session.analysis && session.analysis.error && !session.analysisPromise && !session.pendingMove && !session.grading &&
+      !(opts && opts.analysisRetried)) {
+    session.analysis = null;
+    session.analysisReady = false;
+    preparePracticeAnalysis(session);
+    opts = Object.assign({}, opts, { analysisRetried: true });
+  }
   if (session.pendingMove) {
     const pendingUci = session.pendingMove.source + session.pendingMove.target + (session.pendingMove.promotion || '');
     if (pendingUci === actualUci) return 'pending';
@@ -1621,13 +1628,11 @@ function focusPracticeTarget() {
 }
 
 function renderPracticeBoardCue() {
-  $('#coachBoard .practice-cue-source, #coachBoard .practice-cue-target').removeClass('practice-cue-source practice-cue-target');
+  if (!coachBoard) return;
   const session = coachPracticeSession;
-  if (!session || session.completed || session.hintStage < 2) return;
-  const move = practiceMoveFor(coachGame.fen(), session.expectedUci);
-  if (!move) return;
-  $(`#coachBoard .square-${move.from}`).addClass('practice-cue-source');
-  if (session.hintStage >= 3) $(`#coachBoard .square-${move.to}`).addClass('practice-cue-target');
+  const move = session && !session.completed && session.hintStage >= 2 ? practiceMoveFor(coachGame.fen(), session.expectedUci) : null;
+  coachBoard.setMarks('practice-cue-source', move ? [move.from] : []);
+  coachBoard.setMarks('practice-cue-target', move && session.hintStage >= 3 ? [move.to] : []);
 }
 
 function practiceMistakeFeedback(session, uci, result) {
@@ -1744,17 +1749,30 @@ function exitCoachPractice(message) {
   renderInsights();
 }
 
+// Library board: interactive in Quiz and Explore. Only the side to move can
+// pick up a piece; the drop handlers check the move itself.
+function libraryActiveGame() {
+  return exploreMode && exploreGame ? exploreGame : game;
+}
+
 function createBoard(position, draggable, orientation) {
   if (board) board.destroy();
   board = Chessboard('myBoard', {
     position: position || 'start',
     draggable: !!draggable,
     orientation: orientation || 'white',
-    pieceTheme: localPieceTheme,
+    onDragStart: function(source, piece) {
+      const active = libraryActiveGame();
+      return !!(active && (quizMode || exploreMode) && piece[0] === active.turn());
+    },
+    moveTargets: function(square) {
+      const active = libraryActiveGame();
+      return active ? active.moves({ square, verbose: true }).map(m => m.to) : [];
+    },
     onDrop: handleDrop,
     onSnapEnd: handleSnapEnd,
   });
-  observeBoardLastMove('myBoard');
+  restoreBoardLastMove('myBoard');
   scheduleLibraryBoardFit();
   updateLibraryBoardAccessibility();
 }
@@ -1765,7 +1783,6 @@ function createCoachBoard(position, orientation) {
     position: position || 'start',
     draggable: true,
     orientation: orientation || 'white',
-    pieceTheme: localPieceTheme,
     onDragStart: function(source, piece) {
       if (!coachGameActive || !coachGame) return false;
       if (coachPracticeSession && coachPracticeSession.completed) return false;
@@ -1775,7 +1792,12 @@ function createCoachBoard(position, orientation) {
       if (piece[0] !== userPrefix) return false;
       // Block during our own classification window — premoves wait for opponent's move.
       if (coachThinking && coachIsUserTurn()) return false;
-      // Both regular drags (our turn) and premove drags (their turn) are allowed.
+      // Both regular moves (our turn) and premoves (their turn) are allowed.
+    },
+    moveTargets: function(square) {
+      // Legal-move dots on your turn; a premove is checked when it is played.
+      if (!coachGame || !coachIsUserTurn() || coachIsReviewing()) return [];
+      return coachGame.moves({ square, verbose: true }).map(m => m.to);
     },
     onDrop: function(source, target) {
       if (!coachGameActive || !coachGame) return 'snapback';
@@ -1792,12 +1814,14 @@ function createCoachBoard(position, orientation) {
         }, true)) {
           return 'snapback';
         }
-        // Synchronous legality check — chessboard.js needs a sync return value
+        // Synchronous legality check: the board needs a sync return value.
         const tempGame = new Chess(coachGame.fen());
         const move = tempGame.move({ from: source, to: target, promotion: 'q' });
         if (!move) return 'snapback';
         if (coachPracticeSession) {
-          const result = coachHandlePracticeMove(source, target, 'q', { updateBoard: false });
+          // Grading is async, so the piece goes home now and the board is
+          // redrawn from coachGame once the move is accepted.
+          const result = coachHandlePracticeMove(source, target, 'q', { updateBoard: true });
           return result && typeof result.then === 'function' ? 'snapback' : result;
         }
         // Legal move — dispatch async classification + opponent reply
@@ -1817,9 +1841,9 @@ function createCoachBoard(position, orientation) {
     },
     onSnapEnd: function() {
       if (!coachGame || !coachBoard) return;
-      // chessboard.js calls this after both user drags and programmatic
-      // position changes. Keep analysis/review positions on the board instead
-      // of snapping them back to the live game.
+      // Runs after an accepted move. Redraw from the game so castling, en
+      // passant and promotion show correctly, and keep analysis/review
+      // positions on the board instead of snapping back to the live game.
       const fen = coachAnalysisFen() || (coachReviewCursor !== null ? coachFenAtPly(coachReviewCursor) : coachGame.fen());
       coachBoard.position(fen, false);
       if (coachReviewAnalysis) {
@@ -1829,8 +1853,9 @@ function createCoachBoard(position, orientation) {
       } else coachSyncLastMove();
     }
   });
-  observeBoardLastMove('coachBoard');
   coachSyncLastMove();
+  if (coachPremove) setPremoveSquares(coachPremove.from, coachPremove.to);
+  renderPracticeBoardCue();
   updateCoachBoardAccessibility();
   setTimeout(() => {
     if (coachBoard) coachBoard.resize();
@@ -2126,6 +2151,9 @@ function coachFenAtPly(n) {
 
 function coachGotoPly(n) {
   if (!coachGame) return;
+  // A drill is played from its position; stepping back would leave the board
+  // in review with the step controls hidden.
+  if (coachPracticeSession) return;
   clearCoachReviewAnalysis({ restore: false });
   const total = coachGame.history().length;
   n = Math.max(0, Math.min(n, total));
@@ -2400,8 +2428,14 @@ function resolveAccessibleMove(gameObj, rawMove) {
     return legalMoves.find(move => move.from === uci[1] && move.to === uci[2] &&
       (!move.promotion || (uci[3] || 'q') === move.promotion)) || null;
   }
-  const normalized = value.replace(/\s+/g, '').replace(/[+#?!]+$/, '').toLowerCase();
-  return legalMoves.find(move => move.san.replace(/\s+/g, '').replace(/[+#?!]+$/, '').toLowerCase() === normalized) || null;
+  // Case matters in SAN (Bxc3 is the bishop, bxc3 the pawn): an exact match
+  // wins, and a case-insensitive one is accepted only when it is unique.
+  const bare = san => san.replace(/\s+/g, '').replace(/[+#?!]+$/, '');
+  const typed = bare(value);
+  const exact = legalMoves.find(move => bare(move.san) === typed);
+  if (exact) return exact;
+  const loose = legalMoves.filter(move => bare(move.san).toLowerCase() === typed.toLowerCase());
+  return loose.length === 1 ? loose[0] : null;
 }
 
 function focusableElements(container) {
@@ -2537,6 +2571,7 @@ function renderLineSelector() {
 }
 
 function resetQuizTracking() {
+  quizTimerGeneration++;
   quizAttempts = 0;
   quizSessionMisses = 0;
   quizMissedMoves = [];
@@ -2627,9 +2662,22 @@ function loadQuizReviewPosition() {
 // ─────────────────────────────────────────────
 // QUIZ AUTO-PLAY HELPERS
 // ─────────────────────────────────────────────
+// The side that owns a Library line: traps and gambits are played by the side
+// that springs them (Fool's Mate, Stafford and the Slav are Black's), which
+// opponents.js records. It loads after app.js, so it is looked up at call
+// time; without it the opening's category decides.
+function openingLineSide(opening, lineId) {
+  if (!opening) return 'white';
+  if (typeof OpponentPersonas !== 'undefined' && OpponentPersonas.lineSide) {
+    const id = lineId && lineId !== 'main' ? lineId : opening.id;
+    return OpponentPersonas.lineSide(id, opening) === 'b' ? 'black' : 'white';
+  }
+  return opening.category === 'black' ? 'black' : 'white';
+}
+
 function getUserColor() {
   if (!currentOpening) return 'white';
-  return currentOpening.category === 'black' ? 'black' : 'white';
+  return openingLineSide(currentOpening, currentLine && currentLine.id);
 }
 
 function isUserTurn(idx) {
@@ -2667,8 +2715,11 @@ function autoPlayOpponent() {
   }
   if (isUserTurn(nextIdx)) return; // user's move, wait for them
 
-  // Play opponent's move after a short pause
+  // Play opponent's move after a short pause, unless the quiz restarted
+  // (another opening, line or mode) in the meantime.
+  const generation = quizTimerGeneration;
   setTimeout(function () {
+    if (generation !== quizTimerGeneration) return;
     if (!quizMode) return;
     if (quizReviewMode) return;
     game.move(moves[nextIdx]);
@@ -2751,7 +2802,9 @@ function handleQuizDrop(source, target, promotion) {
     quizAttempts = 0;
     const exp = explanations[nextIdx];
     showFeedback('correct', '✓ ' + (exp ? exp.text : moveLabelForIndex(nextIdx)));
+    const generation = quizTimerGeneration;
     setTimeout(() => {
+      if (generation !== quizTimerGeneration) return;
       board.position(game.fen());
       librarySyncLastMove(game);
       renderMoveList();
@@ -2831,7 +2884,7 @@ function loadOpening(id, lineId) {
   game.reset();
   boardFlipped = false;
 
-  // Show board element first (must be visible before chessboard.js measures it)
+  // Show board element first so the board measures its real size
   $('#board-placeholder').hide();
   $('#myBoard').show();
   createBoard('start', quizMode, 'white');
@@ -2861,6 +2914,9 @@ function loadOpening(id, lineId) {
   clearFeedback();
   updateSRPanel();
   updateURL();
+  // A quiz carries over to the new opening: orient the board for the side
+  // that owns the line and start the opponent's moves.
+  if (quizMode) setMode('quiz');
 }
 
 // ─────────────────────────────────────────────
@@ -3418,6 +3474,9 @@ $(function () {
     // to end again with a revised score.
     if (coachLifetimeRolledForThisGame) unrollGameFromLifetime();
     coachLifetimeRolledForThisGame = false;
+    // A game with a take-back is unrated from here on. A result already rated
+    // stands: taking it back must not erase a loss from the rating.
+    coachTakebackUsed = true;
     // If the game just ended and the post-game summary is pending, abort it —
     // taking back un-ends the game.
     if (coachSummaryTimer) { clearTimeout(coachSummaryTimer); coachSummaryTimer = null; }
@@ -3429,7 +3488,8 @@ $(function () {
     // Undo user move
     coachGame.undo();
     // Roll back stats
-    if (coachLastReview && coachStats) {
+    // Unscored ('unknown') reviews never counted, so they must not uncount.
+    if (coachLastReview && coachStats && coachLastReview.tier !== 'unknown') {
       coachStats.moves = Math.max(0, coachStats.moves - 1);
       coachStats[coachLastReview.tier] = Math.max(0, (coachStats[coachLastReview.tier] || 0) - 1);
     }
@@ -3450,7 +3510,7 @@ $(function () {
     updateCoachSummary();
     updateMoveList();
     updateOpeningLabel();
-    setCoachStatus('Your move.');
+    setCoachStatus('Your move. A game with a take-back is unrated.');
     updateCoachControlsState();
     saveCoachState();
     if (removedReview) {
@@ -3557,9 +3617,12 @@ $(function () {
     if (!isNaN(ply)) coachGotoPly(ply);
   });
 
-  // Coach: click anywhere on the board to cancel a queued premove. Only fires
-  // when no drag is in progress (a real drop fires onDrop instead).
-  $(document).on('mousedown touchstart', '#coachBoard', function() {
+  // Coach: pressing anywhere on the board cancels a queued premove. Pointer
+  // events arrive once per press (a touch is not repeated as a mouse event)
+  // and before the board reads the press, so a press that queues a new
+  // premove clears the old one first.
+  const coachBoardEl = document.getElementById('coachBoard');
+  if (coachBoardEl) coachBoardEl.addEventListener('pointerdown', function() {
     if (coachPremove) clearPremove();
   });
 
@@ -3682,7 +3745,7 @@ $(function () {
         $btn.prop('disabled', false).text('Connect');
         const msg = xhr.status === 401
           ? 'Invalid token — check you copied it correctly.'
-          : 'Could not reach Lichess. Try again.';
+          : (xhr.status === 429 ? LICHESS_RATE_LIMIT_MESSAGE : 'Could not reach Lichess. Try again.');
         $('#token-error').text(msg).show();
       }
     });
@@ -3717,9 +3780,9 @@ $(function () {
 
   function bindGlobalInputEvents() {
 
-  // chessboard.js measures its internal grid at creation time. Re-measure both
-  // boards after responsive layout changes so desktop-to-mobile resizing and
-  // device rotation cannot leave a 440px grid clipped inside a smaller shell.
+  // The boards follow their container's size; also re-measure both after
+  // responsive layout changes so desktop-to-mobile resizing and device
+  // rotation cannot leave a 440px grid clipped inside a smaller shell.
   let boardResizeTimer = null;
   $(window).on('resize', function() {
     if (boardResizeTimer) clearTimeout(boardResizeTimer);
@@ -3868,91 +3931,9 @@ $(function () {
     if (k === '3') { e.preventDefault(); setMode('explore'); return; }
   });
 
-  // ─── TAP-TO-MOVE (mobile) ───────────────
-  function clearTapSelection() {
-    $('.square-55d63').removeClass('tap-selected tap-target');
-    tapSelected = null;
-  }
-  $(document).on('click', '#myBoard .square-55d63', function(e) {
-    // Only intercept taps in interactive modes (study has no interaction)
-    if (!quizMode && !exploreMode) return;
-    // If the drop already happened (pointerup after drag), chessboard will have already moved — don't interfere
-    const sq = $(this).data('square');
-    if (!sq) return;
-    const activeGame = exploreMode ? exploreGame : game;
-    if (!activeGame) return;
-
-    if (tapSelected && tapSelected !== sq) {
-      // Attempt move
-      if (exploreMode) {
-        const from = tapSelected;
-        if (requestPromotionChoice(exploreGame, from, sq, promotion => {
-          applyExploreMove(from, sq, promotion, { updateBoard: true });
-        }, true)) {
-          clearTapSelection();
-          return;
-        }
-        applyExploreMove(from, sq, 'q', { updateBoard: true });
-      } else {
-        // Quiz: delegate to handleDrop to reuse validation logic
-        const result = handleDrop(tapSelected, sq);
-        if (result !== 'snapback') {
-          // handleDrop already updated game; update board position
-          board.position(game.fen());
-          librarySyncLastMove(game);
-        }
-      }
-      clearTapSelection();
-    } else if (tapSelected === sq) {
-      clearTapSelection();
-    } else {
-      // Select source if it has a piece of the side to move
-      const piece = activeGame.get(sq);
-      if (!piece) return;
-      const turn = activeGame.turn(); // 'w' or 'b'
-      if (piece.color !== turn) return;
-      clearTapSelection();
-      tapSelected = sq;
-      $(this).addClass('tap-selected');
-      // Highlight legal target squares
-      const moves = activeGame.moves({ square: sq, verbose: true });
-      moves.forEach(m => $('.square-' + m.to).addClass('tap-target'));
-    }
-  });
-
-  // Coach board: tap-to-move (scoped to #coachBoard)
-  $(document).on('click', '#coachBoard .square-55d63', function() {
-    if (!coachMode || !coachGameActive || !coachGame || coachIsReviewing()) return;
-    const sq = $(this).data('square');
-    if (!sq) return;
-    if (tapSelected && tapSelected !== sq) {
-      const from = tapSelected;
-      if (requestPromotionChoice(coachGame, from, sq, promotion => {
-        coachHandleUserMove(from, sq, promotion, { updateBoard: true }).then(() => {
-          if (coachBoard) coachBoard.position(coachGame.fen());
-        });
-      }, true)) {
-        clearTapSelection();
-        return;
-      }
-      coachHandleUserMove(from, sq, 'q', { updateBoard: true }).then(() => {
-        if (coachBoard) coachBoard.position(coachGame.fen());
-      });
-      clearTapSelection();
-    } else if (tapSelected === sq) {
-      clearTapSelection();
-    } else {
-      const piece = coachGame.get(sq);
-      if (!piece) return;
-      if (piece.color !== coachGame.turn()) return;
-      if (!coachIsUserTurn()) return;
-      clearTapSelection();
-      tapSelected = sq;
-      $(this).addClass('tap-selected');
-      const moves = coachGame.moves({ square: sq, verbose: true });
-      moves.forEach(m => $('.square-' + m.to).addClass('tap-target'));
-    }
-  });
+  // Tap-to-move needs no handler here: the board (src/ui/board.js) turns a
+  // tap or click on a piece and then a square into the same onDragStart /
+  // onDrop calls as a drag, so every input takes one path.
 
   // ─── SWIPE FOR PREV/NEXT (mobile, study only) ───
   let touchStartX = null;
@@ -3960,6 +3941,8 @@ $(function () {
   $('.board-area').on('touchstart', function(e) {
     if (quizMode || exploreMode) return;
     if (e.touches.length !== 1) return;
+    // The phone layout puts the notation strip here; swiping it scrolls it.
+    if ($(e.target).closest('#library-moves, .notation-strip').length) { touchStartX = touchStartY = null; return; }
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
   });
@@ -4014,7 +3997,6 @@ $(function () {
   initCoachWorkspaceLayout();
   initLibraryWorkspaceLayout();
   updateSRSidebar();
-  validateOpeningData();
   hydrateFromUrl();
   updateNetworkStatus(false);
   window.addEventListener('offline', () => updateNetworkStatus(false));

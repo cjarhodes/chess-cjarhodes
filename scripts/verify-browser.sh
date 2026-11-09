@@ -40,6 +40,18 @@ curl -fsS "$BASE_URL/health.html" >/dev/null
 TEST_PROFILE=$(mktemp -d "${TMPDIR:-/tmp}/chess-smoke-profile-XXXXXX")
 "${CLI[@]}" -s="$SESSION" open "$BASE_URL/" --profile "$TEST_PROFILE" >/dev/null
 
+# Stage code goes through a file: a stage passed as one command-line
+# argument fails once it passes the kernel's 128 KB per-argument limit.
+run_code() {
+  local file status
+  file=$(mktemp "${TMPDIR:-/tmp}/chess-stage-XXXXXX")
+  printf '%s\n' "$1" > "$file"
+  "${CLI[@]}" -s="$SESSION" run-code --filename="$file"
+  status=$?
+  rm -f "$file"
+  return "$status"
+}
+
 SMOKE_CODE=$(cat <<'EOF'
 async page => {
   const failures = [];
@@ -86,7 +98,7 @@ async page => {
     if (/favicon\.ico/.test(url) || /favicon\.ico/.test(message.text())) return;
     consoleErrors.push(message.text() + (url ? ' [' + url + ']' : ''));
   });
-  page.on('pageerror', error => pageErrors.push(error.message));
+  page.on('pageerror', error => pageErrors.push((error.stack || error.message).split('\n').slice(0, 4).join(' <- ')));
 
   const insightState = {
     v: 1,
@@ -655,16 +667,23 @@ async page => {
   await settlePracticeMove();
   assert((await page.locator('#coach-practice-status').textContent()).includes('Solved after revealing the answer'), 'revealed answer was not completed');
 
-  // Desktop-first: a narrow viewport shows the desktop notice instead of a
-  // reflowed layout, and the board keeps its desktop size behind it.
+  // Narrowing a page that loaded wide gets the stacked layout but not the
+  // phone notice (it is a gate on arrival, never thrown over a game); the
+  // board fills the width without the page scrolling sideways. A fresh phone
+  // load shows the notice (checked with the Library visit below).
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.waitForTimeout(250);
-  assert(await page.locator('#desktop-notice').isVisible(), 'narrow viewport did not show the desktop notice');
-  const narrowBoard = await page.locator('#coachBoard .board-b72b1').boundingBox();
-  assert(narrowBoard && narrowBoard.width >= 440, 'board shrank below its desktop size on a narrow viewport');
+  await page.waitForTimeout(400);
+  assert(!(await page.locator('#desktop-notice').isVisible()), 'narrowing a page mid-session threw the phone notice over it');
+  const narrowBoard = await page.locator('#coachBoard svg.cm-chessboard').boundingBox();
+  assert(narrowBoard && narrowBoard.x >= 0 && narrowBoard.width >= 380 && narrowBoard.x + narrowBoard.width <= 390.5, `phone viewport did not fit the board to the width (${JSON.stringify(narrowBoard)})`);
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'phone viewport scrolled sideways');
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.waitForTimeout(400);
+  assert(!(await page.locator('#desktop-notice').isVisible()), 'phone notice covered a tablet viewport');
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'tablet viewport scrolled sideways');
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.waitForTimeout(250);
-  assert(!(await page.locator('#desktop-notice').isVisible()), 'desktop notice stayed visible on a desktop viewport');
+  assert(!(await page.locator('#desktop-notice').isVisible()), 'phone notice stayed visible on a desktop viewport');
 
   await leavePractice();
   await page.locator('#btn-coach-newgame').click();
@@ -698,13 +717,14 @@ async page => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(page.url().split('?')[0] + '?opening=italian&mode=quiz');
   await page.waitForTimeout(400);
-  assert(await page.locator('#desktop-notice').isVisible(), 'narrow Library visit did not show the desktop notice');
+  assert(await page.locator('#desktop-notice').isVisible(), 'phone Library visit did not show the phone preview notice');
   await page.locator('#btn-desktop-notice-continue').click();
-  assert(!(await page.locator('#desktop-notice').isVisible()), 'desktop notice did not dismiss');
+  assert(!(await page.locator('#desktop-notice').isVisible()), 'phone notice did not dismiss');
   await page.reload();
   await page.waitForTimeout(400);
-  assert(!(await page.locator('#desktop-notice').isVisible()), 'desktop notice dismissal did not persist for the session');
+  assert(!(await page.locator('#desktop-notice').isVisible()), 'phone notice dismissal did not persist for the session');
   assert(await page.locator('#library').isVisible() && await page.locator('#myBoard').isVisible(), 'dismissed notice left the Library unusable');
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && getComputedStyle(document.querySelector('.top-nav')).position === 'fixed'), 'phone Library scrolled sideways or kept the view tabs in the header');
   await page.evaluate(() => sessionStorage.removeItem('ui:desktop-notice-dismissed'));
 
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -919,7 +939,7 @@ async page => {
     practice: 'adaptive focus was selected, rehearsed, transferred, assessed, and persisted',
     coach: 'replacement-game race stayed clean',
     library: 'keyboard quiz advanced',
-    mobile: 'narrow viewport showed the desktop notice and stayed usable after dismissal',
+    mobile: 'phone viewport showed the preview notice, then a stacked layout that fits the width; tablet showed no notice',
     closedLoop: 'missed mate became a post-game drill and delivered mate stayed scorable',
     dailyHabit: 'first-visit baseline and returning adaptive session completed with takeaways, streaks, persistence, and account isolation',
     growth: 'profile, repertoire, adaptive strength, weekly review, endgames, PGN Inbox, and offline shell worked in-browser'
@@ -929,7 +949,7 @@ EOF
 )
 
 set +e
-SMOKE_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$SMOKE_CODE")
+SMOKE_OUTPUT=$(run_code "$SMOKE_CODE")
 SMOKE_EXIT=$?
 set -e
 echo "$SMOKE_OUTPUT"
@@ -941,7 +961,7 @@ echo "Browser smoke validation passed."
 
 TEACHING_CODE=$(cat "$ROOT/scripts/verify-teaching-journeys.js")
 set +e
-TEACHING_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$TEACHING_CODE")
+TEACHING_OUTPUT=$(run_code "$TEACHING_CODE")
 TEACHING_EXIT=$?
 set -e
 echo "$TEACHING_OUTPUT"
@@ -953,7 +973,7 @@ echo "Teaching journey validation passed."
 
 RECOVERY_CODE=$(cat "$ROOT/scripts/verify-recovery-journeys.js")
 set +e
-RECOVERY_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$RECOVERY_CODE")
+RECOVERY_OUTPUT=$(run_code "$RECOVERY_CODE")
 RECOVERY_EXIT=$?
 set -e
 echo "$RECOVERY_OUTPUT"
@@ -965,7 +985,7 @@ echo "Interruption recovery validation passed."
 
 OPPONENT_CODE=$(cat "$ROOT/scripts/verify-opponent-journeys.js")
 set +e
-OPPONENT_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$OPPONENT_CODE")
+OPPONENT_OUTPUT=$(run_code "$OPPONENT_CODE")
 OPPONENT_EXIT=$?
 set -e
 echo "$OPPONENT_OUTPUT"
@@ -977,7 +997,7 @@ echo "Opponent journey validation passed."
 
 UI_CODE=$(cat "$ROOT/scripts/verify-ui-journeys.js")
 set +e
-UI_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$UI_CODE")
+UI_OUTPUT=$(run_code "$UI_CODE")
 UI_EXIT=$?
 set -e
 echo "$UI_OUTPUT"
@@ -989,7 +1009,7 @@ echo "Coaching UI journey validation passed."
 
 PROGRESS_CODE=$(cat "$ROOT/scripts/verify-progress-journeys.js")
 set +e
-PROGRESS_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$PROGRESS_CODE")
+PROGRESS_OUTPUT=$(run_code "$PROGRESS_CODE")
 PROGRESS_EXIT=$?
 set -e
 echo "$PROGRESS_OUTPUT"
@@ -1001,7 +1021,7 @@ echo "Useful Progress journey validation passed."
 
 OPENING_TRANSFER_CODE=$(cat "$ROOT/scripts/verify-opening-transfer-journeys.js")
 set +e
-OPENING_TRANSFER_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$OPENING_TRANSFER_CODE")
+OPENING_TRANSFER_OUTPUT=$(run_code "$OPENING_TRANSFER_CODE")
 OPENING_TRANSFER_EXIT=$?
 set -e
 echo "$OPENING_TRANSFER_OUTPUT"
@@ -1013,7 +1033,7 @@ echo "Opening transfer journey validation passed."
 
 LEARNING_TRANSFER_CODE=$(cat "$ROOT/scripts/verify-learning-transfer-journeys.js")
 set +e
-LEARNING_TRANSFER_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$LEARNING_TRANSFER_CODE")
+LEARNING_TRANSFER_OUTPUT=$(run_code "$LEARNING_TRANSFER_CODE")
 LEARNING_TRANSFER_EXIT=$?
 set -e
 echo "$LEARNING_TRANSFER_OUTPUT"
@@ -1025,7 +1045,7 @@ echo "Learning transfer journey validation passed."
 
 ACCOUNT_CODE=$(cat "$ROOT/scripts/verify-account-journeys.js")
 set +e
-ACCOUNT_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$ACCOUNT_CODE")
+ACCOUNT_OUTPUT=$(run_code "$ACCOUNT_CODE")
 ACCOUNT_EXIT=$?
 set -e
 echo "$ACCOUNT_OUTPUT"
@@ -1037,7 +1057,7 @@ echo "Account continuity journey validation passed."
 
 PRACTICE_UX_CODE=$(cat "$ROOT/scripts/verify-practice-ux-journeys.js")
 set +e
-PRACTICE_UX_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$PRACTICE_UX_CODE")
+PRACTICE_UX_OUTPUT=$(run_code "$PRACTICE_UX_CODE")
 PRACTICE_UX_EXIT=$?
 set -e
 echo "$PRACTICE_UX_OUTPUT"
@@ -1049,7 +1069,7 @@ echo "Practice UX journey validation passed."
 
 COHESION_CODE=$(cat "$ROOT/scripts/verify-cohesion-journeys.js")
 set +e
-COHESION_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$COHESION_CODE")
+COHESION_OUTPUT=$(run_code "$COHESION_CODE")
 COHESION_EXIT=$?
 set -e
 echo "$COHESION_OUTPUT"
@@ -1061,7 +1081,7 @@ echo "Training cohesion journey validation passed."
 
 PUZZLE_CODE=$(cat "$ROOT/scripts/verify-puzzle-journeys.js")
 set +e
-PUZZLE_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$PUZZLE_CODE")
+PUZZLE_OUTPUT=$(run_code "$PUZZLE_CODE")
 PUZZLE_EXIT=$?
 set -e
 echo "$PUZZLE_OUTPUT"
@@ -1073,7 +1093,7 @@ echo "Puzzle journey validation passed."
 
 BEHAVIOUR_CODE=$(cat "$ROOT/scripts/verify-behaviour-units.js")
 set +e
-BEHAVIOUR_OUTPUT=$("${CLI[@]}" -s="$SESSION" run-code "$BEHAVIOUR_CODE")
+BEHAVIOUR_OUTPUT=$(run_code "$BEHAVIOUR_CODE")
 BEHAVIOUR_EXIT=$?
 set -e
 echo "$BEHAVIOUR_OUTPUT"

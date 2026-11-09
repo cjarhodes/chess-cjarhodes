@@ -7,7 +7,7 @@ async page => {
   const failures = [];
   const passed = [];
   const pageErrors = [];
-  page.on('pageerror', error => pageErrors.push(error.message));
+  page.on('pageerror', error => pageErrors.push((error.stack || error.message).split('\n').slice(0, 4).join(' <- ')));
   const check = async (name, fn) => {
     try {
       const problems = await fn();
@@ -161,6 +161,28 @@ async page => {
     return problems;
   }));
 
+  await check('in check, the threat panel says so instead of calling the king hanging', () => page.evaluate(async () => {
+    const problems = [];
+    const realGame = coachGame;
+    const realEvaluate = engineClient.evaluate;
+    const asked = [];
+    try {
+      engineClient.evaluate = fen => { asked.push(fen); return Promise.resolve({ bestmove: null, info: { cp: 0, mate: null, pv: [] } }); };
+      coachGame = new Chess();
+      ['e4', 'e5', 'd4', 'Bb4+'].forEach(san => coachGame.move(san));
+      await showThreats();
+      await new Promise(resolve => setTimeout(resolve, 20));
+      const text = $('#threats-list').text();
+      if (/King/.test(text) || /No immediate threats/.test(text)) problems.push('the panel misdescribed a check: ' + text);
+      if (!/in check/i.test(text)) problems.push('the panel did not say the king is in check: ' + text);
+      if (asked.length) problems.push('the mate scan sent a position with the side not to move in check');
+    } finally {
+      coachGame = realGame;
+      engineClient.evaluate = realEvaluate;
+    }
+    return problems;
+  }));
+
   // ── Sign-in: the magic-link fragment survives URL syncing until consumed ──
   await check('magic-link fragment is kept until the session is read, then stripped', () => page.evaluate(() => {
     const problems = [];
@@ -293,6 +315,118 @@ async page => {
     return problems;
   }));
 
+  await check('a game result survives leaving Coach or starting the next game while sync waits', () => page.evaluate(async () => {
+    const problems = [];
+    const saved = { client: coachDbClient, user: coachAuthUser, remoteId: coachRemoteGameId, localId: coachLocalGameId, checkpoint: Object.assign({}, accountCheckpoint) };
+    const writes = [];
+    // The checkpoint upload is slow; every game write waits behind it.
+    const fakeClient = {
+      from(table) {
+        const ops = [];
+        const result = () => {
+          if (table === 'coach_checkpoints') return new Promise(resolve => setTimeout(() => resolve(ops.includes('neq') ? { data: [], error: null } : ops.includes('insert') || ops.includes('update') ? { data: { revision: 1 }, error: null } : { data: null, error: null }), 400));
+          if (table === 'coach_games') {
+            writes.push(ops.slice());
+            return Promise.resolve(ops.includes('insert') ? { data: { id: 'game-final-inserted' }, error: null } : { data: null, error: null });
+          }
+          return Promise.resolve({ data: null, error: null });
+        };
+        const query = new Proxy(function () {}, {
+          get(_, prop) {
+            if (prop === 'then') return (resolve, reject) => result().then(resolve, reject);
+            return (...args) => {
+              ops.push(prop, ...args.map(arg => (arg && typeof arg === 'object' ? JSON.parse(JSON.stringify(arg)) : arg)));
+              return prop === 'single' || prop === 'maybeSingle' ? result() : query;
+            };
+          }
+        });
+        return query;
+      }
+    };
+    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const finalWrite = (id, msg) => writes.find(ops => ops.includes('update') && ops.some(arg => arg && arg.end_reason === msg) && ops.includes(id));
+    try {
+      coachDbClient = fakeClient;
+      coachAuthUser = { id: 'behaviour-test-user' };
+      // Earlier stubbed checks can leave this test owner's tab marked as paused.
+      sessionStorage.removeItem(coachMemoryKey('coach:checkpoint-conflict:v1'));
+      Object.assign(accountCheckpoint, { owner: null, loaded: false, conflict: false, chain: Promise.resolve() });
+      // Leaving Coach right after the result: the view change bumps the generation.
+      coachRemoteGameId = 'game-final-1';
+      coachSync.saveGame('Checkmate — White wins.').catch(error => problems.push('final save threw ' + error.message));
+      invalidateCoachAsyncWork('Coach view changed.');
+      await wait(1500);
+      const left = finalWrite('game-final-1', 'Checkmate — White wins.');
+      if (!left) problems.push('leaving Coach while the checkpoint uploaded dropped the game result');
+      else if (!left.some(arg => arg && arg.result === '1-0' || arg && arg.result === '0-1' || arg && arg.result === '*')) problems.push('final write carried no result');
+      // Starting the next game before the result reached the account.
+      writes.length = 0;
+      Object.assign(accountCheckpoint, { owner: null, loaded: false, conflict: false });
+      coachRemoteGameId = 'game-final-2';
+      coachSync.saveGame('Black resigned.').catch(error => problems.push('final save threw ' + error.message));
+      invalidateCoachAsyncWork('A new game replaced the previous analysis.');
+      coachLocalGameId = 'behaviour-next-game';
+      coachRemoteGameId = null;
+      await wait(1500);
+      if (!finalWrite('game-final-2', 'Black resigned.')) problems.push('starting the next game dropped the previous game result');
+      if (writes.some(ops => ops.includes('behaviour-next-game') || (ops.includes('update') && !ops.includes('game-final-2')))) problems.push('the previous result was written to the wrong game');
+    } finally {
+      clearQueuedRemoteCoachGameUpdate();
+      if (accountCheckpoint.timer) clearTimeout(accountCheckpoint.timer);
+      coachDbClient = saved.client;
+      coachAuthUser = saved.user;
+      coachRemoteGameId = saved.remoteId;
+      coachLocalGameId = saved.localId;
+      Object.assign(accountCheckpoint, saved.checkpoint, { timer: null });
+      Object.keys(localStorage).filter(k => k.includes('behaviour-test-user')).forEach(k => localStorage.removeItem(k));
+    }
+    return problems;
+  }));
+
+  await check('practice sync skips an attempt the account rejects and keeps going', () => page.evaluate(async () => {
+    const problems = [];
+    const saved = { client: coachDbClient, user: coachAuthUser };
+    const owner = 'behaviour-practice-user';
+    const calls = [];
+    let offline = false;
+    const event = (id, extra) => Object.assign({ id, ownerId: owner, drillId: 'drill-' + id, tag: 'king_safety',
+      fen: '8/8/8/8/8/8/4K3/7k w - - 0 1', bestUci: 'e2e3', at: Date.parse('2026-11-01T12:00:00Z'), correct: true, revealed: false, synced: false }, extra || {});
+    const pendingIds = () => loadPracticeProgress(owner).events.filter(e => !e.synced).map(e => e.id).join(',');
+    try {
+      coachDbClient = {
+        rpc(name, params) {
+          calls.push(params.p_event_id + (params.p_source_move_id ? '@' + params.p_source_move_id : ''));
+          if (offline) return Promise.resolve({ data: null, error: { message: 'Failed to fetch' } });
+          // The source move was taken back: its id no longer exists.
+          if (params.p_source_move_id === 'taken-back-move') return Promise.resolve({ data: null, error: { code: '23503', message: 'violates foreign key constraint' } });
+          if (params.p_event_id === 'malformed') return Promise.resolve({ data: null, error: { code: 'P0001', message: 'Practice attempt payload is incomplete' } });
+          return Promise.resolve({ data: null, error: null });
+        }
+      };
+      coachAuthUser = { id: owner };
+      savePracticeProgress({ records: {}, events: [event('orphaned', { sourceMoveId: 'taken-back-move' }), event('malformed'), event('later-1'), event('later-2')] }, owner);
+      let threw = null;
+      await syncPendingPracticeEvents().catch(error => { threw = error; });
+      if (pendingIds().includes('later')) problems.push('one failing attempt kept later attempts from syncing (pending: ' + pendingIds() + ')');
+      if (!calls.includes('orphaned')) problems.push('an attempt whose source move was taken back was not retried without it');
+      if (pendingIds().includes('orphaned')) problems.push('the attempt with a taken-back source move never synced');
+      calls.length = 0;
+      await syncPendingPracticeEvents().catch(error => { threw = error; });
+      if (calls.includes('malformed')) problems.push('a permanently rejected attempt is retried on every sync');
+      // A network outage is not permanent: stop, keep the attempts pending.
+      savePracticeProgress({ records: {}, events: loadPracticeProgress(owner).events.concat([event('offline-1'), event('offline-2')]) }, owner);
+      offline = true; calls.length = 0; threw = null;
+      await syncPendingPracticeEvents().catch(error => { threw = error; });
+      if (!threw) problems.push('a network failure was not reported');
+      if (calls.length !== 1 || !pendingIds().includes('offline-1') || !pendingIds().includes('offline-2')) problems.push('a network failure should stop the run and keep attempts pending: ' + calls.join(','));
+    } finally {
+      coachDbClient = saved.client;
+      coachAuthUser = saved.user;
+      Object.keys(localStorage).filter(k => k.includes(owner)).forEach(k => localStorage.removeItem(k));
+    }
+    return problems;
+  }));
+
   await check('manual sync reports partial failures', () => page.evaluate(async () => {
     const problems = [];
     const saved = { client: coachDbClient, user: coachAuthUser, load: coachSync.loadInsights, save: coachSync.saveGame, flush: window.flushAccountCheckpoint };
@@ -327,14 +461,25 @@ async page => {
   // ── Board and accessibility: what a keyboard or screen-reader user relies on ──
   await check('board uses vendored pieces and keeps the last-move highlight across redraws', () => page.evaluate(async () => {
     const problems = [];
-    const pieces = [...document.querySelectorAll('#coachBoard img')];
-    if (!pieces.length || !pieces.every(img => img.getAttribute('src').includes('vendor/pieces/cburnett/'))) problems.push('pieces are not the vendored cburnett set');
-    const before = document.querySelectorAll('#coachBoard .last-move').length;
+    const pieces = [...document.querySelectorAll('#coachBoard .pieces use')];
+    const sprite = document.querySelector('#cm-chessboard-sprite svg');
+    if (!pieces.length || !pieces.every(use => /^#[wb][kqrbnp]$/.test(use.getAttribute('href')))) problems.push('pieces are not drawn from the sprite');
+    if (!sprite || !sprite.querySelector('#wk') || !/cburnett/.test(sprite.parentNode.innerHTML)) problems.push('the cburnett sprite is not loaded');
+    if (performance.getEntriesByType('resource').some(r => /upload\.wikimedia|chessboardjs/.test(r.name))) problems.push('a retired piece or board source was requested');
+    const before = document.querySelectorAll('#coachBoard .board-mark.last-move').length;
     coachBoard.position(coachGame.fen(), false);
+    const host = document.getElementById('coachBoard');
+    host.style.width = (host.clientWidth - 16) + 'px';
     coachBoard.resize();
-    await new Promise(resolve => setTimeout(resolve, 0));
-    const after = document.querySelectorAll('#coachBoard .last-move').length;
+    await new Promise(resolve => setTimeout(resolve, 50));
+    const moved = document.querySelector('#coachBoard .board-mark-cell');
+    const square = moved && document.querySelector(`#coachBoard .square[data-square="${moved.getAttribute('data-mark-square')}"]`);
+    const aligned = moved && square && Math.abs(moved.getBoundingClientRect().width - square.getBoundingClientRect().width) < 0.5;
+    host.style.width = '';
+    coachBoard.resize();
+    const after = document.querySelectorAll('#coachBoard .board-mark.last-move').length;
     if (before !== 2 || after !== 2) problems.push(`last-move squares before/after redraw: ${before}/${after}`);
+    if (!aligned) problems.push('the last-move mark did not follow the squares through a resize');
     return problems;
   }));
 
@@ -368,6 +513,40 @@ async page => {
     });
     return problems;
   }));
+
+  await check('landmarks are named, headings do not skip levels and board labels read as words', async () => {
+    const problems = [];
+    // Every rail is a named complementary landmark (an unnamed aside inside
+    // a named section is not a landmark at all), and names are unique.
+    const names = await page.evaluate(() => [...document.querySelectorAll('aside')].map(a => a.getAttribute('aria-label') || ''));
+    if (names.some(n => !n)) problems.push('an aside has no aria-label: ' + JSON.stringify(names));
+    if (new Set(names).size !== names.length) problems.push('aside names repeat: ' + JSON.stringify(names));
+    const headingSkips = () => page.evaluate(() => {
+      const levels = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6,[role="heading"]')]
+        .filter(h => h.offsetParent || getComputedStyle(h).position === 'fixed')
+        .map(h => ({ level: Number(h.getAttribute('aria-level') || h.tagName.slice(1)), text: h.textContent.trim().slice(0, 30) }));
+      const skips = [];
+      levels.forEach((h, i) => { if (i && h.level > levels[i - 1].level + 1) skips.push(`${levels[i - 1].text} (h${levels[i - 1].level}) -> ${h.text} (h${h.level})`); });
+      return skips;
+    });
+    for (const [nav, setup] of [['#nav-coach', null], ['#nav-library', '#btn-explore'], ['#nav-puzzles', null]]) {
+      await page.locator(nav).click();
+      if (setup) { await page.locator('.opening-btn').first().click(); await page.locator(setup).click(); }
+      await page.waitForTimeout(300);
+      (await headingSkips()).forEach(skip => problems.push(nav + ': heading skips a level: ' + skip));
+    }
+    await page.locator('#nav-coach').click();
+    const label = await page.evaluate(() => {
+      const saved = coachGame;
+      try {
+        coachGame = new Chess('4k3/8/8/8/8/8/4q3/4K3 w - - 0 1');
+        updateCoachBoardAccessibility();
+        return document.getElementById('coachBoard').getAttribute('aria-label');
+      } finally { coachGame = saved; updateCoachBoardAccessibility(); }
+    });
+    expect(problems, label === 'White to move. In check. White: King e1. Black: King e8, Queen e2.', 'Coach board label is not the position in words: ' + label);
+    return problems;
+  });
 
   await check('arrow keys move between top-level and Coach panel tabs', async () => {
     const problems = [];
@@ -518,9 +697,10 @@ async page => {
     });
     if (!started) return ['analysis did not start from a completed review'];
     const before = await page.evaluate(() => ({ pgn: coachGame.pgn(), move: coachGame.moves({ verbose: true })[0] }));
-    await page.locator(`#coachBoard .square-${before.move.from}`).dragTo(page.locator(`#coachBoard .square-${before.move.to}`)).catch(() => {});
-    await page.locator(`#coachBoard .square-${before.move.from}`).click({ force: true });
-    await page.locator(`#coachBoard .square-${before.move.to}`).click({ force: true });
+    const sq = name => page.locator(`#coachBoard .square[data-square="${name}"]`);
+    await sq(before.move.from).dragTo(sq(before.move.to)).catch(() => {});
+    await sq(before.move.from).click({ force: true });
+    await sq(before.move.to).click({ force: true });
     await page.waitForTimeout(400);
     const during = await page.evaluate(() => ({ pgn: coachGame.pgn(), reviewing: coachIsReviewing() }));
     if (during.pgn !== before.pgn) problems.push('a drag or tap changed the live game during analysis');
@@ -556,6 +736,332 @@ async page => {
     await page.evaluate(() => $('#btn-coach-takeback').prop('disabled', false).trigger('click'));
     await page.waitForFunction(() => !coachLifetimeRolledForThisGame, null, { timeout: 30000 }).catch(() => problems.push('take-back left the game counted as finished'));
     if (await page.evaluate(gameId => !!loadLifetime().rollups[gameId], id)) problems.push('lifetime rollup survived the take-back');
+    return problems;
+  });
+
+  await check('a take-back makes the game unrated but never erases a rated result', async () => {
+    const problems = [];
+    const rating = () => page.evaluate(() => { const p = loadGrowthState().profile; return { estimate: p.ratingEstimate, games: p.ratingGames, ids: p.ratingHistory.map(h => h.gameId) }; });
+    const hideSummary = () => page.evaluate(() => { if (typeof closeCoachSummary === 'function') closeCoachSummary(); $('#coach-summary-overlay, #summary-overlay').hide(); });
+    const playOne = async () => {
+      await playMove('e4');
+      await page.waitForFunction(() => coachGame.history().length >= 2 && !coachThinking, null, { timeout: 60000 });
+      await settle();
+      // The rating rule needs four reviewed moves; the take-back rule is what is under test.
+      return page.evaluate(() => { coachStats.moves = Math.max(coachStats.moves, 4); return coachLocalGameId; });
+    };
+    // A standard game is rated; taking back its result keeps that rating
+    // (a take-back must not erase a loss), and play after it is unrated.
+    await newGame();
+    const before = await rating();
+    const id = await playOne();
+    await page.evaluate(() => $('#btn-coach-resign').trigger('click'));
+    await page.waitForFunction(gameId => loadGrowthState().profile.ratingHistory.some(h => h.gameId === gameId), id, { timeout: 10000 })
+      .catch(() => problems.push('a standard finished game was not rated'));
+    await hideSummary();
+    await page.evaluate(() => $('#btn-coach-takeback').prop('disabled', false).trigger('click'));
+    const kept = await rating();
+    if (kept.games !== before.games + 1 || !kept.ids.includes(id)) problems.push('taking back a rated result should keep its rating: ' + JSON.stringify({ before, kept }));
+    if (!/unrated/.test(await page.locator('#coach-status').textContent())) problems.push('the status should say a game with a take-back is unrated');
+    // A take-back mid-game survives a reload and keeps the finished game unrated.
+    await newGame();
+    await playOne();
+    await page.evaluate(() => $('#btn-coach-takeback').prop('disabled', false).trigger('click'));
+    await page.reload();
+    await page.waitForFunction(() => typeof coachGameActive !== 'undefined' && coachGame && coachGameActive && !coachThinking, null, { timeout: 60000 });
+    const id2 = await playOne();
+    const midBefore = await rating();
+    await page.evaluate(() => $('#btn-coach-resign').trigger('click'));
+    await page.waitForFunction(() => !coachGameActive, null, { timeout: 10000 });
+    const eligibility = await page.evaluate(() => ratedCoachEligibility(coachLastEndMsg));
+    if (eligibility.eligible || eligibility.reason !== 'take-back used') problems.push('a game with a take-back should be unrated because of it: ' + JSON.stringify(eligibility));
+    const midAfter = await rating();
+    if (midAfter.games !== midBefore.games || midAfter.ids.includes(id2)) problems.push('a game with a take-back was rated: ' + JSON.stringify({ midBefore, midAfter }));
+    await hideSummary();
+    return problems;
+  });
+
+  await check('a pasted PGN counts once in Insights, signed in or pasted again', async () => {
+    const problems = [];
+    const pgn = '[Event "Club"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 *';
+    const paste = text => page.evaluate(async text => {
+      $('#game-inbox-side').val('white');
+      $('#game-inbox-pgn').val(text);
+      await analyseImportedPgn();
+      return $('#game-inbox-status').text();
+    }, text);
+    await freshCoach();
+    // Signed in: the shown game's moves sync to the account and must not be
+    // counted again from this browser's copy. Only the database is faked.
+    const signedIn = await page.evaluate(async pgn => {
+      const saved = { client: coachDbClient, user: coachAuthUser, insights: coachRemoteInsightEntries, loaded: coachRemoteInsightsLoaded,
+        ensure: window.ensureRemoteCoachGame, arts: window.syncRemoteLearningArtifacts, update: window.updateRemoteCoachGame };
+      let serial = 0;
+      const fakeClient = {
+        from(table) {
+          const result = () => (table === 'coach_moves' ? { data: { id: 'remote-move-' + (++serial) }, error: null } : { data: null, error: null });
+          const query = new Proxy(function () {}, {
+            get(_, prop) {
+              if (prop === 'then') return (resolve, reject) => Promise.resolve(result()).then(resolve, reject);
+              return () => (prop === 'single' || prop === 'maybeSingle' ? Promise.resolve(result()) : query);
+            }
+          });
+          return query;
+        },
+        rpc: async () => ({ data: null, error: null })
+      };
+      try {
+        coachDbClient = fakeClient;
+        coachAuthUser = { id: 'behaviour-import-user' };
+        coachRemoteInsightEntries = [];
+        coachRemoteInsightsLoaded = true;
+        window.ensureRemoteCoachGame = async () => 'remote-import-game';
+        window.syncRemoteLearningArtifacts = async () => {};
+        window.updateRemoteCoachGame = async () => {};
+        $('#game-inbox-side').val('white');
+        $('#game-inbox-pgn').val(pgn);
+        await analyseImportedPgn();
+        const deadline = Date.now() + 15000;
+        while (Date.now() < deadline && coachRemoteInsightEntries.length < 3) await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 300));
+        return { graded: coachReviewLog.filter(r => r.tier !== 'unknown').length, remote: coachRemoteInsightEntries.length, shown: currentInsightEntries().length };
+      } finally {
+        coachDbClient = saved.client;
+        coachAuthUser = saved.user;
+        coachRemoteInsightEntries = saved.insights;
+        coachRemoteInsightsLoaded = saved.loaded;
+        Object.assign(window, { ensureRemoteCoachGame: saved.ensure, syncRemoteLearningArtifacts: saved.arts, updateRemoteCoachGame: saved.update });
+        Object.keys(localStorage).filter(k => k.includes('behaviour-import-user')).forEach(k => localStorage.removeItem(k));
+      }
+    }, pgn);
+    if (signedIn.graded !== 3 || signedIn.remote !== 3) problems.push('the signed-in paste should sync its three graded moves: ' + JSON.stringify(signedIn));
+    if (signedIn.shown !== signedIn.graded) problems.push(`Insights counted the shown game ${signedIn.shown} times over ${signedIn.graded} moves`);
+    // Signed out: pasting the same game again replaces its evidence.
+    await freshCoach();
+    await paste(pgn);
+    const once = await page.evaluate(() => ({ id: coachLocalGameId, entries: loadInsights().entries.length, games: loadGrowthState().repertoire.observed.reduce((n, r) => n + r.games, 0), lifetime: loadLifetime().games }));
+    const status = await paste(pgn);
+    const twice = await page.evaluate(() => ({ id: coachLocalGameId, entries: loadInsights().entries.length, games: loadGrowthState().repertoire.observed.reduce((n, r) => n + r.games, 0), lifetime: loadLifetime().games }));
+    if (!/reviewed/.test(status)) problems.push('the second paste did not finish: ' + status);
+    if (once.entries !== 3 || twice.entries !== 3) problems.push('pasting the same game again added a second set of Insights entries: ' + JSON.stringify({ once, twice }));
+    if (once.games !== 1 || twice.games !== 1) problems.push('pasting the same game again counted it twice in the repertoire: ' + JSON.stringify({ once, twice }));
+    if (twice.id !== once.id || twice.lifetime !== once.lifetime) problems.push('pasting the same game again counted it twice in lifetime stats: ' + JSON.stringify({ once, twice }));
+    // Later checks reopen Coach expecting a live game, not the ended import.
+    await freshCoach();
+    await newGame();
+    return problems;
+  });
+  await check('re-pasting a PGN or retrying a live game insert while signed in reuses its account game', async () => {
+    const problems = [];
+    await freshCoach();
+    // A fake Data API that keeps coach_games rows and enforces what the
+    // database does: one row per (user_id, client_game_key), nulls distinct.
+    const result = await page.evaluate(async pgn => {
+      const saved = { client: coachDbClient, user: coachAuthUser, insights: coachRemoteInsightEntries, loaded: coachRemoteInsightsLoaded, permission: window.ensureAccountWritePermission };
+      const games = [], moves = [];
+      let serial = 0;
+      const one = (list, maybe) => list.length === 1 || (maybe && !list.length)
+        ? { data: list[0] || null, error: null }
+        : { data: null, error: { code: 'PGRST116', message: `${list.length} rows` } };
+      const fakeClient = {
+        from(table) {
+          const state = { op: 'select', rows: null, opts: {}, filters: [] };
+          const run = () => {
+            if (table === 'coach_moves' && state.op === 'upsert') {
+              moves.push(Object.assign({}, state.rows));
+              return { data: [{ id: 'remote-move-' + (++serial) }], error: null };
+            }
+            if (table !== 'coach_games') return null;
+            if (state.op === 'insert' || state.op === 'upsert') {
+              const out = [];
+              for (const row of [].concat(state.rows)) {
+                const dup = row.client_game_key != null && games.find(g => g.user_id === row.user_id && g.client_game_key === row.client_game_key);
+                if (dup && state.op === 'insert') return { data: null, error: { code: '23505', message: 'duplicate key value' } };
+                if (dup && state.opts.ignoreDuplicates) continue;
+                if (dup) { Object.assign(dup, row); out.push(dup); continue; }
+                const created = Object.assign({ id: 'remote-game-' + (++serial) }, row);
+                games.push(created);
+                out.push(created);
+              }
+              return { data: out, error: null };
+            }
+            const matched = games.filter(g => state.filters.every(([key, value]) => g[key] === value));
+            if (state.op === 'update') matched.forEach(g => Object.assign(g, state.rows));
+            if (state.op === 'delete') matched.forEach(g => games.splice(games.indexOf(g), 1));
+            return { data: matched, error: null };
+          };
+          const settle = mode => {
+            const response = run();
+            if (!response) return { data: null, error: null };
+            if (!mode || response.error) return response;
+            return one(Array.isArray(response.data) ? response.data : [response.data].filter(Boolean), mode === 'maybe');
+          };
+          const builder = new Proxy({}, {
+            get(_, prop) {
+              if (prop === 'then') return (resolve, reject) => Promise.resolve(settle(null)).then(resolve, reject);
+              if (prop === 'single') return () => Promise.resolve(settle('single'));
+              if (prop === 'maybeSingle') return () => Promise.resolve(settle('maybe'));
+              if (prop === 'insert' || prop === 'update') return rows => { state.op = prop; state.rows = rows; return builder; };
+              if (prop === 'upsert') return (rows, opts) => { state.op = 'upsert'; state.rows = rows; state.opts = opts || {}; return builder; };
+              if (prop === 'delete') return () => { state.op = 'delete'; return builder; };
+              if (prop === 'eq') return (key, value) => { state.filters.push([key, value]); return builder; };
+              return () => builder;
+            }
+          });
+          return builder;
+        },
+        rpc: async () => ({ data: null, error: null })
+      };
+      const paste = async () => {
+        const before = moves.length;
+        $('#game-inbox-side').val('white');
+        $('#game-inbox-pgn').val(pgn);
+        await analyseImportedPgn();
+        const deadline = Date.now() + 15000;
+        while (Date.now() < deadline && moves.length < before + 3) await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 300));
+        return { remoteGameId: coachRemoteGameId, status: $('#game-inbox-status').text() };
+      };
+      try {
+        coachDbClient = fakeClient;
+        coachAuthUser = { id: 'behaviour-repaste-user' };
+        coachRemoteInsightEntries = [];
+        coachRemoteInsightsLoaded = true;
+        // The session checkpoint is its own boundary (covered above); let game writes through.
+        window.ensureAccountWritePermission = async () => {};
+        const first = await paste();
+        const second = await paste();
+        const pasted = games.map(g => ({ id: g.id, key: g.client_game_key || null }));
+        // A live game is keyed by its local id, so a retried insert (a lost
+        // response, a late duplicate) reuses the row instead of adding one.
+        const liveId = createCoachGameId();
+        const livePayload = { user_id: 'behaviour-repaste-user', status: 'active', pgn: '' };
+        const liveA = await insertRemoteCoachGame(livePayload, liveId);
+        const liveB = await insertRemoteCoachGame(livePayload, liveId);
+        // The final result for a game whose row exists but whose id was lost
+        // lands on that row instead of being dropped by the ignored insert.
+        await commitFinalRemoteCoachGame({ payload: { user_id: 'behaviour-repaste-user', status: 'completed', result: '1-0', pgn: '1. e4 *' }, remoteGameId: null, localGameId: liveId });
+        const liveRow = games.find(g => g.client_game_key === liveId) || {};
+        const live = { a: liveA, b: liveB, rows: games.filter(g => g.client_game_key === liveId).length, finalStatus: liveRow.status, finalResult: liveRow.result };
+        return { first, second, games: pasted, moveGames: Array.from(new Set(moves.map(m => m.game_id))), moves: moves.length, live };
+      } finally {
+        coachDbClient = saved.client;
+        coachAuthUser = saved.user;
+        coachRemoteInsightEntries = saved.insights;
+        coachRemoteInsightsLoaded = saved.loaded;
+        window.ensureAccountWritePermission = saved.permission;
+        clearQueuedRemoteCoachGameUpdate();
+        Object.keys(localStorage).filter(k => k.includes('behaviour-repaste-user')).forEach(k => localStorage.removeItem(k));
+      }
+    }, '[Event "Club"]\n\n1. d4 d5 2. c4 e6 3. Nc3 Nf6 *');
+    if (!/reviewed/.test(result.second.status)) problems.push('the second paste did not finish: ' + result.second.status);
+    if (result.moves < 6) problems.push(`both pastes should sync their moves: ${result.moves} move writes`);
+    if (result.games.length !== 1) problems.push('re-pasting the same game added another account game: ' + JSON.stringify(result.games));
+    if (!result.games[0] || !/^pgn-w/.test(result.games[0].key || '')) problems.push('the pasted game row should carry its content id: ' + JSON.stringify(result.games));
+    if (result.first.remoteGameId !== result.second.remoteGameId) problems.push('the second paste should reuse the first paste\'s row: ' + JSON.stringify([result.first.remoteGameId, result.second.remoteGameId]));
+    if (result.moveGames.length !== 1) problems.push('the re-pasted moves should land on the one game row: ' + JSON.stringify(result.moveGames));
+    if (result.live.rows !== 1 || result.live.a.id !== result.live.b.id || result.live.b.created !== false) problems.push('a retried live-game insert should reuse its row: ' + JSON.stringify(result.live));
+    if (result.live.rows !== 1 || result.live.finalStatus !== 'completed' || result.live.finalResult !== '1-0') problems.push('a final result for an existing keyed row should update it: ' + JSON.stringify(result.live));
+    await freshCoach();
+    await newGame();
+    return problems;
+  });
+  await check('signing in adds guest lifetime stats to the account instead of keeping one side', () => page.evaluate(() => {
+    const problems = [];
+    const account = 'behaviour-lifetime-user';
+    const savedUser = coachAuthUser;
+    const anonKey = `${LIFETIME_KEY}:anon:${coachDeviceId()}`, accountKey = `${LIFETIME_KEY}:user:${account}`;
+    const previousAnon = localStorage.getItem(anonKey);
+    const game = (id, moves, blunders) => [id, { games: 1, moves, accuracySum: 80 * moves, best: 0, excellent: 0, good: moves - blunders, inaccuracies: 0, mistakes: 0, blunders }];
+    const lifetime = rows => Object.assign(emptyLifetime(), rows.reduce((lt, [id, c]) => {
+      ['games', 'moves', 'accuracySum', 'good', 'blunders'].forEach(k => { lt[k] = (lt[k] || 0) + c[k]; });
+      lt.rollups[id] = c; return lt;
+    }, { rollups: {} }));
+    const adopt = (anonRows, accountRows) => {
+      localStorage.setItem(anonKey, JSON.stringify(lifetime(anonRows)));
+      localStorage.setItem(accountKey, JSON.stringify(lifetime(accountRows)));
+      adoptAnonymousCoachMemory(account);
+      coachAuthUser = { id: account };
+      const merged = loadLifetime();
+      coachAuthUser = savedUser;
+      return merged;
+    };
+    try {
+      let merged = adopt([game('guest-1', 20, 1), game('guest-2', 30, 2)], [game('acct-1', 10, 0), game('acct-2', 10, 1), game('acct-3', 10, 0)]);
+      if (merged.games !== 5 || merged.moves !== 80 || merged.blunders !== 4) problems.push(`account with more games lost the guest games: ${merged.games} games, ${merged.moves} moves`);
+      merged = adopt([game('guest-3', 20, 0), game('guest-4', 20, 0)], [game('acct-4', 40, 3)]);
+      if (merged.games !== 3 || merged.moves !== 80 || merged.blunders !== 3) problems.push(`guest with more games replaced the account games: ${merged.games} games, ${merged.moves} moves`);
+      if (Object.keys(merged.rollups).sort().join() !== 'acct-4,guest-3,guest-4') problems.push('per-game rollups were not merged, so a later take-back cannot undo them');
+      if (localStorage.getItem(anonKey) !== null) problems.push('guest lifetime was not consumed after the merge');
+    } finally {
+      coachAuthUser = savedUser;
+      localStorage.removeItem(accountKey);
+      Object.keys(localStorage).filter(k => k.includes(account)).forEach(k => localStorage.removeItem(k));
+      if (previousAnon === null) localStorage.removeItem(anonKey); else localStorage.setItem(anonKey, previousAnon);
+    }
+    return problems;
+  }));
+
+  // ── Sign-in adopts a guest game, drill and return point only as one unit ──
+  await check('sign-in never adopts guest practice beside the account\'s saved game', async () => {
+    const problems = [];
+    await newGame();
+    await playMove('e4');
+    await page.waitForFunction(() => coachGame.history().length >= 2 && !coachThinking, null, { timeout: 60000 });
+    await settle();
+    const account = 'behaviour-adopt-user';
+    const guestGameId = await page.evaluate(acct => {
+      // The account already has a saved game of its own on this browser.
+      const own = JSON.parse(localStorage.getItem(coachMemoryKey(COACH_STATE_KEY)));
+      own.localGameId = 'account-saved-game';
+      own.remoteGameId = null;
+      localStorage.setItem(`${COACH_STATE_KEY}:user:${acct}`, JSON.stringify(own));
+      return coachLocalGameId;
+    }, account);
+    await page.locator('#tab-practice').click();
+    await page.locator('#endgame-track-list .endgame-item button').first().click();
+    await page.waitForFunction(() => coachPracticeSession && coachPracticeSession.analysisReady, null, { timeout: 60000 });
+    try {
+      await page.evaluate(acct => { saveCoachPracticeState(); applyCoachRecoveryUser({ id: acct }); }, account);
+      await page.waitForTimeout(300);
+      await page.evaluate(() => { if (coachPracticeSession) exitCoachPractice(); });
+      const after = await page.evaluate(acct => {
+        const read = key => { try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; } };
+        const anon = `anon:${coachDeviceId()}`;
+        return {
+          accountGame: (read(`${COACH_STATE_KEY}:user:${acct}`) || {}).localGameId || null,
+          guestGameKept: !!read(`${COACH_STATE_KEY}:${anon}`),
+          guestPracticeKept: !!read(`${COACH_PRACTICE_STATE_KEY}:${anon}`),
+          guestReturnKept: !!read(`${COACH_PRACTICE_RETURN_KEY}:${anon}`),
+          accountPractice: !!read(`${COACH_PRACTICE_STATE_KEY}:user:${acct}`),
+          accountReturn: !!read(`${COACH_PRACTICE_RETURN_KEY}:user:${acct}`)
+        };
+      }, account);
+      if (after.accountGame !== 'account-saved-game') problems.push(`the account's saved game was replaced by ${after.accountGame === guestGameId ? 'the guest game' : after.accountGame}`);
+      if (after.accountPractice || after.accountReturn) problems.push('guest practice was adopted beside the account game');
+      if (!after.guestGameKept || !after.guestPracticeKept || !after.guestReturnKept) problems.push('the guest session was not kept intact for the guest');
+      // An account with no saved session takes the whole guest session.
+      const adopted = await page.evaluate(acct => {
+        applyCoachRecoveryUser(null);
+        localStorage.removeItem(`${COACH_STATE_KEY}:user:${acct}`);
+        applyCoachRecoveryUser({ id: acct });
+        const anon = `anon:${coachDeviceId()}`;
+        return [COACH_STATE_KEY, COACH_PRACTICE_STATE_KEY, COACH_PRACTICE_RETURN_KEY]
+          .map(base => [!!localStorage.getItem(`${base}:user:${acct}`), !localStorage.getItem(`${base}:${anon}`)]);
+      }, account);
+      if (!adopted.every(([moved, cleared]) => moved && cleared)) problems.push('an account with no saved session did not adopt the whole guest session: ' + JSON.stringify(adopted));
+    } finally {
+      await page.evaluate(acct => {
+        applyCoachRecoveryUser(null);
+        if (coachPracticeSession) exitCoachPractice();
+        Object.keys(localStorage).filter(k => k.includes(acct)).forEach(k => localStorage.removeItem(k));
+      }, account);
+      // Leave a live guest game for the checks that follow.
+      await page.locator('#tab-game').click();
+      await newGame();
+      await playMove('e4');
+      await page.waitForFunction(() => coachGame.history().length >= 2 && !coachThinking, null, { timeout: 60000 });
+    }
     return problems;
   });
 
@@ -629,7 +1135,7 @@ async page => {
     const darkBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     if (darkBg === 'rgb(245, 239, 227)') problems.push('choosing Dark left the light page colour');
     await page.locator('#board-theme').selectOption('contrast');
-    const lightSquare = await page.evaluate(() => getComputedStyle(document.querySelector('#coachBoard .white-1e1d7')).backgroundColor);
+    const lightSquare = await page.evaluate(() => getComputedStyle(document.querySelector('#coachBoard .square.white')).fill);
     if (lightSquare !== 'rgb(255, 255, 255)') problems.push('High contrast did not recolour the light squares: ' + lightSquare);
     await page.reload();
     await page.waitForFunction(() => typeof applyBoardTheme === 'function');
@@ -640,6 +1146,366 @@ async page => {
     await page.waitForFunction(() => typeof applyBoardTheme === 'function');
     const migrated = await page.evaluate(() => [document.documentElement.dataset.theme || 'auto', document.documentElement.dataset.boardTheme]);
     if (migrated[0] !== 'auto' || migrated[1] !== 'walnut') problems.push('retired Ivory or Match device did not apply: ' + migrated.join('/'));
+    return problems;
+  });
+
+  // ── The board (src/ui/board.js on cm-chessboard): drag, click, touch ──
+  const boardSquare = (p, id, name) => p.locator(`#${id} .square[data-square="${name}"]`);
+  const squareCentre = async (p, id, name) => {
+    const box = await boardSquare(p, id, name).boundingBox();
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  };
+  const mouseDrag = async (id, from, to) => {
+    const a = await squareCentre(page, id, from), b = await squareCentre(page, id, to);
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down();
+    await page.mouse.move(b.x, b.y, { steps: 8 });
+    await page.mouse.up();
+  };
+
+  await check('the board plays a dragged move, snaps back an illegal drop and plays a clicked move once', async () => {
+    const problems = [];
+    await freshCoach();
+    await newGame();
+    const sq = name => boardSquare(page, 'coachBoard', name);
+    const boardMatchesGame = () => page.evaluate(() => Chessboard.objToFen(coachBoard.position()) === coachGame.fen().split(' ')[0]);
+    await mouseDrag('coachBoard', 'a2', 'a5');
+    await page.waitForTimeout(250);
+    const illegal = await page.evaluate(() => ({ plies: coachGame.history().length, a2: coachBoard.position().a2, a5: coachBoard.position().a5 || null,
+      shown: !!document.querySelector('#coachBoard .pieces g[data-square="a2"]:not([visibility="hidden"])'), floating: document.querySelectorAll('.cm-chessboard-draggable-piece').length }));
+    if (illegal.plies !== 0 || illegal.a2 !== 'wP' || illegal.a5 || !illegal.shown || illegal.floating) problems.push('an illegal drop was not snapped back: ' + JSON.stringify(illegal));
+    await mouseDrag('coachBoard', 'e2', 'e4');
+    await page.waitForFunction(() => coachGame.history().length >= 1, null, { timeout: 5000 }).catch(() => {});
+    const dragged = await page.evaluate(() => coachGame.history()[0] || null);
+    if (dragged !== 'e4') problems.push('a dragged e2-e4 was not played: ' + dragged);
+    await page.waitForFunction(() => coachGame.history().length >= 2 && !coachThinking, null, { timeout: 60000 });
+    await page.waitForTimeout(300);
+    if (!(await boardMatchesGame())) problems.push('the board does not show the game after the reply');
+    await sq('g1').click();
+    const selected = await page.evaluate(() => ({ sel: coachBoard.marks('tap-selected').join(), dots: coachBoard.marks('tap-target').sort().join(),
+      drawn: document.querySelectorAll('#coachBoard .board-mark.tap-target').length }));
+    if (selected.sel !== 'g1' || selected.dots !== 'e2,f3,h3' || selected.drawn !== 3) problems.push('clicking a piece did not select it with its legal moves: ' + JSON.stringify(selected));
+    // Another of your own pieces switches the selection; a second click on it drops it.
+    await sq('b1').click();
+    await sq('d2').click();
+    const switched = await page.evaluate(() => ({ sel: coachBoard.marks('tap-selected').join(), plies: coachGame.history().length, premove: !!coachPremove }));
+    if (switched.sel !== 'd2' || switched.plies !== 2 || switched.premove) problems.push('clicking your own piece did not switch the selection: ' + JSON.stringify(switched));
+    await sq('d2').click();
+    if (await page.evaluate(() => coachBoard.marks('tap-selected').length)) problems.push('a second click did not drop the selection');
+    await sq('g1').click();
+    await sq('f3').click();
+    await page.waitForFunction(() => coachGame.history().length >= 3, null, { timeout: 5000 }).catch(() => {});
+    const clicked = await page.evaluate(() => ({ third: coachGame.history()[2] || null, marks: coachBoard.marks('tap-selected').length + coachBoard.marks('tap-target').length }));
+    if (clicked.third !== 'Nf3' || clicked.marks) problems.push('a clicked g1-f3 was not played cleanly: ' + JSON.stringify(clicked));
+    await page.waitForFunction(() => coachGame.history().length >= 4 && !coachThinking, null, { timeout: 60000 });
+    await page.waitForTimeout(300);
+    const plies = await page.evaluate(() => coachGame.history().length);
+    if (plies !== 4) problems.push('one click played more than one move: ' + plies + ' plies');
+    if (!(await boardMatchesGame())) problems.push('the board does not show the game after a clicked move');
+    // The opponent's replies vary, and some make d4 illegal (2...Bb4 pins the
+    // d-pawn, ...Nd4 blocks it), so type a quiet pawn move that is legal here.
+    const keyMove = await page.evaluate(() => {
+      const legal = coachGame.moves({ verbose: true });
+      return ['d4', 'd3', 'h3', 'a3', 'b3'].map(san => legal.find(m => m.san === san)).find(Boolean) || legal.find(m => !m.captured) || legal[0];
+    });
+    await playMove(keyMove.san);
+    await page.waitForFunction(() => coachGame.history().length >= 5, null, { timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(250);
+    const typed = await page.evaluate(to => ({ fifth: coachGame.history()[4] || null, piece: coachBoard.position()[to] || null }), keyMove.to);
+    if (typed.fifth !== keyMove.san || typed.piece !== 'w' + keyMove.piece.toUpperCase()) problems.push(`a keyboard move (${keyMove.san}) did not reach the board: ` + JSON.stringify(typed));
+    await settle();
+    return problems;
+  });
+
+  await check('flipping turns the board and its coordinates, also mid-animation', async () => {
+    const problems = [];
+    const read = () => page.evaluate(() => {
+      const r = s => document.querySelector(`#coachBoard .square[data-square="${s}"]`).getBoundingClientRect();
+      return { o: coachBoard.orientation(), a1Top: r('a1').top < r('a8').top, h1Left: r('h1').left < r('a1').left,
+        files: [...document.querySelectorAll('#coachBoard .board-coord.file')].map(t => t.textContent).join(''),
+        ranks: [...document.querySelectorAll('#coachBoard .board-coord.rank')].map(t => t.textContent).join('') };
+    });
+    await page.locator('#btn-coach-flip').click();
+    const flipped = await read();
+    if (flipped.o !== 'black' || !flipped.a1Top || !flipped.h1Left || flipped.files !== 'hgfedcba' || flipped.ranks !== '12345678') problems.push('flip did not turn the board: ' + JSON.stringify(flipped));
+    await page.locator('#btn-coach-flip').click();
+    const back = await read();
+    if (back.o !== 'white' || back.a1Top || back.h1Left || back.files !== 'abcdefgh' || back.ranks !== '87654321') problems.push('flipping back did not restore White at the bottom: ' + JSON.stringify(back));
+    // Flips requested while pieces are still moving wait for them and settle.
+    await page.evaluate(() => { coachBoard.position('start', true); coachBoard.flip(); coachBoard.flip(); coachBoard.flip(); });
+    await page.waitForTimeout(800);
+    const queued = await read();
+    if (queued.o !== 'black' || !queued.a1Top || queued.files !== 'hgfedcba') problems.push('flips during an animation did not settle: ' + JSON.stringify(queued));
+    await page.evaluate(() => { coachBoard.flip(); coachBoard.position(coachGame.fen(), false); });
+    await page.waitForTimeout(400);
+    return problems;
+  });
+
+  await check('board themes recolour the squares from the tokens', async () => {
+    const problems = [];
+    await page.evaluate(() => { document.getElementById('group-board').open = true; });
+    const seen = new Set();
+    for (const theme of ['green', 'walnut', 'blue', 'contrast']) {
+      await page.locator('#board-theme').selectOption(theme);
+      const colours = await page.evaluate(() => {
+        const probe = document.createElement('div');
+        document.body.appendChild(probe);
+        probe.style.background = 'var(--board-light)';
+        const light = getComputedStyle(probe).backgroundColor;
+        probe.style.background = 'var(--board-dark)';
+        const dark = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return { light, dark, squareLight: getComputedStyle(document.querySelector('#coachBoard .square.white[data-square="b1"]')).fill,
+          squareDark: getComputedStyle(document.querySelector('#coachBoard .square.black[data-square="a1"]')).fill };
+      });
+      if (colours.squareLight !== colours.light || colours.squareDark !== colours.dark) problems.push(`${theme}: squares ${colours.squareLight}/${colours.squareDark} do not match the tokens ${colours.light}/${colours.dark}`);
+      seen.add(colours.squareLight + colours.squareDark);
+    }
+    if (seen.size !== 4) problems.push('the four board themes did not give four different boards');
+    await page.locator('#board-theme').selectOption('green');
+    return problems;
+  });
+
+  await check('castling, en passant and promotion are redrawn after the move', async () => {
+    const problems = [];
+    await page.goto(base + '/?view=library&mode=explore');
+    await page.waitForFunction(() => typeof exploreGame !== 'undefined' && exploreGame && !!board);
+    await page.locator('#explore-engine-toggle').uncheck().catch(() => {});
+    await page.locator('.explore-load summary').click();
+    const load = async fen => {
+      await page.locator('#explore-load-input').fill(fen);
+      await page.locator('#explore-load-form button').click();
+      await page.waitForFunction(f => exploreGame.fen() === f, fen, { timeout: 5000 });
+      await page.waitForTimeout(150);
+    };
+    const shown = () => page.evaluate(() => board.position());
+    await load('r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1');
+    await mouseDrag('myBoard', 'e1', 'g1');
+    await page.waitForTimeout(400);
+    let pos = await shown();
+    if (pos.g1 !== 'wK' || pos.f1 !== 'wR' || pos.h1 || pos.e1) problems.push('castling by drag left the rook behind: ' + JSON.stringify({ e1: pos.e1, f1: pos.f1, g1: pos.g1, h1: pos.h1 }));
+    await load('rnbqkbnr/ppp1pppp/8/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3');
+    await boardSquare(page, 'myBoard', 'e5').click();
+    await boardSquare(page, 'myBoard', 'd6').click();
+    await page.waitForTimeout(500);
+    pos = await shown();
+    if (pos.d6 !== 'wP' || pos.d5 || pos.e5) problems.push('en passant by click left the captured pawn: ' + JSON.stringify({ d5: pos.d5, d6: pos.d6, e5: pos.e5 }));
+    await load('8/P6k/8/8/8/8/8/K7 w - - 0 1');
+    await mouseDrag('myBoard', 'a7', 'a8');
+    await page.locator('#promotion-picker .promotion-choice[data-promotion="n"]').click();
+    await page.waitForTimeout(500);
+    pos = await shown();
+    if (pos.a8 !== 'wN' || pos.a7) problems.push('a dragged under-promotion did not show the knight: ' + JSON.stringify({ a7: pos.a7, a8: pos.a8 }));
+    await load('8/P6k/8/8/8/8/8/K7 w - - 0 1');
+    await boardSquare(page, 'myBoard', 'a7').click();
+    await boardSquare(page, 'myBoard', 'a8').click();
+    await page.locator('#promotion-picker .promotion-choice[data-promotion="q"]').click();
+    await page.waitForTimeout(500);
+    pos = await shown();
+    if (pos.a8 !== 'wQ' || pos.a7) problems.push('a clicked promotion did not show the queen: ' + JSON.stringify({ a7: pos.a7, a8: pos.a8 }));
+    const fenMatches = await page.evaluate(() => Chessboard.objToFen(board.position()) === exploreGame.fen().split(' ')[0]);
+    if (!fenMatches) problems.push('the Explore board and game disagree after promotion');
+    await page.locator('#explore-engine-toggle').check().catch(() => {});
+    return problems;
+  });
+
+  // The board itself, on a scratch element: only onSnapEnd can put the rook
+  // or the promoted piece where the game has it.
+  await check('onSnapEnd follows each accepted drag or click, so castling and promotion are drawn from the game', async () => {
+    const problems = [];
+    await page.evaluate(() => {
+      const host = document.createElement('div');
+      host.id = 'board-harness';
+      host.style.cssText = 'position:fixed;left:24px;top:24px;width:328px;z-index:9999';
+      document.body.appendChild(host);
+      const h = window.__harness = { game: new Chess('r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1'), snapEnds: 0, drops: [] };
+      h.board = Chessboard('board-harness', {
+        position: h.game.fen(), draggable: true,
+        onDrop: (from, to, piece, newPos, oldPos, side, info) => {
+          h.drops.push(`${from}${to}:${info.input}`);
+          if (h.throwNext) { h.throwNext = false; throw new Error('harness onDrop failure'); }
+          return h.game.move({ from, to, promotion: 'q' }) ? undefined : 'snapback'; },
+        onSnapEnd: () => { h.snapEnds++; h.board.position(h.game.fen(), false); }
+      });
+    });
+    const state = () => page.evaluate(() => ({ pos: __harness.board.position(), snapEnds: __harness.snapEnds, drops: __harness.drops.slice(), fenOk: Chessboard.objToFen(__harness.board.position()) === __harness.game.fen().split(' ')[0] }));
+    try {
+      await mouseDrag('board-harness', 'e1', 'g1');
+      await page.waitForTimeout(400);
+      let s = await state();
+      if (s.pos.f1 !== 'wR' || s.pos.h1 || s.snapEnds !== 1 || !s.fenOk) problems.push('dragged castling was not redrawn by onSnapEnd: ' + JSON.stringify({ f1: s.pos.f1, h1: s.pos.h1, snapEnds: s.snapEnds }));
+      await boardSquare(page, 'board-harness', 'e8').click();
+      await boardSquare(page, 'board-harness', 'c8').click();
+      await page.waitForTimeout(500);
+      s = await state();
+      if (s.pos.d8 !== 'bR' || s.pos.a8 || s.snapEnds !== 2 || !s.fenOk || s.drops[1] !== 'e8c8:click') problems.push('clicked castling was not redrawn by onSnapEnd: ' + JSON.stringify({ d8: s.pos.d8, a8: s.pos.a8, snapEnds: s.snapEnds, drops: s.drops }));
+      await mouseDrag('board-harness', 'a2', 'a5');
+      await page.waitForTimeout(300);
+      s = await state();
+      if (s.pos.a2 !== 'wP' || s.pos.a5 || s.snapEnds !== 2 || s.drops[2] !== 'a2a5:drag') problems.push('a refused drop moved the piece or called onSnapEnd: ' + JSON.stringify({ a2: s.pos.a2, a5: s.pos.a5, snapEnds: s.snapEnds }));
+      // Clicking another of your own pieces changes the selection; onDrop
+      // never hears of it.
+      await boardSquare(page, 'board-harness', 'b2').click();
+      await boardSquare(page, 'board-harness', 'c2').click();
+      s = await state();
+      const selected = await page.evaluate(() => __harness.board.marks('tap-selected').join());
+      if (s.drops.length !== 3 || selected !== 'c2') problems.push('clicking another own piece reached onDrop instead of switching the selection: ' + JSON.stringify({ drops: s.drops, selected }));
+      await boardSquare(page, 'board-harness', 'c2').click();
+      // Dragging onto your own piece is deliberate (a recapture premove in
+      // Coach): onDrop hears of it, and a refusal leaves both pieces home.
+      await mouseDrag('board-harness', 'b2', 'c2');
+      await page.waitForTimeout(300);
+      s = await state();
+      if (s.drops[3] !== 'b2c2:drag' || s.pos.b2 !== 'wP' || s.pos.c2 !== 'wP' || s.snapEnds !== 2 || !s.fenOk) problems.push('a drag onto an own piece did not reach onDrop or moved a piece: ' + JSON.stringify({ drops: s.drops, b2: s.pos.b2, c2: s.pos.c2, snapEnds: s.snapEnds }));
+      // A handler that throws sends the piece home, reports the error and
+      // leaves the board ready for the next move.
+      await page.evaluate(() => { __harness.throwNext = true; });
+      await mouseDrag('board-harness', 'b2', 'b3');
+      await page.waitForTimeout(300);
+      const afterThrow = (await state()).pos;
+      await mouseDrag('board-harness', 'b2', 'b4');
+      await page.waitForTimeout(300);
+      s = await state();
+      const thrown = pageErrors.findIndex(e => e.startsWith('Error: harness onDrop failure'));
+      if (thrown === -1) problems.push('an onDrop error was swallowed');
+      else pageErrors.splice(thrown, 1);
+      if (afterThrow.b2 !== 'wP' || afterThrow.b3 || s.pos.b4 !== 'wP' || !s.fenOk) problems.push('a throwing onDrop left the board stuck or wrong: ' + JSON.stringify({ b2: afterThrow.b2, b3: afterThrow.b3, b4: s.pos.b4 }));
+      await page.evaluate(() => { __harness.game = new Chess('8/P6k/8/8/8/8/8/K7 w - - 0 1'); __harness.board.position(__harness.game.fen(), false); });
+      await mouseDrag('board-harness', 'a7', 'a8');
+      await page.waitForTimeout(300);
+      s = await state();
+      if (s.pos.a8 !== 'wQ' || s.pos.a7 || !s.fenOk) problems.push('a promotion was left as a pawn: ' + JSON.stringify({ a7: s.pos.a7, a8: s.pos.a8 }));
+      const shown = await page.evaluate(() => document.querySelector('#board-harness .pieces g[data-square="a8"]').getAttribute('data-piece'));
+      if (shown !== 'wq') problems.push('the promoted square draws ' + shown);
+    } finally {
+      await page.evaluate(() => { __harness.board.destroy(); document.getElementById('board-harness').remove(); delete window.__harness; });
+    }
+    return problems;
+  });
+
+  await check('touch: a tap selects, a second tap moves once, and a touch drag moves', async () => {
+    const problems = [];
+    const browser = page.context().browser();
+    if (!browser) return ['no browser handle to open a touch context'];
+    const ctx = await browser.newContext({ hasTouch: true, viewport: { width: 1440, height: 900 } });
+    try {
+      const tp = await ctx.newPage();
+      const errors = [];
+      tp.on('pageerror', e => errors.push(e.message));
+      await tp.goto(base + '/?view=coach');
+      await tp.waitForFunction(() => typeof engineClient !== 'undefined' && !!coachBoard && navigator.maxTouchPoints > 0);
+      await tp.locator('#btn-coach-newgame').tap();
+      await tp.waitForFunction(() => coachGameActive && !coachThinking, null, { timeout: 60000 });
+      const sq = name => boardSquare(tp, 'coachBoard', name);
+      await sq('e2').tap();
+      const sel = await tp.evaluate(() => coachBoard.marks('tap-selected').join());
+      if (sel !== 'e2') problems.push('a tap did not select the pawn: ' + sel);
+      await sq('e4').tap();
+      await tp.waitForFunction(() => coachGame.history().length >= 1, null, { timeout: 5000 }).catch(() => {});
+      await tp.waitForTimeout(400); // the emulated mouse events after a tap have arrived
+      const tapped = await tp.evaluate(() => ({ first: coachGame.history()[0] || null, sel: coachBoard.marks('tap-selected').length, premove: !!coachPremove }));
+      if (tapped.first !== 'e4' || tapped.sel || tapped.premove) problems.push('a tap move left a stray selection or premove: ' + JSON.stringify(tapped));
+      await tp.waitForFunction(() => coachGame.history().length >= 2 && !coachThinking, null, { timeout: 60000 });
+      await tp.waitForTimeout(300);
+      const cdp = await ctx.newCDPSession(tp);
+      const a = await squareCentre(tp, 'coachBoard', 'g1'), b = await squareCentre(tp, 'coachBoard', 'f3');
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: a.x, y: a.y }] });
+      for (let i = 1; i <= 8; i++) {
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: a.x + (b.x - a.x) * i / 8, y: a.y + (b.y - a.y) * i / 8 }] });
+      }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await tp.waitForFunction(() => coachGame.history().length >= 3, null, { timeout: 5000 }).catch(() => {});
+      const third = await tp.evaluate(() => coachGame.history()[2] || null);
+      if (third !== 'Nf3') problems.push('a touch drag g1-f3 was not played: ' + third);
+      await tp.waitForFunction(() => coachGame.history().length >= 4 && !coachThinking, null, { timeout: 60000 }).catch(() => {});
+      await tp.waitForTimeout(300);
+      const end = await tp.evaluate(() => ({ plies: coachGame.history().length, same: Chessboard.objToFen(coachBoard.position()) === coachGame.fen().split(' ')[0] }));
+      if (end.plies !== 4 || !end.same) problems.push('touch input moved twice or the board drifted from the game: ' + JSON.stringify(end));
+      if (errors.length) problems.push('page errors: ' + errors.join(' | '));
+    } finally {
+      await ctx.close();
+    }
+    return problems;
+  });
+
+  await check('touch: a tapped promotion keeps its picker open and a slow tap leaves nothing selected', async () => {
+    const problems = [];
+    const browser = page.context().browser();
+    if (!browser) return ['no browser handle to open a touch context'];
+    const ctx = await browser.newContext({ hasTouch: true, viewport: { width: 1440, height: 900 } });
+    try {
+      const tp = await ctx.newPage();
+      const errors = [];
+      tp.on('pageerror', e => errors.push(e.message));
+      const cdp = await ctx.newCDPSession(tp);
+      // A tap held past the 200 ms move animation: the browser's emulated
+      // mouse events then land on the piece that just moved.
+      const slowTap = async (id, name) => {
+        const c = await squareCentre(tp, id, name);
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: c.x, y: c.y }] });
+        await tp.waitForTimeout(350);
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      };
+      // Explore: tap the pawn, then the empty promotion square.
+      await tp.goto(base + '/?opening=italian&mode=explore');
+      await tp.waitForFunction(() => exploreMode && !!board);
+      await tp.locator('.explore-load summary').tap();
+      await tp.locator('#explore-load-input').fill('8/P6k/8/8/8/8/8/K7 w - - 0 1');
+      await tp.locator('#explore-load-form button[type=submit]').tap();
+      await tp.waitForFunction(() => exploreGame && exploreGame.fen().startsWith('8/P6k'));
+      await boardSquare(tp, 'myBoard', 'a7').tap();
+      await slowTap('myBoard', 'a8');
+      await tp.waitForTimeout(400);
+      const open = await tp.evaluate(() => document.getElementById('promotion-picker').getAttribute('aria-hidden') === 'false');
+      if (!open) problems.push('the promotion picker closed straight after the tap that opened it');
+      else {
+        await tp.locator('.promotion-choice[data-promotion="n"]').tap();
+        await tp.waitForTimeout(300);
+        const promoted = await tp.evaluate(() => board.position().a8);
+        if (promoted !== 'wN') problems.push('choosing a knight did not promote to a knight: ' + promoted);
+      }
+      // Coach: a slow tap on the target plays the move and selects nothing.
+      await tp.goto(base + '/?view=coach');
+      await tp.waitForFunction(() => typeof engineClient !== 'undefined' && !!coachBoard);
+      await tp.locator('#btn-coach-newgame').tap();
+      await tp.waitForFunction(() => coachGameActive && !coachThinking, null, { timeout: 60000 });
+      await boardSquare(tp, 'coachBoard', 'd2').tap();
+      await slowTap('coachBoard', 'd4');
+      await tp.waitForTimeout(400);
+      const after = await tp.evaluate(() => ({ first: coachGame.history()[0] || null, sel: coachBoard.marks('tap-selected').join(), premove: !!coachPremove }));
+      if (after.first !== 'd4' || after.sel || after.premove) problems.push('a slow tap left the moved piece selected or a premove queued: ' + JSON.stringify(after));
+      await tp.waitForFunction(() => !coachThinking, null, { timeout: 60000 }).catch(() => {});
+      if (errors.length) problems.push('page errors: ' + errors.join(' | '));
+    } finally {
+      await ctx.close();
+    }
+    return problems;
+  });
+
+  await check('startup stays within its main-thread budget', async () => {
+    // Replaying every opening line at startup once blocked the page for
+    // ~450 ms on a fast desktop. Budget: under 350 ms of blocking time (the
+    // part of each long task over 50 ms), loose enough for a slow CI runner.
+    const problems = [];
+    const browser = page.context().browser();
+    if (!browser) return ['no browser handle to open a fresh context'];
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    try {
+      const fp = await ctx.newPage();
+      await fp.addInitScript(() => {
+        window.__longTasks = [];
+        try { new PerformanceObserver(list => list.getEntries().forEach(e => window.__longTasks.push(Math.round(e.duration)))).observe({ type: 'longtask', buffered: true }); } catch (e) {}
+      });
+      for (const view of ['?view=coach', '?opening=italian', '?view=puzzles']) {
+        await fp.goto(base + '/' + view, { waitUntil: 'load' });
+        await fp.waitForTimeout(1500);
+        const tasks = await fp.evaluate(() => window.__longTasks);
+        const blocking = tasks.reduce((sum, d) => sum + Math.max(0, d - 50), 0);
+        if (blocking >= 350) problems.push(`${view} blocked the main thread for ${blocking} ms at startup (long tasks: ${tasks.join(', ')} ms)`);
+      }
+    } finally {
+      await ctx.close();
+    }
     return problems;
   });
 
@@ -1313,6 +2179,178 @@ async page => {
     return problems;
   });
 
+  // ── Unscored moves and failed practice analysis ──
+  await check('taking back an unscored move leaves the scored move count alone', async () => {
+    const problems = [];
+    await freshCoach();
+    await newGame();
+    await playMove('e4');
+    await page.waitForFunction(() => coachGame.history().length >= 2 && !coachThinking && coachIsUserTurn(), null, { timeout: 60000 });
+    const scored = await page.evaluate(() => coachStats.moves);
+    // The engine stalls (no bestmove, no PV) for this move's review only.
+    await page.evaluate(() => {
+      window.__realEvaluate = engineClient.evaluate;
+      let stalls = 2;
+      engineClient.evaluate = function (...args) {
+        if (stalls-- > 0) return Promise.resolve({ lines: [], bestmove: null, info: {} });
+        return window.__realEvaluate.apply(this, args);
+      };
+    });
+    try {
+      await playMove(await page.evaluate(() => ['d4', 'd3', 'Nf3', 'Nc3'].find(m => coachGame.moves().includes(m))));
+      await page.waitForFunction(() => coachReviewLog.length >= 2 && !coachThinking, null, { timeout: 60000 });
+      if (await page.evaluate(() => coachLastReview.tier) !== 'unknown') problems.push('setup: the stalled review should be unscored');
+    } finally {
+      await page.evaluate(() => { engineClient.evaluate = window.__realEvaluate; });
+    }
+    await page.evaluate(() => $('#btn-coach-takeback').prop('disabled', false).trigger('click'));
+    const after = await page.evaluate(() => ({ moves: coachStats.moves, accuracy: accuracyFromTallies(coachStats, coachStats.moves) }));
+    if (after.moves !== scored) problems.push(`take-back of an unscored move changed the scored count from ${scored} to ${after.moves}`);
+    if (after.accuracy !== null && after.accuracy > 100) problems.push('accuracy rose past 100%: ' + after.accuracy);
+    return problems;
+  });
+
+  await check('a failed practice analysis is retried on the next attempt', async () => {
+    const problems = [];
+    await freshCoach();
+    const start = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    await page.evaluate(fen => {
+      window.__realEvaluate = engineClient.evaluate;
+      window.__practiceSearches = 0;
+      engineClient.evaluate = function (searchFen, ...rest) {
+        if (searchFen === fen) {
+          window.__practiceSearches += 1;
+          // The opening analysis and the first attempt's retry both fail.
+          if (window.__practiceSearches <= 2) return Promise.reject(new Error('engine timed out'));
+        }
+        return window.__realEvaluate.call(this, searchFen, ...rest);
+      };
+      startCoachPractice({ id: 'drill-analysis-retry', tag: 'development', meta: INSIGHT_TAG_META.development,
+        entry: { fenBefore: fen, bestUci: 'e2e4', bestSan: 'e4', userSan: 'a3', pairNum: 1, ply: 1 } });
+    }, start);
+    try {
+      await page.waitForFunction(() => coachPracticeSession && coachPracticeSession.analysisReady, null, { timeout: 30000 });
+      await playMove('d4');
+      await page.waitForFunction(() => !coachPracticeSession.grading && /could not verify/.test($('#coach-practice-status').text()), null, { timeout: 30000 })
+        .catch(() => problems.push('setup: the first attempt should be ungraded while the engine is down'));
+      if (await page.evaluate(() => window.__practiceSearches) > 2) problems.push('a failed retry analysed again in a loop');
+      await playMove('d4');
+      await page.waitForFunction(() => !coachPracticeSession.grading && !/could not verify|Checking/.test($('#coach-practice-status').text()), null, { timeout: 60000 })
+        .catch(() => problems.push('the second attempt was not graded: analysis was never retried'));
+      if (await page.evaluate(() => window.__practiceSearches) < 3) problems.push('the practice position was not analysed again on the next attempt');
+    } finally {
+      await page.evaluate(() => { engineClient.evaluate = window.__realEvaluate; if (coachPracticeSession) exitCoachPractice(); });
+    }
+    return problems;
+  });
+
+  await check('a practice move made on the board is drawn once it is graded', async () => {
+    const problems = [];
+    await freshCoach();
+    await page.evaluate(() => {
+      startCoachPractice({ id: 'drill-board-drag', tag: 'development', meta: INSIGHT_TAG_META.development,
+        entry: { fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', bestUci: 'e2e4', bestSan: 'e4', userSan: 'a3', pairNum: 1, ply: 1 } });
+    });
+    try {
+      await page.waitForFunction(() => coachPracticeSession && coachPracticeSession.analysisReady, null, { timeout: 30000 });
+      await mouseDrag('coachBoard', 'e2', 'e4');
+      // The drill may play the opponent's follow-up reply straight away.
+      await page.waitForFunction(() => coachPracticeSession && !coachPracticeSession.grading && coachGame.history()[0] === 'e4', null, { timeout: 30000 })
+        .catch(() => problems.push('setup: the dragged best move was not accepted'));
+      await page.waitForTimeout(500);
+      const shown = await page.evaluate(() => ({ board: Chessboard.objToFen(coachBoard.position()), game: coachGame.fen().split(' ')[0] }));
+      if (shown.board !== shown.game) problems.push('the board still shows the old position after a graded drag: ' + JSON.stringify(shown));
+    } finally {
+      await page.evaluate(() => { if (coachPracticeSession) exitCoachPractice(); });
+    }
+    return problems;
+  });
+
+  await check('server practice schedules land on this browser\'s local midnight', () => page.evaluate(() => {
+    const problems = [];
+    const attemptAt = new Date(2026, 10, 7, 21, 30).getTime();   // 7 Nov, 21:30 local
+    mergeRemotePracticeRecords([{
+      drill_key: 'merge-midnight', fen: '8/8/8/8/8/8/4K3/7k w - - 0 1', best_uci: 'e2e3', tag: 'candidate_moves',
+      reps: 2, ease: 2.6, interval_days: 3, due_at: new Date(attemptAt + 3 * 86400000).toISOString(),
+      attempts: 2, correct: 2, last_result: 'correct', last_attempt_at: new Date(attemptAt).toISOString()
+    }]);
+    const record = loadPracticeProgress().records['merge-midnight'];
+    const want = new Date(2026, 10, 10).getTime();                // local midnight, three calendar days on
+    if (!record || record.dueAt !== want) problems.push('a three-day server interval should be due at local midnight on 10 Nov: ' + (record && new Date(record.dueAt).toString()));
+    return problems;
+  }));
+
+  await check('a Daily Sprint day saved stuck shows its real state straight after reload', async () => {
+    const problems = [];
+    await freshCoach();
+    // Days saved before drills and moves shared one completion check:
+    // yesterday reached its target without completedAt, and today opened
+    // live play with drills still owed ("0 moves remain").
+    await page.evaluate(() => {
+      const now = Date.now();
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const moves = Array.from({ length: 6 }, (_, i) => `g:${i + 1}`);
+      const base = { mode: 'adaptive', focusTag: 'development', focus: 'Slow development', focusCue: 'Develop a piece.', focusReason: 'Recent reviews.',
+        moveTarget: 6, movesCompleted: 6, moveIds: moves, target: 8, completedAt: null, takeaway: null };
+      const history = { v: 1, days: {
+        [dailySprintDayKey(yesterday.getTime())]: Object.assign({}, base, { phase: 'drills', drillTarget: 2, drillsCompleted: 2, drillIds: ['a', 'b'], completedUnits: 6,
+          startedAt: yesterday.getTime() - 3600000, updatedAt: yesterday.getTime() }),
+        [dailySprintDayKey(now)]: Object.assign({}, base, { phase: 'moves', drillTarget: 2, drillsCompleted: 0, drillIds: [], completedUnits: 6,
+          startedAt: now - 120000, updatedAt: now - 120000 })
+      } };
+      saveDailySprintHistory(history);
+    });
+    await page.goto(base + '/?view=coach');
+    await page.waitForFunction(() => typeof dailySprintToday === 'function' && $('#coach-daily-plan-title').text().trim().length > 0);
+    const shown = await page.evaluate(() => ({
+      title: $('#coach-daily-plan-title').text(),
+      detail: $('#coach-daily-plan-detail').text(),
+      streak: $('#daily-sprint-streak').text(),
+      today: dailySprintToday(),
+      days: Object.values(loadDailySprintHistory().days).map(day => ({ phase: day.phase, done: !!day.completedAt }))
+    }));
+    // No drills are due in a fresh browser, so today's owed drills are
+    // removed and its six moves complete it.
+    if (!/training complete/.test(shown.title)) problems.push(`today should show as complete after reload: ${shown.title} — ${shown.detail}`);
+    if (/0 reviewed moves remain/.test(shown.detail)) problems.push('the stuck "0 reviewed moves remain" state survived a reload');
+    if (!shown.today || !shown.today.completedAt) problems.push('today\'s settled state was not saved: ' + JSON.stringify(shown.today));
+    if (shown.days.some(day => !day.done)) problems.push('a stuck saved day was left incomplete: ' + JSON.stringify(shown.days));
+    if (shown.streak !== '2-day streak') problems.push(`the settled days should count in the streak: ${shown.streak}`);
+    await freshCoach();
+    return problems;
+  });
+
+  await check('opening rehearsals count only unaided solves as correct', async () => {
+    const problems = [];
+    await freshCoach();
+    const rows = await page.evaluate(() => {
+      const item = openingBridgeItem(OPENINGS.find(opening => opening.id === 'italian'));
+      const rowText = () => {
+        renderOpeningBridgeTrack();
+        const row = Array.from(document.querySelectorAll('#opening-bridge-list .opening-bridge-row'))
+          .find(el => el.querySelector('strong') && el.querySelector('strong').textContent === item.meta.title);
+        return row ? row.querySelector('.opening-bridge-copy span').textContent : null;
+      };
+      // Solved after a hint, then solved cleanly.
+      recordPracticeAttempt(item, true, true);
+      const hinted = rowText();
+      const record = loadPracticeProgress();
+      record.records[item.id].dueAt = 0;
+      savePracticeProgress(record);
+      recordPracticeAttempt(item, true, false);
+      return { hinted, both: rowText() };
+    });
+    if (!rows.hinted) problems.push('the Italian rehearsal row was not shown');
+    else {
+      if (/1\/1 correct/.test(rows.hinted)) problems.push('a hinted solve was reported as correct: ' + rows.hinted);
+      if (!/0\/1 correct unaided/.test(rows.hinted) || !/1 completed with a hint or answer/.test(rows.hinted)) problems.push('the hinted solve should be named apart: ' + rows.hinted);
+      if (!/1\/2 correct unaided, 1 completed with a hint or answer/.test(rows.both || '')) problems.push('a clean solve after a hinted one should read 1/2 correct: ' + rows.both);
+    }
+    await freshCoach();
+    return problems;
+  });
+
   await check('Library quiz hides the moves you have not reached', async () => {
     const problems = [];
     await page.goto(base + '/?opening=italian&mode=quiz');
@@ -1330,6 +2368,804 @@ async page => {
     await page.locator('#btn-study').click();
     if ((await shown()).length !== await page.locator('#move-list .move-chip').count()) problems.push('Study mode did not show the whole line');
     return problems;
+  });
+
+  await check('Library quiz plays the side that owns the line', async () => {
+    const problems = [];
+    await page.goto(base + '/?opening=fools-mate&mode=quiz');
+    await page.waitForFunction(() => quizMode && currentOpening && currentOpening.id === 'fools-mate');
+    await page.waitForFunction(() => game.history().length >= 1, null, { timeout: 3000 }).catch(() => {});
+    let state = await page.evaluate(() => ({ side: getUserColor(), orientation: board.orientation(), history: game.history() }));
+    if (state.side !== 'black' || state.orientation !== 'black' || state.history[0] !== 'f3') problems.push('Fool\'s Mate should be quizzed as Black after White\'s f3: ' + JSON.stringify(state));
+    // A Black-owned variation of a White opening.
+    await page.goto(base + '/?opening=italian&mode=quiz');
+    await page.waitForFunction(() => quizMode && currentOpening && currentOpening.id === 'italian');
+    await page.locator('.line-btn[data-line="blackburne-shilling"]').click();
+    await page.waitForFunction(() => game.history().length >= 1, null, { timeout: 3000 }).catch(() => {});
+    state = await page.evaluate(() => ({ side: getUserColor(), orientation: board.orientation(), history: game.history() }));
+    if (state.side !== 'black' || state.orientation !== 'black' || state.history[0] !== 'e4') problems.push('the Blackburne Shilling line should be quizzed as Black: ' + JSON.stringify(state));
+    return problems;
+  });
+
+  await check('choosing another opening mid-quiz restarts the quiz for that opening', async () => {
+    const problems = [];
+    await page.goto(base + '/?opening=italian&mode=quiz');
+    await page.waitForFunction(() => quizMode && currentOpening && currentOpening.id === 'italian');
+    await page.evaluate(() => $('.opening-btn[data-id="sicilian"]').first().trigger('click'));
+    await page.waitForFunction(() => currentOpening.id === 'sicilian' && game.history().length >= 1, null, { timeout: 3000 }).catch(() => {});
+    const state = await page.evaluate(() => ({ quizMode, orientation: board.orientation(), history: game.history(), idx: currentMoveIdx }));
+    if (!state.quizMode || state.orientation !== 'black' || state.history.join(' ') !== 'e4' || state.idx !== 0) problems.push('the Sicilian quiz should face Black with 1.e4 played: ' + JSON.stringify(state));
+    return problems;
+  });
+
+  await check('a pending quiz reply is dropped when the opening or line changes', async () => {
+    const problems = [];
+    await page.goto(base + '/?opening=sicilian&mode=quiz');
+    await page.waitForFunction(() => quizMode && currentOpening && currentOpening.id === 'sicilian' && game.history().length === 1);
+    // Restarting the line queues White's 1.e4; switch to a White opening before it plays.
+    await page.evaluate(() => { switchOpeningLine('main'); loadOpening('italian'); });
+    await page.waitForTimeout(1000);
+    const state = await page.evaluate(() => ({ id: currentOpening.id, history: game.history(), idx: currentMoveIdx, orientation: board.orientation() }));
+    if (state.id !== 'italian' || state.history.length || state.idx !== -1 || state.orientation !== 'white') problems.push('the old line\'s reply was played into the new quiz: ' + JSON.stringify(state));
+    return problems;
+  });
+
+  await check('typed SAN respects piece case', () => page.evaluate(() => {
+    const problems = [];
+    const position = new Chess('4k3/8/8/8/8/2n5/1P1B4/4K3 w - - 0 1');
+    const pick = text => { const m = resolveAccessibleMove(position, text); return m ? m.piece + m.from : null; };
+    if (pick('Bxc3') !== 'bd2') problems.push('Bxc3 should move the bishop, got ' + pick('Bxc3'));
+    if (pick('bxc3') !== 'pb2') problems.push('bxc3 should move the pawn, got ' + pick('bxc3'));
+    if (pick('BXC3') !== null) problems.push('an ambiguous case-insensitive entry should not guess');
+    if (pick('kf2') !== 'ke1') problems.push('a unique lower-case entry should still work');
+    return problems;
+  }));
+
+  await check('Explore explains a Lichess rate limit', async () => {
+    const problems = [];
+    await page.evaluate(key => sessionStorage.setItem(key, 'behaviour-test-token'), await page.evaluate(() => LICHESS_TOKEN_KEY));
+    await page.goto(base + '/?opening=italian&mode=explore');
+    await page.waitForFunction(() => exploreMode && exploreGame);
+    await page.evaluate(() => {
+      window.__realAjax = $.ajax;
+      $.ajax = options => { setTimeout(() => options.error && options.error({ status: 429 }), 0); return { abort() {} }; };
+      exploreCache.clear();
+      fetchExploreData();
+    });
+    await page.waitForFunction(() => !/Fetching/.test($('#continuations-list').text()), null, { timeout: 3000 }).catch(() => {});
+    const text = await page.evaluate(() => $('#continuations-list').text());
+    if (!/limiting requests/.test(text) || /Could not reach/.test(text)) problems.push('a 429 was shown as: ' + text);
+    await page.evaluate(() => { $.ajax = window.__realAjax; sessionStorage.removeItem(LICHESS_TOKEN_KEY); });
+    return problems;
+  });
+
+  await check('Coach opening label says where the game left the book', () => page.evaluate(() => {
+    const problems = [];
+    const saved = { game: coachGame, transfer: coachOpeningTransfer, cursor: coachReviewCursor };
+    try {
+      coachGame = new Chess();
+      ['e4', 'c5', 'Nf3', 'd6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'e5', 'Nf5'].forEach(san => coachGame.move(san));
+      coachOpeningTransfer = null;
+      coachReviewCursor = null;
+      updateOpeningLabel();
+      const text = $('#coach-opening-name').text();
+      if (!/out of book after move 5$/.test(text)) problems.push('5.Nc3 is a book move, so the label should say move 5: ' + text);
+    } finally {
+      coachGame = saved.game; coachOpeningTransfer = saved.transfer; coachReviewCursor = saved.cursor;
+      updateOpeningLabel();
+    }
+    return problems;
+  }));
+
+  // ── Responsive layout (Phase 6a): phone, upright tablet, landscape tablet ──
+  // Fresh contexts at each size; the layout is CSS plus src/ui/layout.js, so
+  // these drive the real pages and measure what is on screen.
+  const layoutReport = (p, boardId) => p.evaluate(id => {
+    const board = document.getElementById(id);
+    const r = board ? board.getBoundingClientRect() : null;
+    // Visible elements that stick out sideways (for the failure message).
+    const wide = [...document.querySelectorAll('body *')].filter(el => {
+      if (!el.checkVisibility || !el.checkVisibility()) return false;
+      if (el.closest('.notation-strip .movelist, .notation-strip .move-list, .cat-tabs, .game-viewer-moves')) return false;
+      const b = el.getBoundingClientRect();
+      return b.width > 0 && (b.right > innerWidth + 1 || b.left < -1);
+    }).slice(0, 4).map(el => (el.id ? '#' + el.id : String(el.className && el.className.baseVal !== undefined ? el.className.baseVal : el.className)) + ' ' + Math.round(el.getBoundingClientRect().left) + '..' + Math.round(el.getBoundingClientRect().right));
+    return { scrollWidth: document.documentElement.scrollWidth, innerWidth, board: r && { left: r.left, right: r.right, width: r.width }, wide };
+  }, boardId);
+  const fitProblems = (where, m, minBoard) => {
+    const out = [];
+    if (m.scrollWidth > m.innerWidth) out.push(`${where}: the page scrolls sideways (${m.scrollWidth} > ${m.innerWidth}; ${m.wide.join(', ')})`);
+    if (!m.board || !m.board.width) out.push(`${where}: no board on screen`);
+    else {
+      if (m.board.left < -0.5 || m.board.right > m.innerWidth + 0.5) out.push(`${where}: the board runs off the screen (${Math.round(m.board.left)}..${Math.round(m.board.right)})`);
+      if (m.board.width < minBoard) out.push(`${where}: the board is ${Math.round(m.board.width)}px wide, expected at least ${minBoard}`);
+    }
+    return out;
+  };
+  const sizedContext = async (width, height, touch) => {
+    const browser = page.context().browser();
+    return browser.newContext({ viewport: { width, height }, hasTouch: !!touch });
+  };
+
+  await check('responsive: Coach, Library and Puzzles fit 375, 820 and 1024 wide with the whole board on screen', async () => {
+    const problems = [];
+    if (!page.context().browser()) return ['no browser handle to open a sized context'];
+    // [width, height, touch, smallest acceptable board]
+    for (const [w, h, touch, minBoard] of [[375, 812, true, 370], [820, 1180, true, 500], [1024, 768, false, 440]]) {
+      const ctx = await sizedContext(w, h, touch);
+      try {
+        const p = await ctx.newPage();
+        const errors = [];
+        p.on('pageerror', e => errors.push(e.message));
+        const tag = `${w}x${h}`;
+        await p.goto(base + '/?view=coach');
+        await p.waitForFunction(() => typeof engineClient !== 'undefined' && !!coachBoard);
+        const notice = await p.locator('#desktop-notice').isVisible();
+        if (w < 760 && !notice) problems.push(`${tag}: the phone preview notice did not appear`);
+        if (w >= 760 && notice) problems.push(`${tag}: the phone notice covered a tablet-sized screen`);
+        if (notice) await p.locator('#btn-desktop-notice-continue').click();
+        await p.waitForTimeout(200);
+        problems.push(...fitProblems(tag + ' Coach (ready)', await layoutReport(p, 'coachBoard'), minBoard));
+        await p.locator('#btn-coach-newgame').click();
+        await p.waitForFunction(() => coachGameActive && !coachThinking, null, { timeout: 60000 });
+        await p.evaluate(() => {
+          document.getElementById('coach-keyboard-move').open = true;
+          document.getElementById('coach-keyboard-move-input').value = 'e4';
+          document.querySelector('#coach-keyboard-move-form button[type=submit]').click();
+        });
+        await p.waitForFunction(() => coachGame.history().length >= 2 && !coachThinking, null, { timeout: 60000 }).catch(() => problems.push(`${tag}: setup: the opponent did not reply`));
+        // Typing a move deliberately gives up some board; close it again.
+        await p.evaluate(() => { document.getElementById('coach-keyboard-move').open = false; });
+        await p.waitForTimeout(400);
+        problems.push(...fitProblems(tag + ' Coach (live game)', await layoutReport(p, 'coachBoard'), minBoard));
+        for (const panel of ['practice', 'progress']) {
+          await p.evaluate(name => document.querySelector('.panel-tab[data-panel="' + name + '"]').click(), panel);
+          await p.waitForTimeout(250);
+          problems.push(...fitProblems(`${tag} Coach (${panel})`, await layoutReport(p, 'coachBoard'), minBoard));
+        }
+        await p.goto(base + '/?opening=italian');
+        await p.waitForFunction(() => !!board && !!currentOpening);
+        await p.waitForTimeout(300);
+        problems.push(...fitProblems(tag + ' Library (study)', await layoutReport(p, 'myBoard'), minBoard));
+        await p.goto(base + '/?opening=italian&mode=explore');
+        await p.waitForFunction(() => exploreMode && !!board);
+        await p.waitForTimeout(800);
+        problems.push(...fitProblems(tag + ' Library (explore)', await layoutReport(p, 'myBoard'), minBoard));
+        await p.goto(base + '/?view=puzzles');
+        await p.waitForFunction(() => { const s = window.PuzzlesView && PuzzlesView._debug().session; return s && s.phase === 'solving' && !s.busy; }, null, { timeout: 15000 });
+        problems.push(...fitProblems(tag + ' Puzzles', await layoutReport(p, 'puzzleBoard'), minBoard));
+        if (errors.length) problems.push(`${tag}: page errors: ${errors.join(' | ')}`);
+      } finally {
+        await ctx.close();
+      }
+    }
+    return problems;
+  });
+
+  await check('phone: taps play moves in Coach, a drill, Library and Puzzles, and the bottom tab bar switches views', async () => {
+    const problems = [];
+    if (!page.context().browser()) return ['no browser handle to open a phone context'];
+    const ctx = await sizedContext(375, 812, true);
+    try {
+      const tp = await ctx.newPage();
+      const errors = [];
+      tp.on('pageerror', e => errors.push(e.message));
+      const tapMove = async (id, from, to) => {
+        await boardSquare(tp, id, from).tap();
+        await boardSquare(tp, id, to).tap();
+      };
+      const smallTargets = () => tp.evaluate(() => [...document.querySelectorAll('.top-nav-btn, [data-primary-action="true"], .ctrl-btn.primary')]
+        .filter(el => el.checkVisibility() && !el.closest('.keyboard-move-form'))
+        .map(el => ({ id: el.id || el.textContent.trim(), r: el.getBoundingClientRect() }))
+        .filter(t => t.r.height < 44 || t.r.width < 44)
+        .map(t => `${t.id} ${Math.round(t.r.width)}x${Math.round(t.r.height)}`));
+      await tp.goto(base + '/?view=coach');
+      await tp.waitForFunction(() => typeof engineClient !== 'undefined' && !!coachBoard);
+      const notice = await tp.locator('#desktop-notice').textContent();
+      if (!/different browser/.test(notice) || !/week/.test(notice)) problems.push('the phone notice does not explain the sign-in and storage risks');
+      await tp.locator('#btn-desktop-notice-continue').tap();
+      if (await tp.locator('#desktop-notice').isVisible()) problems.push('Continue did not lead to the phone layout');
+
+      // The tab bar is fixed to the bottom and every tab is a 44px target.
+      const bar = await tp.evaluate(() => {
+        const nav = document.querySelector('.top-nav').getBoundingClientRect();
+        return { position: getComputedStyle(document.querySelector('.top-nav')).position, bottom: nav.bottom, top: nav.top, innerHeight };
+      });
+      if (bar.position !== 'fixed' || Math.abs(bar.bottom - bar.innerHeight) > 1) problems.push('the view tabs are not a bar fixed to the bottom: ' + JSON.stringify(bar));
+      let small = await smallTargets();
+      if (small.length) problems.push('targets under 44px in Coach: ' + small.join(', '));
+      for (const [tab, view] of [['library', 'library-view'], ['puzzles', 'puzzles-view'], ['coach', 'coach-view']]) {
+        await tp.locator('#nav-' + tab).tap();
+        await tp.waitForTimeout(250);
+        const state = await tp.evaluate(v => ({ app: appView, shown: document.getElementById(v).checkVisibility() }), view);
+        if (state.app !== tab || !state.shown) problems.push(`the ${tab} tab did not switch the view: ` + JSON.stringify(state));
+      }
+
+      // Coach: a game by taps; the notation strip sits under the board.
+      await tp.locator('#btn-coach-newgame').tap();
+      await tp.waitForFunction(() => coachGameActive && !coachThinking, null, { timeout: 60000 });
+      await tapMove('coachBoard', 'e2', 'e4');
+      await tp.waitForFunction(() => coachGame.history().length >= 2 && !coachThinking, null, { timeout: 60000 }).catch(() => {});
+      await tapMove('coachBoard', 'g1', 'f3');
+      await tp.waitForFunction(() => coachGame.history().length >= 4 && !coachThinking, null, { timeout: 60000 }).catch(() => {});
+      await tp.waitForTimeout(300);
+      const coach = await tp.evaluate(() => {
+        const board = document.getElementById('coachBoard').getBoundingClientRect();
+        const strip = document.getElementById('movelist');
+        const cur = strip.querySelector('.ply.current');
+        const s = strip.getBoundingClientRect(), c = cur && cur.getBoundingClientRect();
+        return { moves: coachGame.history().slice(0, 4), inBoardArea: !!strip.closest('.coach-board-area'), below: s.top >= board.bottom - 1,
+          current: !!c && c.left >= s.left - 1 && c.right <= s.right + 1, oneRow: s.height < 80 };
+      });
+      if (coach.moves[0] !== 'e4' || coach.moves[2] !== 'Nf3') problems.push('tapped moves were not played in Coach: ' + coach.moves.join(' '));
+      if (!coach.inBoardArea || !coach.below || !coach.current || !coach.oneRow) problems.push('the Coach notation is not a strip under the board showing the current move: ' + JSON.stringify(coach));
+      small = await smallTargets();
+      if (small.length) problems.push('targets under 44px during a game: ' + small.join(', '));
+
+      // A drill: its question sits above the board and a tap answers it.
+      await tp.evaluate(() => {
+        startCoachPractice({ id: 'drill-phone-tap', tag: 'development', meta: INSIGHT_TAG_META.development,
+          entry: { fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', bestUci: 'e2e4', bestSan: 'e4', userSan: 'a3', pairNum: 1, ply: 1 } });
+      });
+      try {
+        await tp.waitForFunction(() => coachPracticeSession && coachPracticeSession.analysisReady, null, { timeout: 30000 });
+        await tp.waitForTimeout(300);
+        const drill = await tp.evaluate(() => ({ prompt: document.getElementById('coach-practice-prompt').getBoundingClientRect().bottom,
+          board: document.getElementById('coachBoard').getBoundingClientRect().top, width: document.documentElement.scrollWidth }));
+        if (!(drill.prompt <= drill.board)) problems.push('the drill question is not above the board: ' + JSON.stringify(drill));
+        if (drill.width > 375) problems.push('the drill scrolls sideways: ' + drill.width);
+        await tapMove('coachBoard', 'e2', 'e4');
+        await tp.waitForFunction(() => coachPracticeSession && !coachPracticeSession.grading && coachGame.history()[0] === 'e4', null, { timeout: 30000 })
+          .catch(() => problems.push('a tapped drill answer was not accepted'));
+      } finally {
+        await tp.evaluate(() => { if (coachPracticeSession) exitCoachPractice(); });
+      }
+
+      // Library quiz: a tap plays White's first move; the strip follows Study.
+      await tp.goto(base + '/?opening=italian&mode=quiz');
+      await tp.waitForFunction(() => !!board && quizMode);
+      await tapMove('myBoard', 'e2', 'e4');
+      await tp.waitForFunction(() => currentMoveIdx >= 0, null, { timeout: 5000 }).catch(() => problems.push('a tapped quiz move was not accepted in the Library'));
+      await tp.locator('#btn-study').tap();
+      for (let i = 0; i < 6; i++) await tp.locator('#btn-next').tap();
+      const library = await tp.evaluate(() => {
+        const board = document.getElementById('myBoard').getBoundingClientRect();
+        const list = document.getElementById('move-list');
+        const s = list.getBoundingClientRect(), c = list.querySelector('.move-chip.current').getBoundingClientRect();
+        return { inBoardArea: !!list.closest('.board-area'), below: s.top >= board.bottom - 1, current: c.left >= s.left - 1 && c.right <= s.right + 1, oneRow: s.height < 80 };
+      });
+      if (!library.inBoardArea || !library.below || !library.current || !library.oneRow) problems.push('the Library notation is not a strip under the board showing the current move: ' + JSON.stringify(library));
+
+      // Puzzles: tap the solution's next move.
+      await tp.locator('#nav-puzzles').tap();
+      await tp.waitForFunction(() => { const s = PuzzlesView._debug().session; return s && s.phase === 'solving' && !s.busy; }, null, { timeout: 15000 });
+      const before = await tp.evaluate(() => { const s = PuzzlesView._debug().session; return { ply: s.ply, move: s.puzzle.moves[s.ply] }; });
+      await tapMove('puzzleBoard', before.move.slice(0, 2), before.move.slice(2, 4));
+      if (before.move.length === 5) await tp.locator(`.promotion-choice[data-promotion="${before.move[4]}"]`).tap();
+      await tp.waitForFunction(ply => { const s = PuzzlesView._debug().session; return s.ply > ply || s.phase === 'solved'; }, before.ply, { timeout: 10000 })
+        .catch(() => problems.push('a tapped puzzle move was not played'));
+      small = await smallTargets();
+      if (small.length) problems.push('targets under 44px in Puzzles: ' + small.join(', '));
+      if (errors.length) problems.push('page errors: ' + errors.join(' | '));
+    } finally {
+      await ctx.close();
+    }
+    return problems;
+  });
+
+  await check('phone: Settings, the review summary, the game viewer and the shortcut sheet fit 375 wide', async () => {
+    const problems = [];
+    if (!page.context().browser()) return ['no browser handle to open a phone context'];
+    const ctx = await sizedContext(375, 812, true);
+    try {
+      const tp = await ctx.newPage();
+      const errors = [];
+      tp.on('pageerror', e => errors.push(e.message));
+      await tp.addInitScript(() => { try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {} });
+      await tp.goto(base + '/?view=coach');
+      await tp.waitForFunction(() => typeof GameArchive !== 'undefined' && !!coachBoard);
+      const inside = sel => tp.evaluate(s => {
+        const el = document.querySelector(s);
+        if (!el || !el.checkVisibility()) return s + ' is not shown';
+        const r = el.getBoundingClientRect();
+        if (r.left < -0.5 || r.right > innerWidth + 0.5 || r.top < -0.5 || r.bottom > innerHeight + 0.5) return `${s} runs off the screen (${Math.round(r.left)},${Math.round(r.top)} → ${Math.round(r.right)},${Math.round(r.bottom)})`;
+        if (document.documentElement.scrollWidth > innerWidth) return `${s}: the page scrolls sideways`;
+        return null;
+      }, sel);
+      // Settings: every group open at once.
+      await tp.evaluate(() => document.querySelectorAll('.coach-settings details').forEach(d => { d.open = true; }));
+      await tp.waitForTimeout(200);
+      const settings = await layoutReport(tp, 'coachBoard');
+      if (settings.scrollWidth > settings.innerWidth) problems.push('open settings scroll sideways: ' + settings.wide.join(', '));
+      // A finished game: the summary, then the archived game in the viewer.
+      await tp.evaluate(() => {
+        coachStartFen = new Chess().fen();
+        coachLocalGameId = 'fixture-phone-game';
+        coachGame = new Chess();
+        const fens = [coachGame.fen()];
+        ['f3', 'e5', 'g4', 'Qh4#'].forEach(m => { coachGame.move(m); fens.push(coachGame.fen()); });
+        coachUserSide = 'white';
+        coachReviewLog = [
+          { ply: 1, userUci: 'f2f3', userSan: 'f3', bestUci: 'e2e4', bestSan: 'e4', tier: 'inaccuracy', fenBefore: fens[0], evalAfter: { cp: 20 }, localGameId: coachLocalGameId },
+          { ply: 3, userUci: 'g2g4', userSan: 'g4', bestUci: 'b1c3', bestSan: 'Nc3', tier: 'blunder', fenBefore: fens[2], evalAfter: { mate: 1 }, localGameId: coachLocalGameId }
+        ];
+        coachStats = { moves: 2, best: 0, excellent: 0, good: 0, inaccuracy: 1, mistake: 0, blunder: 1 };
+        GameArchive.record('Checkmate — Black wins.');
+        showPostGameSummary('Checkmate — Black wins.');
+      });
+      await tp.waitForTimeout(600);
+      let problem = await inside('.summary-card');
+      if (problem) problems.push(problem);
+      const actions = await tp.evaluate(() => [...document.querySelectorAll('.summary-actions .ctrl-btn')].filter(b => b.checkVisibility()).map(b => b.getBoundingClientRect()).filter(r => r.height < 44).length);
+      if (actions) problems.push(actions + ' summary actions are under 44px tall');
+      await tp.locator('#btn-summary-close').tap();
+      await tp.locator('#tab-progress').tap();
+      await tp.locator('.game-archive-open').first().tap();
+      await tp.locator('#game-viewer').waitFor({ state: 'visible' });
+      await tp.waitForTimeout(300);
+      problem = await inside('.game-viewer-card');
+      if (problem) problems.push(problem);
+      problem = await inside('#archiveBoard');
+      if (problem) problems.push(problem);
+      await tp.keyboard.press('Escape');
+      await tp.waitForTimeout(200);
+      await tp.locator('#btn-shortcuts').tap();
+      await tp.waitForTimeout(200);
+      problem = await inside('.shortcut-card');
+      if (problem) problems.push(problem);
+      if (errors.length) problems.push('page errors: ' + errors.join(' | '));
+    } finally {
+      await ctx.close();
+    }
+    return problems;
+  });
+
+  await check('phone: the notation strip scrolls without stepping, drills cannot be stepped back, and scrolling follows the user', async () => {
+    const problems = [];
+    if (!page.context().browser()) return ['no browser handle to open a phone context'];
+    const ctx = await sizedContext(375, 812, true);
+    try {
+      const tp = await ctx.newPage();
+      const errors = [];
+      tp.on('pageerror', e => errors.push(e.message));
+      await tp.addInitScript(() => { try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {} });
+      const cdp = await ctx.newCDPSession(tp);
+      const swipe = async (box, dx) => {
+        const y = box.y + box.height / 2, x0 = box.x + box.width / 2 + (dx < 0 ? 80 : -80);
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x0, y }] });
+        for (let i = 1; i <= 6; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + dx * i / 6, y }] });
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await tp.waitForTimeout(300);
+      };
+      // Library Study: swiping the board steps; swiping the strip only scrolls it.
+      await tp.goto(base + '/?opening=italian');
+      await tp.waitForFunction(() => !!board && document.querySelectorAll('#move-list .move-chip').length > 4);
+      await tp.evaluate(() => goToMove(2));
+      await swipe(await tp.locator('#myBoard').boundingBox(), -160);
+      const afterBoard = await tp.evaluate(() => currentMoveIdx);
+      if (afterBoard !== 3) problems.push('setup: a swipe on the board should step to the next move, got ' + afterBoard);
+      await swipe(await tp.locator('#library-moves').boundingBox(), -160);
+      const afterStrip = await tp.evaluate(() => currentMoveIdx);
+      if (afterStrip !== afterBoard) problems.push(`swiping the notation strip stepped the opening from ${afterBoard} to ${afterStrip}`);
+
+      // Coach drill: the move list is hidden and cannot put the board into review.
+      await tp.goto(base + '/?view=coach');
+      await tp.waitForFunction(() => typeof engineClient !== 'undefined' && !!coachBoard);
+      await tp.evaluate(() => {
+        startCoachPractice({ id: 'drill-strip', tag: 'development', meta: INSIGHT_TAG_META.development,
+          entry: { fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', bestUci: 'e2e4', bestSan: 'e4', userSan: 'a3', pairNum: 1, ply: 1 } });
+      });
+      await tp.waitForFunction(() => coachPracticeSession && coachPracticeSession.analysisReady, null, { timeout: 30000 });
+      await tp.evaluate(() => { document.getElementById('coach-keyboard-move').open = true; });
+      await tp.locator('#coach-keyboard-move-input').fill('e4');
+      await tp.locator('#coach-keyboard-move-form button[type=submit]').tap();
+      await tp.waitForFunction(() => coachPracticeSession && !coachPracticeSession.grading && coachGame.history()[0] === 'e4', null, { timeout: 30000 }).catch(() => problems.push('setup: the drill move was not graded'));
+      if (await tp.locator('#movelist-section').isVisible()) problems.push('the move list showed during a drill on a phone');
+      const reviewing = await tp.evaluate(() => { coachGotoPly(0); return coachReviewCursor; });
+      if (reviewing !== null) problems.push('stepping back during a drill put the board into review at ply ' + reviewing);
+      await tp.evaluate(() => { if (coachPracticeSession) exitCoachPractice(); });
+
+      // Re-showing the current view (as sign-in does) keeps the scroll position.
+      await tp.evaluate(() => window.scrollTo(0, 600));
+      await tp.waitForTimeout(200);
+      const before = await tp.evaluate(() => scrollY);
+      await tp.evaluate(() => switchView('coach'));
+      await tp.waitForTimeout(400);
+      const after = await tp.evaluate(() => scrollY);
+      if (before > 100 && after < before - 50) problems.push(`re-showing Coach jumped the page from ${before} to ${after}`);
+
+      // Puzzles: a mode chosen at the bottom brings its board into view.
+      await tp.locator('#nav-puzzles').tap();
+      await tp.waitForFunction(() => document.getElementById('puzzles-view').getAttribute('aria-hidden') === 'false');
+      await tp.waitForTimeout(1500);
+      await tp.locator('#puzzle-mode-rush').scrollIntoViewIfNeeded();
+      await tp.locator('#puzzle-mode-rush').tap();
+      await tp.waitForTimeout(900);
+      const boardTop = await tp.evaluate(() => document.querySelector('.puzzles-board-area').getBoundingClientRect().top);
+      if (boardTop < -10 || boardTop > 812 * 0.5) problems.push('choosing a puzzle mode left its board off screen (top ' + Math.round(boardTop) + ')');
+      if (errors.length) problems.push('page errors: ' + errors.join(' | '));
+    } finally {
+      await ctx.close();
+    }
+    // Reduced motion: page scrolls are instant.
+    const rm = await page.context().browser().newContext({ viewport: { width: 375, height: 812 }, reducedMotion: 'reduce' });
+    try {
+      const rp = await rm.newPage();
+      await rp.goto(base + '/?view=coach');
+      const behaviour = await rp.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior);
+      if (behaviour !== 'auto') problems.push('with reduced motion the page still scrolls smoothly (' + behaviour + ')');
+    } finally {
+      await rm.close();
+    }
+    return problems;
+  });
+
+  await check('phone: keyboard and screen-reader order follow the drawn order, and desktop gets the markup order back', async () => {
+    const problems = [];
+    if (!page.context().browser()) return ['no browser handle to open a phone context'];
+    const containers = ['#library-view', '#coach-view', '#puzzles-view', '#library-view .board-area', '.coach-board-area', '.puzzles-board-area'];
+    // In DOM order, the drawn order (CSS `order`) must never go down.
+    const outOfOrder = (p, where) => p.evaluate(([sels, where]) => {
+      const bad = [];
+      sels.forEach(sel => {
+        const c = document.querySelector(sel);
+        if (!c || !c.offsetParent) return;
+        const orders = [...c.children].map(el => ({ el, o: parseInt(getComputedStyle(el).order, 10) || 0 }));
+        for (let i = 1; i < orders.length; i++) {
+          if (orders[i].o < orders[i - 1].o) bad.push(`${where} ${sel}: ${orders[i].el.className || orders[i].el.id} (order ${orders[i].o}) comes after ${orders[i - 1].el.className || orders[i - 1].el.id} (order ${orders[i - 1].o})`);
+        }
+      });
+      return bad;
+    }, [containers, where]);
+    const childList = p => p.evaluate(sels => sels.map(sel => { const c = document.querySelector(sel); return c ? [...c.children].map(el => el.id || el.className).join('|') : ''; }), containers);
+    const ctx = await sizedContext(375, 812, true);
+    try {
+      const tp = await ctx.newPage();
+      await tp.addInitScript(() => { try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {} });
+      const settle = () => tp.waitForTimeout(300);
+      await tp.goto(base + '/?view=coach');
+      await tp.waitForFunction(() => typeof engineClient !== 'undefined' && !!coachBoard);
+      await settle();
+      problems.push(...await outOfOrder(tp, 'Coach ready'));
+      await tp.locator('#btn-coach-newgame').tap();
+      await tp.waitForFunction(() => coachGameActive && !coachThinking, null, { timeout: 60000 });
+      await settle();
+      problems.push(...await outOfOrder(tp, 'Coach playing'));
+      await tp.evaluate(() => {
+        startCoachPractice({ id: 'drill-order', tag: 'development', meta: INSIGHT_TAG_META.development,
+          entry: { fenBefore: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', bestUci: 'e2e4', bestSan: 'e4', userSan: 'a3', pairNum: 1, ply: 1 } });
+      });
+      await settle();
+      problems.push(...await outOfOrder(tp, 'Coach drill'));
+      await tp.evaluate(() => { if (coachPracticeSession) exitCoachPractice(); });
+      await tp.locator('#nav-library').tap();
+      await settle();
+      problems.push(...await outOfOrder(tp, 'Library list'));
+      await tp.locator('.opening-btn').first().tap();
+      await settle();
+      problems.push(...await outOfOrder(tp, 'Library opening'));
+      await tp.locator('#nav-puzzles').tap();
+      await tp.waitForTimeout(1200);
+      problems.push(...await outOfOrder(tp, 'Puzzles'));
+      // Widening restores the markup order a desktop load has.
+      await tp.setViewportSize({ width: 1440, height: 900 });
+      await settle();
+      const widened = await childList(tp);
+      const dp = await (await sizedContext(1440, 900, false)).newPage();
+      try {
+        await dp.goto(base + '/?view=puzzles');
+        await dp.waitForTimeout(600);
+        const fresh = await childList(dp);
+        containers.forEach((sel, i) => { if (widened[i] !== fresh[i]) problems.push(`${sel} kept the phone order after widening: ${widened[i]} vs ${fresh[i]}`); });
+      } finally {
+        await dp.context().close();
+      }
+    } finally {
+      await ctx.close();
+    }
+    return problems;
+  });
+
+  // ── Backups on phones (redesign plan §3, risk 2: local-only data) ──
+  // The download is the boundary: a link click with a download name is
+  // recorded instead of saving a file.
+  const stubDownloads = () => {
+    window.__downloads = [];
+    const realClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function () {
+      if (this.download) { window.__downloads.push(this.download); return; }
+      return realClick.call(this);
+    };
+  };
+  const loadSettled = async (p, view = 'coach') => {
+    await p.goto(base + '/?view=' + view);
+    await p.waitForFunction(v => typeof growthOwnerId === 'function' && typeof coachSync !== 'undefined' && (v === 'coach' ? !!coachBoard : appView === v), view);
+    // The reminder is decided once the first account check has finished.
+    await p.evaluate(async () => {
+      await coachSync.init();
+      await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 50)));
+    });
+  };
+  const nudgeState = p => p.evaluate(() => {
+    const el = document.getElementById('backup-nudge');
+    if (!el) return { exists: false, shown: false, text: '' };
+    return { exists: true, shown: !el.hidden && el.checkVisibility(), focusInside: el.contains(document.activeElement), text: el.textContent.replace(/\s+/g, ' ').trim() };
+  });
+
+  await check('Training data says when this browser last exported a backup', async () => {
+    const problems = [];
+    if (!page.context().browser()) return ['no browser handle to open a context'];
+    const ctx = await sizedContext(1440, 900, false);
+    try {
+      const p = await ctx.newPage();
+      await p.addInitScript(stubDownloads);
+      const line = () => p.evaluate(() => { const el = document.getElementById('training-data-last-backup'); return el ? el.textContent.trim() : null; });
+      await loadSettled(p);
+      expect(problems, await line() === 'Not backed up yet', 'before any backup the card says ' + JSON.stringify(await line()));
+      await p.evaluate(() => { document.getElementById('group-data').open = true; });
+      await p.locator('#btn-export-training-data').click();
+      const downloads = await p.evaluate(() => window.__downloads);
+      expect(problems, downloads.length === 1 && /^chess-coach-training-.*\.json$/.test(downloads[0]), 'export did not download a backup: ' + JSON.stringify(downloads));
+      expect(problems, await line() === 'Last backed up: today', 'after exporting the card says ' + JSON.stringify(await line()));
+      await loadSettled(p);
+      expect(problems, await line() === 'Last backed up: today', 'after a reload the card says ' + JSON.stringify(await line()));
+      // An older backup shows its date.
+      await p.evaluate(() => localStorage.setItem('coach:last-backup:v1', String(Date.now() - 10 * 86400000)));
+      await loadSettled(p);
+      const older = await line();
+      expect(problems, /^Last backed up: \S/.test(older || '') && !/today|yesterday/.test(older), 'a ten-day-old backup reads ' + JSON.stringify(older));
+      // A failed export records nothing.
+      await p.evaluate(() => localStorage.removeItem('coach:last-backup:v1'));
+      await loadSettled(p);
+      await p.evaluate(() => {
+        downloadTrainingBackup = () => { throw new Error('Storage is blocked.'); };
+        document.getElementById('group-data').open = true;
+      });
+      await p.locator('#btn-export-training-data').click();
+      const failed = await p.evaluate(() => ({ stored: localStorage.getItem('coach:last-backup:v1'), status: document.getElementById('training-data-status').textContent, line: document.getElementById('training-data-last-backup').textContent }));
+      expect(problems, failed.stored === null && failed.status === 'Storage is blocked.' && failed.line === 'Not backed up yet', 'a failed export still recorded a backup: ' + JSON.stringify(failed));
+    } finally {
+      await ctx.close();
+    }
+    return problems;
+  });
+
+  await check('phone: a signed-out user with progress is offered sign-in or a backup, and a dismissal lasts two weeks', async () => {
+    const problems = [];
+    if (!page.context().browser()) return ['no browser handle to open a phone context'];
+    const ctx = await sizedContext(375, 812, true);
+    try {
+      const tp = await ctx.newPage();
+      const errors = [];
+      tp.on('pageerror', e => errors.push(e.message));
+      await tp.addInitScript(() => { try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {} });
+      await tp.addInitScript(stubDownloads);
+      const daysAgo = n => Date.now() - n * 86400000;
+      // An empty profile: no reminder.
+      await loadSettled(tp);
+      let s = await nudgeState(tp);
+      if (!s.exists) return ['there is no backup reminder'];
+      expect(problems, !s.shown, 'shown to a user with no progress');
+      // Two finished games are not enough; three are. The reminder sits under
+      // the app bar, does not take focus and leaves the whole board on screen.
+      await tp.evaluate(() => { const lt = loadLifetime(); lt.games = 2; saveLifetime(lt); });
+      await loadSettled(tp);
+      expect(problems, !(await nudgeState(tp)).shown, 'shown with only two finished games');
+      await tp.evaluate(() => { const lt = loadLifetime(); lt.games = 3; saveLifetime(lt); });
+      await loadSettled(tp);
+      s = await nudgeState(tp);
+      expect(problems, s.shown, 'not shown to a signed-out phone user with three finished games');
+      expect(problems, !s.focusInside, 'the reminder took focus');
+      expect(problems, /only on this device/.test(s.text) && /Safari can clear it after a week without a visit/.test(s.text) && /Not backed up yet/.test(s.text), 'reminder text: ' + s.text);
+      const fit = await tp.evaluate(() => {
+        const b = document.getElementById('coachBoard').getBoundingClientRect();
+        const bar = document.querySelector('.top-nav').getBoundingClientRect();
+        const nudge = document.getElementById('backup-nudge').getBoundingClientRect();
+        return { boardTop: Math.round(b.top), boardBottom: Math.round(b.bottom), barTop: Math.round(bar.top), nudgeBottom: Math.round(nudge.bottom), wide: document.documentElement.scrollWidth > innerWidth };
+      });
+      expect(problems, fit.nudgeBottom <= fit.boardTop && fit.boardBottom <= fit.barTop, 'with the reminder the board is not fully on screen: ' + JSON.stringify(fit));
+      expect(problems, !fit.wide, 'the reminder makes the page scroll sideways');
+      const buttons = await tp.evaluate(() => [...document.querySelectorAll('#backup-nudge button')].filter(b => b.checkVisibility()).map(b => ({ name: b.textContent.trim(), h: Math.round(b.getBoundingClientRect().height) })));
+      expect(problems, buttons.map(b => b.name).join('|') === 'Sign in to sync|Back up now|Hide for 2 weeks', 'reminder buttons: ' + JSON.stringify(buttons));
+      expect(problems, buttons.every(b => b.h >= 44), 'reminder buttons under 44px: ' + JSON.stringify(buttons));
+      // Sign in to sync: from Puzzles, it opens Coach's sign-in form.
+      await loadSettled(tp, 'puzzles');
+      await tp.locator('#btn-backup-nudge-signin').tap();
+      await tp.waitForTimeout(400);
+      const signIn = await tp.evaluate(() => {
+        const r = document.getElementById('coach-auth-email').getBoundingClientRect();
+        return { view: appView, open: document.getElementById('group-account').open, focus: document.activeElement && document.activeElement.id, inView: r.top >= 0 && r.bottom <= innerHeight };
+      });
+      expect(problems, signIn.view === 'coach' && signIn.open && signIn.focus === 'coach-auth-email' && signIn.inView, 'Sign in to sync did not open the sign-in form: ' + JSON.stringify(signIn));
+      // Back up now: downloads, says so, and keeps the reminder away for a week.
+      await loadSettled(tp);
+      await tp.locator('#btn-backup-nudge-backup').tap();
+      const backedUp = await tp.evaluate(() => ({
+        downloads: window.__downloads.length,
+        status: document.getElementById('backup-nudge-status').textContent,
+        backupHidden: document.getElementById('btn-backup-nudge-backup').hidden,
+        focus: document.activeElement && document.activeElement.id,
+        card: document.getElementById('training-data-last-backup').textContent
+      }));
+      expect(problems, backedUp.downloads === 1 && /Backup downloaded/.test(backedUp.status) && backedUp.backupHidden, 'Back up now did not back up: ' + JSON.stringify(backedUp));
+      expect(problems, backedUp.focus === 'btn-backup-nudge-dismiss', 'focus was lost when the backup button went away: ' + backedUp.focus);
+      expect(problems, backedUp.card === 'Last backed up: today', 'the Training data card did not update: ' + backedUp.card);
+      // Closing after a backup is not a two-week dismissal.
+      await tp.locator('#btn-backup-nudge-dismiss').tap();
+      const closed = await tp.evaluate(() => ({ hidden: document.getElementById('backup-nudge').hidden, dismissedAt: localStorage.getItem('ui:backup-nudge-dismissed-at') }));
+      expect(problems, closed.hidden && closed.dismissedAt === null, 'closing after a backup: ' + JSON.stringify(closed));
+      await loadSettled(tp);
+      expect(problems, !(await nudgeState(tp)).shown, 'shown again right after a backup');
+      // A week-old backup brings it back, with the date.
+      await tp.evaluate(d => localStorage.setItem('coach:last-backup:v1', String(d)), daysAgo(8));
+      await loadSettled(tp);
+      s = await nudgeState(tp);
+      expect(problems, s.shown && /Last backed up: \S/.test(s.text) && !/Not backed up yet/.test(s.text), 'not back after a week-old backup: ' + s.text);
+      // Dismissal: hides it, hands focus to the view tab, and lasts two weeks.
+      await tp.locator('#btn-backup-nudge-dismiss').tap();
+      const dismissed = await tp.evaluate(() => ({ hidden: document.getElementById('backup-nudge').hidden, focus: document.activeElement && document.activeElement.id }));
+      expect(problems, dismissed.hidden && dismissed.focus === 'nav-coach', 'dismissing did not hide it, or dropped focus: ' + JSON.stringify(dismissed));
+      await loadSettled(tp);
+      expect(problems, !(await nudgeState(tp)).shown, 'a dismissal did not survive a reload');
+      await tp.evaluate(d => localStorage.setItem('ui:backup-nudge-dismissed-at', String(d)), daysAgo(13));
+      await loadSettled(tp);
+      expect(problems, !(await nudgeState(tp)).shown, 'shown again before two weeks were up');
+      await tp.evaluate(d => localStorage.setItem('ui:backup-nudge-dismissed-at', String(d)), daysAgo(15));
+      await loadSettled(tp);
+      expect(problems, (await nudgeState(tp)).shown, 'not back after two weeks');
+      // Signing in hides it at once.
+      await tp.evaluate(() => { coachAuthUser = { id: 'nudge-user', email: 'nudge@example.com' }; renderCoachAuth(); });
+      expect(problems, !(await nudgeState(tp)).shown, 'still shown after signing in');
+      await tp.evaluate(() => { coachAuthUser = null; renderCoachAuth(); });
+      // Wider than the stacked layout it goes; back in it, it returns.
+      await tp.setViewportSize({ width: 1024, height: 768 });
+      await tp.waitForTimeout(250);
+      expect(problems, !(await nudgeState(tp)).shown, 'shown at 1024 wide');
+      await tp.setViewportSize({ width: 375, height: 812 });
+      await tp.waitForTimeout(250);
+      expect(problems, (await nudgeState(tp)).shown, 'not back after returning to the phone layout');
+      if (errors.length) problems.push('page errors: ' + errors.join(' | '));
+    } finally {
+      await ctx.close();
+    }
+    return problems;
+  });
+
+  await check('backup reminder: never for a signed-in phone user or on a desktop, even with progress', async () => {
+    const problems = [];
+    if (!page.context().browser()) return ['no browser handle to open a context'];
+    // A signed-in session from the account service (the Supabase client is
+    // the boundary), switched on per tab; every query answers with no rows.
+    const signedInClient = () => {
+      try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {}
+      if (sessionStorage.getItem('test:signed-in') !== '1') return;
+      const result = { data: null, error: null, count: 0 };
+      const chain = () => new Proxy(function () {}, {
+        get: (t, prop) => prop === 'then' ? (ok, fail) => Promise.resolve(result).then(ok, fail) : chain(),
+        apply: () => chain()
+      });
+      const user = { id: '00000000-0000-4000-8000-00000000ab12', email: 'synced@example.com' };
+      window.supabase = { createClient: () => ({
+        auth: {
+          getSession: async () => ({ data: { session: { user, access_token: 'x' } }, error: null }),
+          onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+          signOut: async () => ({ error: null })
+        },
+        from: () => chain(),
+        rpc: () => chain(),
+        channel: () => chain(),
+        removeChannel: () => {}
+      }) };
+    };
+    for (const [tag, w, h, touch, signed, want] of [['signed-in phone', 375, 812, true, true, false], ['signed-out desktop', 1440, 900, false, false, false], ['signed-out phone (control)', 375, 812, true, false, true]]) {
+      const ctx = await sizedContext(w, h, touch);
+      try {
+        const p = await ctx.newPage();
+        await p.addInitScript(signedInClient);
+        await loadSettled(p);
+        // Guest progress first; a signed-in tab adopts it into the account.
+        await p.evaluate(signed => {
+          const lt = loadLifetime(); lt.games = 5; saveLifetime(lt);
+          if (signed) sessionStorage.setItem('test:signed-in', '1');
+        }, signed);
+        await loadSettled(p);
+        const s = await p.evaluate(() => ({ user: !!coachAuthUser, games: loadLifetime().games }));
+        if (signed && !s.user) problems.push(tag + ': setup: the stubbed session did not sign in');
+        if (s.games !== 5) problems.push(tag + ': setup: the guest games did not carry over: ' + s.games);
+        const shown = (await nudgeState(p)).shown;
+        if (shown !== want) problems.push(`${tag}: reminder ${shown ? 'shown' : 'not shown'}`);
+      } finally {
+        await ctx.close();
+      }
+    }
+    return problems;
+  });
+
+  await check('an endgame lesson is marked done only after an unaided solve', async () => {
+    await freshCoach();
+    return page.evaluate(() => {
+      const problems = [];
+      const lesson = ENDGAME_LESSONS[0];
+      const item = endgamePracticeItem(lesson);
+      const row = () => {
+        renderEndgameTrack();
+        const el = document.querySelectorAll('#endgame-track-list .endgame-item')[0];
+        return { done: el.classList.contains('is-complete'), title: el.querySelector('strong').textContent,
+          button: el.querySelector('button').textContent, progress: document.getElementById('endgame-track-progress').textContent };
+      };
+      recordPracticeAttempt(item, true, true);   // solved with the answer shown
+      let r = row();
+      if (r.done || r.title.startsWith('✓') || r.progress.startsWith('1/')) problems.push('a helped solve marked the lesson done: ' + JSON.stringify(r));
+      if (r.button !== 'Try unaided') problems.push('a helped-only lesson should offer an unaided try: ' + r.button);
+      recordPracticeAttempt(item, true, false);  // solved unaided
+      r = row();
+      if (!r.done || !r.title.startsWith('✓') || !r.progress.startsWith('1/') || r.button !== 'Review') problems.push('an unaided solve did not mark the lesson done: ' + JSON.stringify(r));
+      return problems;
+    });
+  });
+
+  await check('emailed-code sign-in: the code field appears only when enabled, and a wrong or short code is refused', async () => {
+    await freshCoach();
+    return page.evaluate(async () => {
+      const problems = [];
+      // verify-browser.sh's smoke stage may have installed a setter that forces
+      // the flag on for the session; replace the property outright and put
+      // the original descriptor back afterwards.
+      const saved = { client: coachDbClient, config: window.COACH_SUPABASE_CONFIG, descriptor: Object.getOwnPropertyDescriptor(window, 'COACH_SUPABASE_CONFIG') };
+      const setConfig = value => Object.defineProperty(window, 'COACH_SUPABASE_CONFIG', { configurable: true, writable: true, value });
+      const calls = [];
+      const fake = {
+        auth: {
+          signInWithOtp: async args => { calls.push(['send', args.email]); return { error: null }; },
+          verifyOtp: async args => { calls.push(['verify', args]); return args.token === '424242' ? { data: {}, error: null } : { data: null, error: { message: 'Token has expired or is invalid' } }; },
+          getSession: async () => ({ data: { session: null }, error: null }),
+          onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+          signOut: async () => ({ error: null })
+        },
+        from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) })
+      };
+      const submit = id => new Promise(resolve => { document.getElementById(id).requestSubmit(); setTimeout(resolve, 150); });
+      const status = () => document.getElementById('coach-auth-status').textContent;
+      const codeShown = () => getComputedStyle(document.getElementById('coach-auth-code-form')).display !== 'none';
+      try {
+        coachDbClient = fake;
+        document.getElementById('coach-auth-form').style.display = '';
+        const group = document.getElementById('coach-auth-form').closest('details');
+        if (group) group.open = true;
+        // Off (the shipped default): the link is sent and no code field appears.
+        setConfig(Object.assign({}, saved.config, { emailCodeEnabled: false }));
+        $('#coach-auth-code-form').hide();
+        $('#coach-auth-email').val('player@example.com');
+        await submit('coach-auth-email-form');
+        if (codeShown()) problems.push('with codes off, the code field appeared');
+        if (!/Open it in this browser to finish/.test(status())) problems.push('with codes off, the status should point to the link: ' + status());
+        // On: the code field appears, takes focus, and only the right code signs in.
+        setConfig(Object.assign({}, saved.config, { emailCodeEnabled: true }));
+        await submit('coach-auth-email-form');
+        if (!codeShown()) problems.push('with codes on, the code field did not appear after sending');
+        if (document.activeElement !== document.getElementById('coach-auth-code')) problems.push('the code field did not take focus');
+        $('#coach-auth-code').val('123');
+        await submit('coach-auth-code-form');
+        if (status() !== 'Enter the 6-digit code from the sign-in email.' || calls.some(c => c[0] === 'verify')) problems.push('a short code was sent or not refused: ' + status());
+        // Codes are often pasted with a space ("111 111"); the space is ignored.
+        $('#coach-auth-code').val('111 111');
+        await submit('coach-auth-code-form');
+        if (!/invalid or has expired/.test(status())) problems.push('a wrong code was not refused: ' + status());
+        const wrong = calls.filter(c => c[0] === 'verify').pop();
+        if (!wrong || wrong[1].token !== '111111') problems.push('a code pasted with a space was not sent as six digits: ' + JSON.stringify(wrong));
+        $('#coach-auth-code').val('424 242');
+        await submit('coach-auth-code-form');
+        const last = calls.filter(c => c[0] === 'verify').pop();
+        if (!last || last[1].email !== 'player@example.com' || last[1].token !== '424242' || last[1].type !== 'email') problems.push('verifyOtp got the wrong arguments: ' + JSON.stringify(last));
+        if (status() !== 'Signed in.') problems.push('the right code did not sign in: ' + status());
+      } finally {
+        coachDbClient = saved.client;
+        if (saved.descriptor) Object.defineProperty(window, 'COACH_SUPABASE_CONFIG', saved.descriptor);
+        else delete window.COACH_SUPABASE_CONFIG;
+        $('#coach-auth-code-form').hide();
+      }
+      return problems;
+    });
   });
 
   if (pageErrors.length) failures.push('page errors: ' + pageErrors.join(' | '));

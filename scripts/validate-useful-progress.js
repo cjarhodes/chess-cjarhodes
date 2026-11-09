@@ -47,7 +47,9 @@ vm.runInContext(metadata + '\n' + [
   'isInsightProblem', 'moveFromUci', 'recurringMistakeSummaries', 'insightTagCounts',
   'insightTagForEntry', 'buildPracticeQueue', 'practiceItemsForEntries', 'practiceMoveFor',
   'hashPracticeValue', 'practiceItemId', 'applyAdaptiveGoalBoost', 'adaptiveFocusProfile',
-  'adaptiveFocusReason', 'prioritizeAdaptivePractice', 'adaptiveDailyPlan', 'currentInsightEntries'
+  'adaptiveFocusReason', 'prioritizeAdaptivePractice', 'adaptiveDailyPlan', 'currentInsightEntries',
+  'insightTagsForReview', 'phaseOf', 'isCastlingMove', 'undevelopedMinorCount', 'isEarlyKingPawnLoosener',
+  'isCentralPawnMove', 'isNonCapturePawnWeakener', 'isLikelyBackRankTactic', 'isLikelyPinPressure', 'materialValue'
 ].map(extract).join('\n') + '\n' + growth + '\nplayerProfile = () => testProfile; repertoireFocusOpening = () => null;', context);
 
 const review = (ts, flagged = false, extras = {}) => Object.assign({
@@ -154,6 +156,36 @@ context.coachRemoteInsightEntries = [review(now - 1000, true, {id:'same',gameId:
 assert(context.currentInsightEntries().length === 1, 'local and remote copies double-counted a review');
 context.coachRemoteInsightsLoaded = false;
 assert(context.currentInsightEntries().length === 1, 'account-local history was unavailable while sync had not loaded');
+
+// Missed recaptures: the opponent has just taken on e4 and Nxe4 takes back.
+{
+  const recapture = {
+    tier: 'mistake', loss: 150, pairNum: 3, ply: 5,
+    fenBefore: 'rnbqkbnr/ppp1pppp/8/8/4p3/2N5/PPPP1PPP/R1BQKBNR w KQkq - 0 3',
+    fenAfter: 'rnbqkbnr/ppp1pppp/8/8/4p3/2NP4/PPP2PPP/R1BQKBNR b KQkq - 0 3',
+    userUci: 'd2d3', bestUci: 'c3e4', previousCaptureSquare: 'e4'
+  };
+  assert(context.insightTagsForReview(recapture).includes('missed_recapture'), 'declining to take back after a capture must be tagged as a missed recapture');
+  assert(!context.insightTagsForReview(Object.assign({}, recapture, { previousCaptureSquare: null })).includes('missed_recapture'), 'a capture with no capture before it is not a recapture');
+  assert(!context.insightTagsForReview(Object.assign({}, recapture, { previousCaptureSquare: 'd5' })).includes('missed_recapture'), 'capturing elsewhere is not a recapture');
+}
+
+// Endgame-track practice tags reach the adaptive focus and the endgame goal boost.
+context.testEntries = [];
+context.testEvents = [
+  { tag: 'endgame_conversion', at: now - 1000, correct: false, revealed: false },
+  { tag: 'passed_pawns', at: now - 2000, correct: false, revealed: false }
+];
+context.testProfile.goal = 'endgames';
+{
+  const profiles = context.adaptiveFocusProfile([], now);
+  const tags = profiles.map(profile => profile.tag);
+  assert(tags.includes('endgame_conversion') && tags.includes('passed_pawns'), 'endgame-track practice tags were dropped from the adaptive focus: ' + tags.join(','));
+  const conversion = profiles.find(profile => profile.tag === 'endgame_conversion');
+  assert(conversion && conversion.score === 2.5 + 0.75, 'the endgames goal must boost endgame-track tags');
+}
+context.testProfile.goal = 'balanced';
+context.testEvents = [];
 
 if (failures.length) { console.error(failures.join('\n')); process.exit(1); }
 console.log(`Useful progress validation passed (${checks} behavioural checks).`);

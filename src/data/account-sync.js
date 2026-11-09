@@ -148,6 +148,8 @@ function cleanAuthCallbackUrl() {
 
 function renderCoachAuth() {
   const configured = isSupabaseConfigured();
+  // Signing in hides the phone backup reminder (backup-nudge.js).
+  if (window.BackupNudge && window.BackupNudge.refresh) window.BackupNudge.refresh(false);
   $('#coach-auth-local').toggle(!configured);
   $('#coach-auth-form').toggle(configured && !coachAuthUser);
   $('#coach-auth-session').toggle(configured && !!coachAuthUser);
@@ -458,6 +460,46 @@ function remoteGamePayload(endReason) {
   };
 }
 
+// A pasted game has a content id (importedPgnGameKey in growth.js), so the
+// account keeps one row per pasted game: the insert carries that id as
+// client_game_key, unique per user, and a second paste of the same game finds
+// the row already there instead of adding another. Live games have no key.
+// Every game's local id is its client key: a pasted game's content id
+// (pgn-<side><hash>, the same for every paste of that game) or a live game's
+// random id. Either way a retried insert, a late duplicate or a guest game
+// adopted at sign-in lands on the row the account already has.
+function remoteGameClientKey(localGameId) {
+  return typeof localGameId === 'string' && localGameId.length >= 1 && localGameId.length <= 120 ? localGameId : null;
+}
+
+// Adds a game row, or for a keyed game returns the row the account already
+// holds for it. `created` says whether this call made the row, so a caller
+// that discards a stale insert never deletes an earlier paste's row.
+async function insertRemoteCoachGame(payload, localGameId) {
+  const key = remoteGameClientKey(localGameId);
+  if (!key) {
+    const { data, error } = await coachDbClient.from('coach_games').insert(payload).select('id').single();
+    if (error) throw error;
+    return { id: data.id, created: true };
+  }
+  const row = Object.assign({}, payload, { client_game_key: key });
+  const inserted = await coachDbClient
+    .from('coach_games')
+    .upsert(row, { onConflict: 'user_id,client_game_key', ignoreDuplicates: true })
+    .select('id');
+  if (inserted.error) throw inserted.error;
+  const created = Array.isArray(inserted.data) ? inserted.data[0] : inserted.data;
+  if (created && created.id) return { id: created.id, created: true };
+  const existing = await coachDbClient
+    .from('coach_games')
+    .select('id')
+    .eq('user_id', row.user_id)
+    .eq('client_game_key', key)
+    .single();
+  if (existing.error) throw existing.error;
+  return { id: existing.data.id, created: false };
+}
+
 async function ensureRemoteCoachGame(generation = coachGameGeneration) {
   if (!hasCoachDbSession() || !coachGame || coachPracticeSession) return null;
   const syncOwner = coachMemoryOwnerId();
@@ -470,20 +512,16 @@ async function ensureRemoteCoachGame(generation = coachGameGeneration) {
   const gameRef = coachGame;
   const userId = coachAuthUser.id;
   const payload = remoteGamePayload(null);
+  const localGameId = coachLocalGameId;
   coachRemoteGamePromiseGeneration = generation;
   coachRemoteGamePromise = (async () => {
-    const { data, error } = await coachDbClient
-      .from('coach_games')
-      .insert(payload)
-      .select('id')
-      .single();
-    if (error) throw error;
+    const data = await insertRemoteCoachGame(payload, localGameId);
     if (generation !== coachGameGeneration || coachGame !== gameRef ||
         !coachAuthUser || coachAuthUser.id !== userId) {
       // The insert completed after the user replaced the game. Remove the
       // now-orphaned row when the session still permits it, and never attach it
-      // to the current game.
-      coachDbClient.from('coach_games').delete().eq('id', data.id).eq('user_id', userId).then(() => {});
+      // to the current game. A row an earlier paste made stays.
+      if (data.created) coachDbClient.from('coach_games').delete().eq('id', data.id).eq('user_id', userId).then(() => {});
       return null;
     }
     coachRemoteGameId = data.id;
@@ -503,11 +541,59 @@ async function ensureRemoteCoachGame(generation = coachGameGeneration) {
 
 function updateRemoteCoachGame(endReason, generation = coachGameGeneration) {
   const owner = coachMemoryOwnerId(), localGameId = coachLocalGameId;
+  // A result is captured now: leaving Coach or starting the next game while
+  // this write waits behind the checkpoint upload must not drop it.
+  const final = endReason && hasCoachDbSession() && coachGame
+    ? { payload: remoteGamePayload(endReason), remoteGameId: coachRemoteGameId, localGameId } : null;
   const write = () => {
-    if (owner !== coachMemoryOwnerId() || localGameId !== coachLocalGameId || generation !== coachGameGeneration) return;
+    if (owner !== coachMemoryOwnerId()) return;
+    if (final) return commitFinalRemoteCoachGame(final);
+    if (localGameId !== coachLocalGameId || generation !== coachGameGeneration) return;
     return commitRemoteCoachGame(endReason, generation);
   };
   return typeof runAccountGameWrite === 'function' ? runAccountGameWrite(write) : Promise.resolve(write());
+}
+
+// Writes a captured result to its own game row, identified by the game rather
+// than the board generation (a view change or the next game bumps that).
+async function commitFinalRemoteCoachGame(final) {
+  if (!hasCoachDbSession()) return;
+  const owner = coachMemoryOwnerId();
+  const current = () => owner === coachMemoryOwnerId() && final.localGameId === coachLocalGameId;
+  if (typeof ensureAccountWritePermission === 'function') await ensureAccountWritePermission();
+  if (owner !== coachMemoryOwnerId() || !hasCoachDbSession()) return;
+  let gameId = final.remoteGameId || (current() ? coachRemoteGameId : null);
+  if (!gameId && current() && coachGame && !coachPracticeSession) gameId = await ensureRemoteCoachGame(coachGameGeneration);
+  if (owner !== coachMemoryOwnerId()) return;
+  if (!gameId) {
+    // The board moved on before this game reached the account: add it whole,
+    // and point its queued reviews at the new row.
+    const inserted = await insertRemoteCoachGame(final.payload, final.localGameId);
+    gameId = inserted.id;
+    if (owner !== coachMemoryOwnerId()) return;
+    if (!inserted.created) {
+      // The account already had this game (an earlier insert whose id was
+      // lost): the row holds an older state, so write the result to it.
+      const { error } = await coachDbClient.from('coach_games').update(final.payload).eq('id', gameId);
+      if (owner !== coachMemoryOwnerId()) return;
+      if (error) throw error;
+    }
+    if (current()) { coachRemoteGameId = gameId; saveCoachState(); }
+    if (typeof pendingAccountReviews === 'function') {
+      const entries = pendingAccountReviews();
+      entries.forEach(entry => { if (entry.localGameId === final.localGameId && !entry.remoteGameId) entry.remoteGameId = gameId; });
+      savePendingAccountReviews(entries);
+    }
+    setCoachDbStatus('Game saved.');
+    return;
+  }
+  const { error } = await coachDbClient
+    .from('coach_games')
+    .update(final.payload)
+    .eq('id', gameId);
+  if (owner !== coachMemoryOwnerId()) return;
+  if (error) throw error;
+  setCoachDbStatus('Game saved.');
 }
 
 async function commitRemoteCoachGame(endReason, generation = coachGameGeneration) {
@@ -607,9 +693,12 @@ async function syncRemoteLearningArtifacts(review, moveId, generation) {
 
   const writes = [];
   if (artifacts.drills.length) {
+    // A drill key already in the account (the same mistake in an earlier
+    // game) keeps its source move and schedule; re-pointing it here would let
+    // this move's take-back delete progress built up across games.
     writes.push(coachDbClient
       .from('drill_queue')
-      .upsert(artifacts.drills, { onConflict: 'user_id,drill_key' }));
+      .upsert(artifacts.drills, { onConflict: 'user_id,drill_key', ignoreDuplicates: true }));
   }
   if (artifacts.cards.length) {
     writes.push(coachDbClient
@@ -622,6 +711,8 @@ async function syncRemoteLearningArtifacts(review, moveId, generation) {
   }
 }
 
+// Only drills never practised go with their move. A practised drill keeps its
+// progress; the database clears its source_move_id when the move is deleted.
 async function deleteRemoteLearningArtifacts(moveId) {
   if (!hasCoachDbSession() || !moveId) return;
   const [drillDelete, cardDelete] = await Promise.all([
@@ -629,7 +720,8 @@ async function deleteRemoteLearningArtifacts(moveId) {
       .from('drill_queue')
       .delete()
       .eq('source_move_id', moveId)
-      .eq('user_id', coachAuthUser.id),
+      .eq('user_id', coachAuthUser.id)
+      .eq('attempts', 0),
     coachDbClient
       .from('theory_cards')
       .delete()
@@ -776,12 +868,15 @@ async function refreshRemoteInsights(opts = {}) {
   const ownerId = activePracticeOwnerId();
   if (typeof refreshAccountCheckpoints === 'function') refreshAccountCheckpoints().catch(handleAccountCheckpointError);
   if (!opts.silent) setCoachDbStatus('Loading account insights...');
-  await Promise.all([
+  // Uploads go first so the reads include them, but a failed or paused upload
+  // (e.g. a checkpoint conflict) must not keep account insights from loading.
+  const uploads = await Promise.allSettled([
     syncPendingPracticeEvents(),
     typeof flushPendingAccountReviews === 'function' ? flushPendingAccountReviews() : Promise.resolve(),
     syncRemoteDailySprints({ silent: true }),
     typeof syncGrowthState === 'function' ? syncGrowthState({ silent: true }) : Promise.resolve()
   ]);
+  const uploadFailure = uploads.find(result => result.status === 'rejected');
   const [movesResult, drillsResult, attemptsResult] = await Promise.all([
     coachDbClient
       .from('coach_moves')
@@ -812,6 +907,7 @@ async function refreshRemoteInsights(opts = {}) {
   if (!opts.silent) setCoachDbStatus('Account insights loaded.');
   renderCoachAuth();
   renderInsights();
+  if (uploadFailure) throw uploadFailure.reason;
 }
 
 const coachSync = {

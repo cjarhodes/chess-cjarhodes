@@ -11,7 +11,6 @@
   const PREF = 'ui:import:v1';
   const RETRIES = 20;
   const COUNTED = 'coach:import:counted:v1';   // games already in the personal repertoire
-  const SHARE = 150;                          // most Insights entries imported games may hold
   let found = [];          // games listed from the last search
   let running = null;      // { id, stop }
 
@@ -87,6 +86,7 @@
         const m = replay.moves[i];
         const r = await classifyWithRetry(m);
         full.push(Object.assign({}, r, { fenBefore: m.fenBefore, fenAfter: m.fenAfter, userUci: m.uci, userSan: r.userSan || m.san,
+          previousCaptureSquare: m.previousCaptureSquare || null,
           // Move numbers come from the position, which matters for games
           // that started from a set-up position.
           ply: m.ply, pairNum: parseInt(m.fenBefore.split(' ')[5], 10) || Math.ceil(m.ply / 2), gameIndex: 1, localGameId: game.id, source: 'import' }));
@@ -120,12 +120,11 @@
   // repertoire. Entries are tied to this game, not to the live Coach game.
   function countedKey() { return typeof coachMemoryKey === 'function' ? coachMemoryKey(COUNTED) : COUNTED; }
   function countedIds() { try { const v = JSON.parse(localStorage.getItem(countedKey())); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
-  const isImported = e => /^(chesscom|lichess)-/.test(String(e && e.localGameId || ''));
 
   // Returns whether Insights were saved. Reviewing a game again (after
   // deleting it from the archive) replaces its entries instead of adding a
-  // second set, and imported games may hold at most SHARE of the entries, so
-  // they never push the user's own Coach evidence out.
+  // second set, and saveInsights caps imported games' share of the entries
+  // (INSIGHTS_IMPORT_SHARE), so they never push the user's own Coach evidence out.
   function contribute(game, pgn, full) {
     try {
       const parsed = new Chess();
@@ -143,8 +142,6 @@
         e.openingId = openingId;
         state.entries.push(e);
       });
-      let excess = state.entries.filter(isImported).length - SHARE;
-      if (excess > 0) state.entries = state.entries.filter(e => !(isImported(e) && excess-- > 0));
       const saved = saveInsights(state);
       const counted = countedIds();
       if (definition && !counted.includes(game.id)) {

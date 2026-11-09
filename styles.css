@@ -14,6 +14,7 @@
 }
 
 html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 
 body {
   background: var(--bg);
@@ -131,9 +132,11 @@ header .subtitle {
 }
 .opening-btn .eco {
   font-size: var(--text-xs);
-  opacity: 0.6;
+  color: var(--text-3);
   margin-left: 0.5rem;
 }
+.opening-btn.active .eco { color: inherit; }
+.token-help-note { color: var(--text-3); }
 
 /* ── BOARD AREA ── */
 .board-area {
@@ -214,8 +217,10 @@ header .subtitle {
   width: var(--board-size);
 }
 
-/* chessboard.js overrides. Board colour themes (html[data-board-theme] =
-   green | walnut | blue | contrast) are defined in styles/tokens.css. */
+/* The board: cm-chessboard SVG inside src/ui/board.js. Board colour themes
+   (html[data-board-theme] = green | walnut | blue | contrast) are defined in
+   styles/tokens.css. The host element (#myBoard, #coachBoard, …) carries the
+   frame; cm-chessboard sizes its SVG to the space inside it. */
 :root {
   --sq-light: var(--board-light);
   --sq-dark: var(--board-dark);
@@ -225,25 +230,42 @@ header .subtitle {
   --sq-last-move: var(--board-last);
   --sq-select: var(--board-select);
 }
-.board-b72b1 {
-  border: 4px solid var(--sq-frame) !important;
-  border-radius: var(--radius-sm) !important;
+.board-host {
+  box-sizing: border-box;
+  border: 4px solid var(--sq-frame);
+  border-radius: var(--radius-sm);
   overflow: hidden;
   box-shadow: var(--board-shadow);
+  background: var(--sq-frame);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
-.white-1e1d7 { background: var(--sq-light) !important; color: var(--sq-coord-on-light) !important; }
-.black-3c85d { background: var(--sq-dark) !important; color: var(--sq-coord-on-dark) !important; }
-.notation-322f9 {
-  font-family: var(--family-mono) !important;
-  font-weight: 600 !important;
-  font-size: var(--text-xs) !important;
+.board-host svg.cm-chessboard { display: block; }
+.cm-chessboard.app-board .board .border { fill: var(--sq-frame); stroke: none; }
+.cm-chessboard.app-board .board .square { shape-rendering: crispEdges; }
+.cm-chessboard.app-board .board .square.white { fill: var(--sq-light); }
+.cm-chessboard.app-board .board .square.black { fill: var(--sq-dark); }
+.cm-chessboard.app-board .board-marks { pointer-events: none; }
+.cm-chessboard.app-board .board-coord {
+  font-family: var(--family-mono);
+  font-weight: 600;
+  font-size: var(--text-xs);
   opacity: 0.9;
+  pointer-events: none;
+  user-select: none;
 }
-.alpha-d2270 { bottom: 2px !important; right: 4px !important; }
-.numeric-fc462 { top: 3px !important; left: 4px !important; }
-.square-55d63.last-move { box-shadow: inset 0 0 0 100px var(--sq-last-move); }
-.square-55d63.last-move.tap-selected { box-shadow: inset 0 0 0 100px var(--sq-last-move), inset 0 0 0 3px var(--accent); }
-.piece-417db { filter: drop-shadow(0 1px 1px var(--piece-shadow)); }
+.cm-chessboard.app-board .board-coord.on-light { fill: var(--sq-coord-on-light); }
+.cm-chessboard.app-board .board-coord.on-dark { fill: var(--sq-coord-on-dark); }
+.cm-chessboard.app-board .pieces .piece,
+.cm-chessboard-draggable-piece use { filter: drop-shadow(0 1px 1px var(--piece-shadow)); }
+.cm-chessboard-draggable-piece { position: absolute; z-index: 1000; }
+
+/* Square marks (src/ui/board.js draws one per square and name, under the
+   pieces, clipped to the square, so a stroke twice as wide as wanted reads
+   as an inset ring). */
+.board-mark { fill: none; stroke: none; }
+.board-mark.last-move { fill: var(--sq-last-move); }
 
 /* Board preference controls */
 .pref-row { display: flex; flex-direction: column; gap: 0.35rem; }
@@ -543,10 +565,10 @@ header .subtitle {
   justify-content: center;
   height: 100%;
   gap: 0.75rem;
-  opacity: 0.4;
   text-align: center;
 }
-.empty-state .icon { font-size: calc(var(--text-2xl) * 1.25); }
+/* Only the glyph fades: the prompt text keeps --text-3 contrast. */
+.empty-state .icon { font-size: calc(var(--text-2xl) * 1.25); opacity: 0.4; }
 .empty-state p { font-size: var(--text-sm); color: var(--text-3); }
 
 .board-empty-state {
@@ -559,10 +581,9 @@ header .subtitle {
   justify-content: center;
   flex-direction: column;
   gap: 0.75rem;
-  opacity: 0.45;
   background: var(--surface);
 }
-.board-empty-state .icon { font-size: calc(var(--text-2xl) * 1.5); }
+.board-empty-state .icon { font-size: calc(var(--text-2xl) * 1.5); opacity: 0.45; }
 .board-empty-state p { font-size: var(--text-sm); color: var(--text-3); }
 
 /* Quiz mode badge */
@@ -652,13 +673,10 @@ header .subtitle {
 .btn-share:hover { color: var(--text); border-color: var(--text-3); }
 .btn-share.copied { color: var(--success); border-color: var(--success); }
 
-/* ── TAP-TO-MOVE HIGHLIGHT ── */
-.square-55d63.tap-selected {
-  box-shadow: inset 0 0 0 3px var(--accent);
-}
-.square-55d63.tap-target {
-  box-shadow: inset 0 0 0 2px var(--sq-select);
-}
+/* ── SELECTED PIECE AND LEGAL MOVES (click, tap or drag) ── */
+.board-mark.tap-selected { stroke: var(--accent); stroke-width: 6px; }
+.board-mark.tap-target { fill: var(--board-dot); }
+.board-mark.tap-target.capture { fill: none; stroke: var(--board-dot); }
 
 /* ── COACH MODE ── */
 .coach-status {
@@ -869,9 +887,10 @@ header .subtitle {
 .coach-review-actions .ctrl-btn { width: 100%; }
 /* Premove highlights — claret tint on the source + target squares while
    the premove is queued. */
-#coachBoard .coach-premove-from,
-#coachBoard .coach-premove-to {
-  box-shadow: inset 0 0 0 3px var(--board-select);
+#coachBoard .board-mark.coach-premove-from,
+#coachBoard .board-mark.coach-premove-to {
+  stroke: var(--board-select);
+  stroke-width: 6px;
 }
 .coach-premove-hint {
   font-family: var(--family-ui);
@@ -1721,6 +1740,8 @@ input[type=range].strength-slider::-moz-range-thumb {
 }
 .network-status.offline { color: var(--warning); border-left-color: var(--warning); }
 .training-data-actions { display: flex; gap: 0.45rem; flex-wrap: wrap; }
+/* Backup reminder (backup-nudge.js): only ever shown in the stacked layout. */
+.backup-nudge { display: none; }
 .personal-repertoire-list { display: grid; gap: 0.45rem; margin-top: 0.6rem; }
 .repertoire-observed-row { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; padding: 0.55rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); }
 .repertoire-observed-copy { min-width: 0; }
@@ -2097,7 +2118,8 @@ input[type=range].strength-slider::-moz-range-thumb {
 .auto-elo-note { color: var(--text-3); font-size: var(--text-xs); margin-top: 0.35rem; line-height: 1.35; }
 #repertoire-section:empty { display: none; }
 
-/* ── DESKTOP NOTICE ── shown on narrow screens instead of a mobile layout */
+/* ── PHONE NOTICE ── the stacked layout on phones is a preview; this says why
+   (sign-in links, Safari's storage limits) before the phone layout shows. */
 .desktop-notice {
   display: none;
   position: fixed;
@@ -2108,7 +2130,7 @@ input[type=range].strength-slider::-moz-range-thumb {
   justify-content: center;
   padding: 1.5rem;
 }
-@media (max-width: 1023px) {
+@media (max-width: 759.98px) {
   html:not(.desktop-notice-dismissed) .desktop-notice { display: flex; }
   html:not(.desktop-notice-dismissed) body { overflow: hidden; }
 }
@@ -2143,7 +2165,10 @@ input[type=range].strength-slider::-moz-range-thumb {
   opacity: 0.88;
   margin: 0;
 }
-.desktop-notice-card .ctrl-btn { align-self: flex-start; margin-top: 0.4rem; }
+.desktop-notice-card ul { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.desktop-notice-card li { font-family: var(--family-prose); font-size: var(--text-prose); line-height: 1.45; color: var(--text); }
+#desktop-notice-body { display: flex; flex-direction: column; gap: 0.7rem; }
+.desktop-notice-card .ctrl-btn { align-self: stretch; margin-top: 0.4rem; min-height: 48px; }
 
 /* ── COACH RAILS (desktop) ── */
 .play-card {
@@ -2248,6 +2273,7 @@ input[type=range].strength-slider::-moz-range-thumb {
 .coach-view.practice-active .board-nav,
 .coach-view.practice-active .board-controls,
 .coach-view.practice-active .panel-tabs,
+.coach-view.practice-active #movelist-section,
 .coach-view.practice-active .panel-page:not(#panel-practice),
 .coach-view.practice-active #panel-practice > .coach-panel-section:not(#practice-section),
 .coach-view.practice-active .practice-progress,
@@ -2415,8 +2441,8 @@ input[type=range].strength-slider::-moz-range-thumb {
 .coach-practice-actions .ctrl-btn { min-height: 36px; }
 .coach-practice-actions #btn-coach-practice-next { flex: 1 0 100%; }
 #btn-coach-practice-exit { border-color: transparent; color: var(--text-3); }
-#coachBoard .practice-cue-source { box-shadow: inset 0 0 0 4px var(--arrow-played); }
-#coachBoard .practice-cue-target { box-shadow: inset 0 0 0 4px var(--arrow-best); }
+#coachBoard .board-mark.practice-cue-source { stroke: var(--arrow-played); stroke-width: 8px; }
+#coachBoard .board-mark.practice-cue-target { stroke: var(--arrow-best); stroke-width: 8px; }
 #coachBoard:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 4px; }
 
 .practice-activity { margin-top: .8rem; color: var(--text-3); }
@@ -2437,7 +2463,7 @@ input[type=range].strength-slider::-moz-range-thumb {
 #library-view :is(button, input, select, summary):focus-visible { outline: 2px solid var(--accent-text); outline-offset: 3px; }
 
 /* Review keeps its lesson and actions visible; supporting details scroll. */
-.summary-card { max-height: calc(100dvh - 2rem); overflow: hidden; gap: .85rem; }
+.summary-card { max-height: calc(100vh - 2rem); max-height: calc(100dvh - 2rem); overflow: hidden; gap: .85rem; }
 .summary-card > :not(.summary-body) { flex-shrink: 0; }
 .summary-body { min-height: 0; flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 1rem; padding-right: .4rem; }
 .summary-body > * { flex-shrink: 0; }
@@ -2666,14 +2692,14 @@ input[type=range].strength-slider::-moz-range-thumb {
 }
 .puzzle-vision-prompt[hidden] { display: none; }
 .puzzles-view.vision-active .puzzle-controls { visibility: hidden; }
-.puzzles-view.vision-active .square-55d63 { cursor: pointer; }
+.puzzles-view.vision-active .cm-chessboard .square { cursor: pointer; }
 
 .puzzle-board-flash { position: absolute; inset: 0; pointer-events: none; border-radius: var(--radius-sm); opacity: 0; transition: opacity var(--duration-base); }
 .puzzle-board-flash.good { box-shadow: inset 0 0 0 4px var(--success); opacity: 1; }
 .puzzle-board-flash.bad { box-shadow: inset 0 0 0 4px var(--danger); opacity: 1; }
-.square-55d63.hint-square { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--arrow-hint) 45%, transparent); }
-.square-55d63.vision-good { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--success) 55%, transparent); }
-.square-55d63.vision-bad { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--danger) 55%, transparent); }
+.board-mark.hint-square { fill: color-mix(in srgb, var(--arrow-hint) 45%, transparent); }
+.board-mark.vision-good { fill: color-mix(in srgb, var(--success) 55%, transparent); }
+.board-mark.vision-bad { fill: color-mix(in srgb, var(--danger) 55%, transparent); }
 .puzzle-rating-spark[hidden] { display: none; }
 .puzzles-view.has-bar { --puzzle-chrome: 315px; }
 .puzzles-view.has-bar.has-prompt { --puzzle-chrome: 380px; }
@@ -3073,3 +3099,340 @@ input[type=range].strength-slider::-moz-range-thumb {
 .coach-clock-note:empty { display: none; }
 .opponent-tag { display: inline-flex; align-items: center; gap: 0.35rem; margin-right: 0.35rem; font-size: var(--text-xs); color: var(--text-2); font-weight: var(--weight-medium); }
 .opponent-avatar.opponent-avatar-sm { width: 18px; height: 18px; font-size: var(--text-xs); }
+
+/* ══════════════════════════════════════════════════════════════════════
+   RESPONSIVE LAYOUT (redesign Phase 6a; docs/redesign-plan.md §3 "Phone and
+   tablet", docs/design-spec.md "Layout"). Breakpoints are 760px and 1200px.
+   - ≥ 1200px: the three-column desktop above, unchanged.
+   - 760–1199px, landscape: three columns with narrower rails.
+   - Stacked: below 760px, below 1200px when held upright, or on a short
+     (sideways phone) screen. One column: app bar, board edge to edge,
+     notation strip, then the panels; the top nav becomes a bottom tab bar.
+     src/ui/layout.js keeps LAYOUT_STACKED_QUERY equal to this query and
+     moves the notation into the strip under the board.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Inputs in a row with a button may shrink below their default width. */
+.token-input, .library-search input { min-width: 0; }
+
+/* ── Tablet and small laptop ── */
+@media (min-width: 760px) and (max-width: 1199.98px) and (orientation: landscape) and (min-height: 500px) {
+  :root {
+    --header-h: var(--appbar-h);
+    --rail-left: clamp(190px, 19vw, 240px);
+    --rail-right: clamp(280px, 29vw, var(--panel-w-compact));
+  }
+  body { min-width: 0; min-height: 100vh; min-height: 100dvh; }
+  /* Tablet browsers hide and show their toolbar on scroll: dvh follows the
+     visible height, vh (the larger, toolbar-hidden height) is the fallback.
+     Desktop (from 1200px) keeps the vh rules above unchanged. */
+  .app, .coach-view, .puzzles-view { height: calc(100vh - var(--header-h)); height: calc(100dvh - var(--header-h)); }
+  .shortcut-card { max-height: calc(100vh - 64px); max-height: calc(100dvh - 64px); }
+  .game-viewer-card { max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px); }
+  .game-viewer-board-wrap { width: min(560px, calc(100vh - 230px)); width: min(560px, calc(100dvh - 230px)); }
+  /* A custom property cannot fall back by repeating it, hence @supports. */
+  @supports (height: 100dvh) {
+    :root { --board-size: clamp(440px, calc(100dvh - 300px), 760px); }
+    .puzzles-view { --puzzle-board-size: clamp(360px, calc(100dvh - var(--puzzle-chrome) - var(--puzzle-kb)), 780px); }
+  }
+  header { padding: 0 var(--space-4); gap: var(--space-4); }
+  .coach-view { --rail-left: clamp(190px, 19vw, 240px); --rail-right: clamp(280px, 29vw, var(--panel-w-compact)); }
+  .coach-settings, .coach-panel, .puzzles-rail, .puzzles-panel { padding: var(--space-4) var(--space-3) var(--space-5); }
+  .info-panel { padding: var(--space-4) var(--space-4) var(--space-5); }
+  .library { padding: var(--space-4) 0; }
+  .library-label, .opening-btn { padding-left: var(--space-4); padding-right: var(--space-4); }
+  .coach-panel .panel-tabs { top: calc(-1 * var(--space-4)); }
+  /* The vertical evaluation bar sits 34px left of the board: keep room for
+     it on the left while the board fills the column. */
+  .coach-board-area, #library-view .board-area, #library-view.has-eval-bar .board-area { padding: var(--space-3) var(--space-3) var(--space-4) 38px; }
+  .puzzles-board-area { padding: var(--space-4) var(--space-4) var(--space-5); }
+  .coach-turn-header { min-height: 52px; }
+}
+
+/* ── Stacked: phones, upright tablets, sideways phones ── */
+@media (max-width: 759.98px), (max-width: 1199.98px) and (orientation: portrait), (max-width: 1199.98px) and (max-height: 499.98px) {
+  :root {
+    --header-h: var(--appbar-h);
+    /* Edge to edge, but never taller than the screen leaves room for (a
+       sideways phone scrolls). Every board element also has max-width: 100%. */
+    --stack-board: min(100vw, max(320px, calc(100vh - 140px)));
+    --stack-gutter: var(--space-4);
+  }
+  /* dvh follows the mobile browser's toolbar; vh is the fallback. A custom
+     property cannot fall back by repeating it, hence @supports. */
+  @supports (height: 100dvh) {
+    :root { --stack-board: min(100vw, max(320px, calc(100dvh - 140px))); }
+  }
+  body {
+    min-width: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 0 env(safe-area-inset-right) calc(var(--tabbar-h) + env(safe-area-inset-bottom)) env(safe-area-inset-left);
+  }
+
+  /* App bar: back link, title and help; the view tabs move to the bottom. */
+  header {
+    height: auto;
+    min-height: calc(var(--appbar-h) + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) var(--stack-gutter) 0;
+    gap: var(--space-3);
+  }
+  header h1 .tld { display: none; }
+  header a.back { font-size: var(--text-xs); }
+  .header-help { width: var(--tap-min); height: var(--tap-min); margin-left: auto; }
+  .top-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    margin: 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    background: var(--nav-bg);
+    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .top-nav-btn {
+    flex: 1 1 0;
+    min-height: var(--tabbar-h);
+    font-size: var(--text-sm);
+    border-top: 2px solid transparent;
+    color: var(--text-2);
+  }
+  .top-nav-btn.active { background: var(--nav-active); color: var(--accent-text); border-top-color: var(--accent); }
+
+  /* One column, page scroll. The views keep display: grid (set inline when
+     shown) so `order` places the board first. */
+  .app, .coach-view, .puzzles-view {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    height: auto;
+    min-height: 0;
+  }
+  .library, .info-panel, .board-area,
+  .coach-settings, .coach-board-area, .coach-panel,
+  .puzzles-rail, .puzzles-board-area, .puzzles-panel {
+    overflow: visible;
+    min-height: 0;
+    border: 0;
+  }
+  .library, .info-panel, .coach-settings, .coach-panel, .puzzles-rail, .puzzles-panel {
+    border-top: 1px solid var(--line);
+    padding: var(--space-5) var(--stack-gutter) var(--space-6);
+  }
+  .library { padding-left: 0; padding-right: 0; }
+  .library-search { padding-left: var(--stack-gutter); padding-right: var(--stack-gutter); }
+  .library-label, .opening-btn { padding-left: var(--stack-gutter); padding-right: var(--stack-gutter); }
+  .cat-tabs { padding-left: var(--stack-gutter); padding-right: var(--stack-gutter); overflow-x: auto; scrollbar-width: none; }
+
+  /* Board columns: full width, board edge to edge, tools in the gutter. */
+  .board-area, .coach-board-area, .puzzles-board-area,
+  #library-view .board-area, #library-view.has-eval-bar .board-area {
+    order: 1;
+    align-items: stretch;
+    padding: var(--space-2) 0 var(--space-4);
+    gap: var(--space-2);
+  }
+  .board-area > *, .coach-board-area > *, .puzzles-board-area > * {
+    width: auto;
+    max-width: none;
+    margin-left: var(--stack-gutter);
+    margin-right: var(--stack-gutter);
+  }
+  #board-wrap, #coachBoard-wrap, .puzzle-board-wrap {
+    align-self: center;
+    width: var(--board-size);
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .puzzle-board-wrap { width: var(--puzzle-board-size); }
+  #library-view, .coach-view { --board-size: var(--stack-board); }
+  .puzzles-view { --puzzle-board-size: var(--stack-board); }
+  #myBoard, #coachBoard, #library-view #myBoard { width: 100%; max-width: 100%; }
+  #library-view .board-empty-state { width: 100%; height: auto; aspect-ratio: 1; }
+  .board-host { border-width: 0; border-radius: 0; box-shadow: none; }
+  #coachBoard:focus-visible, #puzzleBoard:focus-visible { outline-offset: -3px; }
+  .coach-board-area .board-controls, .coach-turn-header,
+  .puzzles-board-area .coach-turn-header, .puzzles-view .keyboard-move,
+  #library-view .board-controls, .captured-bar, .feedback-bar, .progress-bar, .board-nav,
+  .coach-analysis-strip { width: auto; max-width: none; }
+  /* Typing a move is an extra on a touch screen: it goes last. */
+  .keyboard-move { order: 2; }
+  .mode-toggle { align-self: center; }
+  .mode-btn { flex: 1 1 0; }
+  .board-controls { flex-wrap: wrap; justify-content: center; }
+  .board-controls .ctrl-btn { flex: 1 1 0; min-width: 0; padding-left: var(--space-1); padding-right: var(--space-1); white-space: nowrap; }
+  .board-controls .ctrl-btn.flip { flex: 0 0 var(--tap-min); }
+  .board-nav { flex-wrap: wrap; }
+  .board-nav .ctrl-btn.nav { flex: 1 1 0; min-width: var(--tap-min); }
+  .coach-turn-header { min-height: 0; }
+  #library-view .feedback-bar { margin-top: 0; }
+
+  /* The evaluation bar turns into a thin bar above the board: the vertical
+     bar (board-overlay.js sizes it to the board's height) is turned a
+     quarter left; White's share grows from the left, or from the right when
+     the board is flipped. */
+  .board-eval-bar {
+    left: 0 !important;
+    width: 6px !important;
+    border-radius: var(--radius-pill);
+    transform-origin: 0 0;
+    transform: translateY(-4px) rotate(-90deg);
+    flex-direction: column;
+  }
+  .board-eval-bar.flipped { flex-direction: column-reverse; }
+  .board-eval-label { display: none; }
+  #coachBoard-wrap:has(> .board-eval-bar:not([hidden])),
+  #board-wrap:has(> .board-eval-bar:not([hidden])),
+  #archiveBoard-wrap:has(> .board-eval-bar:not([hidden])) { margin-top: var(--space-3); }
+
+  /* Notation: one scrolling row under the board (layout.js moves it here and
+     keeps the current move centred). */
+  .notation-strip { margin-left: 0 !important; margin-right: 0 !important; padding: 0; }
+  .notation-strip .section-label { display: none; }
+  .notation-strip .movelist-head { padding: 0 var(--stack-gutter); justify-content: flex-end; }
+  .notation-strip .movelist,
+  .notation-strip .move-list {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--space-1);
+    max-height: none;
+    min-height: var(--tap-min);
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    padding: 0 var(--stack-gutter);
+    margin: 0;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+  .notation-strip .movelist::-webkit-scrollbar,
+  .notation-strip .move-list::-webkit-scrollbar { display: none; }
+  .notation-strip .movelist .num, .notation-strip .movelist .ply, .notation-strip .movelist .ply-empty,
+  .notation-strip .move-pair { flex: none; white-space: nowrap; }
+  .notation-strip .movelist .ply { min-height: 36px; display: inline-flex; align-items: center; padding: 0 var(--space-2); }
+  .notation-strip .movelist .num { margin-left: var(--space-1); }
+  .notation-strip .move-chip { min-height: 36px; }
+  #library-view:has(#btn-explore[aria-pressed="true"]) #library-moves,
+  #library-view:has(#move-list:empty) #library-moves { display: none; }
+
+  /* Order follows the task. Library: the board, then the opening, then the
+     list, except before an opening is chosen, when the list comes first. */
+  .info-panel { order: 2; }
+  .library { order: 3; }
+  #library-view:has(#board-placeholder:not([style*="none"])) .library { order: 0; border-top: 0; }
+  /* Coach: board, then the game panel, then setup; while waiting to start,
+     setup (with the session's start button) comes before the panel; during
+     a drill its question sits above the board. */
+  .coach-panel { order: 2; }
+  .coach-settings { order: 3; }
+  .coach-view:is([data-ui-state="ready"], [data-ui-state="complete"]):not(.practice-browsing) .coach-settings { order: 2; }
+  .coach-view:is([data-ui-state="ready"], [data-ui-state="complete"]):not(.practice-browsing) .coach-panel { order: 3; }
+  .coach-view.practice-active .coach-panel { order: 0; border-top: 0; padding-top: var(--space-2); padding-bottom: 0; }
+  /* A drill's banner carries its question and status; keep it short enough
+     that the board below it stays on screen. The board's own status line
+     stays for screen readers only. */
+  .coach-view.practice-active .coach-practice-banner { padding: var(--space-3); gap: var(--space-1); }
+  .coach-view.practice-active .coach-practice-banner .status { padding: var(--space-1) 0 0; font-size: var(--text-sm); }
+  .coach-view.practice-active .coach-practice-actions { margin-top: var(--space-1); }
+  .coach-view.practice-active .coach-practice-actions .ctrl-btn:not(.primary) { flex: 1 1 0; min-width: 0; padding-left: var(--space-1); padding-right: var(--space-1); }
+  .coach-view.practice-active .coach-turn-header {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+  .coach-view.practice-active .coach-panel > .panel-page { display: none !important; }
+  .coach-panel .panel-tabs { top: 0; }
+  .panel-tab { flex: 1 1 0; justify-content: center; }
+  /* Puzzles: board, then the puzzle card, then modes and rating. */
+  .puzzles-panel { order: 2; }
+  .puzzles-rail { order: 3; }
+  .puzzle-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+  .puzzle-mode { border-color: var(--line); }
+
+  /* Touch targets: 44px at least; the primary action spans the width. */
+  button, select, summary, .toggle-label,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) { min-height: var(--tap-min); }
+  :is(.ctrl-btn, .movelist-copy, .token-disconnect, .db-btn, .cat-tab, .line-btn):not([hidden]) { display: inline-flex; align-items: center; justify-content: center; }
+  .ctrl-btn.primary:not(.keyboard-move-form .ctrl-btn) {
+    width: 100%;
+    flex: 1 1 100%;
+    min-height: 48px;
+  }
+  .summary-actions .primary { margin-right: 0; }
+  .board-controls .ctrl-btn, .coach-board-area .board-controls .ctrl-btn,
+  #library-view .board-controls .ctrl-btn, .play-actions .ctrl-btn { font-size: var(--text-sm); }
+  .opening-btn { min-height: var(--tap-min); }
+
+  /* Backup reminder: a banner under the app bar, in the page flow (not a
+     dialog), for a signed-out user whose progress is only on this device. */
+  .backup-nudge:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: var(--space-2) var(--stack-gutter) 0;
+    padding: var(--space-3);
+    background: var(--surface);
+    border: 1px solid var(--card-border);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-md);
+  }
+  .backup-nudge p { font-size: var(--text-sm); line-height: var(--leading-snug); color: var(--text); }
+  .backup-nudge .backup-nudge-meta, .backup-nudge .backup-nudge-status { font-size: var(--text-xs); color: var(--text-2); }
+  .backup-nudge .backup-nudge-status:empty { display: none; }
+  .backup-nudge-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .backup-nudge .backup-nudge-actions .ctrl-btn { flex: 1 1 0; min-width: 0; }
+  .backup-nudge-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: calc(-1 * var(--space-2)); }
+  .backup-nudge .backup-nudge-dismiss { flex: none; margin-right: calc(-1 * var(--space-2)); padding-left: var(--space-2); padding-right: var(--space-2); border-color: transparent; color: var(--text-2); text-decoration: underline; text-underline-offset: 3px; }
+
+  /* Dialogs fit the screen. */
+  .desktop-notice { align-items: flex-start; overflow-y: auto; padding: calc(var(--space-4) + env(safe-area-inset-top)) var(--space-4) var(--space-4); }
+  /* viewport-fit=cover lets content reach under the notch and the home bar,
+     so full-screen overlays keep their cards inside the safe area. */
+  .summary-overlay, .game-viewer-overlay, .shortcut-overlay {
+    padding: max(var(--space-2), env(safe-area-inset-top)) max(var(--space-2), env(safe-area-inset-right))
+      max(var(--space-2), env(safe-area-inset-bottom)) max(var(--space-2), env(safe-area-inset-left));
+  }
+  .summary-overlay { align-items: stretch; }
+  .summary-card { padding: var(--space-4); max-height: 100%; }
+  .shortcut-card { max-height: 100%; padding: var(--space-4); }
+  .game-viewer-card {
+    width: 100%;
+    max-height: 100%;
+    padding: var(--space-4);
+  }
+  .game-viewer-body { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+  .game-viewer-board-col { padding-left: 0; }
+  .game-viewer-board-wrap { width: min(100%, var(--stack-board)); align-self: center; }
+  .game-viewer-moves { max-height: 160px; }
+}
+
+/* Upright tablets: the stacked layout, with a framed board small enough
+   that the notation, step and game buttons stay on screen with it. */
+@media (min-width: 600px) and (max-width: 1199.98px) and (orientation: portrait) {
+  :root { --stack-board: min(calc(100vw - 2 * var(--space-6)), max(360px, calc(100vh - 500px))); }
+  @supports (height: 100dvh) {
+    :root { --stack-board: min(calc(100vw - 2 * var(--space-6)), max(360px, calc(100dvh - 500px))); }
+  }
+  .board-host { border-width: 4px; border-radius: var(--radius-sm); box-shadow: var(--board-shadow); }
+  .board-area > *, .coach-board-area > *, .puzzles-board-area > * {
+    align-self: center;
+    width: var(--stack-board);
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .coach-board-area .board-controls, .coach-turn-header,
+  .puzzles-board-area .coach-turn-header, .puzzles-view .keyboard-move,
+  #library-view .board-controls, .captured-bar, .feedback-bar, .progress-bar, .board-nav,
+  .coach-analysis-strip { width: var(--stack-board); }
+  .mode-toggle { width: auto; }
+}

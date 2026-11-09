@@ -7,7 +7,7 @@ with vendored copies of every third-party library.
 
 ## Modes
 
-**Library** — Guided study of 28 openings across 35 total lines (main
+**Library** — Guided study of 39 openings across 50 total lines (main
 lines plus attached variations, e.g. the Italian Game links to the Evans
 Gambit, Fried Liver Attack, and Blackburne Shilling as sub-lines). Each
 line has move-by-move explanations and key ideas. A quiz mode tests
@@ -99,8 +99,16 @@ choice when stepping back to a move that wasn't among its best, the next move
 of a **Show why** line, and an evaluation bar beside the board (dimmed when it
 is from before the latest move). Drills hide all of it. **Appearance &
 sounds → Arrows, move badges and evaluation bar** turns it off
-(`ui:board-feedback`). `board-overlay.js` draws on any chessboard.js board;
-`coach-overlay.js` decides what Coach shows.
+(`ui:board-feedback`). `board-overlay.js` draws on any board from
+`src/ui/board.js`; `coach-overlay.js` decides what Coach shows.
+
+Every board (Library, Coach, Puzzles, the game archive) is the same
+component, `src/ui/board.js`, built on the vendored
+[cm-chessboard](https://github.com/shaack/cm-chessboard) SVG board with the
+cburnett pieces. Drag a piece, or click (tap) a piece and then its square:
+both go through the same move check, a selected piece shows dots on its legal
+squares, and clicking another of your pieces switches the selection. Square
+colours follow the board theme tokens in `styles/tokens.css`.
 
 Engine-first moves can also earn **Great (!)**, the only good move with a
 clear gap to the second-best line, or **Brilliant (!!)**, a sound sacrifice
@@ -144,7 +152,7 @@ a follow-up after an opponent reply. Unverified engine results are not counted
 as mistakes.
 
 Library visits preserve the current drill or selected review position. Both
-workspaces fit their boards and tools to the desktop viewport. Post-game reviews
+workspaces fit their boards and tools to the viewport, from phone to desktop. Post-game reviews
 keep the takeaway and next actions visible while supporting details scroll.
 
 **Opening → game** carries a selected Library position and idea into free,
@@ -241,16 +249,21 @@ affects this browser's session. See [the account continuity audit](docs/account-
   build tooling, no package manager, no framework
 - Vendored libraries (see `vendor/` and `stockfish/`):
   - `chess.js` 0.10.3
-  - `chessboard.js` 1.0.0
-  - `jQuery` 3.6.0
+  - `cm-chessboard` 8.15.4 (ES modules, loaded by `src/ui/board-module.js`;
+    pieces: the cburnett sprite built by `scripts/build-piece-sprite.js`)
+  - `jQuery` 3.6.0 (app code still uses it; the board no longer needs it)
   - `@supabase/supabase-js` 2.114.0
   - Stockfish (WASM build: `stockfish.js` + `stockfish.wasm`)
 - Lichess Opening Explorer API for Explore mode
 - Optional Supabase project for account-backed Coach sync
-- Desktop-first by design: the board scales with the window height, the
-  rails use the width a laptop or desktop offers, and screens narrower than
-  1024px get a notice recommending a larger screen (with a continue option)
-  instead of a mobile layout.
+- Responsive layout: three columns on desktops (from 1200px) and on tablets
+  and small laptops held sideways (760–1199px, narrower rails); one column on
+  phones and upright tablets, with the board edge to edge, the moves in a
+  scrolling strip under it, and the Library / Coach / Puzzles tabs at the
+  bottom of the screen. Below 760px a notice first says the phone layout is a
+  preview: a sign-in link can open in a different browser from the one you
+  asked from, and Safari can clear progress kept only on the device after a
+  week without a visit.
 - Browser-only by design: there is no web app manifest and nothing registers
   a service worker. `service-worker.js` remains only as a kill switch that
   unregisters and clears caches for browsers that installed an earlier

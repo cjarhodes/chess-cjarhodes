@@ -8,10 +8,12 @@
 const COACH_DEPTH = 12;
 
 // Rank-and-loss aware classification. `rank` is 1 if user played the engine's
-// #1 move, 2 or 3 if it was a top-3 alternative, otherwise null.
+// #1 move, 2 or 3 if it was a top-3 alternative, otherwise null. A top-3
+// alternative is Excellent only while it stays within the Good margin (60cp):
+// when the engine's second choice already loses a piece, rank is no excuse.
 function classifyRankLoss(rank, loss) {
   if (rank === 1) return { tier: 'best',      label: 'Best move', emoji: '★' };
-  if (rank === 2 || rank === 3)
+  if ((rank === 2 || rank === 3) && loss < 60)
                   return { tier: 'excellent', label: 'Excellent', emoji: '✦' };
   if (loss < 60)  return { tier: 'good',       label: 'Good',       emoji: '👍' };
   if (loss < 120) return { tier: 'inaccuracy', label: 'Inaccuracy', emoji: '⚠' };

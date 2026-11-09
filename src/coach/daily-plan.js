@@ -481,9 +481,10 @@ function beginDailyDrillSprint(items) {
   return updateDailySprint(day => {
     if (day.mode) return upgradeLegacyDailySprint(day, renderedAdaptivePlan);
     initializeAdaptiveDay(day, renderedAdaptivePlan);
-    day.drillTarget = Math.min(day.drillTarget || DAILY_DRILL_TARGET, (items || []).length);
+    // A play-first plan has no drills; manual practice must not add some.
+    day.drillTarget = Math.min(day.drillTarget || 0, (items || []).length);
     day.target = day.drillTarget + day.moveTarget;
-    return day;
+    return settleDailySprintDay(day);
   });
 }
 
@@ -505,6 +506,57 @@ function dailyMoveSprintTakeaway(day) {
     : `Session activity: ${accuracy}% accuracy across ${scored.length} reviewed moves in this game. Keep practising to build evidence over time.`;
 }
 
+// Shared by drills and moves: a day completes when its units reach the
+// target, whichever kind of unit arrives last; otherwise its phase follows
+// the drills still owed.
+function settleDailySprintDay(day) {
+  if (day.completedAt) return day;
+  day.completedUnits = (day.drillsCompleted || 0) + (day.movesCompleted || 0);
+  if (day.target > 0 && day.completedUnits >= day.target) {
+    day.completedAt = Date.now();
+    day.phase = 'complete';
+    day.takeaway = dailyMoveSprintTakeaway(day);
+  } else if (day.mode === 'adaptive') {
+    day.phase = (day.drillsCompleted || 0) < (day.drillTarget || 0) ? 'drills' : 'moves';
+  }
+  return day;
+}
+
+// Days saved before drills and moves shared settleDailySprintDay can be
+// stuck: their units reached the target with no completedAt, or live play
+// opened with drills still owed ("0 moves remain"). Settle them whenever
+// Coach renders the plan, instead of waiting for the next recorded move
+// (which only ever reached today, so an earlier stuck day broke the streak).
+function settleSavedDailySprints(ownerId = activePracticeOwnerId()) {
+  const history = loadDailySprintHistory(ownerId);
+  const todayKey = dailySprintDayKey();
+  let changed = false;
+  Object.entries(history.days).forEach(([key, day]) => {
+    if (!day || day.completedAt || day.mode !== 'adaptive') return;
+    const before = JSON.stringify(day);
+    const settled = Object.assign({}, day);
+    if (key === todayKey) {
+      settleDailySprintDay(settled);
+    } else {
+      // An earlier day that reached its target finished when its last unit
+      // was recorded, not now.
+      const units = (Number(settled.drillsCompleted) || 0) + (Number(settled.movesCompleted) || 0);
+      if (!(settled.target > 0 && units >= settled.target)) return;
+      settled.completedUnits = units;
+      settled.completedAt = Number(settled.updatedAt) || Number(settled.startedAt) || Date.now();
+      settled.phase = 'complete';
+    }
+    if (JSON.stringify(settled) === before) return;
+    if (key === todayKey) settled.updatedAt = Date.now();
+    history.days[key] = settled;
+    changed = true;
+  });
+  if (!changed) return;
+  const saved = saveDailySprintHistory(history, ownerId);
+  if (!saved.ok) setCoachStatus('Daily Sprint progress could not be saved in this browser.');
+  else queueRemoteDailySprintSync();
+}
+
 function recordDailySprintMove(review) {
   const existing = dailySprintToday();
   if (existing && (existing.completedAt || existing.mode === 'drills' || (existing.mode === 'adaptive' && existing.phase === 'drills'))) return existing;
@@ -512,17 +564,13 @@ function recordDailySprintMove(review) {
   return updateDailySprint(day => {
     if (day.mode && day.mode !== 'adaptive') upgradeLegacyDailySprint(day, renderedAdaptivePlan);
     else if (day.mode !== 'adaptive') initializeAdaptiveDay(day, renderedAdaptivePlan);
-    day.phase = 'moves';
+    // A move that starts a drills-first day (a game resumed on a new day)
+    // does not count: live play opens once the drills are done.
+    if (day.phase === 'drills') return day;
     day.moveIds = Array.isArray(day.moveIds) ? day.moveIds : [];
     if (!day.moveIds.includes(id)) day.moveIds.push(id);
     day.movesCompleted = Math.min(day.moveTarget, day.moveIds.length);
-    day.completedUnits = (day.drillsCompleted || 0) + day.movesCompleted;
-    if (day.completedUnits >= day.target && !day.completedAt) {
-      day.completedAt = Date.now();
-      day.phase = 'complete';
-      day.takeaway = dailyMoveSprintTakeaway(day);
-    }
-    return day;
+    return settleDailySprintDay(day);
   });
 }
 
@@ -543,9 +591,7 @@ function recordDailySprintDrill(item, revealed, clean) {
     day.drillsCompleted = Math.min(day.drillTarget, day.drillIds.length);
     day.clean = Math.min(day.drillsCompleted, Math.max(day.clean || 0, day.cleanDrillIds.length));
     day.assisted = Math.min(day.drillsCompleted, Math.max(day.assisted || 0, day.assistedDrillIds.length));
-    day.completedUnits = day.drillsCompleted + (day.movesCompleted || 0);
-    if (day.drillsCompleted >= day.drillTarget) day.phase = 'moves';
-    return day;
+    return settleDailySprintDay(day);
   });
 }
 
@@ -591,9 +637,16 @@ function renderDailySprintChrome(day) {
 }
 
 function formatPracticeDue(record) {
-  if (!record || !record.dueAt || record.dueAt <= Date.now()) return 'Due now';
-  const days = Math.max(1, Math.ceil((record.dueAt - Date.now()) / DAY_MS));
-  return `Due in ${days}d`;
+  const now = Date.now();
+  if (!record || !record.dueAt || record.dueAt <= now) return 'Due now';
+  // Count calendar days: noon-to-midnight differences and clock changes must
+  // not add or lose a day.
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  const due = new Date(record.dueAt);
+  due.setHours(0, 0, 0, 0);
+  const days = Math.round((due.getTime() - start.getTime()) / DAY_MS);
+  return days < 1 ? 'Due later today' : `Due in ${days}d`;
 }
 
 // Older saved plans may require more positions than still exist in the due

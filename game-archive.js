@@ -284,8 +284,7 @@
     del.textContent = 'Delete game';
     renderStats();
     if (viewer.board) viewer.board.destroy();
-    viewer.board = Chessboard('archiveBoard', { position: fens[viewer.cursor], orientation: viewer.orientation, draggable: false, pieceTheme: typeof localPieceTheme === 'function' ? localPieceTheme : 'vendor/pieces/cburnett/{piece}.svg' });
-    if (typeof observeBoardLastMove === 'function') observeBoardLastMove('archiveBoard');
+    viewer.board = Chessboard('archiveBoard', { position: fens[viewer.cursor], orientation: viewer.orientation, draggable: false });
     renderMoves();
     renderChart();
     show();
@@ -316,10 +315,21 @@
 
   function reviewAt(ply) { return viewer.game.reviews.find(r => r.ply === ply) || null; }
 
+  // The board is role="img": its label is the position, read aloud.
+  function describeArchiveBoard(fen, move) {
+    const el = document.getElementById('archiveBoard');
+    if (!el || typeof describeChessPosition !== 'function') return;
+    try {
+      const after = move ? `After ${move.san}. ` : 'Starting position. ';
+      el.setAttribute('aria-label', after + describeChessPosition(new Chess(fen)));
+    } catch (e) { /* unreadable FEN: keep the previous label */ }
+  }
+
   function show() {
     const ply = viewer.cursor;
     viewer.board.position(viewer.fens[ply], false);
     const move = ply ? viewer.moves[ply - 1] : null;
+    describeArchiveBoard(viewer.fens[ply], move);
     if (typeof setBoardLastMove === 'function') setBoardLastMove('archiveBoard', move);
     const review = reviewAt(ply);
     const spec = { arrows: [], badges: [] };
@@ -491,14 +501,16 @@
     viewer.board.destroy();
     viewer.board = Chessboard('archiveBoard', {
       position: fen, orientation: viewer.orientation, draggable: true,
-      pieceTheme: typeof localPieceTheme === 'function' ? localPieceTheme : 'vendor/pieces/cburnett/{piece}.svg',
       onDragStart: (source, piece) => !!(viewer && viewer.retry && !viewer.retry.solved && !viewer.retry.busy && piece[0] === viewer.retry.turn),
-      onDrop: (source, target) => {
+      moveTargets: square => (viewer && viewer.retry ? new Chess(viewer.retry.fen).moves({ square, verbose: true }).map(m => m.to) : []),
+      onDrop: (source, target, piece, newPos, oldPos, side, info) => {
         if (!viewer || !viewer.retry || source === target) return 'snapback';
         const game = new Chess(viewer.retry.fen);
         const move = game.move({ from: source, to: target, promotion: 'q' });
         if (!move) return 'snapback';
-        gradeRetry(move.from + move.to + (move.promotion || ''), false);
+        // gradeRetry draws an accepted move itself: slide a clicked one into
+        // place, set a dragged one down where it was dropped.
+        gradeRetry(move.from + move.to + (move.promotion || ''), !!(info && info.input === 'drag'));
         return 'snapback';
       }
     });
@@ -536,6 +548,7 @@
     const accept = text => {
       retry.solved = true;
       viewer.board.position(game.fen(), !typed);
+      describeArchiveBoard(game.fen(), move);
       if (typeof setBoardLastMove === 'function') setBoardLastMove('archiveBoard', move);
       if (window.BoardOverlay) window.BoardOverlay.set('archiveBoard', 'archiveBoard-wrap', { badges: [{ square: move.to, tier: 'best' }], arrows: [] });
       setNote(text);
@@ -580,7 +593,7 @@
     const ply = viewer.retry.ply;
     viewer.retry = null;
     viewer.board.destroy();
-    viewer.board = Chessboard('archiveBoard', { position: viewer.fens[ply], orientation: viewer.orientation, draggable: false, pieceTheme: typeof localPieceTheme === 'function' ? localPieceTheme : 'vendor/pieces/cburnett/{piece}.svg' });
+    viewer.board = Chessboard('archiveBoard', { position: viewer.fens[ply], orientation: viewer.orientation, draggable: false });
     document.getElementById('btn-gv-retry-answer').hidden = false;
     viewer.cursor = ply;
     show();

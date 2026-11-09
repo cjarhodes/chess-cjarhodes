@@ -81,6 +81,11 @@ function emptyGrowthState() {
       ratingGames: 0,
       ratedGameIds: [],
       ratingHistory: [],
+      // Rating evidence syncs separately from preferences: ratingUpdatedAt
+      // moves only when the estimate does, ratingResetAt marks a deliberate
+      // restart that discarded earlier games.
+      ratingUpdatedAt: 0,
+      ratingResetAt: 0,
       minutes: 10,
       goal: 'balanced',
       sessionStyle: 'balanced',
@@ -88,7 +93,7 @@ function emptyGrowthState() {
       onboarded: false,
       updatedAt: 0
     },
-    repertoire: { ids: [], updatedAt: 0, focusKey: null, focusUpdatedAt: 0, observed: [], repairs: [], comparisons: [] },
+    repertoire: { ids: [], idsUpdatedAt: 0, updatedAt: 0, focusKey: null, focusUpdatedAt: 0, observed: [], repairs: [], comparisons: [] },
     openingTransfers: [],
     learningTransfers: [],
     library: { records: {} },
@@ -121,6 +126,11 @@ function normalizeGrowthState(value) {
   profile.ratingHistory = Array.isArray(profile.ratingHistory)
     ? profile.ratingHistory.filter(item => item && Number.isFinite(item.at)).slice(-30)
     : [];
+  profile.ratingResetAt = Number(profile.ratingResetAt) || 0;
+  // Older states have no rating timestamp; their newest rated game stands in.
+  profile.ratingUpdatedAt = rawProfile.ratingUpdatedAt == null
+    ? newestRatingAt(profile)
+    : (Number(rawProfile.ratingUpdatedAt) || 0);
   profile.minutes = Math.max(5, Math.min(60, Number(profile.minutes) || 10));
   profile.goal = ['balanced', 'tactics', 'repertoire', 'endgames'].includes(profile.goal) ? profile.goal : 'balanced';
   profile.sessionStyle = ['balanced', 'drills', 'play'].includes(profile.sessionStyle) ? profile.sessionStyle : 'balanced';
@@ -161,6 +171,12 @@ function normalizeGrowthState(value) {
     profile,
     repertoire: {
       ids: Array.from(new Set(repertoireIds)),
+      // Imports and practice also bump updatedAt, so the chosen openings keep
+      // their own timestamp. Older states fall back to updatedAt when they
+      // have openings, so an empty list on another device cannot win a tie.
+      idsUpdatedAt: rawRepertoire.idsUpdatedAt == null
+        ? (repertoireIds.length ? Number(rawRepertoire.updatedAt) || 0 : 0)
+        : (Number(rawRepertoire.idsUpdatedAt) || 0),
       updatedAt: Number(rawRepertoire.updatedAt) || 0,
       focusKey: typeof rawRepertoire.focusKey === 'string' ? rawRepertoire.focusKey : null,
       focusUpdatedAt: Number(rawRepertoire.focusUpdatedAt) || 0,
@@ -316,6 +332,21 @@ function downloadTrainingBackup() {
   return Object.keys(payload.data).length;
 }
 
+// Download a backup and remember when (backup-nudge.js shows the date and
+// stops reminding for a week). Used by Export backup and the phone reminder.
+function exportTrainingBackupNow() {
+  try {
+    const count = downloadTrainingBackup();
+    $('#training-data-status').removeClass('error').addClass('success').text(`Backup downloaded with ${count} local data set${count === 1 ? "" : "s"}.`);
+    if (window.BackupNudge && window.BackupNudge.recordBackup) window.BackupNudge.recordBackup();
+    return { ok: true, count };
+  } catch (error) {
+    const message = (error && error.message) || 'Backup could not be created in this browser.';
+    $('#training-data-status').removeClass('success').addClass('error').text(message);
+    return { ok: false, message };
+  }
+}
+
 function importedBackupValue(data, exactKey, prefixKey) {
   if (Object.prototype.hasOwnProperty.call(data, exactKey)) return data[exactKey];
   const matches = Object.keys(data).filter(key => key === prefixKey || key.startsWith(prefixKey + ':'));
@@ -359,7 +390,8 @@ function mergeImportedTrainingData(payload) {
       merged.events.push(Object.assign({}, event, { id, importSourceId, ownerId, sourceMoveId: null, synced: false }));
       ids.add(id); importedIds.add(importSourceId);
     });
-    merged.events = merged.events.slice(-PRACTICE_EVENT_LIMIT);
+    // Keep the newest events whichever file they came from.
+    merged.events = merged.events.sort((a, b) => (Number(a && a.at) || 0) - (Number(b && b.at) || 0)).slice(-PRACTICE_EVENT_LIMIT);
     values[practiceProgressStorageKey(ownerId)] = merged;
   }
   const daily = incoming(dailySprintStorageKey(ownerId), DAILY_SPRINT_KEY, 1);
@@ -376,8 +408,10 @@ function mergeImportedTrainingData(payload) {
     const identity = entry => entry && (entry.id || `${entry.ts}|${entry.fenBefore}|${entry.userUci}`);
     const ids = new Set(current.entries.map(identity));
     insights.entries.forEach(entry => { if (entry && !ids.has(identity(entry))) { current.entries.push(entry); ids.add(identity(entry)); } });
-    current.entries = current.entries.slice(-INSIGHTS_MAX_ENTRIES);
-    values[coachMemoryKey(INSIGHTS_KEY)] = current;
+    // Keep the newest reviews whichever file they came from.
+    current.entries = current.entries.filter(Boolean).sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0));
+    values[coachMemoryKey(INSIGHTS_KEY)] = { v: 1, entries: typeof capInsightEntries === 'function'
+      ? capInsightEntries(current.entries) : current.entries.slice(-INSIGHTS_MAX_ENTRIES) };
   }
   if (typeof GameArchive !== 'undefined') {
     // Older backups may hold the archive as a bare array of games.
@@ -456,13 +490,46 @@ function saveSyncedLibrarySR(records) {
   return saveGrowthState(state);
 }
 
+function newestRatingAt(profile) {
+  return (profile && Array.isArray(profile.ratingHistory) ? profile.ratingHistory : [])
+    .reduce((newest, item) => Math.max(newest, Number(item && item.at) || 0), 0);
+}
+
+// Preferences (starting rating, minutes, goal, style) follow the newer
+// profile edit. The calibrated estimate follows the newer rating change, so a
+// guest profile set up on a new device never replaces an account's rated
+// history; rated games from both sides are kept.
+function mergeGrowthProfiles(local, remote) {
+  const prefs = (Number(remote.updatedAt) || 0) > (Number(local.updatedAt) || 0) ? remote : local;
+  const other = prefs === local ? remote : local;
+  const resetAt = Math.max(local.ratingResetAt || 0, remote.ratingResetAt || 0);
+  // A reset discards the other side's games unless it rated more after it.
+  const sides = [prefs, other].filter(profile => (profile.ratingResetAt || 0) === resetAt || newestRatingAt(profile) > resetAt);
+  const source = sides.slice().sort((a, b) => ((b.ratingUpdatedAt || 0) - (a.ratingUpdatedAt || 0)) || (b.ratingGames - a.ratingGames))[0];
+  const history = new Map();
+  sides.forEach(profile => profile.ratingHistory.forEach(item => {
+    if (item.at < resetAt) return;
+    history.set(item.gameId || `at:${item.at}`, item);
+  }));
+  const ids = new Set();
+  sides.filter(profile => profile !== source).concat(source).forEach(profile => profile.ratedGameIds.forEach(id => ids.add(id)));
+  return Object.assign({}, prefs, {
+    ratingEstimate: source.ratingEstimate,
+    ratingDeviation: source.ratingDeviation,
+    ratingGames: source.ratingGames,
+    ratingUpdatedAt: source.ratingUpdatedAt || 0,
+    ratingResetAt: resetAt,
+    ratedGameIds: Array.from(ids).slice(-50),
+    ratingHistory: Array.from(history.values()).sort((a, b) => a.at - b.at).slice(-30)
+  });
+}
+
 function mergeGrowthStates(localValue, remoteValue) {
   const local = normalizeGrowthState(localValue);
   const remote = normalizeGrowthState(remoteValue);
   const merged = emptyGrowthState();
-  merged.profile = (Number(remote.profile.updatedAt) || 0) > (Number(local.profile.updatedAt) || 0)
-    ? remote.profile : local.profile;
-  const newerRepertoire = (Number(remote.repertoire.updatedAt) || 0) > (Number(local.repertoire.updatedAt) || 0)
+  merged.profile = mergeGrowthProfiles(local.profile, remote.profile);
+  const newerRepertoire = (Number(remote.repertoire.idsUpdatedAt) || 0) > (Number(local.repertoire.idsUpdatedAt) || 0)
     ? remote.repertoire : local.repertoire;
   const observed = new Map();
   [...local.repertoire.observed, ...remote.repertoire.observed].forEach(item => {
@@ -495,6 +562,7 @@ function mergeGrowthStates(localValue, remoteValue) {
     ? remote.repertoire : local.repertoire;
   merged.repertoire = {
     ids: newerRepertoire.ids.slice(),
+    idsUpdatedAt: Math.max(local.repertoire.idsUpdatedAt || 0, remote.repertoire.idsUpdatedAt || 0),
     updatedAt: Math.max(local.repertoire.updatedAt || 0, remote.repertoire.updatedAt || 0),
     focusKey: focusSource.focusKey || null,
     focusUpdatedAt: Math.max(local.repertoire.focusUpdatedAt || 0, remote.repertoire.focusUpdatedAt || 0),
@@ -537,6 +605,19 @@ function adoptAnonymousGrowthState(ownerId) {
   } catch (e) {}
 }
 
+// Add the guest's lifetime totals to the account's. Games both already hold
+// (the same rollup id) count once; totals from before per-game rollups have
+// no id and are added as they are.
+function mergeLifetimeTotals(account, guest) {
+  const merged = Object.assign(emptyLifetime(), account, { rollups: Object.assign({}, account.rollups || {}) });
+  applyLifetimeContribution(merged, guest, 1);
+  Object.entries(guest.rollups || {}).forEach(([id, contribution]) => {
+    if (merged.rollups[id]) applyLifetimeContribution(merged, contribution, -1);
+    else merged.rollups[id] = contribution;
+  });
+  return merged;
+}
+
 function adoptAnonymousCoachMemory(ownerId) {
   if (!ownerId || typeof coachMemoryKey !== 'function') return;
   const previousUser = coachAuthUser;
@@ -555,10 +636,9 @@ function adoptAnonymousCoachMemory(ownerId) {
       const id = entry && (entry.id || `${entry.ts}|${entry.fenBefore}|${entry.userUci}`);
       if (entry && !insightIds.has(id)) { accountInsights.entries.push(entry); insightIds.add(id); }
     });
+    accountInsights.entries.sort((a, b) => (Number(a && a.ts) || 0) - (Number(b && b.ts) || 0));
     insightsCopied = saveInsights(accountInsights);
-    const anonymousRicher = (anonymousLifetime.games || 0) > (accountLifetime.games || 0) ||
-      ((anonymousLifetime.games || 0) === (accountLifetime.games || 0) && (anonymousLifetime.moves || 0) > (accountLifetime.moves || 0));
-    lifetimeCopied = anonymousRicher ? saveLifetime(anonymousLifetime) : true;
+    lifetimeCopied = saveLifetime(mergeLifetimeTotals(accountLifetime, anonymousLifetime));
   } finally {
     coachAuthUser = previousUser;
   }
@@ -628,6 +708,12 @@ function savePlayerProfile(values) {
   const ratingChanged = Number.isFinite(suppliedRating) && suppliedRating !== state.profile.rating;
   state.profile = Object.assign({}, state.profile, values, { onboarded: true, updatedAt: Date.now() });
   if (ratingChanged) {
+    // Only a restart that discards rated games is a reset other devices must
+    // honour; a first estimate on a fresh device leaves the account's games.
+    if (state.profile.ratingGames || state.profile.ratingHistory.length) {
+      state.profile.ratingResetAt = Date.now();
+      state.profile.ratingUpdatedAt = Date.now();
+    }
     state.profile.ratingEstimate = suppliedRating;
     state.profile.ratingDeviation = 350;
     state.profile.ratingGames = 0;
@@ -643,7 +729,7 @@ function toggleRepertoireOpening(id) {
   const state = loadGrowthState();
   const ids = new Set(state.repertoire.ids);
   if (ids.has(id)) ids.delete(id); else ids.add(id);
-  state.repertoire = Object.assign({}, state.repertoire, { ids: Array.from(ids), updatedAt: Date.now() });
+  state.repertoire = Object.assign({}, state.repertoire, { ids: Array.from(ids), idsUpdatedAt: Date.now(), updatedAt: Date.now() });
   state.updatedAt = Date.now();
   saveGrowthState(state);
   renderRepertoireUI();
@@ -659,7 +745,8 @@ function repertoireConfidence(record) {
   const practiceAttempts = Math.max(0, Number(record.practiceAttempts) || 0);
   const practiceCorrect = Math.max(0, Number(record.practiceCorrect) || 0);
   const practiceRate = practiceAttempts ? practiceCorrect / practiceAttempts : 0;
-  const reviewPenalty = reviewed ? Math.min(55, mistakes / reviewed * 100 * 70) : 25;
+  // 0.7 points per percentage point of flagged moves, capped at 55.
+  const reviewPenalty = reviewed ? Math.min(55, mistakes / reviewed * 70) : 25;
   const deviationPenalty = Math.min(25, deviations * 8);
   const practiceBoost = practiceAttempts ? Math.min(40, practiceRate * 40) : 0;
   return Math.max(0, Math.min(100, Math.round(35 - reviewPenalty - deviationPenalty + practiceBoost + (reviewed ? Math.min(25, reviewed / 4) : 0))));
@@ -695,7 +782,8 @@ function repertoireFocusOpening() {
 
 function openingBridgeItem(opening) {
   if (!opening || !Array.isArray(opening.moves) || opening.moves.length < 14) return null;
-  const targetIndex = opening.category === 'black' ? 13 : 12;
+  const owner = typeof openingLineSide === 'function' ? openingLineSide(opening) : (opening.category === 'black' ? 'black' : 'white');
+  const targetIndex = owner === 'black' ? 13 : 12;
   const position = new Chess();
   for (let i = 0; i < targetIndex; i++) {
     if (!position.move(opening.moves[i])) return null;
@@ -866,7 +954,7 @@ function renderOpeningBridgeTrack() {
     const $row = $('<div class="opening-bridge-row"></div>');
     $row.append($('<div class="opening-bridge-copy"></div>').append(
       $('<strong></strong>').text(item.meta.title),
-      $('<span></span>').text(`${item.meta.practice} ${record ? ` ${record.correct || 0}/${record.attempts || 0} correct.` : ' Not rehearsed yet.'}`)
+      $('<span></span>').text(`${item.meta.practice} ${record ? ` ${practiceSolveSummary(practiceSolveCounts(item, record))}` : ' Not rehearsed yet.'}`)
     ));
     $('<button type="button" class="movelist-copy"></button>')
       .text(record && record.correct ? 'Review' : 'Rehearse')
@@ -877,14 +965,21 @@ function renderOpeningBridgeTrack() {
   $section.toggle($list.children().length > 0);
 }
 
+// Opening names only mean something from the normal start position; a game
+// set up from a FEN has no opening to attribute.
+function importedOpeningDefinition(game) {
+  if (pgnStartFen(game) !== new Chess().fen()) return null;
+  return openingDefinitionForSans(game.history());
+}
+
 function recordImportedOpenings(parsedGames, side, reviews) {
   const state = loadGrowthState();
   const observed = new Map(state.repertoire.observed.map(item => [`${item.key}|${item.side}`, item]));
   const repairs = new Map(state.repertoire.repairs.map(item => [item.id, item]));
   let changed = false;
   (parsedGames || []).forEach((game, index) => {
-    const definition = openingDefinitionForSans(game.history());
-    if (!definition.info.match) return;
+    const definition = importedOpeningDefinition(game);
+    if (!definition || !definition.info.match) return;
     const opening = definition.opening;
     const key = opening ? opening.id : `name:${definition.info.match.name}`;
     const name = opening ? opening.name : definition.info.match.name;
@@ -941,11 +1036,10 @@ function recordImportedOpenings(parsedGames, side, reviews) {
   });
   if (!changed) return;
   const reviewedMoves = (reviews || []).filter(review => review && review.tier !== 'unknown').length;
-  const bookMoves = (reviews || []).filter(review => review && review.tier !== 'unknown' && parsedGames.some((game, index) => {
-    const definition = openingDefinitionForSans(game.history());
-    return review.gameIndex === index + 1 && review.ply <= definition.info.matchedPlies;
-  })).length;
-  const deviations = parsedGames.reduce((total, game) => total + (openingDefinitionForSans(game.history()).info.exact ? 0 : 1), 0);
+  const definitions = parsedGames.map(importedOpeningDefinition);
+  const bookMoves = (reviews || []).filter(review => review && review.tier !== 'unknown' && definitions.some((definition, index) =>
+    definition && review.gameIndex === index + 1 && review.ply <= definition.info.matchedPlies)).length;
+  const deviations = definitions.reduce((total, definition) => total + (definition && !definition.info.exact ? 1 : 0), 0);
   const mistakes = (reviews || []).filter(review => review && isInsightProblem(review.tier)).length;
   const comparison = {
     at: Date.now(),
@@ -956,10 +1050,7 @@ function recordImportedOpenings(parsedGames, side, reviews) {
     bookCoverage: reviewedMoves ? Math.round(bookMoves / reviewedMoves * 100) : 0,
     deviations,
     mistakes,
-    openings: parsedGames.map(game => {
-      const definition = openingDefinitionForSans(game.history());
-      return definition.info.match ? definition.info.match.name : null;
-    }).filter(Boolean)
+    openings: definitions.map(definition => definition && definition.info.match ? definition.info.match.name : null).filter(Boolean)
   };
   state.repertoire = Object.assign({}, state.repertoire, {
     updatedAt: Date.now(),
@@ -1015,6 +1106,7 @@ function userScoreFromGameResult(result) {
 function ratedCoachEligibility(endReason) {
   if (typeof coachContinuityCopy !== 'undefined' && coachContinuityCopy) return { eligible: false, reason: 'recovered session copy' };
   if (typeof coachOpeningTransfer !== 'undefined' && coachOpeningTransfer) return { eligible: false, reason: 'opening exercise' };
+  if (typeof coachTakebackUsed !== 'undefined' && coachTakebackUsed) return { eligible: false, reason: 'take-back used' };
   if (!coachGame || !coachLocalGameId) return { eligible: false, reason: 'missing game' };
   if (coachStartFen !== new Chess().fen()) return { eligible: false, reason: 'custom position' };
   if (!coachStats || coachStats.moves < 4) return { eligible: false, reason: 'fewer than four reviewed moves' };
@@ -1046,7 +1138,7 @@ function nextPlayerRatingEstimate(profileValue, opponent, score, gameId, at = Da
     accuracy: Number.isFinite(session.accuracy) ? Math.max(0, Math.min(100, Math.round(session.accuracy))) : null,
     moves: Number.isFinite(session.moves) ? Math.max(0, Math.round(session.moves)) : 0
   }).slice(-30);
-  profile.updatedAt = at;
+  profile.ratingUpdatedAt = at;
   return { profile, rated: true, before, after, games, deviation };
 }
 
@@ -1062,7 +1154,7 @@ function recordRatedCoachResult(endReason) {
   );
   if (!update.rated) return Object.assign({ eligible: true }, update);
   state.profile = update.profile;
-  state.updatedAt = update.profile.updatedAt;
+  state.updatedAt = update.profile.ratingUpdatedAt;
   const saved = saveGrowthState(state);
   if (saved.ok) {
     renderPlayerProfileStatus(saved.state.profile);
@@ -1337,15 +1429,19 @@ function renderEndgameTrack() {
   ENDGAME_LESSONS.forEach(lesson => {
     const item = endgamePracticeItem(lesson);
     const record = practiceRecordFor(item);
-    const done = !!(record && record.correct > 0);
+    // Done means solved unaided at least once; a solve with a hint or the
+    // answer shown is progress, but not yet the lesson learned.
+    const counts = practiceSolveCounts(item, record);
+    const done = counts.clean > 0;
+    const helpedOnly = !done && counts.assisted > 0;
     if (done) complete += 1;
     const $row = $('<div class="endgame-item"></div>').toggleClass('is-complete', done);
     const $copy = $('<div></div>').append(
       $('<strong></strong>').text((done ? '✓ ' : '') + lesson.title),
-      $('<span></span>').text(lesson.detail)
+      $('<span></span>').text(helpedOnly ? `${lesson.detail} Solved with help so far.` : lesson.detail)
     );
     const $button = $('<button class="movelist-copy" type="button"></button>')
-      .text(done ? 'Review' : 'Train')
+      .text(done ? 'Review' : helpedOnly ? 'Try unaided' : 'Train')
       .on('click', () => {
         switchView('coach');
         startCoachPractice(item);
@@ -1417,16 +1513,46 @@ function collectImportedTargets(parsedEntries, side, gameMetadata) {
         fenAfter: replay.fen(),
         userUci: uciFromMove(played),
         userSan: played.san,
+        previousCaptureSquare: index > 0 && allMoves[index - 1].captured ? allMoves[index - 1].to : null,
         ply: index + 1,
-        pairNum: Math.ceil((index + 1) / 2),
+        // Move numbers come from the position, so a game set up from a FEN
+        // keeps its own numbering (and opening/middlegame phase).
+        pairNum: parseInt(fenBefore.split(' ')[5], 10) || Math.ceil((index + 1) / 2),
         gameIndex: gameIndex + 1,
-        gameKey: `import-${sourceIndex + 1}`,
+        gameKey: metadata.gameKey || `import-${sourceIndex + 1}`,
         openingId: metadata.openingId || null,
         opening: metadata.opening || null
       });
     });
   });
   return targets;
+}
+
+// A pasted game is identified by its content (start position, moves and the
+// side reviewed), so pasting it again replaces its evidence instead of adding
+// a second copy.
+function importedPgnGameKey(game, side) {
+  return `pgn-${side === 'black' ? 'b' : 'w'}${hashPracticeValue(`${pgnStartFen(game)}|${game.history().join(' ')}`)}`;
+}
+
+// Games already counted in the personal repertoire, shared with game-import.js.
+const IMPORT_COUNTED_KEY = 'coach:import:counted:v1';
+function importCountedKey() {
+  return typeof coachMemoryKey === 'function' ? coachMemoryKey(IMPORT_COUNTED_KEY) : IMPORT_COUNTED_KEY;
+}
+
+function importCountedIds() {
+  try {
+    const value = JSON.parse(localStorage.getItem(importCountedKey()));
+    return Array.isArray(value) ? value : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function markImportsCounted(ids) {
+  if (!ids.length) return;
+  try { localStorage.setItem(importCountedKey(), JSON.stringify(importCountedIds().concat(ids).slice(-200))); } catch (e) { /* counted again next time */ }
 }
 
 function importRunOwnsBoard(run) {
@@ -1465,12 +1591,14 @@ async function analyseImportedPgn() {
     );
     return;
   }
-  const gameMetadata = parsedGames.map(parsed => {
-    const definition = openingDefinitionForSans(parsed.history());
+  const gameKeys = parsedGames.map(parsed => importedPgnGameKey(parsed, side));
+  const gameMetadata = parsedGames.map((parsed, index) => {
+    const definition = importedOpeningDefinition(parsed);
     return {
-      openingId: definition.opening ? definition.opening.id : null,
-      opening: definition.info.match ? definition.info.match.name : null,
-      exact: !!definition.info.exact
+      gameKey: gameKeys[index],
+      openingId: definition && definition.opening ? definition.opening.id : null,
+      opening: definition && definition.info.match ? definition.info.match.name : null,
+      exact: !!(definition && definition.info.exact)
     };
   });
   const targets = collectImportedTargets(parsedEntries, side, gameMetadata);
@@ -1503,7 +1631,7 @@ async function analyseImportedPgn() {
   // preserves an existing game when the user cancels or starts another one.
   const generation = run.generation;
   const displayGame = parsedGames[parsedGames.length - 1];
-  const displayGameKey = `import-${parsedEntries[parsedEntries.length - 1].sourceIndex + 1}`;
+  const displayGameKey = gameKeys[gameKeys.length - 1];
   try {
     await engineClient.init();
     if (run.cancelled || importedAnalysisRun !== run || generation !== coachGameGeneration || !importRunOwnsBoard(run)) throw createAbortError('Import review cancelled.');
@@ -1542,13 +1670,16 @@ async function analyseImportedPgn() {
     // Commit the final parsed game to Coach while aggregating all games into
     // Insights and repertoire evidence. Each staged review retains its source
     // game key so later games cannot collapse onto the first game's moves.
-    const displayReviews = allReviews.filter(review => review.gameKey === displayGameKey);
+    const displayReviews = allReviews.filter(review => review.gameIndex === parsedGames.length);
     resetCoachState(pgnStartFen(displayGame));
     const committedGeneration = coachGameGeneration;
     coachUserSide = side;
     coachGame = displayGame;
     coachStartFen = pgnStartFen(displayGame);
-    coachLocalGameId = createCoachGameId();
+    // The shown game keeps its content id, so its staged Insights entries are
+    // the ones account sync links to the saved moves, and pasting it again
+    // replaces its archive, lifetime and Insights records.
+    coachLocalGameId = displayGameKey;
     coachReviewLog = displayReviews.map(review => Object.assign({}, review, {
       gameGeneration: committedGeneration,
       localGameId: coachLocalGameId
@@ -1560,10 +1691,29 @@ async function analyseImportedPgn() {
       }
       return stats;
     }, { moves: 0, best: 0, excellent: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 });
+    const pastedKeys = new Set(gameKeys);
+    const stagedKeys = new Set();
     const insightState = loadInsights();
-    insightState.entries.push(...stagedInsightEntries);
+    insightState.entries = insightState.entries.filter(entry => !pastedKeys.has(entry && entry.localGameId));
+    insightState.entries.push(...stagedInsightEntries.filter(entry => {
+      const key = `${entry.localGameId}|${entry.ply}`;
+      if (stagedKeys.has(key)) return false;
+      stagedKeys.add(key);
+      return true;
+    }));
     saveInsights(insightState);
-    recordImportedOpenings(parsedGames, side, allReviews);
+    // Count each game in the personal repertoire once, however often it is pasted.
+    const counted = new Set(importCountedIds());
+    const fresh = [];
+    parsedGames.forEach((game, index) => {
+      if (counted.has(gameKeys[index]) || fresh.some(item => item.key === gameKeys[index])) return;
+      fresh.push({ game, key: gameKeys[index], gameIndex: index + 1 });
+    });
+    const freshReviews = allReviews
+      .map(review => Object.assign({}, review, { gameIndex: fresh.findIndex(item => item.gameIndex === review.gameIndex) + 1 }))
+      .filter(review => review.gameIndex > 0);
+    recordImportedOpenings(fresh.map(item => item.game), side, freshReviews);
+    markImportsCounted(fresh.map(item => item.key));
     coachReviewLog.forEach(review => coachSync.saveMove(review).catch(handleCoachDbError));
     coachLastReview = coachReviewLog[coachReviewLog.length - 1] || null;
     coachGameActive = false;
@@ -1665,21 +1815,14 @@ function initGrowthFeatures() {
   });
   $('#btn-analyse-pgn').on('click', () => analyseImportedPgn());
   $('#' + IMPORT_CANCEL_BUTTON_ID).on('click', () => cancelImportedPgnAnalysis());
-  $('#btn-export-training-data').on('click', () => {
-    try {
-      const count = downloadTrainingBackup();
-      $('#training-data-status').removeClass('error').addClass('success').text(`Backup downloaded with ${count} local data sets.`);
-    } catch (error) {
-      $('#training-data-status').removeClass('success').addClass('error').text((error && error.message) || 'Backup could not be created in this browser.');
-    }
-  });
+  $('#btn-export-training-data').on('click', () => exportTrainingBackupNow());
   $('#btn-import-training-data').on('click', () => $('#training-data-file').trigger('click'));
   $('#training-data-file').on('change', async function() {
     const file = this.files && this.files[0];
     if (!file) return;
     try {
       const count = await importTrainingBackupFile(file);
-      $('#training-data-status').removeClass('error').addClass('success').text(`Merged ${count} data sets. Your existing progress was kept.`);
+      $('#training-data-status').removeClass('error').addClass('success').text(`Merged ${count} data set${count === 1 ? "" : "s"}. Your existing progress was kept.`);
     } catch (error) {
       $('#training-data-status').removeClass('success').addClass('error').text((error && error.message) || 'That backup could not be imported.');
     } finally {

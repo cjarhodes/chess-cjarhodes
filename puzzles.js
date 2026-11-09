@@ -23,7 +23,6 @@
   let vision = null;           // running Vision run
   let lastRush = null;         // finished Rush run, for review
   let repRun = null;           // repertoire review session: { queue, at, results, index }
-  let tapFrom = null;
   let timers = [];
   let generation = 0;          // invalidates delayed work after a change
 
@@ -134,25 +133,21 @@
   }
 
   // ── Board ─────────────────────────────────────
-  function pieceTheme(piece) {
-    return typeof localPieceTheme === 'function' ? localPieceTheme(piece) : `vendor/pieces/cburnett/${piece}.svg`;
-  }
   function createBoard(position, opts) {
     const options = opts || {};
     if (board) board.destroy();
-    clearTap();
     board = Chessboard(BOARD_ID, {
       position: position || 'start',
       orientation,
       draggable: !options.static,
       showNotation: options.showNotation !== false,
-      pieceTheme,
       moveSpeed: 160,
       onDragStart: onDragStart,
+      moveTargets: square => (canMove() ? session.game.moves({ square, verbose: true }).map(m => m.to) : []),
       onDrop: onDrop,
       onSnapEnd: () => { if (session && board) board.position(session.game.fen(), false); }
     });
-    if (typeof observeBoardLastMove === 'function') observeBoardLastMove(BOARD_ID);
+    if (typeof restoreBoardLastMove === 'function') restoreBoardLastMove(BOARD_ID);
     setArrows(null);
     describeBoard();
   }
@@ -164,23 +159,17 @@
     if (!el) return;
     if (mode === 'vision') { el.setAttribute('aria-label', 'Vision board. Click the named square.'); return; }
     if (!session) { el.setAttribute('aria-label', 'Puzzle board'); return; }
-    const side = session.game.turn() === 'w' ? 'White' : 'Black';
-    el.setAttribute('aria-label', `Puzzle position, ${side} to move. FEN ${session.game.fen()}`);
-  }
-  function squareEl(square) {
-    return document.querySelector(`#${BOARD_ID} .square-${square}`);
+    el.setAttribute('aria-label', 'Puzzle position. ' + describeChessPosition(session.game));
   }
   function markSquares(cls, squares) {
-    document.querySelectorAll(`#${BOARD_ID} .${cls}`).forEach(el => el.classList.remove(cls));
-    (squares || []).forEach(sq => { const el = squareEl(sq); if (el) el.classList.add(cls); });
+    if (board) board.setMarks(cls, squares || []);
   }
   function setArrows(arrows) {
     if (window.BoardOverlay) window.BoardOverlay.set(BOARD_ID, 'puzzleBoard-wrap', arrows && arrows.length ? { arrows } : null);
   }
+  // Drops a piece picked up by click or tap, e.g. when a move is typed.
   function clearTap() {
-    tapFrom = null;
-    markSquares('tap-selected', []);
-    markSquares('tap-target', []);
+    if (board) board.cancelInput();
   }
   function flash(kind) {
     const el = document.getElementById('puzzle-board-flash');
@@ -199,39 +188,20 @@
     if (!canMove()) return false;
     return piece[0] === solverColor();
   }
-  function onDrop(source, target) {
+  // Drag, click and tap all arrive here (src/ui/board.js).
+  function onDrop(source, target, piece, newPos, oldPos, side, info) {
     if (!canMove() || source === target) return 'snapback';
-    if (typeof requestPromotionChoice === 'function' && requestPromotionChoice(session.game, source, target, promotion => submitMove(source + target + promotion), true)) {
+    const clicked = !!(info && info.input === 'click');
+    if (typeof requestPromotionChoice === 'function' && requestPromotionChoice(session.game, source, target, promotion => submitMove(source + target + promotion, { animate: clicked }), true)) {
       return 'snapback';
     }
     const legal = session.game.moves({ verbose: true }).some(m => m.from === source && m.to === target);
     if (!legal) return 'snapback';
-    // chessboard.js finishes the drop itself; a wrong move snaps back.
+    // A clicked move slides into place, and a wrong one shows briefly before
+    // it is taken back; submitMove draws both. A dragged move is already on
+    // its square: the board keeps it, or snaps a wrong one back.
+    if (clicked) { submitMove(source + target, { animate: true }); return 'snapback'; }
     return submitMove(source + target, { fromDrop: true }) ? undefined : 'snapback';
-  }
-
-  function onSquareClick(square) {
-    if (mode === 'vision') { visionClick(square); return; }
-    if (!canMove()) return;
-    if (tapFrom && tapFrom !== square) {
-      const from = tapFrom;
-      const legal = session.game.moves({ square: from, verbose: true }).filter(m => m.to === square);
-      clearTap();
-      if (!legal.length) { maybeSelect(square); return; }
-      if (typeof requestPromotionChoice === 'function' && requestPromotionChoice(session.game, from, square, promotion => submitMove(from + square + promotion, { animate: true }), true)) return;
-      submitMove(from + square, { animate: true });
-      return;
-    }
-    if (tapFrom === square) { clearTap(); return; }
-    maybeSelect(square);
-  }
-  function maybeSelect(square) {
-    const piece = session.game.get(square);
-    if (!piece || piece.color !== solverColor()) return;
-    clearTap();
-    tapFrom = square;
-    markSquares('tap-selected', [square]);
-    markSquares('tap-target', session.game.moves({ square, verbose: true }).map(m => m.to));
   }
 
   function startPuzzle(puzzle, opts) {
@@ -636,10 +606,10 @@
     renderVision();
   }
   function flashSquare(square, cls) {
-    const el = squareEl(square);
-    if (!el) return;
-    el.classList.add(cls);
-    setTimeout(() => el.classList.remove(cls), 260);
+    if (!board) return;
+    const shown = board;
+    shown.setMarks(cls, [square]);
+    setTimeout(() => shown.setMarks(cls, []), 260);
   }
   function tickVision() {
     if (!vision) return;
@@ -774,8 +744,8 @@
     const current = session;
     const movedAt = Date.now();
     // Let the player's move finish animating: the engine can answer these
-    // positions in milliseconds, and overlapping chessboard.js animations
-    // leave a ghost piece behind.
+    // positions in milliseconds, and a reply drawn mid-animation would
+    // jump the player's piece.
     const settle = res => new Promise(resolve => setTimeout(() => resolve(res), Math.max(0, 350 - (Date.now() - movedAt))));
     engineClient.evaluate(session.game.fen(), EG_DEPTH).then(settle).then(res => {
       if (mine !== egToken || session !== current) return;
@@ -1475,12 +1445,12 @@
       status.textContent = 'Move played: ' + move.san;
       submitMove(move.from + move.to + (move.promotion || ''), { animate: true });
     });
-    // chessboard.js starts a drag on mousedown, so a click on a piece never
-    // reaches the square. Select on pointerdown instead (mouse and touch).
+    // Vision drills use a static board: read the square under the press
+    // (mouse or touch; pointer events arrive once per press).
     document.getElementById(BOARD_ID).addEventListener('pointerdown', e => {
-      if (!visible || (e.pointerType === 'mouse' && e.button !== 0)) return;
-      const sq = e.target.closest && e.target.closest('.square-55d63');
-      if (sq) onSquareClick(sq.getAttribute('data-square'));
+      if (!visible || mode !== 'vision' || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      const sq = e.target.closest && e.target.closest('.square[data-square]');
+      if (sq) visionClick(sq.getAttribute('data-square'));
     });
     document.addEventListener('keydown', onKey);
     let resizeTimer = null;

@@ -4,7 +4,7 @@ async browserPage => {
  const browser=browserPage.context().browser(),base=browserPage.url().split('?')[0];
  const contexts=[],checks=[],captures=[],errors=[];let page;
  const assert=(ok,message)=>{if(!ok)throw Error(message);checks.push(message);};
- const fresh=async()=>{if(page)await page.context().close();const c=await browser.newContext();contexts.push(c);page=await c.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(base);await page.locator('#btn-coach-next-action').waitFor();};
+ const fresh=async()=>{if(page)await page.context().close();const c=await browser.newContext();contexts.push(c);page=await c.newPage();page.on('pageerror', e => errors.push((e.stack || e.message).split('\n').slice(0, 4).join(' <- ')));await page.goto(base);await page.locator('#btn-coach-next-action').waitFor();};
  const frame=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
  const play=async move=>{await page.locator('#coach-keyboard-move').evaluate(e=>e.open=true);await page.locator('#coach-keyboard-move-input').fill(move);await page.locator('#coach-keyboard-move-form button').click();};
  // On a timeout, report what the app and engine were doing so a CI failure names its cause.

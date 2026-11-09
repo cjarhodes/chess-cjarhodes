@@ -1,6 +1,6 @@
 // Playwright CLI run-code body: real engine, complete endings and opening sessions.
 async page => {
- const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const errors=[];page.on('pageerror', e => errors.push((e.stack || e.message).split('\n').slice(0, 4).join(' <- ')));
  const assert=(x,msg)=>{if(!x)throw new Error(msg);};
  const results=[];
  await page.setViewportSize({width:1440,height:1000});

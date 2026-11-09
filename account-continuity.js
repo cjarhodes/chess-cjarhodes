@@ -5,7 +5,7 @@ const ACCOUNT_PREVIOUS_KEY = 'coach:checkpoint-previous:v1';
 const ACCOUNT_IMPORT_JOURNAL_KEY = 'coach:import-journal:v1';
 const ACCOUNT_CHECKPOINT_LIMIT = 240 * 1024;
 const accountCheckpoint = { owner: null, revision: null, loaded: false, conflict: false, writing: false,
-  candidate: null, timer: null, chain: Promise.resolve(), dirty: 0, saved: 0, message: '' };
+  remoteEmpty: true, candidate: null, timer: null, chain: Promise.resolve(), dirty: 0, saved: 0, message: '' };
 
 function accountCheckpointDeviceId() {
   try { return sessionStorage.getItem(coachMemoryKey('coach:checkpoint-device:v1')) || coachDeviceId(); }
@@ -31,9 +31,48 @@ function readLocalAccountCheckpoint() {
   return snapshot.game || snapshot.practice ? snapshot : null;
 }
 
+// A browser whose game and drill have both ended has nothing to resume. Its
+// account row becomes this empty marker (the table has no delete grant), which
+// other browsers skip because it fails validateAccountCheckpoint.
+function clearedAccountCheckpoint() {
+  return { v: 1, owner: coachMemoryOwnerId(), savedAt: Date.now(), game: null, practice: null, returnState: null, cleared: true };
+}
+
+function accountCheckpointHasSession(snapshot) {
+  return !!(snapshot && (snapshot.game || snapshot.practice));
+}
+
+function accountCheckpointBytes(value) {
+  return new TextEncoder().encode(JSON.stringify(value)).length;
+}
+
+// A long game with a drill on top is stored three times (saved game, return
+// point, the drill's own return point). Fit it under the account limit
+// without changing what can be resumed: drop the top-level return point when
+// the drill carries the same copy (only the drill's copy is restored), then
+// engine detail the review screen renders only when present, keeping the
+// latest review whole. Returns null when even that does not fit.
+function compactAccountCheckpoint(snapshot) {
+  if (accountCheckpointBytes(snapshot) <= ACCOUNT_CHECKPOINT_LIMIT) return snapshot;
+  const compact = cloneCoachValue(snapshot, null);
+  if (compact.returnState && compact.practice && compact.practice.returnState &&
+      JSON.stringify(compact.returnState) === JSON.stringify(compact.practice.returnState)) compact.returnState = null;
+  if (accountCheckpointBytes(compact) <= ACCOUNT_CHECKPOINT_LIMIT) return compact;
+  [compact.game, compact.returnState, compact.practice && compact.practice.returnState].forEach(game => {
+    if (!game || !Array.isArray(game.reviewLog)) return;
+    game.reviewLog.slice(0, -1).forEach(review => {
+      if (!review || typeof review !== 'object') return;
+      delete review.topAlternatives;
+      delete review.pvSan;
+      [review.evalBefore, review.evalAfter].forEach(info => { if (info && typeof info === 'object') delete info.pv; });
+    });
+  });
+  return accountCheckpointBytes(compact) <= ACCOUNT_CHECKPOINT_LIMIT ? compact : null;
+}
+
 function validateAccountCheckpoint(value) {
   if (!value || value.v !== 1 || typeof value.owner !== 'string' ||
-      new TextEncoder().encode(JSON.stringify(value)).length > ACCOUNT_CHECKPOINT_LIMIT ||
+      accountCheckpointBytes(value) > ACCOUNT_CHECKPOINT_LIMIT ||
       (!value.game && !value.practice)) throw new Error('That saved session is incomplete or too large. Export a smaller session backup.');
   const checkGame = game => {
     if (!game || game.v !== 1 || !['white', 'black', 'random'].includes(game.userSide) ||
@@ -141,7 +180,7 @@ async function refreshAccountCheckpoints() {
   if (accountCheckpoint.owner !== owner) {
     if (accountCheckpoint.timer) clearTimeout(accountCheckpoint.timer);
     Object.assign(accountCheckpoint, { owner, revision: null, loaded: false, conflict: false, writing: false,
-      candidate: null, timer: null, dirty: 0, saved: 0, message: '' });
+      remoteEmpty: true, candidate: null, timer: null, dirty: 0, saved: 0, message: '' });
     try { accountCheckpoint.conflict = sessionStorage.getItem(coachMemoryKey('coach:checkpoint-conflict:v1')) === '1'; } catch (e) {}
   }
   if (!hasCoachDbSession()) { renderAccountCheckpoint(); return; }
@@ -154,10 +193,14 @@ async function refreshAccountCheckpoints() {
   if (own.error) throw own.error;
   if (others.error) throw others.error;
   // Refresh must not silently advance a stale tab's write revision.
+  const ownHasSession = !!own.data && accountCheckpointHasSession(own.data.snapshot);
   if (!accountCheckpoint.loaded) {
     accountCheckpoint.revision = own.data ? own.data.revision : null;
+    accountCheckpoint.remoteEmpty = !ownHasSession;
+    // Tabs on one device share localStorage, so a missing local session means
+    // it ended here (the flush below clears the row), never "newer elsewhere".
     const local = readLocalAccountCheckpoint();
-    if (own.data && (!local || (own.data.snapshot.savedAt || 0) > (local.savedAt || 0))) {
+    if (ownHasSession && local && (own.data.snapshot.savedAt || 0) > (local.savedAt || 0)) {
       pauseAccountCheckpoint();
     }
   } else if (own.data && !accountCheckpoint.writing && Number(own.data.revision) > Number(accountCheckpoint.revision || 0)) pauseAccountCheckpoint();
@@ -173,9 +216,9 @@ async function refreshAccountCheckpoints() {
   }
   accountCheckpoint.message = accountCheckpoint.conflict
     ? 'Another tab saved a newer session. Automatic session sync is paused here. Export a backup or continue the saved copy.'
-    : own.data ? 'This browser has a saved account session.' : 'No session uploaded from this browser yet.';
+    : ownHasSession ? 'This browser has a saved account session.' : 'No session uploaded from this browser yet.';
   renderAccountCheckpoint();
-  if (!accountCheckpoint.conflict && readLocalAccountCheckpoint()) queueAccountCheckpoint();
+  if (!accountCheckpoint.conflict && (readLocalAccountCheckpoint() || !accountCheckpoint.remoteEmpty)) queueAccountCheckpoint();
 }
 
 function queueAccountCheckpoint() {
@@ -205,9 +248,17 @@ function flushAccountCheckpoint() {
     if (!accountCheckpoint.loaded || accountCheckpoint.owner !== owner) await refreshAccountCheckpoints();
     if (owner !== coachMemoryOwnerId() || accountCheckpoint.conflict) return;
     if (accountCheckpoint.timer) { clearTimeout(accountCheckpoint.timer); accountCheckpoint.timer = null; }
-    const snapshot = readLocalAccountCheckpoint();
-    if (!snapshot) return;
-    validateAccountCheckpoint(snapshot);
+    const local = readLocalAccountCheckpoint();
+    if (!local && (accountCheckpoint.revision === null || accountCheckpoint.remoteEmpty)) return;
+    const fitted = local && compactAccountCheckpoint(local);
+    if (local && !fitted) {
+      // Too large even trimmed: keep it in this browser and let every other
+      // account write continue. A backup export still carries all of it.
+      accountCheckpoint.message = 'This session is too large to save to your account. It is kept in this browser; export a backup to continue elsewhere.';
+      renderAccountCheckpoint();
+      return;
+    }
+    const snapshot = local ? validateAccountCheckpoint(fitted) : clearedAccountCheckpoint();
     const dirty = accountCheckpoint.dirty, revision = accountCheckpoint.revision;
     const userId = coachAuthUser.id, device = accountCheckpointDeviceId();
     const payload = { user_id: userId, device_id: device, snapshot };
@@ -226,8 +277,10 @@ function flushAccountCheckpoint() {
     }
     if (result.error) throw result.error;
     accountCheckpoint.revision = result.data.revision;
+    accountCheckpoint.remoteEmpty = !local;
     accountCheckpoint.saved = dirty;
-    accountCheckpoint.message = 'Session saved to your account. Continue it from Account on another browser.';
+    accountCheckpoint.message = local ? 'Session saved to your account. Continue it from Account on another browser.'
+      : 'No session in progress on this browser.';
     renderAccountCheckpoint();
     if (dirty !== accountCheckpoint.dirty) queueAccountCheckpoint();
   });
@@ -395,7 +448,9 @@ function flushPendingAccountReviews() {
         if (move.error) throw move.error;
         if (move.data) {
           for (const table of ['drill_queue', 'theory_cards']) {
-            const removed = await coachDbClient.from(table).delete().eq('source_move_id', move.data.id).eq('user_id', coachAuthUser.id);
+            let removal = coachDbClient.from(table).delete().eq('source_move_id', move.data.id).eq('user_id', coachAuthUser.id);
+            if (table === 'drill_queue') removal = removal.eq('attempts', 0);
+            const removed = await removal;
             if (owner !== coachMemoryOwnerId()) return;
             if (removed.error) throw removed.error;
           }
@@ -410,9 +465,7 @@ function flushPendingAccountReviews() {
       if (!gameId) {
         if (coachLocalGameId === pending.localGameId && !coachPracticeSession) gameId = await ensureRemoteCoachGame();
         else {
-          const created = await coachDbClient.from('coach_games').insert(pending.game).select('id').single();
-          if (created.error) throw created.error;
-          gameId = created.data.id;
+          gameId = (await insertRemoteCoachGame(pending.game, pending.localGameId)).id;
         }
         if (owner !== coachMemoryOwnerId() || !gameId) return;
         const entries = pendingAccountReviews();

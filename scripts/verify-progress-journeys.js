@@ -1,6 +1,6 @@
 // Playwright CLI body: useful Progress through real practice and playing flows.
 async page => {
- const errors=[],consoleErrors=[];page.on('pageerror',e=>errors.push(e.message));
+ const errors=[],consoleErrors=[];page.on('pageerror', e => errors.push((e.stack || e.message).split('\n').slice(0, 4).join(' <- ')));
  page.on('console',message=>{if(message.type()==='error')consoleErrors.push(message.text());});
  const assert=(ok,message)=>{if(!ok)throw Error(message);};
  const checks=[],scenarios=[];

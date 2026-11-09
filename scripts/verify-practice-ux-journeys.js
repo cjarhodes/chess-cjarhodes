@@ -8,7 +8,7 @@ async browserPage => {
   const fresh = async () => {
     if (page) await page.context().close();
     const context = await browser.newContext(); contexts.push(context); page = await context.newPage();
-    page.on('pageerror', e => errors.push(e.message));
+    page.on('pageerror', e => errors.push((e.stack || e.message).split('\n').slice(0, 4).join(' <- ')));
     await page.goto(base); await page.locator('#tab-practice').waitFor();
   };
   const play = async move => {
@@ -28,7 +28,7 @@ async browserPage => {
         return {width:innerWidth,height:innerHeight,scrollWidth:document.documentElement.scrollWidth,board:rect('#coachBoard'),action:rect(action),
           boardPrimary:document.getElementById('coachBoard-wrap').dataset.primaryTarget==='true',
           primary:[...document.querySelectorAll('#coach-view [data-primary-action="true"]')].filter(e=>e.checkVisibility()).map(e=>e.id||'keyboard-submit'),
-          hinted:[...document.querySelectorAll('#coachBoard .practice-cue-source, #coachBoard .practice-cue-target')].map(e=>getComputedStyle(e).boxShadow)};
+          hinted:[...document.querySelectorAll('#coachBoard .board-mark.practice-cue-source, #coachBoard .board-mark.practice-cue-target')].map(e=>getComputedStyle(e).stroke)};
       },action);
       assert(m.scrollWidth<=width && m.board.x>=0 && m.board.right<=width && m.board.bottom<=height && m.board.width>=320, name+': board fits '+width);
       assert(m.action.y>=0 && m.action.bottom<=height && m.primary.length+Number(m.boardPrimary)===1, name+': one visible next action '+width);

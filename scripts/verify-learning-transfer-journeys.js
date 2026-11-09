@@ -3,7 +3,7 @@ async browserPage=>{
  const browser=browserPage.context().browser(),base=browserPage.url().split('?')[0];
  let context,page;const checks=[],scenarios=[],errors=[],consoleErrors=[];
  const assert=(ok,message)=>{if(!ok)throw Error(message);};
- const fresh=async()=>{if(context)await context.close();context=await browser.newContext();page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error'&&!/favicon/.test(m.text()))consoleErrors.push(m.text());});await page.goto(base);};
+ const fresh=async()=>{if(context)await context.close();context=await browser.newContext();page=await context.newPage();page.on('pageerror', e => errors.push((e.stack || e.message).split('\n').slice(0, 4).join(' <- ')));page.on('console',m=>{if(m.type()==='error'&&!/favicon/.test(m.text()))consoleErrors.push(m.text());});await page.goto(base);};
  const play=async move=>{await page.locator('#coach-keyboard-move').evaluate(e=>{e.open=true;});await page.locator('#coach-keyboard-move-input').fill(move);await page.locator('#coach-keyboard-move-form button[type=submit]').click();};
  const settle=()=>page.waitForFunction(()=>!coachThinking&&coachGameActive&&coachIsUserTurn(),null,{timeout:60000});
  const source=async(index=0,hint=false)=>{

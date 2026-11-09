@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Chess Coach &amp; Opening Library — Alex Rhodes</title>
   <meta name="description" content="Drill openings, play an adaptive Stockfish coach, solve puzzles and review every game. A personal chess training app by Alex Rhodes.">
   <link rel="canonical" href="https://chess.cjarhodes.com/">
@@ -24,7 +24,7 @@
   <script src="theme-init.js"></script>
   <link rel="preload" href="fonts/dm-sans-variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/fraunces-600.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="vendor/chessboardjs/chessboard-1.0.0.min.css">
+  <link rel="stylesheet" href="vendor/cm-chessboard/assets/chessboard.css">
   <link rel="stylesheet" href="styles/fonts.css">
   <link rel="stylesheet" href="styles/tokens.css">
   <link rel="stylesheet" href="styles.css">
@@ -42,12 +42,32 @@
   <button type="button" class="header-help" id="btn-shortcuts" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">?</button>
 </header>
 
-  <div class="desktop-notice" id="desktop-notice" role="dialog" aria-modal="true" aria-labelledby="desktop-notice-title">
+<section class="backup-nudge" id="backup-nudge" aria-label="Backup reminder" hidden>
+  <p class="backup-nudge-title"><strong>Progress kept only on this device</strong></p>
+  <p class="backup-nudge-text" id="backup-nudge-text">Safari can clear it after a week without a visit. Sign in to sync it, or save a backup file.</p>
+  <div class="backup-nudge-actions">
+    <button type="button" class="ctrl-btn" id="btn-backup-nudge-signin">Sign in to sync</button>
+    <button type="button" class="ctrl-btn" id="btn-backup-nudge-backup">Back up now</button>
+  </div>
+  <p class="backup-nudge-status" id="backup-nudge-status" role="status" aria-live="polite"></p>
+  <div class="backup-nudge-foot">
+    <p class="backup-nudge-meta" id="backup-nudge-last">Not backed up yet</p>
+    <button type="button" class="ctrl-btn backup-nudge-dismiss" id="btn-backup-nudge-dismiss">Hide for 2 weeks</button>
+  </div>
+</section>
+
+  <div class="desktop-notice" id="desktop-notice" role="dialog" aria-modal="true" aria-labelledby="desktop-notice-title" aria-describedby="desktop-notice-body">
     <div class="desktop-notice-card">
-      <div class="desktop-notice-eyebrow">Chess Coach</div>
-      <h2 id="desktop-notice-title">Built for the desktop</h2>
-      <p>The board, engine review, and training panels are laid out for a large screen. Open chess.cjarhodes.com on a laptop or desktop for the full experience.</p>
-      <button type="button" class="ctrl-btn" id="btn-desktop-notice-continue">Continue here anyway</button>
+      <div class="desktop-notice-eyebrow">Chess Coach · phone preview</div>
+      <h2 id="desktop-notice-title">The phone layout is a preview</h2>
+      <div id="desktop-notice-body">
+        <p>Everything works on this screen, but two things can still go wrong on a phone:</p>
+        <ul>
+          <li><strong>Signing in.</strong> The sign-in link may open in a different browser from the one you asked from. Sign in on a computer instead, or back up your progress from Training data at the bottom of Coach.</li>
+          <li><strong>Progress on this device.</strong> Progress that is kept only on this phone can be cleared by Safari after a week without a visit.</li>
+        </ul>
+      </div>
+      <button type="button" class="ctrl-btn primary" id="btn-desktop-notice-continue">Continue to the phone layout</button>
     </div>
   </div>
 
@@ -64,7 +84,7 @@
 <div class="app" id="library-view" role="tabpanel" aria-labelledby="nav-library" aria-hidden="true" style="display:none;">
 
   <!-- ── LIBRARY SIDEBAR ── -->
-  <aside class="library" id="library">
+  <aside class="library" id="library" aria-label="Openings">
     <!-- Search -->
     <div class="library-search">
       <label class="sr-only" for="library-search-input">Search openings</label>
@@ -174,14 +194,14 @@
   </main>
 
   <!-- ── INFO PANEL ── -->
-  <aside class="info-panel" id="info-panel">
+  <aside class="info-panel" id="info-panel" aria-label="Opening details">
     <div class="empty-state" id="empty-state">
       <div class="icon">♛</div>
       <p>Choose an opening from the library to start learning</p>
     </div>
     <div id="opening-content" style="display:none; flex-direction:column; gap:1.25rem;">
       <div>
-        <div class="opening-title" id="opening-title"></div>
+        <div class="opening-title" id="opening-title" role="heading" aria-level="2"></div>
         <div class="opening-tagline" id="opening-tagline"></div>
         <button class="btn-share" id="btn-share" title="Copy shareable link">Share link</button>
         <button class="btn-share repertoire-action" id="btn-repertoire-toggle" type="button">☆ Add to my repertoire</button>
@@ -201,7 +221,7 @@
         <div class="line-selector" id="line-selector"></div>
       </div>
 
-      <div>
+      <div id="library-moves">
         <div class="section-label">Moves</div>
         <div class="move-list" id="move-list"></div>
       </div>
@@ -222,7 +242,7 @@
     <!-- Explore mode panel -->
     <div id="explore-content" style="display:none; flex-direction:column; gap:1.25rem;">
       <div>
-        <div class="opening-title" id="explore-title">Free Exploration</div>
+        <div class="opening-title" id="explore-title" role="heading" aria-level="2">Free Exploration</div>
         <div class="opening-tagline" id="explore-tagline">Move freely — see what real players do</div>
       </div>
 
@@ -236,7 +256,7 @@
         <div class="section-label">Connect to Lichess</div>
         <div class="token-setup">
           <p>Opening Explorer data requires a free Lichess API token. It stays in this browser tab only.</p>
-          <p><a href="https://lichess.org/account/oauth/token/create?description=Chess+Opening+Library" target="_blank" rel="noopener noreferrer">→ Generate a token on Lichess ↗</a><br><small style="opacity:0.6;">No scopes needed — just click Create.</small></p>
+          <p><a href="https://lichess.org/account/oauth/token/create?description=Chess+Opening+Library" target="_blank" rel="noopener noreferrer">→ Generate a token on Lichess ↗</a><br><small class="token-help-note">No scopes needed — just click Create.</small></p>
           <form class="token-input-row" id="lichess-token-form">
             <label class="sr-only" for="lichess-token-input">Lichess personal access token</label>
             <input type="password" class="token-input" id="lichess-token-input" placeholder="lip_..." autocomplete="off" spellcheck="false" />
@@ -266,9 +286,9 @@
 <section class="coach-view" id="coach-view" role="tabpanel" aria-labelledby="nav-coach" aria-hidden="false">
 
   <!-- SETTINGS -->
-  <aside class="coach-settings">
+  <aside class="coach-settings" aria-label="Coach setup">
 <div class="coach-hero">
-      <div class="title">Coach</div>
+      <div class="title" role="heading" aria-level="2">Coach</div>
       <div class="tagline">Sharpen your reactive play</div>
     </div>
 <div id="network-status" class="network-status" role="status" aria-live="polite" hidden></div>
@@ -326,7 +346,7 @@
           </form>
           <form class="auth-row" id="coach-auth-code-form" style="display:none;">
             <label class="sr-only" for="coach-auth-code">Six-digit sign-in code from the email</label>
-            <input type="text" class="auth-input" id="coach-auth-code" placeholder="6-digit code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" />
+            <input type="text" class="auth-input" id="coach-auth-code" placeholder="6-digit code" inputmode="numeric" autocomplete="one-time-code" maxlength="12" />
             <button type="submit" class="ctrl-btn" id="btn-coach-verify-code">Verify code</button>
           </form>
         </div>
@@ -436,6 +456,7 @@
         <button class="ctrl-btn" id="btn-import-training-data" type="button">Import backup</button>
         <input id="training-data-file" type="file" accept="application/json,.json" hidden>
       </div>
+      <div class="growth-status training-data-last-backup" id="training-data-last-backup">Not backed up yet</div>
       <div class="growth-status" id="training-data-status" role="status" aria-live="polite"></div>
       </div>
       </div>
@@ -490,7 +511,7 @@
   </main>
 
   <!-- COACH PANEL -->
-  <aside class="coach-panel">
+  <aside class="coach-panel" aria-label="Game, practice and progress">
 <div class="coach-panel-section coach-daily-plan" id="coach-daily-plan" aria-labelledby="coach-daily-plan-label">
       <div class="daily-sprint-meta">
         <span class="section-label" id="coach-daily-plan-label">Adaptive session · 5–10 min</span>
@@ -561,7 +582,7 @@
     </section>
 
       <div class="coach-review-empty" id="coach-review-empty" role="note">
-        <div class="title">Your next move, explained</div>
+        <div class="title" role="heading" aria-level="3">Your next move, explained</div>
         <p>Play a move to see what it changes, what to watch for, and what to try next.</p>
       </div>
 <div id="coach-review" class="coach-review" style="display:none">
@@ -759,9 +780,9 @@
 </section>
 
 <section class="puzzles-view" id="puzzles-view" role="tabpanel" aria-labelledby="nav-puzzles" aria-hidden="true" style="display:none;">
-  <aside class="puzzles-rail">
+  <aside class="puzzles-rail" aria-label="Puzzle modes and rating">
     <div class="coach-hero">
-      <div class="title">Puzzles</div>
+      <div class="title" role="heading" aria-level="2">Puzzles</div>
       <div class="tagline">Spot the tactic, then prove it</div>
     </div>
     <div class="puzzle-modes" role="group" aria-label="Puzzle modes">
@@ -832,7 +853,7 @@
     </div>
   </main>
 
-  <aside class="puzzles-panel">
+  <aside class="puzzles-panel" aria-label="Puzzle details">
     <div class="puzzle-panel" id="puzzle-panel-rated" role="region" aria-label="Puzzle">
       <section class="coach-panel-section puzzle-card" aria-labelledby="puzzle-card-title">
         <div class="puzzle-card-meta">
@@ -1027,10 +1048,12 @@
   </div>
 </div>
 
-<!-- Scripts: jQuery first, then chess.js, then chessboard.js -->
+<!-- Scripts: jQuery first (app code still uses it; the board does not), then chess.js.
+     The board is cm-chessboard: src/ui/board-module.js (an ES module, so it runs
+     after these classic scripts but before DOMContentLoaded) loads it, and
+     src/ui/board.js wraps it as window.Chessboard. -->
 <script src="vendor/jquery/jquery-3.6.0.min.js"></script>
 <script src="vendor/chess.js/chess-0.10.3.min.js"></script>
-<script src="vendor/chessboardjs/chessboard-1.0.0.min.js"></script>
 <script src="coach-config.js"></script>
 
 <script src="openings.js"></script>
@@ -1040,6 +1063,7 @@
 <script src="src/core/tactics.js"></script>
 <script src="src/core/opening-book.js"></script>
 <script src="src/core/library-sr.js"></script>
+<script src="src/core/position-text.js"></script>
 <script src="src/data/coach-persistence.js"></script>
 <script src="src/data/lifetime.js"></script>
 <script src="src/data/account-sync.js"></script>
@@ -1051,6 +1075,9 @@
 <script src="src/coach/candidates.js"></script>
 <script src="src/coach/summary.js"></script>
 <script src="src/ui/sounds.js"></script>
+<script src="src/ui/layout.js"></script>
+<script src="src/ui/board.js"></script>
+<script type="module" src="src/ui/board-module.js"></script>
 <script src="src/library/explore.js"></script>
 <script src="app.js"></script>
 <script src="growth.js"></script>
@@ -1073,5 +1100,6 @@
 <script src="puzzles.js"></script>
 <script src="shortcuts.js"></script>
 <script src="activity.js"></script>
+<script src="backup-nudge.js"></script>
 </body>
 </html>

@@ -43,7 +43,7 @@ Reference screenshots: [`docs/baseline/`](baseline/), regenerated with
 - [ ] Coach panel tabs (Game / Practice / Progress) expose a complete tab relationship and support arrow keys. **U** *(changes: IA)*
 - [ ] No web app manifest, no service-worker registration, no install prompt. **S**
 - [ ] `service-worker.js` stays a kill switch: it unregisters earlier installs and clears every cache. **A**
-- [ ] Below 1024px a desktop notice appears as an accessible dialog with a "continue" option; dismissal lasts for the session and leaves the app usable; the board doesn't shrink below desktop size. **S** *(changes: removed when phone layout ships, Phase 6)*
+- [ ] Below 760px a phone preview notice appears as an accessible dialog that names the sign-in-link and Safari-storage risks, with a "continue" option; dismissal lasts for the session and leads to the stacked phone layout, where the board fits the width and the page never scrolls sideways. Between 760 and 1199px there is no notice and the three columns fit. **S, B** *(Phase 6a; the notice goes once both risks are resolved)*
 - [ ] No console errors or page errors during the full smoke journey. **S**
 
 ## 2. Board input and accessibility
@@ -134,7 +134,7 @@ Reference screenshots: [`docs/baseline/`](baseline/), regenerated with
 
 ## 8. Library
 
-- [ ] 28 openings and 35 lines, with unique IDs, names, categories, and exactly one explanation per move. **B**
+- [ ] 39 openings and 50 lines, with unique IDs, names, categories, and exactly one explanation per move. **B**
 - [ ] Every opening line is legal chess (806 moves replayed with the vendored chess.js). **B**
 - [ ] Study: step through with Prev/Next/Start/End; per-move explanations and key ideas. Baseline screenshots
 - [ ] Quiz: the opponent's replies play automatically; misses are counted and can be reviewed; spaced repetition is recorded per line. **S**

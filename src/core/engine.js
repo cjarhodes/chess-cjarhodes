@@ -141,36 +141,38 @@ const engineClient = {
         multipv: (opts && opts.multipv) || null,
         timeoutId: null
       };
-      // Safety timeout — if the engine worker stalls or the WASM module
-      // wedges, abandon the task after 30s so the queue can drain and
-      // subsequent moves aren't permanently blocked.
-      task.timeoutId = setTimeout(() => {
-        task.timeoutId = null;
-        if (this.current === task) {
-          // UCI replies are untagged, so the stopped search's late info and
-          // bestmove must not be read as the next task's answer. Hold the
-          // slot until that bestmove arrives; restart the worker if it never
-          // does.
-          this.current = { orphan: true, timeoutId: setTimeout(() => this._restart(), 5000) };
-          try { this.worker.postMessage('stop'); } catch (_) {}
-        } else {
-          this.queue = this.queue.filter(t => t !== task);
-        }
-        if (task.multipv) {
-          resolve({ bestmove: null, lines: [] });
-        } else {
-          resolve({ bestmove: null, info: { cp: 0, pv: [], depth: 0 } });
-        }
-        this._runNext();
-      }, 30000);
       this.queue.push(task);
       this._runNext();
     }));
   },
 
+  // Safety timeout — if the engine worker stalls or the WASM module wedges,
+  // abandon the running search after 30s so the queue can drain and later
+  // moves aren't permanently blocked. It is armed when the search starts, not
+  // when it is queued: time spent waiting behind other searches must not
+  // count, or a queued search could resolve empty without ever running.
+  _armTimeout(task) {
+    task.timeoutId = setTimeout(() => {
+      task.timeoutId = null;
+      if (this.current !== task) return;
+      // UCI replies are untagged, so the stopped search's late info and
+      // bestmove must not be read as the next task's answer. Hold the slot
+      // until that bestmove arrives; restart the worker if it never does.
+      this.current = { orphan: true, timeoutId: setTimeout(() => this._restart(), 5000) };
+      try { this.worker.postMessage('stop'); } catch (_) {}
+      if (task.multipv) {
+        task.resolve({ bestmove: null, lines: [] });
+      } else {
+        task.resolve({ bestmove: null, info: { cp: 0, pv: [], depth: 0 } });
+      }
+      this._runNext();
+    }, 30000);
+  },
+
   _runNext() {
     if (this.status !== 'ready' || this.current || this.queue.length === 0) return;
     this.current = this.queue.shift();
+    this._armTimeout(this.current);
     this.worker.postMessage('ucinewgame');
     // Stockfish.js 10 supports Skill Level but not UCI_Elo. Only send options
     // announced during the UCI handshake so unsupported commands can never

@@ -33,6 +33,10 @@ function showExploreTokenState() {
   }
 }
 
+// Lichess answers 429 when a client sends too many requests and asks it to
+// wait a minute; that is not a connection problem.
+const LICHESS_RATE_LIMIT_MESSAGE = 'Lichess is limiting requests right now. Wait a minute, then try again.';
+
 function exploreCacheKey(db, fen) {
   return db + '|' + fen;
 }
@@ -97,6 +101,8 @@ function fetchExploreData() {
         exploreCache.clear();
         showExploreTokenState();
         $('#token-error').text('Token invalid or expired — please reconnect.').show();
+      } else if (xhr.status === 429) {
+        $('#continuations-list').empty().append($('<div class="explore-empty"></div>').text(LICHESS_RATE_LIMIT_MESSAGE));
       } else {
         $('#continuations-list').html('<div class="explore-empty">Could not reach Lichess. Check your connection.</div>');
       }
