@@ -414,11 +414,12 @@ function recurringMistakeSummaries(entries, now = Date.now()) {
 }
 
 function renderRecurringMistakeDashboard(entries) {
-  const $list = $('#insights-recurring-list').empty();
-  if (!$list.length) return;
+  const list = byId('insights-recurring-list');
+  if (!list) return;
+  list.replaceChildren();
   const summaries = recurringMistakeSummaries(entries);
   if (!summaries.length) {
-    $list.append($('<div class="insight-empty"></div>').text('No flagged pattern in the retained reviews from the last 60 days.'));
+    list.append(makeEl('div', 'insight-empty', 'No flagged pattern in the retained reviews from the last 60 days.'));
     return;
   }
   summaries.slice(0, 4).forEach(summary => {
@@ -429,10 +430,10 @@ function renderRecurringMistakeDashboard(entries) {
       ? 'Too few retained reviews to compare rates; need 30 in each period.'
       : Math.abs(summary.change * 100) < 0.05 ? 'Observed flag rate is unchanged.'
         : `Observed flag rate is ${Math.abs(summary.change * 100).toFixed(1)} percentage points ${summary.change < 0 ? 'lower' : 'higher'}.`;
-    const $row = $('<div class="insight-recurring-row"></div>');
-    $row.append($('<strong></strong>').text(meta.title));
-    $row.append($('<span></span>').text(`${current}; ${previous}. ${direction}`));
-    $list.append($row);
+    const row = makeEl('div', 'insight-recurring-row');
+    row.append(makeEl('strong', '', meta.title));
+    row.append(makeEl('span', '', `${current}; ${previous}. ${direction}`));
+    list.append(row);
   });
 }
 

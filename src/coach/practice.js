@@ -276,8 +276,8 @@ function practiceTrendSnapshot(now = Date.now()) {
 
 function renderPracticeTrends() {
   const trend = practiceTrendSnapshot();
-  $('#practice-progress-week').text(trend.attempts);
-  $('#practice-progress-streak').text(trend.streak + 'd');
+  byId('practice-progress-week').textContent = trend.attempts;
+  byId('practice-progress-streak').textContent = trend.streak + 'd';
   const comparison = trend.rate === null
     ? 'No attempts in the last 7 days.'
     : trend.previousRate === null
@@ -286,22 +286,22 @@ function renderPracticeTrends() {
   const focus = trend.focus && INSIGHT_TAG_META[trend.focus.tag]
     ? ` Focus next: ${INSIGHT_TAG_META[trend.focus.tag].title}.`
     : '';
-  $('#practice-trend-summary').text(comparison + focus);
+  byId('practice-trend-summary').textContent = comparison + focus;
 
   const maxAttempts = Math.max(1, ...trend.days.map(day => day.attempts));
-  const $bars = $('#practice-trend-bars').empty();
+  const bars = byId('practice-trend-bars');
+  bars.replaceChildren();
   trend.days.forEach(day => {
     const height = day.attempts ? Math.max(12, Math.round(day.attempts / maxAttempts * 100)) : 4;
     const success = day.attempts ? Math.round(day.correct / day.attempts * 100) : 0;
-    const $day = $('<div class="practice-trend-day"></div>')
-      .attr('aria-label', `${day.label}: ${day.attempts} attempt${day.attempts === 1 ? '' : 's'}, ${success}% completed attempts`);
-    $day.append(
-      $('<span class="practice-trend-bar"></span>')
-        .css('--bar-height', height + '%')
-        .css('--bar-success', success + '%')
-    );
-    $day.append($('<span class="practice-trend-label"></span>').text(day.label));
-    $bars.append($day);
+    const dayEl = makeEl('div', 'practice-trend-day');
+    dayEl.setAttribute('aria-label', `${day.label}: ${day.attempts} attempt${day.attempts === 1 ? '' : 's'}, ${success}% completed attempts`);
+    const bar = makeEl('span', 'practice-trend-bar');
+    bar.style.setProperty('--bar-height', height + '%');
+    bar.style.setProperty('--bar-success', success + '%');
+    dayEl.append(bar);
+    dayEl.append(makeEl('span', 'practice-trend-label', day.label));
+    bars.append(dayEl);
   });
 }
 

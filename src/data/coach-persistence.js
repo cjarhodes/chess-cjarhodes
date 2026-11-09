@@ -91,7 +91,7 @@ function saveCoachPracticeState() {
       v: 1, owner: session.owner, session: stable, run: coachPracticeRun,
       pgn: coachGame.pgn(), fen: coachGame.fen(), returnState: coachPracticeReturnState,
       boardFlipped: coachBoardFlipped,
-      prompt: $('#coach-practice-prompt').text(), status: $('#coach-practice-status').text(), ts: Date.now()
+      prompt: byId('coach-practice-prompt').textContent, status: byId('coach-practice-status').textContent, ts: Date.now()
     }));
     if (typeof queueAccountCheckpoint === 'function') queueAccountCheckpoint();
     return true;
@@ -161,7 +161,10 @@ function renderCoachPracticeNextAction() {
   const sprint = dailySprintToday();
   const hasNext = coachPracticeRun.index + 1 < coachPracticeRun.items.length;
   const transfer = !hasNext && sprint && !sprint.completedAt && sprint.mode === 'adaptive' && sprint.phase === 'moves';
-  $('#btn-coach-practice-next').text(hasNext ? 'Next drill' : coachPracticeSession.item.id.startsWith('opening-bridge:') ? 'Continue this opening in play' : (transfer ? 'Continue to live play' : coachPracticeReturnState ? 'Return to saved game' : 'Choose another lesson')).show().prop('disabled', false);
+  const next = byId('btn-coach-practice-next');
+  next.textContent = hasNext ? 'Next drill' : coachPracticeSession.item.id.startsWith('opening-bridge:') ? 'Continue this opening in play' : (transfer ? 'Continue to live play' : coachPracticeReturnState ? 'Return to saved game' : 'Choose another lesson');
+  showEl(next);
+  next.disabled = false;
 }
 
 function tryRestoreCoachPractice() {
@@ -191,17 +194,28 @@ function tryRestoreCoachPractice() {
     coachGameActive = true;
     coachBoardFlipped = !!saved.boardFlipped;
     createCoachBoard(position.fen(), coachBoardFlipped ? 'black' : 'white');
-    $('#coach-view').addClass('game-active');
+    byId('coach-view').classList.add('game-active');
     CoachController.setPhase('practice');
-    $('#coach-practice-title').text(item.meta.title);
-    $('#coach-practice-session-status').text(practiceRunPositionText());
-    $('#coach-practice-prompt').text(saved.prompt || practicePromptForItem(item));
-    $('#coach-practice-status').text(saved.status || 'Continue from this position.');
-    $('#btn-coach-practice-answer').text('Show answer').prop('disabled', stable.completed || stable.revealed);
-    $('#btn-coach-practice-hint').text('Hint').show().prop('disabled', stable.completed || stable.revealed);
-    $('#btn-coach-practice-next').hide().prop('disabled', true);
-    $('#coach-practice-takeaway').text(stable.completed ? `Carry into your next game: ${practiceCarryForwardCue(item)}` : '').toggle(!!stable.completed);
-    $('#coach-practice-banner').show().css('display', 'flex');
+    byId('coach-practice-title').textContent = item.meta.title;
+    byId('coach-practice-session-status').textContent = practiceRunPositionText();
+    byId('coach-practice-prompt').textContent = saved.prompt || practicePromptForItem(item);
+    byId('coach-practice-status').textContent = saved.status || 'Continue from this position.';
+    const answer = byId('btn-coach-practice-answer');
+    answer.textContent = 'Show answer';
+    answer.disabled = stable.completed || stable.revealed;
+    const hint = byId('btn-coach-practice-hint');
+    hint.textContent = 'Hint';
+    showEl(hint);
+    hint.disabled = stable.completed || stable.revealed;
+    const next = byId('btn-coach-practice-next');
+    hideEl(next);
+    next.disabled = true;
+    const takeaway = byId('coach-practice-takeaway');
+    takeaway.textContent = stable.completed ? `Carry into your next game: ${practiceCarryForwardCue(item)}` : '';
+    toggleEl(takeaway, !!stable.completed);
+    const banner = byId('coach-practice-banner');
+    showEl(banner);
+    banner.style.display = 'flex';
     setPracticeFocus(true);
     renderCoachPracticeNextAction();
     updateCapturedDisplay(position.fen());
@@ -255,16 +269,19 @@ function restoreCoachPracticeReturnState(snapshot) {
     coachThinking = false;
     coachGameActive = true;
     coachLifetimeRolledForThisGame = false;
-    $('#coach-strength').val(coachEngineElo);
-    $('#coach-strength-value').text(coachEngineElo);
-    $('#coach-strength-tier').text(strengthTierLabel(coachEngineElo));
-    $('.side-toggle button').removeClass('active').attr('aria-pressed', 'false');
-    $('.side-toggle button[data-side="' + coachUserSide + '"]').addClass('active').attr('aria-pressed', 'true');
+    byId('coach-strength').value = coachEngineElo;
+    byId('coach-strength-value').textContent = coachEngineElo;
+    byId('coach-strength-tier').textContent = strengthTierLabel(coachEngineElo);
+    qsa('.side-toggle button').forEach(btn => {
+      const active = btn.dataset.side === coachUserSide;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
     coachBoardFlipped = typeof snapshot.boardFlipped === 'boolean'
       ? snapshot.boardFlipped
       : coachUserColor() === 'black';
     createCoachBoard(restored.fen(), coachBoardFlipped ? 'black' : 'white');
-    $('#coach-view').addClass('game-active');
+    byId('coach-view').classList.add('game-active');
     updateCapturedDisplay(restored.fen());
     updateMoveList();
     updateOpeningLabel();
@@ -400,17 +417,19 @@ function tryRestoreCoachGame() {
     coachLifetimeRolledForThisGame = !!s.ended;
     if (s.ended) registerRestoredLifetimeRollup();
     // Sync slider + tier label.
-    $('#coach-strength').val(coachEngineElo);
-    $('#coach-strength-value').text(coachEngineElo);
-    $('#coach-strength-tier').text(strengthTierLabel(coachEngineElo));
+    byId('coach-strength').value = coachEngineElo;
+    byId('coach-strength-value').textContent = coachEngineElo;
+    byId('coach-strength-tier').textContent = strengthTierLabel(coachEngineElo);
     // Sync side toggle.
-    $('.side-toggle button').removeClass('active');
-    $('.side-toggle button').attr('aria-pressed', 'false');
-    $('.side-toggle button[data-side="' + coachUserSide + '"]').addClass('active').attr('aria-pressed', 'true');
+    qsa('.side-toggle button').forEach(btn => {
+      const active = btn.dataset.side === coachUserSide;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
     // Build the board oriented for the user.
     coachBoardFlipped = typeof s.boardFlipped === 'boolean' ? s.boardFlipped : (coachUserColor() === 'black');
     createCoachBoard(g.fen(), coachBoardFlipped ? 'black' : 'white');
-    $('#coach-view').addClass('game-active');
+    byId('coach-view').classList.add('game-active');
     // Repopulate panels.
     updateCapturedDisplay(g.fen());
     updateMoveList();

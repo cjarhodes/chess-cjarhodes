@@ -155,15 +155,15 @@ function openingDefinitionForSans(sans) {
 function updateOpeningLabel() {
   coachOpeningId = null;
   if (!coachGame) {
-    $('#opening-section').hide();
+    hideEl(byId('opening-section'));
     return;
   }
   if (coachOpeningTransfer) {
     const source = OPENINGS.find(opening => opening.id === coachOpeningTransfer.openingId);
     coachOpeningId = source && source.id;
-    $('#coach-opening-eco').text(source ? source.eco : '');
-    $('#coach-opening-name').text(`${coachOpeningTransfer.title} · ${coachOpeningTransfer.lineName} · free play from move ${coachOpeningTransfer.sourceFen.split(' ')[5]}`);
-    $('#opening-section').show();
+    byId('coach-opening-eco').textContent = source ? source.eco : '';
+    byId('coach-opening-name').textContent = `${coachOpeningTransfer.title} · ${coachOpeningTransfer.lineName} · free play from move ${coachOpeningTransfer.sourceFen.split(' ')[5]}`;
+    showEl(byId('opening-section'));
     return;
   }
   // Respect the history cursor so navigating back shows the opening as it was
@@ -172,26 +172,24 @@ function updateOpeningLabel() {
   const end = coachReviewCursor === null ? fullSans.length : coachReviewCursor;
   const sans = fullSans.slice(0, end);
   if (sans.length === 0) {
-    $('#opening-section').hide();
+    hideEl(byId('opening-section'));
     return;
   }
   const definition = openingDefinitionForSans(sans);
   const info = definition.info;
   if (!info.match) {
-    $('#opening-section').hide();
+    hideEl(byId('opening-section'));
     return;
   }
   coachOpeningId = definition.opening ? definition.opening.id : null;
-  $('#coach-opening-eco').text(info.match.eco);
+  byId('coach-opening-eco').textContent = info.match.eco;
   if (info.exact) {
     // Still in book — just show the current opening name.
-    $('#coach-opening-name').text(info.match.name);
+    byId('coach-opening-name').textContent = info.match.name;
   } else {
     // Out of book — pin the deepest named match and say after which move.
     const moveNum = Math.ceil(info.bookPlies / 2);
-    $('#coach-opening-name').text(
-      `${info.match.name} — out of book after move ${moveNum}`
-    );
+    byId('coach-opening-name').textContent = `${info.match.name} — out of book after move ${moveNum}`;
   }
-  $('#opening-section').show();
+  showEl(byId('opening-section'));
 }

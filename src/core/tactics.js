@@ -146,20 +146,19 @@ async function detectMateThreat(fen) {
 }
 
 function renderThreatItems(items) {
-  const $section = $('#threats-section');
-  const $list = $('#threats-list');
-  $list.empty();
+  const list = byId('threats-list');
+  list.replaceChildren();
   if (items.length === 0) {
-    $list.append($('<div class="threats-empty">No immediate threats. Look for active moves.</div>'));
+    list.append(makeEl('div', 'threats-empty', 'No immediate threats. Look for active moves.'));
   } else {
     items.forEach(it => {
-      const $card = $('<div class="threat-card"></div>').addClass(it.kind === 'mate' ? 'mate' : '');
-      if (it.glyph) $card.append($('<span class="piece"></span>').text(it.glyph));
-      $card.append($('<span class="text"></span>').text(it.text));
-      $list.append($card);
+      const card = makeEl('div', it.kind === 'mate' ? 'threat-card mate' : 'threat-card');
+      if (it.glyph) card.append(makeEl('span', 'piece', it.glyph));
+      card.append(makeEl('span', 'text', it.text));
+      list.append(card);
     });
   }
-  $section.show();
+  showEl(byId('threats-section'));
 }
 
 async function showThreats() {
