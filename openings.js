@@ -431,7 +431,7 @@ const OPENINGS = [
     category: 'white',
     tagline: 'Open and active — White fights for the center immediately',
     description: 'The Scotch Game (1.e4 e5 2.Nf3 Nc6 3.d4) was popularized by Garry Kasparov who used it to sidestep the mountains of Ruy López theory. By striking at the center immediately on move 3, White creates open, dynamic positions. After 5.Nxc6 bxc6 6.e5, Black\'s queen goes on a wild journey through the center while White tries to build a powerful pawn structure.',
-    moves: ['e4','e5','Nf3','Nc6','d4','exd4','Nxd4','Nf6','Nxc6','bxc6','e5','Qe7','Qe2','Nd5','c4','Nb6','Nc3','Qe6','Qe4','f5','exf6','Qxe4+','Nxe4','gxf6','f4','d6'],
+    moves: ['e4','e5','Nf3','Nc6','d4','exd4','Nxd4','Nf6','Nxc6','bxc6','e5','Qe7','Qe2','Nd5','c4','Nb6','Nc3','Qe6','Qe4','f5','exf6','Qxe4+','Nxe4','gxf6','Nxf6+','Kf7'],
     explanations: [
       { label: '1. e4 — White', text: 'The King\'s Pawn — White stakes a central claim and opens lines for quick piece development.' },
       { label: '1... e5 — Black', text: 'The classical symmetrical response — Black takes equal space in the center.' },
@@ -456,9 +456,9 @@ const OPENINGS = [
       { label: '11. exf6 — White', text: 'White takes en passant on f6 (or captures f5 square)! The f6-square becomes a target and Black\'s king loses some shelter.' },
       { label: '11... Qxe4+ — Black', text: 'Black takes the e4 queen with check — the queens are exchanged! Both sides simplify into an endgame where Black has the extra pawn from exf6 but White has activity.' },
       { label: '12. Nxe4 — White', text: 'White recaptures. Now the game is queenless — White has the Ne4 centrally placed and will try to target the weak c6 and f6 pawns.' },
-      { label: '12... gxf6 — Black', text: 'Black recaptures on f6, creating a passed f-pawn. The position is unbalanced with both sides having structural strengths and weaknesses.' },
-      { label: '13. f4 — White', text: 'White advances f4, controlling the center and preparing Be3, Nf6+, or a queenside push. White\'s pieces are very active despite the queen trade.' },
-      { label: '13... d6 — Black', text: 'Black challenges White\'s center and tries to free the position. The game is rich and double-edged — both sides have targets to play against.' }
+      { label: '12... gxf6 — Black', text: 'Black recaptures on f6, but the f-pawns are now doubled and the front one is loose: no black piece defends f6, and the knight on e4 is already attacking it.' },
+      { label: '13. Nxf6+ — White', text: 'White takes the loose pawn with check! Because the capture comes with check against the king on e8, Black has no time to trap the knight. White is a clean pawn up in a queenless middlegame.' },
+      { label: '13... Kf7 — Black', text: 'The king steps up and attacks the knight, which will drop back to e4. Black looks for compensation with ...Bg7 and pressure on b2 along the long diagonal, but White\'s extra pawn and healthier structure make the endgame easier to play.' }
     ],
     keyIdeas: [
       'Scotch key idea: open the center early to fight for activity, not slow maneuvering',
