@@ -869,36 +869,107 @@ function coachHandleGameOver() {
 // ─────────────────────────────────────────────
 // URL STATE
 // ─────────────────────────────────────────────
-function updateURL() {
-  const params = new URLSearchParams();
-  if (appView === 'coach') {
-    params.set('view', 'coach');
-  } else if (appView === 'puzzles') {
-    params.set('view', 'puzzles');
-    const mode = window.PuzzlesView && window.PuzzlesView.urlMode();
-    if (mode) params.set('mode', mode);
-  } else {
-    // Preserve an intentional switch to the Library when no opening has been
-    // selected. Opening links remain compact and continue to imply Library.
-    if (!currentOpening) params.set('view', 'library');
-    if (currentOpening) params.set('opening', currentOpening.id);
-    if (currentOpening && currentLineId && currentLineId !== 'main') params.set('line', currentLineId);
-    if (quizMode) params.set('mode', 'quiz');
-    else if (exploreMode) params.set('mode', 'explore');
-    if (currentOpening && !quizMode && !exploreMode && currentMoveIdx >= 0) {
-      params.set('move', String(currentMoveIdx));
-    }
+// The route (src/ui/router.js) for what is on screen now.
+function currentRoute() {
+  const settings = window.SettingsSheet ? window.SettingsSheet.section() : null;
+  if (appView === 'coach') return { view: 'coach', settings };
+  if (appView === 'puzzles') {
+    return { view: 'puzzles', mode: (window.PuzzlesView && window.PuzzlesView.urlMode()) || 'rated', settings };
   }
-  const q = params.toString();
-  const url = q ? `?${q}` : location.pathname;
-  // A magic link returns with the session in the fragment. Keep it until the
-  // Supabase client has consumed it; clearCoachAuthUrlState removes it after.
-  const authHash = readCoachAuthUrlState().present ? location.hash : '';
-  history.replaceState(null, '', url + authHash);
+  return {
+    view: 'library',
+    opening: currentOpening ? currentOpening.id : null,
+    line: currentOpening && currentLineId !== 'main' ? currentLineId : null,
+    mode: quizMode ? 'quiz' : exploreMode ? 'explore' : 'study',
+    move: currentOpening && currentMoveIdx >= 0 ? currentMoveIdx : null,
+    settings
+  };
 }
-function readURL() {
-  const p = new URLSearchParams(location.search);
-  return { view: p.get('view'), opening: p.get('opening'), line: p.get('line'), mode: p.get('mode'), move: parseInt(p.get('move'), 10) };
+
+// Called after anything that changes what the URL describes. A new place
+// becomes a history entry; a study move or a Settings section rewrites the
+// current one (routeHistoryAction in src/ui/router.js). A magic-link
+// fragment is kept until the Supabase client has consumed it;
+// clearCoachAuthUrlState removes it after.
+function updateURL() {
+  Router.commit(currentRoute());
+}
+
+// Library with no opening on the board (Back from an opening to the list).
+function clearOpening() {
+  if (!currentOpening) return;
+  resetQuizTracking();
+  currentOpening = null;
+  currentLine = null;
+  currentLineId = 'main';
+  currentMoveIdx = -1;
+  game.reset();
+  boardFlipped = false;
+  librarySyncLastMove(null);
+  $('.opening-btn').removeClass('active');
+  $('.app').removeClass('has-opening');
+  $('#opening-content').hide();
+  $('#move-list, #key-ideas').empty();
+  if (!exploreMode) {
+    $('#myBoard').hide();
+    $('#board-placeholder').show();
+    $('#empty-state').show();
+  }
+  ['btn-prev', 'btn-start', 'btn-next', 'btn-end', 'btn-flip'].forEach(id => $('#' + id).prop('disabled', true));
+  if (typeof renderRepertoireUI === 'function') renderRepertoireUI();
+  updateProgress();
+  clearFeedback();
+  updateSRPanel();
+}
+
+// Put the app in the state a route describes. On load (initial) every
+// view is switched to even if it is already the current one, because the
+// switch is what builds it; after Back or Forward (restoreRoute) only what
+// differs changes, so a game, drill or puzzle in progress is left as it is.
+function applyRoute(route, opts) {
+  const initial = !!(opts && opts.initial);
+  if (route.view === 'puzzles') {
+    if (window.PuzzlesView) window.PuzzlesView.selectMode(route.mode);
+    if (initial || appView !== 'puzzles') switchView('puzzles');
+  } else if (route.view === 'library') {
+    const op = route.opening ? OPENINGS.find(o => o.id === route.opening) : null;
+    if (route.opening && !op) {
+      // An opening that no longer exists: the home view.
+      switchView('coach');
+    } else if (op) {
+      const line = route.line || 'main';
+      if (!currentOpening || currentOpening.id !== op.id) loadOpening(op.id, line);
+      else {
+        if (appView !== 'library') switchView('library');
+        if (currentLineId !== line) switchOpeningLine(line);
+      }
+      const have = quizMode ? 'quiz' : exploreMode ? 'explore' : 'study';
+      if (route.mode !== have) setMode(route.mode);
+      if (route.mode === 'study') {
+        const target = route.move === null || route.move === undefined ? -1 : route.move;
+        if (currentMoveIdx !== target && (!initial || target >= 0)) goToMove(target);
+      }
+    } else {
+      if (initial || appView !== 'library') switchView('library');
+      clearOpening();
+      const have = quizMode ? 'quiz' : exploreMode ? 'explore' : 'study';
+      if (route.mode !== have) setMode(route.mode);
+    }
+  } else if (initial || appView !== 'coach') {
+    // Coach is the app's home: make the default explicit so direct visits,
+    // reloads, and clients with no prior URL state all start there.
+    switchView('coach');
+  }
+  if (window.SettingsSheet) {
+    if (route.settings) window.SettingsSheet.open(route.settings, { fromHistory: true });
+    else window.SettingsSheet.close({ fromHistory: true });
+  }
+}
+
+// Back / Forward (src/ui/router.js runs this without adding history).
+function restoreRoute(route) {
+  applyRoute(route);
+  updateURL();
 }
 
 // ─────────────────────────────────────────────
@@ -3958,37 +4029,16 @@ $(function () {
   });
   }
 
-  // ─── SR SIDEBAR INIT ────────────────────
-  function hydrateFromUrl() {
-
   // ─── HYDRATE FROM URL ───────────────────
-  const initial = readURL();
-  if (initial.view === 'coach') {
-    switchView('coach');
-  } else if (initial.view === 'puzzles') {
-    if (window.PuzzlesView) window.PuzzlesView.setInitialMode(initial.mode);
-    switchView('puzzles');
-  } else if (initial.opening) {
-    const op = OPENINGS.find(o => o.id === initial.opening);
-    if (op) {
-      loadOpening(op.id, initial.line || 'main');
-      if (initial.mode === 'quiz') setMode('quiz');
-      else if (initial.mode === 'explore') setMode('explore');
-      else if (!isNaN(initial.move) && initial.move >= 0) goToMove(initial.move);
-    }
-  } else if (initial.view === 'library') {
-    switchView('library');
-    if (initial.mode === 'explore') setMode('explore');
-  } else if (initial.mode === 'explore') {
-    switchView('library');
-    setMode('explore');
-  } else {
-    // Coach is the app's home: make the default explicit so direct visits,
-    // reloads, and clients with no prior URL state all start there.
-    switchView('coach');
+  // The page applies the URL it loaded with (old ?view= / ?opening= / mode=
+  // links included, see parseRoute), then Back and Forward go through
+  // restoreRoute.
+  function hydrateFromUrl() {
+    applyRoute(parseRoute(location.search), { initial: true });
+    // Settings opens after the view, so write the address once more with it.
+    updateURL();
+    Router.start(restoreRoute);
   }
-  }
-
   bindLibraryEvents();
   bindCoachEvents();
   bindExploreEvents();

@@ -3100,6 +3100,102 @@ input[type=range].strength-slider::-moz-range-thumb {
 .opponent-tag { display: inline-flex; align-items: center; gap: 0.35rem; margin-right: 0.35rem; font-size: var(--text-xs); color: var(--text-2); font-weight: var(--weight-medium); }
 .opponent-avatar.opponent-avatar-sm { width: 18px; height: 18px; font-size: var(--text-xs); }
 
+/* ── SETTINGS SHEET (src/ui/settings.js) ──
+   A native modal <dialog>: a centred card from 760px, a bottom sheet in the
+   stacked layout (see RESPONSIVE LAYOUT). The controls inside are the ones
+   that used to sit in Coach's left rail. */
+.header-actions { display: flex; align-items: center; gap: var(--space-2); }
+.header-settings { display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.header-settings svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+html.settings-open { overflow: hidden; }
+.settings-sheet {
+  width: min(560px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100vh - 64px);
+  padding: 0;
+  /* Anchored near the top, so the tabs stay put when a section is taller. */
+  margin: min(12vh, 96px) auto auto;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+}
+.settings-sheet[open] { display: flex; flex-direction: column; }
+.settings-sheet::backdrop { background: var(--scrim); }
+.settings-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); padding: var(--space-4) var(--space-5) var(--space-2); }
+.settings-head h2 { font-family: var(--family-display); font-size: var(--text-lg); font-weight: var(--weight-semibold); color: var(--text); }
+.settings-close { flex: none; }
+.settings-tabs { display: flex; gap: var(--space-1); padding: 0 var(--space-5); border-bottom: 1px solid var(--line); }
+.settings-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  color: var(--text-2);
+  font-family: var(--family-ui);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+}
+.settings-tab:hover { color: var(--text); }
+.settings-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.settings-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--space-5); }
+/* The sheet is the card: the moved account and backup cards lose their own frame. */
+.settings-sheet :is(.growth-card, .auth-card) { display: flex; flex-direction: column; gap: var(--space-3); margin: 0; padding: 0; background: none; border: 0; }
+.settings-sheet :is(.growth-status, .auth-status, .auth-user) { margin: 0; font-size: var(--text-sm); line-height: var(--leading-snug); color: var(--text-2); }
+.settings-sheet :is(.growth-status, .auth-status):empty { display: none; }
+.settings-sheet .account-recovery { display: flex; flex-direction: column; gap: var(--space-2); margin-top: 0; padding-top: var(--space-3); border-top: 1px solid var(--line); }
+.settings-sheet .account-recovery .growth-status { font-size: var(--text-xs); }
+.settings-section { display: flex; flex-direction: column; gap: var(--space-4); }
+.settings-section[hidden] { display: none; }
+.settings-group { display: flex; flex-direction: column; gap: var(--space-4); }
+.settings-group + .settings-group { padding-top: var(--space-4); border-top: 1px solid var(--line); }
+.settings-sheet .pref-label { font-size: var(--text-sm); color: var(--text-2); }
+.settings-sheet .pref-select { font-size: var(--text-sm); padding: var(--space-2) var(--space-3); background: var(--surface-2); }
+.pref-board { display: flex; align-items: center; gap: var(--space-3); }
+.pref-board .pref-select { flex: 1 1 auto; min-width: 0; }
+.pref-board .board-theme-preview { flex: none; width: 40px; height: 40px; }
+.settings-sheet .toggle-label { color: var(--text); }
+.settings-sheet .auth-input { font-size: var(--text-sm); }
+.settings-sheet :is(button, select, input, a):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+@keyframes settings-sheet-in { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* The Coach rail's way in. */
+.rail-settings-btn {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-2);
+  row-gap: var(--space-1);
+  padding: 0.75rem 0;
+  background: none;
+  border: 0;
+  color: var(--text-3);
+  font-family: var(--family-ui);
+  text-align: left;
+  cursor: pointer;
+}
+.rail-settings-btn .section-label { margin: 0; }
+.rail-settings-btn .section-label { flex: 1 1 auto; }
+.rail-settings-note { order: 3; flex: 1 0 100%; font-size: var(--text-xs); color: var(--text-3); }
+.rail-settings-btn::after {
+  content: '';
+  flex: none;
+  align-self: center;
+  width: 7px; height: 7px;
+  border-right: 1.5px solid var(--text-3);
+  border-bottom: 1.5px solid var(--text-3);
+  transform: rotate(-45deg);
+  margin-right: 0.2rem;
+}
+.rail-settings-btn:hover .section-label, .rail-settings-btn:hover .rail-settings-note { color: var(--text); }
+.rail-settings-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
 /* ══════════════════════════════════════════════════════════════════════
    RESPONSIVE LAYOUT (redesign Phase 6a; docs/redesign-plan.md §3 "Phone and
    tablet", docs/design-spec.md "Layout"). Breakpoints are 760px and 1200px.
@@ -3128,6 +3224,7 @@ input[type=range].strength-slider::-moz-range-thumb {
      Desktop (from 1200px) keeps the vh rules above unchanged. */
   .app, .coach-view, .puzzles-view { height: calc(100vh - var(--header-h)); height: calc(100dvh - var(--header-h)); }
   .shortcut-card { max-height: calc(100vh - 64px); max-height: calc(100dvh - 64px); }
+  .settings-sheet { max-height: calc(100vh - 64px); max-height: calc(100dvh - 64px); }
   .game-viewer-card { max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px); }
   .game-viewer-board-wrap { width: min(560px, calc(100vh - 230px)); width: min(560px, calc(100dvh - 230px)); }
   /* A custom property cannot fall back by repeating it, hence @supports. */
@@ -3179,7 +3276,9 @@ input[type=range].strength-slider::-moz-range-thumb {
   }
   header h1 .tld { display: none; }
   header a.back { font-size: var(--text-xs); }
-  .header-help { width: var(--tap-min); height: var(--tap-min); margin-left: auto; }
+  .header-actions { margin-left: auto; gap: var(--space-1); }
+  .header-help { width: var(--tap-min); height: var(--tap-min); }
+  .header-settings svg { width: 20px; height: 20px; }
   .top-nav {
     position: fixed;
     left: 0;
@@ -3414,6 +3513,42 @@ input[type=range].strength-slider::-moz-range-thumb {
   .game-viewer-board-col { padding-left: 0; }
   .game-viewer-board-wrap { width: min(100%, var(--stack-board)); align-self: center; }
   .game-viewer-moves { max-height: 160px; }
+
+  /* Settings: a bottom sheet, full width, above the home bar. */
+  .settings-sheet {
+    width: 100%;
+    max-width: 100%;
+    max-height: calc(100vh - var(--space-7));
+    margin: auto 0 0;
+    border-width: 1px 0 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  @supports (height: 100dvh) {
+    .settings-sheet { max-height: calc(100dvh - var(--space-7)); }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .settings-sheet[open] { animation: settings-sheet-in var(--duration-slow) var(--ease-out); }
+  }
+  .settings-sheet::before {
+    content: '';
+    flex: none;
+    align-self: center;
+    width: 36px;
+    height: 4px;
+    margin-top: var(--space-2);
+    border-radius: var(--radius-pill);
+    background: var(--line);
+  }
+  .settings-head { padding: var(--space-2) var(--stack-gutter) var(--space-1); }
+  .settings-tabs { padding: 0 var(--stack-gutter); }
+  .settings-tab { flex: 1 1 0; min-width: 0; padding-left: var(--space-1); padding-right: var(--space-1); }
+  /* Tall enough for Appearance, so switching section does not make the
+     sheet jump under the finger. */
+  .settings-body { min-height: min(340px, 50vh); padding: var(--space-4) var(--stack-gutter) var(--space-5); }
+  .settings-sheet .toggle-label { align-items: flex-start; padding: var(--space-2) 0; }
+  .settings-sheet .toggle-label input[type="checkbox"] { width: 20px; height: 20px; margin: 0; flex: none; }
+  .settings-sheet :is(.auth-actions, .auth-row, .training-data-actions) .ctrl-btn { flex: 1 1 0; min-height: var(--tap-min); font-size: var(--text-sm); }
 }
 
 /* Upright tablets: the stacked layout, with a framed board small enough

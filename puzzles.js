@@ -16,6 +16,7 @@
   let orientation = 'white';
   let mode = 'rated';          // rated | daily | rush | vision | endgames | repertoire
   let initialMode = null;
+  const MODES = ['rated', 'daily', 'rush', 'vision', 'endgames', 'repertoire'];
   let visible = false;
   let themeGroup = 'all';
   let session = null;          // current puzzle being solved
@@ -1557,8 +1558,15 @@
     missed: () => Core.missedQueue(loadState()),
     show,
     hide,
-    urlMode: () => (mode === 'rated' ? null : mode),
-    setInitialMode: m => { if (['rated', 'daily', 'rush', 'vision', 'endgames', 'repertoire'].includes(m)) { initialMode = m; mode = m; } },
+    // A mode chosen while Puzzles is hidden opens when it is shown.
+    urlMode: () => { const m = initialMode || mode; return m === 'rated' ? null : m; },
+    setInitialMode: m => { if (MODES.includes(m)) { initialMode = m; mode = m; } },
+    // The router (Back / Forward, links): the same as pressing a mode button.
+    selectMode: m => {
+      const next = MODES.includes(m) ? m : 'rated';
+      if (visible) { initialMode = null; if (next !== mode) setMode(next); }
+      else initialMode = next;
+    },
     repertoireKey: () => repKey(),
     // Exposed for tests and the console.
     _debug: () => ({ mode, session, rush, vision, repRun, puzzles: puzzles ? puzzles.length : 0, state: loadState() }),
