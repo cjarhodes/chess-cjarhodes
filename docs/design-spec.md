@@ -109,8 +109,10 @@ and (orientation: portrait), (max-width: 1199.98px) and (max-height:
 499.98px)`, mirrored as `LAYOUT_STACKED_QUERY` in `src/ui/layout.js`); there
 the top nav is the tab bar, the eval bar turns horizontal above the board,
 and upright tablets keep a framed board small enough for the controls to
-stay on screen. There is no Settings gear yet: settings stay in the Coach
-setup groups, stacked under the board.
+stay on screen. Settings (appearance, account, training data) sits behind a
+gear in the app bar: a centred modal card from 760px and a bottom sheet in
+the stacked layout (`src/ui/settings.js`); Coach's setup groups keep the
+game, position, profile and import controls.
 
 ---
 
