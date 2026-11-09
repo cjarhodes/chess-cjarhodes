@@ -851,7 +851,7 @@ async page => {
     await newGame();
     return problems;
   });
-  await check('re-pasting a PGN while signed in reuses its account game instead of adding another', async () => {
+  await check('re-pasting a PGN or retrying a live game insert while signed in reuses its account game', async () => {
     const problems = [];
     await freshCoach();
     // A fake Data API that keeps coach_games rows and enforces what the
@@ -931,9 +931,19 @@ async page => {
         window.ensureAccountWritePermission = async () => {};
         const first = await paste();
         const second = await paste();
-        // A live game has no content id, so it still gets a row of its own.
-        const liveKey = typeof remoteGameClientKey === "function" ? remoteGameClientKey(createCoachGameId()) : null;
-        return { first, second, games: games.map(g => ({ id: g.id, key: g.client_game_key || null })), moveGames: Array.from(new Set(moves.map(m => m.game_id))), moves: moves.length, liveKey };
+        const pasted = games.map(g => ({ id: g.id, key: g.client_game_key || null }));
+        // A live game is keyed by its local id, so a retried insert (a lost
+        // response, a late duplicate) reuses the row instead of adding one.
+        const liveId = createCoachGameId();
+        const livePayload = { user_id: 'behaviour-repaste-user', status: 'active', pgn: '' };
+        const liveA = await insertRemoteCoachGame(livePayload, liveId);
+        const liveB = await insertRemoteCoachGame(livePayload, liveId);
+        // The final result for a game whose row exists but whose id was lost
+        // lands on that row instead of being dropped by the ignored insert.
+        await commitFinalRemoteCoachGame({ payload: { user_id: 'behaviour-repaste-user', status: 'completed', result: '1-0', pgn: '1. e4 *' }, remoteGameId: null, localGameId: liveId });
+        const liveRow = games.find(g => g.client_game_key === liveId) || {};
+        const live = { a: liveA, b: liveB, rows: games.filter(g => g.client_game_key === liveId).length, finalStatus: liveRow.status, finalResult: liveRow.result };
+        return { first, second, games: pasted, moveGames: Array.from(new Set(moves.map(m => m.game_id))), moves: moves.length, live };
       } finally {
         coachDbClient = saved.client;
         coachAuthUser = saved.user;
@@ -950,7 +960,8 @@ async page => {
     if (!result.games[0] || !/^pgn-w/.test(result.games[0].key || '')) problems.push('the pasted game row should carry its content id: ' + JSON.stringify(result.games));
     if (result.first.remoteGameId !== result.second.remoteGameId) problems.push('the second paste should reuse the first paste\'s row: ' + JSON.stringify([result.first.remoteGameId, result.second.remoteGameId]));
     if (result.moveGames.length !== 1) problems.push('the re-pasted moves should land on the one game row: ' + JSON.stringify(result.moveGames));
-    if (result.liveKey !== null) problems.push('a live game must not carry a pasted-game key: ' + result.liveKey);
+    if (result.live.rows !== 1 || result.live.a.id !== result.live.b.id || result.live.b.created !== false) problems.push('a retried live-game insert should reuse its row: ' + JSON.stringify(result.live));
+    if (result.live.rows !== 1 || result.live.finalStatus !== 'completed' || result.live.finalResult !== '1-0') problems.push('a final result for an existing keyed row should update it: ' + JSON.stringify(result.live));
     await freshCoach();
     await newGame();
     return problems;

@@ -464,8 +464,12 @@ function remoteGamePayload(endReason) {
 // account keeps one row per pasted game: the insert carries that id as
 // client_game_key, unique per user, and a second paste of the same game finds
 // the row already there instead of adding another. Live games have no key.
+// Every game's local id is its client key: a pasted game's content id
+// (pgn-<side><hash>, the same for every paste of that game) or a live game's
+// random id. Either way a retried insert, a late duplicate or a guest game
+// adopted at sign-in lands on the row the account already has.
 function remoteGameClientKey(localGameId) {
-  return typeof localGameId === 'string' && /^pgn-[wb]/.test(localGameId) ? localGameId : null;
+  return typeof localGameId === 'string' && localGameId.length >= 1 && localGameId.length <= 120 ? localGameId : null;
 }
 
 // Adds a game row, or for a keyed game returns the row the account already
@@ -564,8 +568,16 @@ async function commitFinalRemoteCoachGame(final) {
   if (!gameId) {
     // The board moved on before this game reached the account: add it whole,
     // and point its queued reviews at the new row.
-    gameId = (await insertRemoteCoachGame(final.payload, final.localGameId)).id;
+    const inserted = await insertRemoteCoachGame(final.payload, final.localGameId);
+    gameId = inserted.id;
     if (owner !== coachMemoryOwnerId()) return;
+    if (!inserted.created) {
+      // The account already had this game (an earlier insert whose id was
+      // lost): the row holds an older state, so write the result to it.
+      const { error } = await coachDbClient.from('coach_games').update(final.payload).eq('id', gameId);
+      if (owner !== coachMemoryOwnerId()) return;
+      if (error) throw error;
+    }
     if (current()) { coachRemoteGameId = gameId; saveCoachState(); }
     if (typeof pendingAccountReviews === 'function') {
       const entries = pendingAccountReviews();
