@@ -3108,7 +3108,11 @@ async page => {
     await freshCoach();
     return page.evaluate(async () => {
       const problems = [];
-      const saved = { client: coachDbClient, config: window.COACH_SUPABASE_CONFIG };
+      // verify-browser.sh's smoke stage may have installed a setter that forces
+      // the flag on for the session; replace the property outright and put
+      // the original descriptor back afterwards.
+      const saved = { client: coachDbClient, config: window.COACH_SUPABASE_CONFIG, descriptor: Object.getOwnPropertyDescriptor(window, 'COACH_SUPABASE_CONFIG') };
+      const setConfig = value => Object.defineProperty(window, 'COACH_SUPABASE_CONFIG', { configurable: true, writable: true, value });
       const calls = [];
       const fake = {
         auth: {
@@ -3129,14 +3133,14 @@ async page => {
         const group = document.getElementById('coach-auth-form').closest('details');
         if (group) group.open = true;
         // Off (the shipped default): the link is sent and no code field appears.
-        window.COACH_SUPABASE_CONFIG = Object.assign({}, saved.config, { emailCodeEnabled: false });
+        setConfig(Object.assign({}, saved.config, { emailCodeEnabled: false }));
         $('#coach-auth-code-form').hide();
         $('#coach-auth-email').val('player@example.com');
         await submit('coach-auth-email-form');
         if (codeShown()) problems.push('with codes off, the code field appeared');
         if (!/Open it in this browser to finish/.test(status())) problems.push('with codes off, the status should point to the link: ' + status());
         // On: the code field appears, takes focus, and only the right code signs in.
-        window.COACH_SUPABASE_CONFIG = Object.assign({}, saved.config, { emailCodeEnabled: true });
+        setConfig(Object.assign({}, saved.config, { emailCodeEnabled: true }));
         await submit('coach-auth-email-form');
         if (!codeShown()) problems.push('with codes on, the code field did not appear after sending');
         if (document.activeElement !== document.getElementById('coach-auth-code')) problems.push('the code field did not take focus');
@@ -3156,7 +3160,8 @@ async page => {
         if (status() !== 'Signed in.') problems.push('the right code did not sign in: ' + status());
       } finally {
         coachDbClient = saved.client;
-        window.COACH_SUPABASE_CONFIG = saved.config;
+        if (saved.descriptor) Object.defineProperty(window, 'COACH_SUPABASE_CONFIG', saved.descriptor);
+        else delete window.COACH_SUPABASE_CONFIG;
         $('#coach-auth-code-form').hide();
       }
       return problems;
