@@ -285,7 +285,6 @@ read it. `scripts/validate-router.js` tests the address rules in Node;
   - `chess.js` 0.10.3
   - `cm-chessboard` 8.15.4 (ES modules, loaded by `src/ui/board-module.js`;
     pieces: the cburnett sprite built by `scripts/build-piece-sprite.js`)
-  - `jQuery` 3.6.0 (app code still uses it; the board no longer needs it)
   - `@supabase/supabase-js` 2.114.0
   - Stockfish (WASM build: `stockfish.js` + `stockfish.wasm`)
 - Lichess Opening Explorer API for Explore mode
