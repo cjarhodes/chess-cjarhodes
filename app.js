@@ -997,11 +997,6 @@ function updateCoachBoardAccessibility() {
   $('#coachBoard').attr('aria-label', describeChessPosition(coachGame));
 }
 
-const DESKTOP_NOTICE_KEY = 'ui:desktop-notice-dismissed';
-
-// Phones get the stacked layout behind a notice that says it is a preview
-// (sign-in links and Safari's storage limits; see index.html). Dismissal
-// lasts for the browser session.
 const COACH_PANEL_TAB_KEY = 'ui:coach-panel-tab';
 
 // Right-rail tabs: Game (live review), Practice (queue and drills), Progress.
@@ -1038,21 +1033,6 @@ function updatePracticeTabBadge(dueCount) {
   if (!$badge.length) return;
   $badge.text(String(dueCount));
   if (dueCount > 0) $badge.removeAttr('hidden'); else $badge.attr('hidden', true);
-}
-
-function initDesktopNotice() {
-  let dismissed = false;
-  try { dismissed = sessionStorage.getItem(DESKTOP_NOTICE_KEY) === '1'; } catch (e) { /* stays visible */ }
-  // The notice is a gate on arrival, not something to throw over a game in
-  // progress: a page that loads wider than a phone (a sideways phone, say)
-  // never shows it, even if the device is rotated later.
-  const narrowAtLoad = !!(window.matchMedia && window.matchMedia('(max-width: 759.98px)').matches);
-  if (dismissed || !narrowAtLoad) document.documentElement.classList.add('desktop-notice-dismissed');
-  else setTimeout(() => { const btn = document.getElementById('btn-desktop-notice-continue'); if (btn && btn.offsetParent) btn.focus(); }, 0);
-  $('#btn-desktop-notice-continue').on('click', function() {
-    try { sessionStorage.setItem(DESKTOP_NOTICE_KEY, '1'); } catch (e) { /* session only */ }
-    document.documentElement.classList.add('desktop-notice-dismissed');
-  });
 }
 
 function placeDailySprintCard() {
@@ -3135,7 +3115,6 @@ function clearFeedback() {
 // ─────────────────────────────────────────────
 $(function () {
   // Board is initialized lazily on first opening selection
-  initDesktopNotice();
   initBoardTheme();
   initColorTheme();
   initCoachPanelTabs();
@@ -3631,7 +3610,7 @@ $(function () {
   // fire in coach mode and never while the user is typing in a form field.
   $(document).on('keydown', function(e) {
     if (!coachMode || !coachGame || coachPracticeSession || e.isDefaultPrevented() ||
-        $('#summary-overlay, #promotion-picker, #desktop-notice').is(':visible')) return;
+        $('#summary-overlay, #promotion-picker').is(':visible')) return;
     // Ignore if the user is typing (inputs, textareas, contenteditable).
     const tag = (e.target && e.target.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
@@ -3849,7 +3828,7 @@ $(function () {
 
   // ─── KEYBOARD SHORTCUTS ─────────────────
   $(document).on('keydown', function (e) {
-    if (e.isDefaultPrevented() || $('#summary-overlay').is(':visible') || $('#desktop-notice').is(':visible')) return;
+    if (e.isDefaultPrevented() || $('#summary-overlay').is(':visible')) return;
     if ($('#promotion-picker').is(':visible')) {
       if (e.key === 'Escape') {
         e.preventDefault();

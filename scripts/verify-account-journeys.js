@@ -9,7 +9,7 @@ async browserPage => {
     b: { id: '22222222-2222-4222-8222-222222222222', email: 'continuity-b@example.invalid', aud: 'authenticated', role: 'authenticated', created_at: '2026-01-01T00:00:00Z' }
   };
   const tokenOwners = new Map();
-  const tables = Object.fromEntries(['coach_checkpoints','player_training_profiles','coach_games','coach_moves','drill_queue','practice_attempts','daily_training_sessions','theory_cards'].map(t=>[t,[]]));
+  const tables = Object.fromEntries(['coach_checkpoints','player_training_profiles','coach_games','coach_moves','drill_queue','practice_attempts','daily_training_sessions','theory_cards','coach_archive_games'].map(t=>[t,[]]));
   const raceWaiters = [], ACCOUNT_LIMIT_BYTES = 240 * 1024;
   let serial = 1, stamp = 1, failLogout = false, offline = false, otpRequests = 0, logoutScope = '', profileRace = false, raceReads = 0;
   const stampTime = () => new Date(Date.UTC(2026,0,1,0,0,0,stamp++)).toISOString();
@@ -212,6 +212,29 @@ async browserPage => {
     profileRace=true;raceReads=0;await Promise.all([a.evaluate(()=>syncGrowthState({silent:true})),b.evaluate(()=>syncGrowthState({silent:true}))]);profileRace=false;
     const observations=tables.player_training_profiles.find(row=>row.user_id===users.a.id).state.repertoire.observed;
     assert(observations.some(row=>row.key==='fixture-left')&&observations.some(row=>row.key==='fixture-right'),'simultaneous profile sync merges both browsers');
+    // Safari can clear a site's storage after a week away. Signed in, the
+    // game archive, repertoire-drill schedule and endgame bests come back
+    // from the account; a game removed on one browser stays removed.
+    const archived={id:'fixture-archive-1',at:Date.UTC(2026,0,2),result:'1-0',side:'white',elo:1500,startFen:'',pgn:'1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7#',accuracy:90,acpl:12,opening:'Fixture',reviews:[{ply:1,tier:'best',userSan:'e4',bestSan:'e4',bestUci:'e2e4',userUci:'e2e4',cp:30}],source:'lichess',opponent:'fixture',url:'https://lichess.org/fixture',speed:'blitz'};
+    const doomed={...archived,id:'fixture-archive-2',at:Date.UTC(2026,0,3)};
+    assert(await a.evaluate(games=>games.map(game=>GameArchive.add(game)).join(),[archived,doomed])==='saved,saved','fixture games enter the archive');
+    await a.evaluate(()=>{PuzzlesView._saveRepertoire({v:1,records:{'fixture-line':{reps:2,ease:2.6,interval:3,lapses:0,seen:2,dueAt:Date.now()+3*864e5,lastAt:Date.now()}},newDay:{day:'',count:0}});PuzzlesView._saveEndgameBest('fixture-endgame',7);});
+    await sync(a);
+    assert(['fixture-archive-1','fixture-archive-2'].every(key=>tables.coach_archive_games.some(row=>row.user_id===users.a.id&&row.game_key===key&&row.game&&row.game.reviews.length===1)),'archived games reach the account');
+    await a.evaluate(()=>GameArchive.remove('fixture-archive-2'));
+    await a.waitForFunction(()=>!localStorage.getItem(GameArchive.storageKeyFor(coachAuthUser.id)+':removed'));
+    assert(tables.coach_archive_games.find(row=>row.game_key==='fixture-archive-2').deleted_at&&!tables.coach_archive_games.find(row=>row.game_key==='fixture-archive-2').game,'a removed game leaves a tombstone');
+    await b.evaluate(game=>{localStorage.setItem(GameArchive.storageKeyFor(coachAuthUser.id),JSON.stringify({v:1,games:[game]}));},doomed);
+    await sync(b);
+    assert(await b.evaluate(()=>!GameArchive.has('fixture-archive-2')&&GameArchive.has('fixture-archive-1')),'another browser drops the removed game and gains the kept one');
+    assert(!tables.coach_archive_games.find(row=>row.game_key==='fixture-archive-2').game,'a stale copy does not resurrect a removed game');
+    // A wiped browser is an empty one: signed out, nothing stored.
+    const wiped=await fresh();
+    assert(await wiped.evaluate(()=>!coachAuthUser&&!GameArchive.has('fixture-archive-1')&&!Object.keys(PuzzlesView._endgameBests()).length),'a wiped browser starts signed out and empty');
+    await signIn(wiped);await sync(wiped);
+    const restored=await wiped.evaluate(()=>({archive:GameArchive.load().map(game=>game.id),line:PuzzlesView._repertoireState().records['fixture-line'],best:PuzzlesView._endgameBests()['fixture-endgame']}));
+    assert(restored.archive.includes('fixture-archive-1')&&!restored.archive.includes('fixture-archive-2'),'the archive comes back after a storage wipe, without the removed game: '+restored.archive.join());
+    assert(restored.line&&restored.line.interval===3&&restored.best===7,'the drill schedule and endgame bests come back after a storage wipe: '+JSON.stringify(restored));
     // A competing tab advances this browser's checkpoint after our last read.
     await b.evaluate(()=>flushAccountCheckpoint());
     const device=await b.evaluate(()=>accountCheckpointDeviceId());

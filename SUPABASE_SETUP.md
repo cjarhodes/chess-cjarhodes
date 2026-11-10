@@ -24,12 +24,12 @@ Library spaced-repetition schedules, trends, and theory cards:
    - Site URL: `https://chess.cjarhodes.com`
    - Redirect URL: `https://chess.cjarhodes.com/?view=coach`
    - Optional local redirect: `http://127.0.0.1:4173/index.html?view=coach`
-4. Optional, for code-based sign-in. Supabase's built-in email service only
-   sends its default templates, so the Magic Link template is read-only until
-   one of these is in place: custom SMTP (Authentication -> Emails -> SMTP
-   Settings, any provider such as Resend or Postmark), a Pro plan, or a Send
-   Email auth hook. Once editing is unlocked, open Authentication -> Emails ->
-   Magic link or OTP, paste `supabase/templates/magic_link.html` as the body,
+4. Optional, for code-based sign-in. Without custom SMTP, Supabase's built-in
+   email service only delivers to addresses on the project's team, so anyone
+   else needs custom SMTP (Authentication -> Emails -> SMTP Settings, any
+   provider such as Resend or Postmark) before they can sign in by email at
+   all. With it in place, open Authentication -> Emails -> Magic link or OTP,
+   paste `supabase/templates/magic_link.html` as the body,
    set the subject to "Your Chess Coach sign-in link and code", and save. The
    template includes `{{ .Token }}`, the 6-digit code that lets sign-in finish
    in the browser tab that requested it. Then set `emailCodeEnabled: true` in

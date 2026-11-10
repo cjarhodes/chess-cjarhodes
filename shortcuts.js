@@ -85,7 +85,7 @@
 
   function blocked() {
     const visible = id => { const el = document.getElementById(id); return el && el.offsetParent !== null; };
-    return visible('summary-overlay') || visible('desktop-notice') || visible('promotion-picker');
+    return visible('summary-overlay') || visible('promotion-picker');
   }
 
   // Capture phase so the view handlers never see the ?.

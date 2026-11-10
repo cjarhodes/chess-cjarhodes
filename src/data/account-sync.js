@@ -15,8 +15,9 @@ function supabaseRuntimeConfig() {
 }
 
 // The emailed 6-digit code only exists when the project's Magic Link email
-// template includes {{ .Token }}, which Supabase allows only with custom SMTP,
-// a Pro plan, or a Send Email hook. Keep the field hidden until then.
+// template includes {{ .Token }}. Without custom SMTP, Supabase's built-in
+// mailer only reaches the project's own team, so the field stays hidden until
+// custom SMTP and the template are both in place (see SUPABASE_SETUP.md).
 function coachEmailCodeEnabled() {
   return supabaseRuntimeConfig().emailCodeEnabled;
 }
@@ -874,7 +875,8 @@ async function refreshRemoteInsights(opts = {}) {
     syncPendingPracticeEvents(),
     typeof flushPendingAccountReviews === 'function' ? flushPendingAccountReviews() : Promise.resolve(),
     syncRemoteDailySprints({ silent: true }),
-    typeof syncGrowthState === 'function' ? syncGrowthState({ silent: true }) : Promise.resolve()
+    typeof syncGrowthState === 'function' ? syncGrowthState({ silent: true }) : Promise.resolve(),
+    typeof GameArchive !== 'undefined' && GameArchive.syncRemote ? GameArchive.syncRemote() : Promise.resolve()
   ]);
   const uploadFailure = uploads.find(result => result.status === 'rejected');
   const [movesResult, drillsResult, attemptsResult] = await Promise.all([

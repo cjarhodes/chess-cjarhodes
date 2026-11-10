@@ -2500,10 +2500,8 @@ async page => {
         const tag = `${w}x${h}`;
         await p.goto(base + '/?view=coach');
         await p.waitForFunction(() => typeof engineClient !== 'undefined' && !!coachBoard);
-        const notice = await p.locator('#desktop-notice').isVisible();
-        if (w < 760 && !notice) problems.push(`${tag}: the phone preview notice did not appear`);
-        if (w >= 760 && notice) problems.push(`${tag}: the phone notice covered a tablet-sized screen`);
-        if (notice) await p.locator('#btn-desktop-notice-continue').click();
+        const dialog = await p.evaluate(() => [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')].some(el => el.checkVisibility()));
+        if (dialog) problems.push(`${tag}: a dialog covered the layout on arrival`);
         await p.waitForTimeout(200);
         problems.push(...fitProblems(tag + ' Coach (ready)', await layoutReport(p, 'coachBoard'), minBoard));
         await p.locator('#btn-coach-newgame').click();
@@ -2561,10 +2559,6 @@ async page => {
         .map(t => `${t.id} ${Math.round(t.r.width)}x${Math.round(t.r.height)}`));
       await tp.goto(base + '/?view=coach');
       await tp.waitForFunction(() => typeof engineClient !== 'undefined' && !!coachBoard);
-      const notice = await tp.locator('#desktop-notice').textContent();
-      if (!/different browser/.test(notice) || !/week/.test(notice)) problems.push('the phone notice does not explain the sign-in and storage risks');
-      await tp.locator('#btn-desktop-notice-continue').tap();
-      if (await tp.locator('#desktop-notice').isVisible()) problems.push('Continue did not lead to the phone layout');
 
       // The tab bar is fixed to the bottom and every tab is a 44px target.
       const bar = await tp.evaluate(() => {
@@ -2661,7 +2655,6 @@ async page => {
       const tp = await ctx.newPage();
       const errors = [];
       tp.on('pageerror', e => errors.push(e.message));
-      await tp.addInitScript(() => { try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {} });
       await tp.goto(base + '/?view=coach');
       await tp.waitForFunction(() => typeof GameArchive !== 'undefined' && !!coachBoard);
       const inside = sel => tp.evaluate(s => {
@@ -2728,7 +2721,6 @@ async page => {
       const tp = await ctx.newPage();
       const errors = [];
       tp.on('pageerror', e => errors.push(e.message));
-      await tp.addInitScript(() => { try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {} });
       const cdp = await ctx.newCDPSession(tp);
       const swipe = async (box, dx) => {
         const y = box.y + box.height / 2, x0 = box.x + box.width / 2 + (dx < 0 ? 80 : -80);
@@ -2821,7 +2813,6 @@ async page => {
     const ctx = await sizedContext(375, 812, true);
     try {
       const tp = await ctx.newPage();
-      await tp.addInitScript(() => { try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {} });
       const settle = () => tp.waitForTimeout(300);
       await tp.goto(base + '/?view=coach');
       await tp.waitForFunction(() => typeof engineClient !== 'undefined' && !!coachBoard);
@@ -2938,7 +2929,6 @@ async page => {
       const tp = await ctx.newPage();
       const errors = [];
       tp.on('pageerror', e => errors.push(e.message));
-      await tp.addInitScript(() => { try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {} });
       await tp.addInitScript(stubDownloads);
       const daysAgo = n => Date.now() - n * 86400000;
       // An empty profile: no reminder.
@@ -3037,7 +3027,6 @@ async page => {
     // A signed-in session from the account service (the Supabase client is
     // the boundary), switched on per tab; every query answers with no rows.
     const signedInClient = () => {
-      try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {}
       if (sessionStorage.getItem('test:signed-in') !== '1') return;
       const result = { data: null, error: null, count: 0 };
       const chain = () => new Proxy(function () {}, {

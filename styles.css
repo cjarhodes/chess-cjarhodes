@@ -4,8 +4,8 @@
   /* Colour, type, space and shape tokens live in styles/tokens.css. */
 
   /* Desktop-first layout. The board takes the height the viewport offers; the
-     rails take the width a laptop or desktop offers. Below --min-shell the
-     page keeps this layout and shows a desktop notice instead of reflowing. */
+     rails take the width a laptop or desktop offers. Narrower screens reflow
+     (see RESPONSIVE LAYOUT at the end of this file). */
   --header-h: 56px;
   --rail-left: 320px;
   --rail-right: 440px;
@@ -2118,58 +2118,6 @@ input[type=range].strength-slider::-moz-range-thumb {
 .auto-elo-note { color: var(--text-3); font-size: var(--text-xs); margin-top: 0.35rem; line-height: 1.35; }
 #repertoire-section:empty { display: none; }
 
-/* ── PHONE NOTICE ── the stacked layout on phones is a preview; this says why
-   (sign-in links, Safari's storage limits) before the phone layout shows. */
-.desktop-notice {
-  display: none;
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  background: color-mix(in srgb, var(--bg) 96%, transparent);
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
-}
-@media (max-width: 759.98px) {
-  html:not(.desktop-notice-dismissed) .desktop-notice { display: flex; }
-  html:not(.desktop-notice-dismissed) body { overflow: hidden; }
-}
-.desktop-notice-card {
-  max-width: 420px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-top: 2px solid var(--accent);
-  border-radius: var(--radius-sm);
-  padding: 1.5rem 1.6rem 1.4rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.8rem;
-}
-.desktop-notice-eyebrow {
-  font-family: var(--family-ui);
-  font-size: var(--text-xs);
-  color: var(--accent-text);
-}
-.desktop-notice-card h2 {
-  font-family: var(--family-prose);
-  font-size: var(--text-xl);
-  font-weight: 500;
-  line-height: 1.2;
-  margin: 0;
-}
-.desktop-notice-card p {
-  font-family: var(--family-prose);
-  font-size: var(--text-prose);
-  line-height: 1.5;
-  color: var(--text);
-  opacity: 0.88;
-  margin: 0;
-}
-.desktop-notice-card ul { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.6rem; }
-.desktop-notice-card li { font-family: var(--family-prose); font-size: var(--text-prose); line-height: 1.45; color: var(--text); }
-#desktop-notice-body { display: flex; flex-direction: column; gap: 0.7rem; }
-.desktop-notice-card .ctrl-btn { align-self: stretch; margin-top: 0.4rem; min-height: 48px; }
-
 /* ── COACH RAILS (desktop) ── */
 .play-card {
   background: var(--surface);
@@ -3394,8 +3342,6 @@ input[type=range].strength-slider::-moz-range-thumb {
   .backup-nudge-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: calc(-1 * var(--space-2)); }
   .backup-nudge .backup-nudge-dismiss { flex: none; margin-right: calc(-1 * var(--space-2)); padding-left: var(--space-2); padding-right: var(--space-2); border-color: transparent; color: var(--text-2); text-decoration: underline; text-underline-offset: 3px; }
 
-  /* Dialogs fit the screen. */
-  .desktop-notice { align-items: flex-start; overflow-y: auto; padding: calc(var(--space-4) + env(safe-area-inset-top)) var(--space-4) var(--space-4); }
   /* viewport-fit=cover lets content reach under the notch and the home bar,
      so full-screen overlays keep their cards inside the safe area. */
   .summary-overlay, .game-viewer-overlay, .shortcut-overlay {

@@ -97,7 +97,9 @@ function emptyGrowthState() {
     openingTransfers: [],
     learningTransfers: [],
     library: { records: {} },
-    puzzles: null
+    puzzles: null,
+    repertoireDrills: null,
+    endgames: {}
   };
 }
 
@@ -107,6 +109,33 @@ function normalizeGrowthPuzzles(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   if (typeof PuzzleCore === 'undefined') return value;
   return PuzzleCore.compactState(value);
+}
+
+// The repertoire-drill schedule (RepertoireCore state) and endgame bests
+// (fewest moves per drill) also ride along, so a browser that clears its
+// storage gets them back from the account. puzzles.js keeps the local copies.
+function normalizeGrowthRepertoireDrills(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (typeof RepertoireCore === 'undefined') return value;
+  return RepertoireCore.normalizeState(value);
+}
+
+function normalizeEndgameBests(value) {
+  const out = {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
+  Object.keys(value).slice(0, 100).forEach(id => {
+    const moves = Math.floor(Number(value[id]));
+    if (id.length <= 60 && moves >= 1 && moves <= 500) out[id] = moves;
+  });
+  return out;
+}
+
+function mergeEndgameBests(a, b) {
+  const out = normalizeEndgameBests(a);
+  Object.entries(normalizeEndgameBests(b)).forEach(([id, moves]) => {
+    if (!out[id] || moves < out[id]) out[id] = moves;
+  });
+  return out;
 }
 
 function normalizeGrowthState(value) {
@@ -191,7 +220,9 @@ function normalizeGrowthState(value) {
         ? value.library.records
         : {}
     },
-    puzzles: normalizeGrowthPuzzles(value.puzzles)
+    puzzles: normalizeGrowthPuzzles(value.puzzles),
+    repertoireDrills: normalizeGrowthRepertoireDrills(value.repertoireDrills),
+    endgames: normalizeEndgameBests(value.endgames)
   };
 }
 
@@ -587,6 +618,10 @@ function mergeGrowthStates(localValue, remoteValue) {
   merged.puzzles = local.puzzles && remote.puzzles && typeof PuzzleCore !== 'undefined'
     ? PuzzleCore.mergeStates(local.puzzles, remote.puzzles)
     : (local.puzzles || remote.puzzles || null);
+  merged.repertoireDrills = local.repertoireDrills && remote.repertoireDrills && typeof RepertoireCore !== 'undefined'
+    ? RepertoireCore.mergeStates(local.repertoireDrills, remote.repertoireDrills)
+    : (local.repertoireDrills || remote.repertoireDrills || null);
+  merged.endgames = mergeEndgameBests(local.endgames, remote.endgames);
   merged.updatedAt = Math.max(local.updatedAt, remote.updatedAt);
   return normalizeGrowthState(merged);
 }
@@ -594,7 +629,7 @@ function mergeGrowthStates(localValue, remoteValue) {
 function adoptAnonymousGrowthState(ownerId) {
   if (!ownerId) return;
   const anonymous = loadGrowthState(null);
-  const hasData = (anonymous.puzzles && anonymous.puzzles.history && anonymous.puzzles.history.length) || anonymous.learningTransfers.length || anonymous.openingTransfers.length || anonymous.profile.onboarded || anonymous.repertoire.ids.length || anonymous.repertoire.observed.length || anonymous.repertoire.repairs.length || Object.keys(anonymous.library.records).length;
+  const hasData = (anonymous.puzzles && anonymous.puzzles.history && anonymous.puzzles.history.length) || (anonymous.repertoireDrills && Object.keys(anonymous.repertoireDrills.records || {}).length) || Object.keys(anonymous.endgames).length || anonymous.learningTransfers.length || anonymous.openingTransfers.length || anonymous.profile.onboarded || anonymous.repertoire.ids.length || anonymous.repertoire.observed.length || anonymous.repertoire.repairs.length || Object.keys(anonymous.library.records).length;
   if (!hasData) return;
   const merged = mergeGrowthStates(loadGrowthState(ownerId), anonymous);
   const saved = saveGrowthState(merged, ownerId, { skipSync: true, preserveTimestamp: true });

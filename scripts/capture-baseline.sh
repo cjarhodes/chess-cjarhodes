@@ -133,12 +133,11 @@ async page => {
   await page.locator('#btn-explore').click();
   await shot('library-explore');
 
-  // Narrow screens get the desktop notice.
+  // Narrow screens get the stacked layout.
   await page.setViewportSize({ width: 820, height: 1000 });
-  await page.evaluate(() => sessionStorage.removeItem('ui:desktop-notice-dismissed'));
   await page.goto(base + '/?view=coach');
   await page.waitForTimeout(600);
-  await shot('narrow-desktop-notice');
+  await shot('narrow-stacked');
 
   return { saved: shots.length, shots };
 }

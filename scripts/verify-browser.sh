@@ -667,23 +667,18 @@ async page => {
   await settlePracticeMove();
   assert((await page.locator('#coach-practice-status').textContent()).includes('Solved after revealing the answer'), 'revealed answer was not completed');
 
-  // Narrowing a page that loaded wide gets the stacked layout but not the
-  // phone notice (it is a gate on arrival, never thrown over a game); the
-  // board fills the width without the page scrolling sideways. A fresh phone
-  // load shows the notice (checked with the Library visit below).
+  // Narrowing a page that loaded wide gets the stacked layout; the board
+  // fills the width without the page scrolling sideways.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(400);
-  assert(!(await page.locator('#desktop-notice').isVisible()), 'narrowing a page mid-session threw the phone notice over it');
   const narrowBoard = await page.locator('#coachBoard svg.cm-chessboard').boundingBox();
   assert(narrowBoard && narrowBoard.x >= 0 && narrowBoard.width >= 380 && narrowBoard.x + narrowBoard.width <= 390.5, `phone viewport did not fit the board to the width (${JSON.stringify(narrowBoard)})`);
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'phone viewport scrolled sideways');
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.waitForTimeout(400);
-  assert(!(await page.locator('#desktop-notice').isVisible()), 'phone notice covered a tablet viewport');
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'tablet viewport scrolled sideways');
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.waitForTimeout(250);
-  assert(!(await page.locator('#desktop-notice').isVisible()), 'phone notice stayed visible on a desktop viewport');
 
   await leavePractice();
   await page.locator('#btn-coach-newgame').click();
@@ -717,15 +712,10 @@ async page => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(page.url().split('?')[0] + '?opening=italian&mode=quiz');
   await page.waitForTimeout(400);
-  assert(await page.locator('#desktop-notice').isVisible(), 'phone Library visit did not show the phone preview notice');
-  await page.locator('#btn-desktop-notice-continue').click();
-  assert(!(await page.locator('#desktop-notice').isVisible()), 'phone notice did not dismiss');
-  await page.reload();
-  await page.waitForTimeout(400);
-  assert(!(await page.locator('#desktop-notice').isVisible()), 'phone notice dismissal did not persist for the session');
-  assert(await page.locator('#library').isVisible() && await page.locator('#myBoard').isVisible(), 'dismissed notice left the Library unusable');
+  // A phone visit goes straight to the phone layout: no dialog in the way.
+  assert(await page.evaluate(() => ![...document.querySelectorAll('[role="dialog"][aria-modal="true"]')].some(el => el.checkVisibility())), 'a dialog covered the phone Library on arrival');
+  assert(await page.locator('#library').isVisible() && await page.locator('#myBoard').isVisible(), 'the phone Library was not usable on arrival');
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && getComputedStyle(document.querySelector('.top-nav')).position === 'fixed'), 'phone Library scrolled sideways or kept the view tabs in the header');
-  await page.evaluate(() => sessionStorage.removeItem('ui:desktop-notice-dismissed'));
 
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(page.url().split('?')[0] + '?view=coach');
@@ -939,7 +929,7 @@ async page => {
     practice: 'adaptive focus was selected, rehearsed, transferred, assessed, and persisted',
     coach: 'replacement-game race stayed clean',
     library: 'keyboard quiz advanced',
-    mobile: 'phone viewport showed the preview notice, then a stacked layout that fits the width; tablet showed no notice',
+    mobile: 'phone viewport went straight to a stacked layout that fits the width, with no dialog in the way',
     closedLoop: 'missed mate became a post-game drill and delivered mate stayed scorable',
     dailyHabit: 'first-visit baseline and returning adaptive session completed with takeaways, streaks, persistence, and account isolation',
     growth: 'profile, repertoire, adaptive strength, weekly review, endgames, PGN Inbox, and offline shell worked in-browser'

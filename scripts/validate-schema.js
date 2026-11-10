@@ -25,6 +25,8 @@ const gameKeyMigration = read('supabase/migrations/20261108050000_coach_game_cli
 const gameKeyTest = read('supabase/tests/database/coach_game_client_key.test.sql');
 const ootdDropMigration = read('supabase/migrations/20261108060000_drop_ootd_objects.sql');
 const ootdDropTest = read('supabase/tests/database/ootd_objects_dropped.test.sql');
+const archiveMigration = read('supabase/migrations/20261110010000_coach_archive_games.sql');
+const archiveTest = read('supabase/tests/database/coach_archive_games.test.sql');
 const workflow = read('.github/workflows/ci.yml');
 const serviceWorker = read('service-worker.js');
 
@@ -34,6 +36,10 @@ requirePattern(schema, /\(select auth\.uid\(\)\)/, 'RLS policies must use cached
 requirePattern(profileMigration, /create table public\.player_training_profiles[\s\S]+enable row level security[\s\S]+for select to authenticated[\s\S]+for insert to authenticated[\s\S]+for update to authenticated[\s\S]+grant select, insert, update/, 'training profile sync must use explicit grants and owner-only RLS');
 requirePattern(practiceMigration, /create table public\.practice_attempts[\s\S]{0,1800}enable row level security/, 'attempt history must be RLS-protected');
 requirePattern(dailyMigration, /create table public\.daily_training_sessions[\s\S]{0,1600}enable row level security[\s\S]{0,1800}to authenticated[\s\S]{0,1800}grant select, insert, update/, 'adaptive session sync must use an RLS-protected, explicitly granted account table');
+for (const [source, label] of [[archiveMigration, 'migration'], [schema, 'canonical schema']]) {
+  requirePattern(source, /create table (if not exists )?public\.coach_archive_games[\s\S]+primary key \(user_id, game_key\)[\s\S]+check \(\(game is null\) = \(deleted_at is not null\)\)[\s\S]+enable row level security[\s\S]+for select to authenticated[\s\S]+for insert to authenticated[\s\S]+for update to authenticated[\s\S]+grant select, insert, update on table public\.coach_archive_games to authenticated/, `${label} must keep the synced game archive one row per game, owner-only, with tombstones and no client deletes`);
+}
+forbidPattern(archiveMigration, /grant[^;]*delete[^;]*coach_archive_games/, 'archive rows are tombstoned, never deleted by the client');
 
 // Practice RPC semantics
 requirePattern(practiceMigration, /function public\.record_practice_attempt[\s\S]{0,600}security invoker[\s\S]{0,4200}pg_advisory_xact_lock/, 'practice RPC must be security-invoker and serialize each drill');
@@ -61,6 +67,7 @@ forbidPattern(schema, /ootd/i, 'supabase-schema.sql must not define OOTD objects
 requirePattern(gameKeyTest, /plan\(10\)[\s\S]+a second paste of the same game does not create a second row[\s\S]+games without a client key are each kept[\s\S]+another account pasting the same game gets its own row/, 'database tests must prove a pasted game is stored once per account, with null keys and other accounts unaffected');
 requirePattern(ootdDropTest, /plan\(6\)[\s\S]+hasnt_table\('public', 'ootd_wardrobes'[\s\S]+hasnt_table\('public', 'ootd_wardrobe_history'[\s\S]+hasnt_function\('public', 'ootd_save_wardrobe'[\s\S]+the OOTD photo bucket is removed[\s\S]+the OOTD photo bucket policies are removed/, 'database tests must prove the OOTD tables, function, bucket and policies are gone');
 requirePattern(drillSourceTest, /plan\(6\)[\s\S]+deleting the source move keeps the drill and its practice progress[\s\S]+another account cannot read a drill with no source move/, 'database tests must prove a practised drill survives its source move and stays private');
+requirePattern(archiveTest, /plan\(11\)[\s\S]+the same game is stored once[\s\S]+a row is either a game or a tombstone[\s\S]+another account cannot read the first account archive[\s\S]+archive rows cannot be deleted from the client/, 'database tests must prove the game archive is per game, tombstoned and private');
 requirePattern(profileTest, /plan\(12\)[\s\S]+another account cannot read the first account profile[\s\S]+another account cannot insert for the first account/, 'database tests must prove training-profile account isolation');
 requirePattern(practiceTest, /plan\(23\)[\s\S]+older offline attempt can arrive after newer events[\s\S]+late delivery preserves the chronologically latest schedule anchor/, 'database tests must prove idempotency, late-event ordering, and account isolation');
 requirePattern(dailyTest, /plan\(12\)[\s\S]+another account cannot read the first account session[\s\S]+another account cannot insert for the first account/, 'database tests must prove adaptive-session account isolation');
