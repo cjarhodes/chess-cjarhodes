@@ -40,6 +40,7 @@ for (const [source, label] of [[archiveMigration, 'migration'], [schema, 'canoni
   requirePattern(source, /create table (if not exists )?public\.coach_archive_games[\s\S]+primary key \(user_id, game_key\)[\s\S]+check \(\(game is null\) = \(deleted_at is not null\)\)[\s\S]+enable row level security[\s\S]+for select to authenticated[\s\S]+for insert to authenticated[\s\S]+for update to authenticated[\s\S]+grant select, insert, update on table public\.coach_archive_games to authenticated/, `${label} must keep the synced game archive one row per game, owner-only, with tombstones and no client deletes`);
 }
 forbidPattern(archiveMigration, /grant[^;]*delete[^;]*coach_archive_games/, 'archive rows are tombstoned, never deleted by the client');
+requirePattern(archiveMigration, /revoke all on table public\.coach_archive_games from anon, authenticated;/, 'the archive migration must revoke the default grants, so clients cannot delete rows');
 
 // Practice RPC semantics
 requirePattern(practiceMigration, /function public\.record_practice_attempt[\s\S]{0,600}security invoker[\s\S]{0,4200}pg_advisory_xact_lock/, 'practice RPC must be security-invoker and serialize each drill');

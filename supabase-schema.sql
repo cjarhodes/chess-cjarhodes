@@ -713,7 +713,9 @@ create policy "coach archive games update own"
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
-revoke all on table public.coach_archive_games from anon;
+-- Supabase grants every new table to anon and authenticated by default;
+-- revoke that so rows can only be tombstoned, never deleted, by a client.
+revoke all on table public.coach_archive_games from anon, authenticated;
 grant select, insert, update on table public.coach_archive_games to authenticated;
 
 revoke all on function public.touch_coach_archive_game_updated_at() from public, anon;
