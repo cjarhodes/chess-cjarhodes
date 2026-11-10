@@ -401,24 +401,8 @@ async page => {
     const status = document.querySelector('#coach-auth-status')?.textContent || '';
     return status && status !== 'Connecting...';
   }, null, { timeout: 15000 }).catch(() => {});
-  const codeHiddenByDefault = await page.evaluate(() => {
-    return getComputedStyle(document.querySelector('#coach-auth-code-form')).display === 'none';
-  });
-  assert(codeHiddenByDefault, 'emailed code field showed before the project enabled it');
-  // Force the flag on for the rest of the run to exercise the code-entry UI.
-  await page.addInitScript(() => {
-    let stored;
-    Object.defineProperty(window, 'COACH_SUPABASE_CONFIG', {
-      configurable: true,
-      get() { return stored; },
-      set(value) { stored = Object.assign({}, value, { emailCodeEnabled: true }); }
-    });
-  });
-  await page.reload();
-  await page.waitForFunction(() => {
-    const status = document.querySelector('#coach-auth-status')?.textContent || '';
-    return status && status !== 'Connecting...';
-  }, null, { timeout: 15000 }).catch(() => {});
+  // Code sign-in ships on: a pending sign-in reopens with the code field
+  // (the link-only path is covered in verify-behaviour-units.js).
   const codeEntry = await page.evaluate(() => ({
     visible: !!document.querySelector('#coach-auth-code-form') && getComputedStyle(document.querySelector('#coach-auth-code-form')).display !== 'none',
     email: document.querySelector('#coach-auth-email')?.value || ''

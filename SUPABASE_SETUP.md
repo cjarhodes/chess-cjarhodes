@@ -24,23 +24,24 @@ Library spaced-repetition schedules, trends, and theory cards:
    - Site URL: `https://chess.cjarhodes.com`
    - Redirect URL: `https://chess.cjarhodes.com/?view=coach`
    - Optional local redirect: `http://127.0.0.1:4173/index.html?view=coach`
-4. Optional, for code-based sign-in. Without custom SMTP, Supabase's built-in
-   email service only delivers to addresses on the project's team, so anyone
-   else needs custom SMTP (Authentication -> Emails -> SMTP Settings, any
-   provider such as Resend or Postmark) before they can sign in by email at
-   all. With it in place, open Authentication -> Emails -> Magic link or OTP,
-   paste `supabase/templates/magic_link.html` as the body,
-   set the subject to "Your Chess Coach sign-in link and code", and save. The
-   template includes `{{ .Token }}`, the 6-digit code that lets sign-in finish
-   in the browser tab that requested it. Then set `emailCodeEnabled: true` in
-   `coach-config.js`; until that flag is on, the app hides the code field and
-   sign-in works by link only.
+4. Sign-in email with a code. The app signs in with the code from the email
+   (`emailCodeEnabled: true` in `coach-config.js`), so the Magic Link
+   template must include `{{ .Token }}`. Open Authentication -> Emails ->
+   Magic link or OTP, paste `supabase/templates/magic_link.html` as the body,
+   set the subject to "Your Chess Coach sign-in link and code", and save.
+   The code is typed into the tab that asked for it, so sign-in works
+   whichever browser the mail app opens links in; the link in the same email
+   still works. Without custom SMTP, Supabase's built-in email service only
+   delivers to addresses on the project's team, so anyone else needs custom
+   SMTP (Authentication -> Emails -> SMTP Settings, any provider such as
+   Resend or Postmark) before they can sign in at all. To go back to
+   link-only sign-in, set `emailCodeEnabled: false`.
 5. Copy the project URL and publishable key into `coach-config.js`. Existing
    projects may use the legacy anon public key instead.
 6. Commit and push. Vercel will deploy `main` automatically.
 7. Smoke test:
-   - Open Coach, send a sign-in link, and sign in once by clicking the link
-     and, only when `emailCodeEnabled` is enabled, by typing the emailed code into the original tab.
+   - Open Coach, ask for a code, and sign in once by typing the emailed code
+     into the same tab, and once by clicking the link in the email.
    - Finish a game with a review mistake.
    - Complete at least two practice drills, including one incorrect attempt.
    - Reload the page and verify the attempts, schedule, and 7-day trend remain.

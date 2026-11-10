@@ -3121,21 +3121,31 @@ async page => {
         document.getElementById('coach-auth-form').style.display = '';
         const group = document.getElementById('coach-auth-form').closest('details');
         if (group) group.open = true;
-        // Off (the shipped default): the link is sent and no code field appears.
+        // Off: the link is sent and no code field appears.
         setConfig(Object.assign({}, saved.config, { emailCodeEnabled: false }));
         $('#coach-auth-code-form').hide();
         $('#coach-auth-email').val('player@example.com');
         await submit('coach-auth-email-form');
         if (codeShown()) problems.push('with codes off, the code field appeared');
         if (!/Open it in this browser to finish/.test(status())) problems.push('with codes off, the status should point to the link: ' + status());
-        // On: the code field appears, takes focus, and only the right code signs in.
+        // On (the shipped default): the code field appears, takes focus, and
+        // only the right code signs in.
         setConfig(Object.assign({}, saved.config, { emailCodeEnabled: true }));
         await submit('coach-auth-email-form');
+        if (!/^Code sent to player@example\.com\. Enter it here/.test(status())) problems.push('with codes on, the status should ask for the code: ' + status());
         if (!codeShown()) problems.push('with codes on, the code field did not appear after sending');
         if (document.activeElement !== document.getElementById('coach-auth-code')) problems.push('the code field did not take focus');
         $('#coach-auth-code').val('123');
         await submit('coach-auth-code-form');
-        if (status() !== 'Enter the 6-digit code from the sign-in email.' || calls.some(c => c[0] === 'verify')) problems.push('a short code was sent or not refused: ' + status());
+        if (status() !== 'Enter the code from the sign-in email.' || calls.some(c => c[0] === 'verify')) problems.push('a short code was sent or not refused: ' + status());
+        $('#coach-auth-code').val('123456789');
+        await submit('coach-auth-code-form');
+        if (status() !== 'Enter the code from the sign-in email.' || calls.some(c => c[0] === 'verify')) problems.push('a nine-digit code was sent or not refused: ' + status());
+        // Projects can send 8-digit codes; those go through whole.
+        $('#coach-auth-code').val('1234 5678');
+        await submit('coach-auth-code-form');
+        const eight = calls.filter(c => c[0] === 'verify').pop();
+        if (!eight || eight[1].token !== '12345678') problems.push('an 8-digit code was not sent whole: ' + JSON.stringify(eight));
         // Codes are often pasted with a space ("111 111"); the space is ignored.
         $('#coach-auth-code').val('111 111');
         await submit('coach-auth-code-form');

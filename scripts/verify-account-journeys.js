@@ -134,7 +134,7 @@ async browserPage => {
     const a=await fresh();
     await a.locator('#group-account').evaluate(e=>e.open=true);
     await a.locator('#coach-auth-email').fill(users.a.email);await a.locator('#btn-coach-login').click();
-    await a.waitForFunction(()=>document.querySelector('#coach-auth-status').textContent.startsWith('Link sent'));
+    await a.waitForFunction(()=>document.querySelector('#coach-auth-status').textContent.startsWith('Code sent'));
     assert(otpRequests===1,'email form sends one controlled request');
     await signIn(a);
     await a.locator('#btn-coach-next-action').click();await play(a,'e4');await sync(a);
