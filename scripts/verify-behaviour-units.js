@@ -1729,7 +1729,8 @@ async page => {
     await page.locator('#coach-sound-toggle').check();
     expect(problems, await page.evaluate(() => coachSoundEnabled && localStorage.getItem('coach:sound:v1') === '1'), 'Move sounds did not turn on');
     await page.locator('#coach-sound-toggle').uncheck();
-    // Account: the sign-in form sends a link (the auth service is the boundary).
+    // Account: the sign-in form sends the email (the auth service is the
+    // boundary). It reports a link, or a code when the run has code sign-in on.
     await openSettings(page, 'account');
     let otp = 0;
     await page.route('**/auth/v1/otp**', route => { otp++; route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }); });
@@ -1737,8 +1738,8 @@ async page => {
       if (await page.locator('#coach-auth-email').isVisible()) {
         await page.locator('#coach-auth-email').fill('settings@example.com');
         await page.locator('#btn-coach-login').click();
-        await page.waitForFunction(() => /Link sent/.test(document.getElementById('coach-auth-status').textContent), null, { timeout: 5000 })
-          .catch(() => problems.push('Send link did not report a sent link: ' + JSON.stringify(otp)));
+        await page.waitForFunction(() => /^(Link|Code) sent/.test(document.getElementById('coach-auth-status').textContent), null, { timeout: 5000 })
+          .catch(() => problems.push('the sign-in form did not report a sent email: ' + JSON.stringify(otp)));
         expect(problems, otp === 1, 'the sign-in form sent ' + otp + ' requests');
       } else if (await page.evaluate(() => isSupabaseConfigured())) problems.push('the sign-in form is not shown in Settings → Account');
     } finally {
