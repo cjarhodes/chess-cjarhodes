@@ -9,7 +9,6 @@
 // ─────────────────────────────────────────────
 onReady(function () {
   // Board is initialized lazily on first opening selection
-  initDesktopNotice();
   initBoardTheme();
   initColorTheme();
   initCoachPanelTabs();
@@ -515,7 +514,7 @@ onReady(function () {
   // fire in coach mode and never while the user is typing in a form field.
   on(document, 'keydown', function(e) {
     if (!coachMode || !coachGame || coachPracticeSession || e.defaultPrevented ||
-        isVisible(qsa('#summary-overlay, #promotion-picker, #desktop-notice'))) return;
+        isVisible(qsa('#summary-overlay, #promotion-picker'))) return;
     // Ignore if the user is typing (inputs, textareas, contenteditable).
     const tag = (e.target && e.target.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
@@ -743,7 +742,7 @@ onReady(function () {
 
   // ─── KEYBOARD SHORTCUTS ─────────────────
   on(document, 'keydown', function (e) {
-    if (e.defaultPrevented || isVisible(byId('summary-overlay')) || isVisible(byId('desktop-notice'))) return;
+    if (e.defaultPrevented || isVisible(byId('summary-overlay'))) return;
     if (isVisible(byId('promotion-picker'))) {
       if (e.key === 'Escape') {
         e.preventDefault();

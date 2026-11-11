@@ -43,7 +43,8 @@ Reference screenshots: [`docs/baseline/`](baseline/), regenerated with
 - [ ] Coach panel tabs (Game / Practice / Progress) expose a complete tab relationship and support arrow keys. **U** *(changes: IA)*
 - [ ] No web app manifest, no service-worker registration, no install prompt. **S**
 - [ ] `service-worker.js` stays a kill switch: it unregisters earlier installs and clears every cache. **A**
-- [ ] Below 760px a phone preview notice appears as an accessible dialog that names the sign-in-link and Safari-storage risks, with a "continue" option; dismissal lasts for the session and leads to the stacked phone layout, where the board fits the width and the page never scrolls sideways. Between 760 and 1199px there is no notice and the three columns fit. **S, B** *(Phase 6a; the notice goes once both risks are resolved)*
+- [ ] Below 760px the page goes straight to the stacked phone layout, with no dialog in the way: the board fits the width and the page never scrolls sideways. Between 760 and 1199px the three columns fit. **S, B** *(Phase 6a; the preview notice was removed on 10 November 2026 once both phone risks were resolved)*
+- [ ] Signed in, a browser that has lost its storage gets the game archive, the repertoire-drill schedule and endgame bests back from the account, and a game removed in one browser does not come back from another's copy. **B** (`verify-account-journeys.js`), **U** (`validate-growth-sync.js`)
 - [ ] No console errors or page errors during the full smoke journey. **S**
 
 ## 2. Board input and accessibility

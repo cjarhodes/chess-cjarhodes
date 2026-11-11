@@ -86,7 +86,7 @@
 
   const visible = id => { const el = document.getElementById(id); return el && el.offsetParent !== null; };
   function blocked() {
-    return visible('summary-overlay') || visible('desktop-notice') || visible('promotion-picker');
+    return visible('summary-overlay') || visible('promotion-picker');
   }
   const settingsOpen = () => !!(window.SettingsSheet && window.SettingsSheet.isOpen());
 

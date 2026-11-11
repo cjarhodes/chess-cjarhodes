@@ -59,21 +59,6 @@
   </div>
 </section>
 
-  <div class="desktop-notice" id="desktop-notice" role="dialog" aria-modal="true" aria-labelledby="desktop-notice-title" aria-describedby="desktop-notice-body">
-    <div class="desktop-notice-card">
-      <div class="desktop-notice-eyebrow">Chess Coach · phone preview</div>
-      <h2 id="desktop-notice-title">The phone layout is a preview</h2>
-      <div id="desktop-notice-body">
-        <p>Everything works on this screen, but two things can still go wrong on a phone:</p>
-        <ul>
-          <li><strong>Signing in.</strong> The sign-in link may open in a different browser from the one you asked from. Sign in on a computer instead, or back up your progress from Settings (the gear at the top) → Training data.</li>
-          <li><strong>Progress on this device.</strong> Progress that is kept only on this phone can be cleared by Safari after a week without a visit.</li>
-        </ul>
-      </div>
-      <button type="button" class="ctrl-btn primary" id="btn-desktop-notice-continue">Continue to the phone layout</button>
-    </div>
-  </div>
-
 <div id="promotion-picker" class="promotion-picker" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="promotion-title">
   <div class="promotion-panel">
     <h2 id="promotion-title" class="sr-only">Choose promotion piece</h2>
@@ -138,8 +123,8 @@
             <button type="submit" class="ctrl-btn" id="btn-coach-login">Send link</button>
           </form>
           <form class="auth-row" id="coach-auth-code-form" style="display:none;">
-            <label class="sr-only" for="coach-auth-code">Six-digit sign-in code from the email</label>
-            <input type="text" class="auth-input" id="coach-auth-code" placeholder="6-digit code" inputmode="numeric" autocomplete="one-time-code" maxlength="12" />
+            <label class="sr-only" for="coach-auth-code">Sign-in code from the email</label>
+            <input type="text" class="auth-input" id="coach-auth-code" placeholder="Code from the email" inputmode="numeric" autocomplete="one-time-code" maxlength="12" />
             <button type="submit" class="ctrl-btn" id="btn-coach-verify-code">Verify code</button>
           </form>
         </div>

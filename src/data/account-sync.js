@@ -15,9 +15,15 @@ function supabaseRuntimeConfig() {
   };
 }
 
-// The emailed 6-digit code only exists when the project's Magic Link email
-// template includes {{ .Token }}, which Supabase allows only with custom SMTP,
-// a Pro plan, or a Send Email hook. Keep the field hidden until then.
+// Code sign-in (off until enabled in coach-config.js): the email carries a
+// one-time code ({{ .Token }} in the project's Magic Link template) as well as
+// the link, and the code is typed into the tab that asked for it, so it works
+// whichever browser the mail app opens links in. Supabase keeps templates
+// read-only until the project has custom SMTP. It sends 6 digits by default;
+// projects can set up to 8.
+const COACH_EMAIL_CODE_MIN = 6;
+const COACH_EMAIL_CODE_MAX = 8;
+
 function coachEmailCodeEnabled() {
   return supabaseRuntimeConfig().emailCodeEnabled;
 }
@@ -169,6 +175,7 @@ function renderCoachAuth() {
       : 'Progress is saved here. Account history has not finished syncing.';
   } else {
     const pendingEmail = pendingCoachAuthEmail();
+    byId('btn-coach-login').textContent = coachEmailCodeEnabled() ? 'Email me a code' : 'Send link';
     toggleEl(byId('coach-auth-code-form'), coachEmailCodeEnabled() && !!pendingEmail);
     if (pendingEmail && !byId('coach-auth-email').value) byId('coach-auth-email').value = pendingEmail;
     if (coachAuthPhase !== 'sending' && coachAuthPhase !== 'callback') coachAuthPhase = 'signed-out';
@@ -306,7 +313,7 @@ async function sendCoachLoginLink() {
     return;
   }
   coachDbStatus = '';
-  setCoachAuthStatus('Sending link...');
+  setCoachAuthStatus(coachEmailCodeEnabled() ? 'Sending code...' : 'Sending link...');
   coachAuthPhase = 'sending';
   const redirectTo = location.origin + location.pathname + '?view=coach';
   byId('btn-coach-login').disabled = true;
@@ -331,7 +338,7 @@ async function sendCoachLoginLink() {
     const code = byId('coach-auth-code');
     code.value = '';
     code.focus();
-    coachDbStatus = 'Link sent to ' + email + '. Open it in this browser, or enter the 6-digit code from that email here.';
+    coachDbStatus = 'Code sent to ' + email + '. Enter it here, or open the link in that email in this browser.';
   } else {
     coachDbStatus = 'Link sent to ' + email + '. Open it in this browser to finish signing in.';
   }
@@ -354,8 +361,8 @@ async function verifyCoachLoginCode() {
     byId('coach-auth-email').focus();
     return;
   }
-  if (code.length !== 6) {
-    setCoachAuthStatus('Enter the 6-digit code from the sign-in email.');
+  if (code.length < COACH_EMAIL_CODE_MIN || code.length > COACH_EMAIL_CODE_MAX) {
+    setCoachAuthStatus('Enter the code from the sign-in email.');
     byId('coach-auth-code').focus();
     return;
   }
@@ -877,7 +884,8 @@ async function refreshRemoteInsights(opts = {}) {
     syncPendingPracticeEvents(),
     typeof flushPendingAccountReviews === 'function' ? flushPendingAccountReviews() : Promise.resolve(),
     syncRemoteDailySprints({ silent: true }),
-    typeof syncGrowthState === 'function' ? syncGrowthState({ silent: true }) : Promise.resolve()
+    typeof syncGrowthState === 'function' ? syncGrowthState({ silent: true }) : Promise.resolve(),
+    typeof GameArchive !== 'undefined' && GameArchive.syncRemote ? GameArchive.syncRemote() : Promise.resolve()
   ]);
   const uploadFailure = uploads.find(result => result.status === 'rejected');
   const [movesResult, drillsResult, attemptsResult] = await Promise.all([

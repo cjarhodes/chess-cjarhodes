@@ -103,7 +103,10 @@
       const list = load();
       const existing = list.find(row => row.id === id);
       if (existing) entry.at = existing.at;
-      save([entry].concat(list.filter(row => row.id !== id)));
+      if (save([entry].concat(list.filter(row => row.id !== id)))) {
+        const saved = load().find(row => row.id === id);
+        if (saved) uploadRemote([saved]);
+      }
       render();
     } catch (e) { /* the archive must never break the game summary */ }
   }
@@ -116,13 +119,95 @@
     const ok = save([entry].concat(list.filter(row => row.id !== entry.id)));
     render();
     if (!ok) return 'storage';
-    return load().some(row => row.id === entry.id) ? 'saved' : 'outside';
+    const saved = load().find(row => row.id === entry.id);
+    if (!saved) return 'outside';
+    uploadRemote([saved]);
+    return 'saved';
   }
   function has(id) { return load().some(row => row.id === id); }
 
   function remove(id) {
-    save(load().filter(row => row.id !== id));
+    const list = load();
+    const gone = list.find(row => row.id === id);
+    save(list.filter(row => row.id !== id));
     render();
+    if (gone) removeRemote(gone);
+  }
+
+  // ── Account copy ────────────────────────────────
+  // Signed in, each archived game is also a row in coach_archive_games, so a
+  // browser that clears its storage gets the list back on the next sync. A
+  // removed game stays there as a tombstone, so other browsers drop their
+  // copies instead of uploading them again. Removals made offline wait in a
+  // small local list until a sync delivers them.
+  const REMOTE_TABLE = 'coach_archive_games';
+  const REMOTE_FETCH = LIMIT * 4;
+  function remoteOwner() {
+    const signedIn = typeof hasCoachDbSession === 'function' && hasCoachDbSession() && typeof coachDbClient !== 'undefined';
+    return signedIn ? ownerId() : null;
+  }
+  // Until the table's migration is applied, sync quietly does nothing.
+  function missingTable(error) { return !!error && (error.code === '42P01' || error.code === 'PGRST205'); }
+  function remoteResult(result) { if (result && result.error && !missingTable(result.error)) throw result.error; return result; }
+  function pendingKey() { return storageKey() + ':removed'; }
+  function pendingRemovals() {
+    try { const v = JSON.parse(localStorage.getItem(pendingKey())); return Array.isArray(v) ? v.filter(r => r && typeof r.id === 'string' && Number.isFinite(r.at)).slice(-200) : []; } catch (e) { return []; }
+  }
+  function setPendingRemovals(list) {
+    try { if (list.length) localStorage.setItem(pendingKey(), JSON.stringify(list)); else localStorage.removeItem(pendingKey()); } catch (e) { /* retried while the list lasts */ }
+  }
+  function pushRemote(owner, games) {
+    if (!owner || !games.length) return Promise.resolve();
+    const rows = games.map(game => ({ user_id: owner, game_key: game.id, game, played_at: new Date(game.at).toISOString(), deleted_at: null }));
+    return coachDbClient.from(REMOTE_TABLE).upsert(rows, { onConflict: 'user_id,game_key' }).then(remoteResult);
+  }
+  function tombstoneRemote(owner, removals) {
+    if (!owner || !removals.length) return Promise.resolve();
+    const now = new Date().toISOString();
+    const rows = removals.map(r => ({ user_id: owner, game_key: r.id, game: null, played_at: new Date(r.at).toISOString(), deleted_at: now }));
+    return coachDbClient.from(REMOTE_TABLE).upsert(rows, { onConflict: 'user_id,game_key' }).then(remoteResult);
+  }
+  function uploadRemote(games) {
+    const owner = remoteOwner();
+    if (owner) pushRemote(owner, games).catch(() => { /* the next sync uploads it */ });
+  }
+  function removeRemote(game) {
+    const owner = remoteOwner();
+    if (!owner) return;
+    const pending = pendingRemovals().filter(r => r.id !== game.id).concat([{ id: game.id, at: game.at }]);
+    setPendingRemovals(pending);
+    tombstoneRemote(owner, [{ id: game.id, at: game.at }])
+      .then(() => { if (ownerId() === owner) setPendingRemovals(pendingRemovals().filter(r => r.id !== game.id)); })
+      .catch(() => { /* the next sync delivers it */ });
+  }
+  // Pending removals first, then read the latest rows, drop tombstoned games,
+  // merge the rest in (the copy with more reviews wins), and upload games the
+  // account lacks or holds with fewer reviews.
+  async function syncRemote() {
+    const owner = remoteOwner();
+    if (!owner) return;
+    const pending = pendingRemovals();
+    await tombstoneRemote(owner, pending);
+    if (ownerId() !== owner) return;
+    setPendingRemovals(pendingRemovals().filter(r => !pending.some(p => p.id === r.id)));
+    const result = remoteResult(await coachDbClient.from(REMOTE_TABLE).select('game_key,game,deleted_at')
+      .eq('user_id', owner).order('played_at', { ascending: false }).limit(REMOTE_FETCH));
+    if (result.error || ownerId() !== owner) return;
+    const removed = new Set();
+    const remote = new Map();
+    (result.data || []).forEach(row => {
+      if (row.deleted_at || !row.game) removed.add(row.game_key);
+      else remote.set(row.game_key, row.game);
+    });
+    const local = load().filter(game => !removed.has(game.id));
+    const merged = merge({ v: 1, games: local }, { v: 1, games: Array.from(remote.values()).filter(game => game && !removed.has(game.id)) }).games;
+    save(merged);
+    render();
+    const upload = merged.filter(game => {
+      const copy = remote.get(game.id);
+      return !copy || !Array.isArray(copy.reviews) || game.reviews.length > copy.reviews.length;
+    });
+    await pushRemote(owner, upload);
   }
 
   // ── Progress panel list ─────────────────────────
@@ -136,7 +221,7 @@
     section.id = 'game-archive-section';
     section.setAttribute('aria-labelledby', 'game-archive-heading');
     section.innerHTML = '<div class="game-archive-head"><h3 class="section-label" id="game-archive-heading">Game archive</h3><span class="game-archive-count" id="game-archive-count"></span></div>' +
-      '<ol class="game-archive-list" id="game-archive-list"></ol><p class="progress-method">Kept in this browser (latest ' + LIMIT + ' Coach games and ' + LIMIT + ' imported games). Copy a PGN to keep a game elsewhere.</p>';
+      '<ol class="game-archive-list" id="game-archive-list"></ol><p class="progress-method">Kept in this browser and, when you are signed in, in your account (latest ' + LIMIT + ' Coach games and ' + LIMIT + ' imported games). Copy a PGN to keep a game elsewhere.</p>';
     const lifetime = document.getElementById('lifetime-section');
     if (lifetime && lifetime.parentElement === panel) panel.insertBefore(section, lifetime);
     else panel.appendChild(section);
@@ -608,7 +693,7 @@
     navigator.clipboard.writeText(viewer.game.pgn).then(() => done('Copied ✓'), () => done('Copy unavailable'));
   }
 
-  window.GameArchive = { KEY, LIMIT, record, add, has, load, open, close, render, remove, merge, storageKeyFor, _viewer: () => viewer };
+  window.GameArchive = { KEY, LIMIT, record, add, has, load, open, close, render, remove, merge, storageKeyFor, syncRemote, _viewer: () => viewer };
   const init = () => { render(); const tab = document.getElementById('tab-progress'); if (tab) tab.addEventListener('click', render); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();

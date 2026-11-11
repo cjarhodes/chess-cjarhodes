@@ -253,26 +253,6 @@ function initColorTheme() {
   on(byId('color-theme'), 'change', function() { applyColorTheme(this.value); });
 }
 
-const DESKTOP_NOTICE_KEY = 'ui:desktop-notice-dismissed';
-
-// Phones get the stacked layout behind a notice that says it is a preview
-// (sign-in links and Safari's storage limits; see index.html). Dismissal
-// lasts for the browser session.
-function initDesktopNotice() {
-  let dismissed = false;
-  try { dismissed = sessionStorage.getItem(DESKTOP_NOTICE_KEY) === '1'; } catch (e) { /* stays visible */ }
-  // The notice is a gate on arrival, not something to throw over a game in
-  // progress: a page that loads wider than a phone (a sideways phone, say)
-  // never shows it, even if the device is rotated later.
-  const narrowAtLoad = !!(window.matchMedia && window.matchMedia('(max-width: 759.98px)').matches);
-  if (dismissed || !narrowAtLoad) document.documentElement.classList.add('desktop-notice-dismissed');
-  else setTimeout(() => { const btn = document.getElementById('btn-desktop-notice-continue'); if (btn && btn.offsetParent) btn.focus(); }, 0);
-  on(byId('btn-desktop-notice-continue'), 'click', function() {
-    try { sessionStorage.setItem(DESKTOP_NOTICE_KEY, '1'); } catch (e) { /* session only */ }
-    document.documentElement.classList.add('desktop-notice-dismissed');
-  });
-}
-
 // Library uses the same viewport budget as Coach, including open move entry
 // and quiz feedback. Both the width and actual tools determine board size.
 let libraryBoardFitFrame = null;

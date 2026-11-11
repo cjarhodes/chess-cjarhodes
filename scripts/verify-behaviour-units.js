@@ -1729,7 +1729,8 @@ async page => {
     await page.locator('#coach-sound-toggle').check();
     expect(problems, await page.evaluate(() => coachSoundEnabled && localStorage.getItem('coach:sound:v1') === '1'), 'Move sounds did not turn on');
     await page.locator('#coach-sound-toggle').uncheck();
-    // Account: the sign-in form sends a link (the auth service is the boundary).
+    // Account: the sign-in form sends the email (the auth service is the
+    // boundary). It reports a link, or a code when the run has code sign-in on.
     await openSettings(page, 'account');
     let otp = 0;
     await page.route('**/auth/v1/otp**', route => { otp++; route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }); });
@@ -1737,8 +1738,8 @@ async page => {
       if (await page.locator('#coach-auth-email').isVisible()) {
         await page.locator('#coach-auth-email').fill('settings@example.com');
         await page.locator('#btn-coach-login').click();
-        await page.waitForFunction(() => /Link sent/.test(document.getElementById('coach-auth-status').textContent), null, { timeout: 5000 })
-          .catch(() => problems.push('Send link did not report a sent link: ' + JSON.stringify(otp)));
+        await page.waitForFunction(() => /^(Link|Code) sent/.test(document.getElementById('coach-auth-status').textContent), null, { timeout: 5000 })
+          .catch(() => problems.push('the sign-in form did not report a sent email: ' + JSON.stringify(otp)));
         expect(problems, otp === 1, 'the sign-in form sent ' + otp + ' requests');
       } else if (await page.evaluate(() => isSupabaseConfigured())) problems.push('the sign-in form is not shown in Settings → Account');
     } finally {
@@ -2774,10 +2775,8 @@ async page => {
         const tag = `${w}x${h}`;
         await p.goto(base + '/?view=coach');
         await p.waitForFunction(() => typeof engineClient !== 'undefined' && !!coachBoard);
-        const notice = await p.locator('#desktop-notice').isVisible();
-        if (w < 760 && !notice) problems.push(`${tag}: the phone preview notice did not appear`);
-        if (w >= 760 && notice) problems.push(`${tag}: the phone notice covered a tablet-sized screen`);
-        if (notice) await p.locator('#btn-desktop-notice-continue').click();
+        const dialog = await p.evaluate(() => [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')].some(el => el.checkVisibility()));
+        if (dialog) problems.push(`${tag}: a dialog covered the layout on arrival`);
         await p.waitForTimeout(200);
         problems.push(...fitProblems(tag + ' Coach (ready)', await layoutReport(p, 'coachBoard'), minBoard));
         await p.locator('#btn-coach-newgame').click();
@@ -2835,10 +2834,6 @@ async page => {
         .map(t => `${t.id} ${Math.round(t.r.width)}x${Math.round(t.r.height)}`));
       await tp.goto(base + '/?view=coach');
       await tp.waitForFunction(() => typeof engineClient !== 'undefined' && !!coachBoard);
-      const notice = await tp.locator('#desktop-notice').textContent();
-      if (!/different browser/.test(notice) || !/week/.test(notice)) problems.push('the phone notice does not explain the sign-in and storage risks');
-      await tp.locator('#btn-desktop-notice-continue').tap();
-      if (await tp.locator('#desktop-notice').isVisible()) problems.push('Continue did not lead to the phone layout');
 
       // The tab bar is fixed to the bottom and every tab is a 44px target.
       const bar = await tp.evaluate(() => {
@@ -2935,7 +2930,6 @@ async page => {
       const tp = await ctx.newPage();
       const errors = [];
       tp.on('pageerror', e => errors.push(e.message));
-      await tp.addInitScript(() => { try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {} });
       await tp.goto(base + '/?view=coach');
       await tp.waitForFunction(() => typeof GameArchive !== 'undefined' && !!coachBoard);
       const inside = sel => tp.evaluate(s => {
@@ -3010,7 +3004,6 @@ async page => {
       const tp = await ctx.newPage();
       const errors = [];
       tp.on('pageerror', e => errors.push(e.message));
-      await tp.addInitScript(() => { try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {} });
       await tp.goto(base + '/?view=coach');
       await tp.waitForFunction(() => typeof coachBoard !== 'undefined' && !!coachBoard);
       if (!(await tp.locator('#btn-settings').count())) return ['there is no Settings gear in the app bar'];
@@ -3040,9 +3033,6 @@ async page => {
       await tp.waitForTimeout(250);
       let s = await sheetState(tp);
       expect(problems, !s.open && s.focus === 'btn-settings', 'Escape did not close the sheet back to the gear: ' + JSON.stringify(s));
-      // The phone notice now points at Settings, not the bottom of Coach.
-      const notice = await tp.locator('#desktop-notice').textContent();
-      expect(problems, /Settings/.test(notice) && /Training data/.test(notice) && !/bottom of Coach/.test(notice), 'the phone notice still points at the bottom of Coach');
       // Close button, from the Coach rail link.
       await tp.locator('#btn-coach-settings').tap();
       await tp.waitForTimeout(300);
@@ -3067,7 +3057,6 @@ async page => {
       const tp = await ctx.newPage();
       const errors = [];
       tp.on('pageerror', e => errors.push(e.message));
-      await tp.addInitScript(() => { try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {} });
       const cdp = await ctx.newCDPSession(tp);
       const swipe = async (box, dx) => {
         const y = box.y + box.height / 2, x0 = box.x + box.width / 2 + (dx < 0 ? 80 : -80);
@@ -3160,7 +3149,6 @@ async page => {
     const ctx = await sizedContext(375, 812, true);
     try {
       const tp = await ctx.newPage();
-      await tp.addInitScript(() => { try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {} });
       const settle = () => tp.waitForTimeout(300);
       await tp.goto(base + '/?view=coach');
       await tp.waitForFunction(() => typeof engineClient !== 'undefined' && !!coachBoard);
@@ -3275,7 +3263,6 @@ async page => {
       const tp = await ctx.newPage();
       const errors = [];
       tp.on('pageerror', e => errors.push(e.message));
-      await tp.addInitScript(() => { try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {} });
       await tp.addInitScript(stubDownloads);
       const daysAgo = n => Date.now() - n * 86400000;
       // An empty profile: no reminder.
@@ -3376,7 +3363,6 @@ async page => {
     // A signed-in session from the account service (the Supabase client is
     // the boundary), switched on per tab; every query answers with no rows.
     const signedInClient = () => {
-      try { sessionStorage.setItem('ui:desktop-notice-dismissed', '1'); } catch (e) {}
       if (sessionStorage.getItem('test:signed-in') !== '1') return;
       const result = { data: null, error: null, count: 0 };
       const chain = () => new Proxy(function () {}, {
@@ -3483,11 +3469,20 @@ async page => {
         // On: the code field appears, takes focus, and only the right code signs in.
         setConfig(Object.assign({}, saved.config, { emailCodeEnabled: true }));
         await submit('coach-auth-email-form');
+        if (!/^Code sent to player@example\.com\. Enter it here/.test(status())) problems.push('with codes on, the status should ask for the code: ' + status());
         if (!codeShown()) problems.push('with codes on, the code field did not appear after sending');
         if (document.activeElement !== document.getElementById('coach-auth-code')) problems.push('the code field did not take focus');
         document.getElementById('coach-auth-code').value = '123';
         await submit('coach-auth-code-form');
-        if (status() !== 'Enter the 6-digit code from the sign-in email.' || calls.some(c => c[0] === 'verify')) problems.push('a short code was sent or not refused: ' + status());
+        if (status() !== 'Enter the code from the sign-in email.' || calls.some(c => c[0] === 'verify')) problems.push('a short code was sent or not refused: ' + status());
+        document.getElementById('coach-auth-code').value = '123456789';
+        await submit('coach-auth-code-form');
+        if (status() !== 'Enter the code from the sign-in email.' || calls.some(c => c[0] === 'verify')) problems.push('a nine-digit code was sent or not refused: ' + status());
+        // Projects can send 8-digit codes; those go through whole.
+        document.getElementById('coach-auth-code').value = '1234 5678';
+        await submit('coach-auth-code-form');
+        const eight = calls.filter(c => c[0] === 'verify').pop();
+        if (!eight || eight[1].token !== '12345678') problems.push('an 8-digit code was not sent whole: ' + JSON.stringify(eight));
         // Codes are often pasted with a space ("111 111"); the space is ignored.
         document.getElementById('coach-auth-code').value = '111 111';
         await submit('coach-auth-code-form');

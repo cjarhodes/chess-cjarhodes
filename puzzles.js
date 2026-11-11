@@ -66,12 +66,32 @@
   }
 
   // ── Repertoire storage ────────────────────────
-  // Spaced-repetition records per line, in this browser and in backups.
+  // Spaced-repetition records per line, in this browser and in backups. A
+  // copy rides in the synced growth state, merged back in on load, so a
+  // browser that clears its storage gets the schedule back from the account.
   const Rep = window.RepertoireCore;
   function repKey() { return Rep.storageKeyFor(ownerId()); }
-  function repLoad() { try { return Rep.normalizeState(JSON.parse(localStorage.getItem(repKey()))); } catch (e) { return Rep.emptyState(); } }
+  function repLoad() {
+    let local;
+    try { local = Rep.normalizeState(JSON.parse(localStorage.getItem(repKey()))); } catch (e) { local = Rep.emptyState(); }
+    const synced = growthCopy('repertoireDrills');
+    return synced ? Rep.mergeStates(local, synced) : local;
+  }
   function repSave(state) {
-    try { localStorage.setItem(repKey(), JSON.stringify(Rep.normalizeState(state))); return true; } catch (e) { return false; }
+    const normalized = Rep.normalizeState(state);
+    try { localStorage.setItem(repKey(), JSON.stringify(normalized)); } catch (e) { return false; }
+    writeGrowthCopy('repertoireDrills', normalized);
+    return true;
+  }
+  function growthCopy(field) {
+    if (typeof loadGrowthState !== 'function') return null;
+    try { return loadGrowthState()[field] || null; } catch (e) { return null; }
+  }
+  function writeGrowthCopy(field, value) {
+    if (typeof loadGrowthState !== 'function' || typeof saveGrowthState !== 'function') return;
+    const growth = loadGrowthState();
+    growth[field] = value;
+    saveGrowthState(growth);
   }
   function repCards() {
     const ids = typeof repertoireIds === 'function' ? repertoireIds() : [];
@@ -664,17 +684,27 @@
   }
 
   // ── Endgame practice (endgames.js) ────────────
+  // Fewest moves per drill, per account like the rest of the training data.
+  // The unscoped key is the guest's (and where bests lived before scoping);
+  // an account reads it until it has bests of its own. A copy rides in the
+  // synced growth state.
   const EG_KEY = 'chess_endgames_v1';
   const EG_DEPTH = 14;
   let egToken = 0;
+  function egKey() { const owner = ownerId(); return owner ? `${EG_KEY}:${owner}` : EG_KEY; }
+  function egRead(key) {
+    try { const v = JSON.parse(localStorage.getItem(key)); return v && typeof v === 'object' && !Array.isArray(v) ? v : null; } catch (e) { return null; }
+  }
   function egBest() {
-    try { const v = JSON.parse(localStorage.getItem(EG_KEY)); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch (e) { return {}; }
+    const local = egRead(egKey()) || (egKey() !== EG_KEY ? egRead(EG_KEY) : null) || {};
+    return typeof mergeEndgameBests === 'function' ? mergeEndgameBests(local, growthCopy('endgames')) : local;
   }
   function saveEgBest(id, moves) {
     const best = egBest();
     const isBest = !best[id] || moves < best[id];
     if (isBest) best[id] = moves;
-    try { localStorage.setItem(EG_KEY, JSON.stringify(best)); } catch (e) { /* this page only */ }
+    try { localStorage.setItem(egKey(), JSON.stringify(best)); } catch (e) { /* this page only */ }
+    if (isBest) writeGrowthCopy('endgames', best);
     return isBest;
   }
   function goalText(drill) {
@@ -947,9 +977,14 @@
 
   function finishRepCard() {
     const clean = session.mistakes === 0 && !session.hinted;
-    let stored = null;
-    try { stored = JSON.parse(localStorage.getItem(repRun.key)); } catch (e) { stored = null; }
-    try { localStorage.setItem(repRun.key, JSON.stringify(Rep.review(stored, session.card.id, clean, Date.now()))); } catch (e) { /* this line's result is lost */ }
+    // The run belongs to the account it started under; if that changed
+    // mid-run, the result goes to that account's local copy only.
+    if (repRun.key === repKey()) repSave(Rep.review(repLoad(), session.card.id, clean, Date.now()));
+    else {
+      let stored = null;
+      try { stored = JSON.parse(localStorage.getItem(repRun.key)); } catch (e) { stored = null; }
+      try { localStorage.setItem(repRun.key, JSON.stringify(Rep.review(stored, session.card.id, clean, Date.now()))); } catch (e) { /* this line's result is lost */ }
+    }
     repRun.results.push({ name: session.card.name, clean });
     session.phase = 'solved';
     session.busy = true;
@@ -1570,6 +1605,10 @@
     repertoireKey: () => repKey(),
     // Exposed for tests and the console.
     _debug: () => ({ mode, session, rush, vision, repRun, puzzles: puzzles ? puzzles.length : 0, state: loadState() }),
+    _repertoireState: () => repLoad(),
+    _saveRepertoire: state => repSave(state),
+    _endgameBests: () => egBest(),
+    _saveEndgameBest: (id, moves) => saveEgBest(id, moves),
     _start: id => { const p = puzzles && puzzles.find(row => row.id === id); if (p) startPuzzle(p, { rated: true, source: 'rated' }); return !!p; }
   };
 

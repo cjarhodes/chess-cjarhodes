@@ -170,6 +170,38 @@ assert(importedInsights && importedInsights.entries.length === 300 && importedIn
 const importedEvents = written && written['coach:practice:v2:anon'];
 assert(importedEvents && importedEvents.events.length === 2000 && importedEvents.events.every(e => e.at >= 100000), 'importing an older backup replaced the newest practice events with old ones');
 
+// ── Repertoire-drill schedule and endgame bests ride in the synced state ──
+// Without RepertoireCore loaded the copy passes through; load it here so the
+// real merge runs (newest review per line wins, fewest moves per drill wins).
+vm.runInContext(fs.readFileSync(path.join(root, 'repertoire-core.js'), 'utf8') + '\nRepertoireCore = window.RepertoireCore;', context);
+const drills = (records, day) => ({ v: 1, records, newDay: { day, count: 1 } });
+const line = (lastAt, interval) => ({ reps: 1, ease: 2.5, interval, lapses: 0, seen: 1, dueAt: lastAt + interval * 864e5, lastAt });
+const phone = run('emptyGrowthState()');
+const laptop = run('emptyGrowthState()');
+phone.repertoireDrills = drills({ italian: line(5000, 3), london: line(1000, 1) }, '2026-11-10');
+phone.endgames = { 'queen-mate': 9, 'rook-mate': 12, junk: 'many', [('x').repeat(80)]: 3 };
+laptop.repertoireDrills = drills({ london: line(7000, 6), caro: line(2000, 1) }, '2026-11-09');
+laptop.endgames = { 'queen-mate': 7, 'rook-mate': 15, 'k-p': 20 };
+const mergedTraining = context.mergeGrowthStates(phone, laptop);
+const lines = mergedTraining.repertoireDrills.records;
+assert(Object.keys(lines).sort().join() === 'caro,italian,london', 'drill schedules from two browsers were not unioned: ' + Object.keys(lines).join());
+assert(lines.london.interval === 6 && lines.italian.interval === 3, 'the most recently reviewed copy of a line did not win');
+assert(mergedTraining.repertoireDrills.newDay.day === '2026-11-10', 'the newer new-lines-per-day counter was not kept');
+assert(JSON.stringify(mergedTraining.endgames) === JSON.stringify({ 'queen-mate': 7, 'rook-mate': 12, 'k-p': 20 }), 'endgame bests did not keep the fewest moves (or kept junk): ' + JSON.stringify(mergedTraining.endgames));
+assert(context.mergeGrowthStates(laptop, phone).endgames['rook-mate'] === 12, 'endgame merge depends on argument order');
+assert(context.mergeGrowthStates(run('emptyGrowthState()'), run('emptyGrowthState()')).repertoireDrills === null, 'an empty merge invented a drill schedule');
+// A guest's drills and bests on this device are adopted on sign-in.
+store.clear();
+const guestTraining = run('emptyGrowthState()');
+guestTraining.repertoireDrills = drills({ caro: line(9000, 4) }, '2026-11-10');
+guestTraining.endgames = { 'k-p': 11 };
+assert(run('saveGrowthState')(guestTraining, null, { skipSync: true }).ok, 'guest training did not save');
+assert(run('saveGrowthState')(laptop, 'account-b', { skipSync: true }).ok, 'account training did not save');
+run('adoptAnonymousGrowthState')('account-b');
+const adoptedTraining = run('loadGrowthState')('account-b');
+assert(adoptedTraining.repertoireDrills.records.caro.interval === 4 && adoptedTraining.repertoireDrills.records.london.interval === 6, 'guest drill schedule was not adopted into the account');
+assert(adoptedTraining.endgames['k-p'] === 11 && adoptedTraining.endgames['queen-mate'] === 7, 'guest endgame bests were not adopted into the account');
+
 // ── Guest lifetime totals are added to the account's, not swapped in ──
 const lifetime = (games, rollups) => Object.assign(context.emptyLifetime(), { games, moves: games * 10, rollups });
 const roll = { games: 1, moves: 10 };

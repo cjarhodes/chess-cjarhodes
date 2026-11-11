@@ -13,10 +13,12 @@ Phase 4a done: `app.js` is 4,009 lines (from 9,148); core logic lives in
 Phase 6, 9 November 2026: the 4,000-line `app.js` is split. Its code moved unchanged into
 classic scripts under `src/views/` (`shell.js`, `library.js`, `coach.js`,
 `coach-review.js`, `coach-practice.js`, with event binding and startup in a small `app.js`); see the Phase 6 row.
-Phase 5 done, 8 November 2026, except a real-phone check: every board runs
+Phase 5 done, 8 November 2026: every board runs
 on cm-chessboard behind `src/ui/board.js`; see the Phase 5 row in §5. jQuery
 is gone (9 November 2026): app code uses DOM APIs and the helpers in
 `src/ui/dom.js`.
+The real-phone check passed on 10 November 2026, and the phone preview notice is
+gone: both phone risks below are resolved.
 
 November 2026 additions (outside the phases, on the current layout): a
 Puzzles destination, an on-board overlay (`board-overlay.js`: arrows,
@@ -306,7 +308,8 @@ Phone specifics:
   doesn't hide the bottom bar.
 - **Landscape phones** use the phone layout and scroll; no special design.
 
-Risks that only appear on phones (resolve before shipping phone support):
+Risks that only appear on phones (resolve before shipping phone support).
+*Resolved 10 November 2026; the notice that named risks 1 and 2 is removed:*
 
 1. **Magic-link sign-in.** On a phone the link usually opens from the mail
    app, often in a different browser or an in-app web view from the one
@@ -314,7 +317,11 @@ Risks that only appear on phones (resolve before shipping phone support):
    6-digit emailed code (`emailCodeEnabled` in `coach-config.js`) fixes
    this, but per CLAUDE.md it needs the Magic Link template to carry
    `{{ .Token }}`, which needs custom SMTP, a Pro plan or a Send Email hook.
-   Treat that as a prerequisite for Phase 6.
+   Treat that as a prerequisite for Phase 6. *Resolved without it:* the
+   project has one account, its owner, and on their phone the link opens in
+   the browser they use the app in, which already holds the sign-in. Supabase's
+   built-in mailer only delivers to the project's team anyway, so the code
+   matters only once custom SMTP lets other people sign up.
 2. **Local-only data on iPhone.** Safari can clear a site's script-written
    storage (including `localStorage`) after 7 days of browser use without a
    visit. Because the app is deliberately browser-only (no home-screen
@@ -324,7 +331,10 @@ Risks that only appear on phones (resolve before shipping phone support):
    shows the last backup date at every width; in the stacked layout a
    signed-out user with three or more finished games, drill attempts,
    puzzles or Library reviews sees a banner (sign in / back up now) until
-   they back up (gone for 7 days) or hide it (gone for 14 days).
+   they back up (gone for 7 days) or hide it (gone for 14 days). Signed-in
+   users get everything back from the account: the repertoire-drill schedule
+   and endgame bests ride in the synced training profile next to puzzles, and
+   the game archive syncs through `coach_archive_games` (10 November 2026).
 3. **Engine speed.** Opponent strength is set by search depth
    (`COACH_DIFFICULTY_KEYFRAMES`, depth 10 with up to 20 lines), so it plays
    at the same strength on a phone, just more slowly. Measure think time on
@@ -456,7 +466,7 @@ long before the restructuring is finished.
 | **2. Safety net** ✅ | Convert source-regex validators into behaviour tests (node unit tests for logic, browser smoke for UI). Add `data-testid`s. *Done without test ids: the tests use existing element ids; Phase 6 adds `data-testid`s when it rewrites the markup.* Can run alongside Phase 1. | Validators no longer read `app.js` as text; all checks green |
 | **3. Tokens + reskin** ✅ | Introduce `styles/tokens.css` and layers with the chosen direction's values; replace every raw colour, size, radius and font; vendor the fonts; add the lint script and theme switch. The current layout gets the new look. It stays desktop-only (with the notice) because the old layout can't reflow cheaply. | Lint passes; whole app is in the new direction; light + dark both pass contrast |
 | **4. Extract the core** (4a ✅, 4b FSRS deferred) | Move pure logic (engine, classification, opponent, explanations, storage, sync) into `src/core` and `src/data` as ES modules. Replace SM-2 with FSRS (see §6). | `app.js` < 5,000 lines; core has unit tests; calibration script runs unchanged. *4a used plain scripts under `src/` rather than ES modules: the app, `growth.js`, the feature modules and the browser tests share these functions as globals, so ES modules wait for the Phase 6 shell rewrite.* |
-| **5. One board** ✅ (one item left) | Build `ui/board.js` on cm-chessboard; switch Coach and Library to it; add arrows, square marks, quality glyphs, eval bar beside board; drop jQuery. Check touch drag, tap-to-move and engine think time on a real phone. *Done 8 November 2026:* cm-chessboard 8.15.4 is vendored (`vendor/cm-chessboard/`, loaded as ES modules by `src/ui/board-module.js`) and `src/ui/board.js` wraps it in the chessboard.js-style API the app already used, so all four boards (Library, Coach, Puzzles, game archive) switched with small edits and chessboard.js is gone. Drag, click and tap share one input path through `onDragStart`/`onDrop`/`onSnapEnd` (the app's own tap-to-move handlers were removed; tapping now also works in Coach drills and for premoves). The board draws square marks (last move, hints, premoves, practice cues, selection, legal-move dots per §4 of the design spec) and coordinates itself, styled from tokens; the cburnett pieces come from a generated sprite (`scripts/build-piece-sprite.js`). Arrows, quality badges and the eval bar stay in `board-overlay.js`, which now reads cm-chessboard's square rects. `verify-behaviour-units.js` covers drag, click, touch tap and touch drag (in a `hasTouch` context), illegal-drop snapback, castling, en passant and promotion redraws, flip and board themes. *jQuery removed 9 November 2026:* every call site uses DOM APIs and the few helpers in `src/ui/dom.js` (lookup, binding with delegation, ready ordering, show/hide with jQuery's display rules); the Lichess explorer requests use `fetch`; `vendor/jquery/` is gone. *Left:* the real-phone check (touch drag, tap-to-move, engine think time on a mid-range phone). | One board implementation; Show why / candidates / hints draw on the board; works by touch |
+| **5. One board** ✅ | Build `ui/board.js` on cm-chessboard; switch Coach and Library to it; add arrows, square marks, quality glyphs, eval bar beside board; drop jQuery. Check touch drag, tap-to-move and engine think time on a real phone. *Done 8 November 2026:* cm-chessboard 8.15.4 is vendored (`vendor/cm-chessboard/`, loaded as ES modules by `src/ui/board-module.js`) and `src/ui/board.js` wraps it in the chessboard.js-style API the app already used, so all four boards (Library, Coach, Puzzles, game archive) switched with small edits and chessboard.js is gone. Drag, click and tap share one input path through `onDragStart`/`onDrop`/`onSnapEnd` (the app's own tap-to-move handlers were removed; tapping now also works in Coach drills and for premoves). The board draws square marks (last move, hints, premoves, practice cues, selection, legal-move dots per §4 of the design spec) and coordinates itself, styled from tokens; the cburnett pieces come from a generated sprite (`scripts/build-piece-sprite.js`). Arrows, quality badges and the eval bar stay in `board-overlay.js`, which now reads cm-chessboard's square rects. `verify-behaviour-units.js` covers drag, click, touch tap and touch drag (in a `hasTouch` context), illegal-drop snapback, castling, en passant and promotion redraws, flip and board themes. *jQuery removed 9 November 2026:* every call site uses DOM APIs and the few helpers in `src/ui/dom.js` (lookup, binding with delegation, ready ordering, show/hide with jQuery's display rules); the Lichess explorer requests use `fetch`; `vendor/jquery/` is gone. The real-phone check (touch drag, tap-to-move, engine think time) passed on 10 November 2026. | One board implementation; Show why / candidates / hints draw on the board; works by touch |
 | **6. New shell & IA** | Responsive workspace (phone / tablet / desktop from the start), nav + tab bar, router (`?view=` URLs kept as aliases), Settings sheet; migrate destinations in order: Play (incl. review) → Train → Study → Progress. Turn on the emailed sign-in code. Remove the desktop notice and update CLAUDE.md, README, `verify-browser.sh` and `validate-accessibility.js` to match. *Router and Settings done 9 November 2026:* `src/ui/router.js` keeps the place in the address bar with real history (Back and Forward across views, openings, Library and Puzzles modes and Settings; old `?view=` / `?opening=` / `mode=` links parse as before), and `src/ui/settings.js` is the Settings sheet behind an app-bar gear (Appearance, Account, Training data; a bottom sheet on phones), holding the controls moved out of Coach's rail. *`app.js` removed 9 November 2026:* its code moved, unchanged, into classic scripts under `src/views/` that load where it did: `shell.js` (current view and view switching, the route, account and device-scoped storage state, board last-move marks, themes, phone notice, board fitting, promotion picker, keyboard move parsing), `library.js` (Study / Quiz / Explore), `coach.js` (game loop, board, controls, panel tabs, summary overlay), `coach-review.js` (review card, analysis line, review cursor, captured pieces, move list / PGN), `coach-practice.js` (mistake drills), with the ready handler left in `app.js` (event binding and startup, last). They stay plain scripts sharing globals, as Phase 4a decided; ES modules still wait for the destinations to be rebuilt. | `app.js` gone; every view is a module under `src/views`; smoke suite runs at 375px, 1024px and 1440px |
 | **7. Polish** | Copy pass (plain language), first-visit onboarding, keyboard shortcut sheet, accessibility audit (focus order, live regions, contrast in both themes), performance pass, testing on real iOS Safari and Android Chrome. | Smoke suite + a11y validator green in both themes and at all three widths |
 
