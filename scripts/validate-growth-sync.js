@@ -7,6 +7,7 @@
 // growth.js and app functions with storage stubbed; no browser or engine.
 
 const fs = require('fs');
+const { domStub } = require('./lib/dom-stub');
 const path = require('path');
 const vm = require('vm');
 const { Chess } = require('../vendor/chess.js/chess-0.10.3.min.js');
@@ -32,7 +33,7 @@ const store = new Map();
 let owner = null;
 let written = null;
 const context = {
-  Chess, console, window: {}, $: () => ({ text() {}, val() {} }),
+  Chess, console, window: {}, ...domStub(),
   localStorage: { getItem: key => store.has(key) ? store.get(key) : null, setItem: (key, value) => store.set(key, String(value)), removeItem: key => store.delete(key) },
   uciFromMove: move => move.from + move.to + (move.promotion || ''),
   isInsightProblem: tier => ['inaccuracy', 'mistake', 'blunder'].includes(tier),

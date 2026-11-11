@@ -5,6 +5,7 @@
 // evidence floor, and every authored endgame start/solution with chess.js.
 
 const fs = require('fs');
+const { domStub } = require('./lib/dom-stub');
 const path = require('path');
 const vm = require('vm');
 
@@ -22,7 +23,7 @@ const context = {
   practiceRecordFor: () => null,
   isInsightProblem: tier => ['inaccuracy', 'mistake', 'blunder'].includes(tier),
   uciFromMove: move => move && move.from + move.to + (move.promotion || ''),
-  $: () => {},
+  ...domStub(),
   window: {}
 };
 vm.createContext(context);

@@ -21,7 +21,6 @@ async browserPage => {
   const capture = async (name, action) => {
     for (const [width,height] of [[1280,800],[1440,900],[1920,1080]]) {
       await page.setViewportSize({width,height});
-      await page.waitForFunction(() => !jQuery(':animated').length);
       await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
       const m = await page.evaluate(action => {
         const rect = selector => document.querySelector(selector).getBoundingClientRect().toJSON();
@@ -88,7 +87,7 @@ async browserPage => {
       saveInsights({v:1,entries}); renderInsights();
     });
     await page.locator('#tab-practice').click();
-    const plan=await page.evaluate(()=>({raw:practiceItemsForEntries(currentInsightEntries(),insightTagCounts(currentInsightEntries())).length,distinct:renderedPracticeItems.size,planned:orderedPracticeRunItems([...renderedPracticeItems.values()]).length,label:$('#btn-practice-session-start').text()}));
+    const plan=await page.evaluate(()=>({raw:practiceItemsForEntries(currentInsightEntries(),insightTagCounts(currentInsightEntries())).length,distinct:renderedPracticeItems.size,planned:orderedPracticeRunItems([...renderedPracticeItems.values()]).length,label:document.getElementById('btn-practice-session-start').textContent}));
     assert(plan.raw>plan.distinct && plan.distinct===3 && plan.planned<plan.distinct && plan.label.includes(String(plan.planned)),'recommendation advertises the actual capped, distinct session length');
     await capture('personalised','#btn-practice-session-start');
     assert(!(await page.locator('.practice-progress').isVisible()),'activity is disclosed after choosing a lesson');

@@ -15,7 +15,6 @@ async page=>{
    await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
    const board=library?'#myBoard':'#coachBoard';
    await page.waitForFunction(selector=>{const b=document.querySelector(selector).getBoundingClientRect();return b.width>=320&&Math.abs(b.width-b.height)<8;},board,{timeout:15000});
-   await page.waitForFunction(()=>!jQuery(':animated').length);
    const measured=await page.evaluate(({board,library})=>{
     const b=document.querySelector(board).getBoundingClientRect();
     const action=document.getElementById(library?'btn-library-transfer':'btn-opening-transfer-review').getBoundingClientRect();
@@ -95,7 +94,7 @@ async page=>{
  const dragon=await page.evaluate(()=>({fen:game.fen(),cue:activeKeyIdeas()[0]}));await page.locator('#btn-library-transfer').click();await settle();
  assert(await page.evaluate(s=>coachOpeningTransfer.lineId==='sicilian-dragon'&&coachOpeningTransfer.sourceFen===s.fen&&coachUserSide==='black'&&coachBoardFlipped&&coachGame.history({verbose:true})[0].color==='w',dragon),'Black variation, board orientation, or autonomous first opponent move failed');
  await playBest();await capture('black-variation');
- const guarded=await page.evaluate(async()=>{const before=coachGame.pgn();$('#game-inbox-pgn').val('1. e4 e5 *');await analyseImportedPgn();return{same:coachGame.pgn()===before,message:$('#game-inbox-status').text()};});
+ const guarded=await page.evaluate(async()=>{const before=coachGame.pgn();document.getElementById('game-inbox-pgn').value='1. e4 e5 *';await analyseImportedPgn();return{same:coachGame.pgn()===before,message:document.getElementById('game-inbox-status').textContent};});
  assert(guarded.same&&guarded.message.includes('Return from'),'import replaced a borrowed opening game');
  await page.locator('#btn-opening-transfer-return').click();await page.waitForFunction(()=>!coachOpeningTransfer);assert(await page.locator('#library-view').isVisible(),'fresh opening session did not return to its Library line');
  assert(await page.evaluate(()=>currentLineId==='sicilian-dragon'),'return to lesson lost selected variation');
@@ -107,7 +106,6 @@ async page=>{
   await page.waitForFunction(()=>currentMoveIdx>=activeMoves().length-1||isUserTurn(currentMoveIdx+1));
   if(await page.evaluate(()=>currentMoveIdx>=activeMoves().length-1))break;
   await page.locator('#library-keyboard-move-input').fill(await page.evaluate(()=>activeMoves()[currentMoveIdx+1]));await page.locator('#library-keyboard-move-form button[type=submit]').click();
-  await page.waitForFunction(()=>!jQuery(':animated').length);
  }
  await page.waitForFunction(()=>currentMoveIdx===activeMoves().length-1&&loadSR()['scholars-mate']);
  assert((await page.locator('#btn-library-transfer').innerText())==='Play before the finish','completed mating quiz offers an unplayable final position');

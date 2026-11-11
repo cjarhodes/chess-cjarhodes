@@ -1,8 +1,8 @@
 // Loads cm-chessboard (vendored ES modules) and hands it to the classic
 // scripts as window.CMChessboard; src/ui/board.js wraps it in the board API
 // the app uses. Module scripts run after every classic script has been parsed
-// but before DOMContentLoaded, so jQuery ready handlers (where the app builds
-// its boards) always find it.
+// but before DOMContentLoaded, so the app's ready handlers (onReady, where it
+// builds its boards) always find it.
 import { Chessboard, COLOR, INPUT_EVENT_TYPE, FEN } from '../../vendor/cm-chessboard/src/Chessboard.js';
 import { Extension, EXTENSION_POINT } from '../../vendor/cm-chessboard/src/model/Extension.js';
 

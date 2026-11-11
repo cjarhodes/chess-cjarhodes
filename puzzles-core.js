@@ -454,7 +454,7 @@
     return { attempts: rows.length, overall, strengths, weaknesses };
   }
 
-  // Coach insight tags (app.js INSIGHT_TAG_META) → the puzzle theme that
+  // Coach insight tags (INSIGHT_TAG_META, src/coach/insights.js) → the puzzle theme that
   // trains the same skill. Tags without a clear tactical twin map to none.
   const INSIGHT_GROUPS = {
     missed_mate: 'mate', missed_check: 'mate', back_rank: 'mate',

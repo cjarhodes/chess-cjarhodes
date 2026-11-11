@@ -1,6 +1,7 @@
 // Library spaced repetition (SM-2 lite) for opening lines.
-// Classic script loaded before app.js (see index.html); its top-level
-// declarations are shared globals, as they were inside app.js.
+// Classic script loaded before the view scripts in src/views/ (see
+// index.html); its top-level declarations are shared globals, as they were
+// inside app.js.
 
 // ─────────────────────────────────────────────
 // SPACED REPETITION (SM-2 lite)
@@ -81,34 +82,33 @@ function srRecordQuiz(id, quality, now) {
   return saveSR(data);
 }
 function updateSRSidebar() {
-  $('.opening-btn').each(function() {
-    const id = $(this).data('id');
-    const status = srStatus(id);
-    $(this).removeClass('sr-due sr-mastered sr-learning');
-    if (status !== 'new') $(this).addClass('sr-' + status);
-    if ($(this).find('.sr-dot').length === 0) {
-      $(this).prepend('<span class="sr-dot"></span>');
+  qsa('.opening-btn').forEach(btn => {
+    const status = srStatus(btn.dataset.id);
+    btn.classList.remove('sr-due', 'sr-mastered', 'sr-learning');
+    if (status !== 'new') btn.classList.add('sr-' + status);
+    if (!btn.querySelector('.sr-dot')) {
+      btn.prepend(makeEl('span', 'sr-dot'));
     }
   });
   // Populate "Due for Review" section
   const due = OPENINGS.filter(o => srStatus(o.id) === 'due');
-  const $section = $('#sr-due-section');
-  const $list = $('#sr-due-list');
+  const section = byId('sr-due-section');
+  const list = byId('sr-due-list');
   if (due.length === 0) {
-    $section.hide();
+    hideEl(section);
   } else {
     const html = due.map(o => {
       const badge = o.category === 'trap' ? '<span class="trap-badge">trap</span>' : `<span class="eco">${o.eco || ''}</span>`;
       return `<button class="opening-btn sr-due" data-id="${o.id}" data-cat="${o.category}"><span class="sr-dot"></span>${o.name} ${badge}</button>`;
     }).join('');
-    $list.html(html);
-    $section.show();
-    $list.find('.opening-btn').on('click', function() { loadOpening($(this).data('id')); });
+    list.innerHTML = html;
+    showEl(section);
+    qsa('.opening-btn', list).forEach(btn => on(btn, 'click', function() { loadOpening(this.dataset.id); }));
   }
 }
 function updateSRPanel() {
-  const $panel = $('#sr-status-panel');
-  if (!currentOpening || !quizMode) { $panel.hide(); return; }
+  const panel = byId('sr-status-panel');
+  if (!currentOpening || !quizMode) { hideEl(panel); return; }
   const rec = getSRRecord(currentOpening.id);
   const status = srStatus(currentOpening.id);
   const statusLabel = { new: 'Never attempted', due: 'Due for review', learning: 'Learning', mastered: 'Mastered' }[status];
@@ -120,7 +120,8 @@ function updateSRPanel() {
       html += `<div class="sr-line"><span>Next review</span><strong>${srNextReviewLabel(rec.nextDue)}</strong></div>`;
     }
   }
-  $panel.html(html).show();
+  panel.innerHTML = html;
+  showEl(panel);
 }
 
 // Opening data (ids, move counts, legal SAN in every line) is checked by

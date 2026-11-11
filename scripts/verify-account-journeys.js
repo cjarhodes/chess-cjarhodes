@@ -91,6 +91,16 @@ async browserPage => {
     const page=await context.newPage();page.on('pageerror', e => errors.push((e.stack || e.message).split('\n').slice(0, 4).join(' <- ')));
     await page.goto(base);await page.waitForFunction(()=>coachDbClient!==null);return page;
   };
+  // Account and Training data live in the Settings sheet (src/ui/settings.js).
+  const openSettings = async (page,section) => {
+    if (!(await page.evaluate(()=>SettingsSheet.isOpen()))) await page.locator('#btn-settings').click();
+    await page.locator('#settings-tab-'+section).click();
+  };
+  const closeSettings = async page => {
+    if (!(await page.evaluate(()=>SettingsSheet.isOpen()))) return;
+    await page.locator('#btn-settings-close').click();
+    await page.waitForFunction(()=>!SettingsSheet.isOpen());
+  };
   const signIn = async (page,key='a') => {
     const token=await page.evaluate(userId=>{
       const enc=value=>btoa(JSON.stringify(value)).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
@@ -107,7 +117,6 @@ async browserPage => {
       const state=await page.evaluate(()=>({signedIn:!!coachAuthUser,phase:coachAuthPhase,status:coachDbStatus,checkpoint:document.querySelector('#account-checkpoint-status').textContent}));
       throw Error('Fixture sign-in incomplete: '+JSON.stringify({state,errors,requests:requests.slice(-14)}));
     }
-    await page.locator('#group-account').evaluate(e=>e.open=true);
     assert(!page.url().includes('#'),'callback fragment removed');
   };
   const settle=page=>page.waitForFunction(()=>coachGameActive&&!coachThinking&&coachIsUserTurn(),null,{timeout:60000});
@@ -121,18 +130,19 @@ async browserPage => {
     await page.evaluate(async()=>{await refreshRemoteInsights({silent:true});await flushAccountCheckpoint();await refreshAccountCheckpoints();});
   };
   const capture=async(page,name)=>{
-    await page.locator('#group-account').evaluate(e=>e.open=true);
+    await openSettings(page,'account');
     for(const [width,height] of [[1280,800],[1440,900],[1920,1080]]){
-      await page.setViewportSize({width,height});await page.locator('#account-recovery').scrollIntoViewIfNeeded();await page.waitForFunction(()=>!jQuery(':animated').length);
+      await page.setViewportSize({width,height});await page.locator('#account-recovery').scrollIntoViewIfNeeded();
       await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
       const metrics=await page.evaluate(()=>{const b=document.querySelector('#coachBoard').getBoundingClientRect();return {width:innerWidth,height:innerHeight,documentWidth:document.documentElement.scrollWidth,boardBottom:b.bottom,boardWidth:b.width,boardRight:b.right};});
       assert(metrics.documentWidth<=width&&metrics.boardBottom<=height&&metrics.boardRight<=width&&metrics.boardWidth>=320,name+' fits '+width);
       await page.screenshot({path:'output/playwright/account-'+name+'-'+width+'.png',animations:'disabled'});captures.push({name,...metrics});
     }
+    await closeSettings(page);
   };
   try {
     const a=await fresh();
-    await a.locator('#group-account').evaluate(e=>e.open=true);
+    await openSettings(a,'account');
     await a.locator('#coach-auth-email').fill(users.a.email);await a.locator('#btn-coach-login').click();
     await a.waitForFunction(()=>document.querySelector('#coach-auth-status').textContent.startsWith('Link sent'));
     assert(otpRequests===1,'email form sends one controlled request');
@@ -141,16 +151,20 @@ async browserPage => {
     const original=await a.evaluate(()=>({pgn:coachGame.pgn(),id:coachLocalGameId,remote:coachRemoteGameId,stats:coachStats.moves}));
     assert(tables.coach_checkpoints.length===1&&tables.coach_moves.length===1,'real game saves checkpoint and reviewed move');
     const b=await fresh();await signIn(b);await sync(b);
+    await openSettings(b,'account');
     assert(await b.locator('#btn-account-resume').isVisible(),'second browser offers saved session');
     assert(await b.evaluate(()=>!coachGameActive),'cloud history does not replace board automatically');
+    await closeSettings(b);
     await b.locator('#btn-coach-next-action').click();await play(b,'d4');await sync(b);
     const displaced=await b.evaluate(()=>coachGame.pgn());
-    await b.locator('#btn-account-resume').click();await settle(b);
+    await openSettings(b,'account');await b.locator('#btn-account-resume').click();await settle(b);
+    assert(await b.evaluate(()=>!SettingsSheet.isOpen()),'continuing closes Settings to show the board');
     assert(await b.evaluate(saved=>coachGame.pgn()===saved.pgn&&coachLocalGameId!==saved.id&&coachRemoteGameId!==saved.remote&&coachContinuityCopy,original),'continue preserves PGN with separate unrated game identity');
     assert(await a.evaluate(saved=>coachLocalGameId===saved.id&&coachGame.pgn()===saved.pgn,original),'source browser game remains unchanged');
+    await openSettings(b,'account');
     assert(await b.locator('#btn-account-previous').isVisible(),'displaced local session is recoverable');
     await capture(b,'continued');
-    await b.locator('#btn-account-previous').click();await settle(b);
+    await openSettings(b,'account');await b.locator('#btn-account-previous').click();await settle(b);
     assert(await b.evaluate(pgn=>coachGame.pgn()===pgn,displaced),'return to previous session restores exact moves');
     // Durable offline review retry, even after another game replaces the board.
     offline=true;
@@ -182,12 +196,12 @@ async browserPage => {
     const backup=await a.evaluate(()=>readTrainingBackup());
     const c=await fresh();await c.locator('#btn-coach-next-action').click();await play(c,'c4');
     const current=await c.evaluate(()=>coachGame.pgn());
-    await c.locator('#group-data').evaluate(e=>e.open=true);
+    await openSettings(c,'data');
     await c.evaluate(payload=>{const input=document.querySelector('#training-data-file'),transfer=new DataTransfer();transfer.items.add(new File([JSON.stringify(payload)],'fixture-training.json',{type:'application/json'}));input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));},backup);
     await c.waitForFunction(()=>document.querySelector('#training-data-status').textContent.startsWith('Merged'));
     assert(await c.evaluate(pgn=>coachGame.pgn()===pgn,current),'backup merge keeps current board');
     assert(await c.evaluate(()=>loadInsights().entries.length>=2),'scoped review history imports across owners');
-    await c.locator('#group-account').evaluate(e=>e.open=true);await c.locator('#btn-account-resume').click();
+    await openSettings(c,'account');await c.locator('#btn-account-resume').click();
     await c.waitForFunction(()=>coachPracticeSession&&coachPracticeSession.analysisReady,null,{timeout:60000});
     assert(await c.evaluate(()=>coachPracticeSession.hintUsed&&coachPracticeSession.hintStage>0),'practice hint state survives backup transfer');
     const exactReturn=await a.evaluate(()=>coachPracticeReturnState&&coachPracticeReturnState.pgn);
@@ -246,7 +260,7 @@ async browserPage => {
     assert(JSON.stringify(contested.snapshot)===protectedSnapshot,'competing tab checkpoint is preserved');
     await b.reload();await b.waitForFunction(()=>accountCheckpoint.loaded&&accountCheckpoint.conflict);
     assert(await b.evaluate(()=>accountCheckpoint.conflict),'stale-tab pause survives reload');
-    await b.locator('#group-account').evaluate(e=>e.open=true);await b.locator('#btn-account-resume').click();await settle(b);
+    await openSettings(b,'account');await b.locator('#btn-account-resume').click();await settle(b);
     await b.evaluate(()=>flushAccountCheckpoint());
     assert(await b.evaluate(old=>accountCheckpointDeviceId()!==old&&!accountCheckpoint.conflict,device),'explicit continuation forks the stale tab checkpoint');
     assert(JSON.stringify(contested.snapshot)===protectedSnapshot,'continued stale tab still leaves source checkpoint intact');
@@ -313,12 +327,12 @@ async browserPage => {
     await a.evaluate(r=>runAccountMoveWrite(()=>deleteRemoteCoachMove(r)),mistake.first);
     assert(kept()&&kept().attempts===3,'taking back the original move keeps a practised drill');
     // Failed sign-out must leave the real session and UI consistent.
-    failLogout=true;await b.locator('#btn-coach-logout').click();
+    failLogout=true;await openSettings(b,'account');await b.locator('#btn-coach-logout').click();
     await b.waitForFunction(()=>!coachAuthUser&&document.querySelector('#coach-auth-status').textContent.includes('Signed out on this browser.'));
     assert(await b.evaluate(async()=>!(await coachDbClient.auth.getSession()).data.session),'server logout failure reconciles cleared local credentials');
     failLogout=false;await signIn(b);
     await b.evaluate(()=>{window.fixtureSignOut=coachDbClient.auth.signOut.bind(coachDbClient.auth);coachDbClient.auth.signOut=async()=>({error:new Error('Controlled client error')});});
-    await b.locator('#btn-coach-logout').click();await b.waitForFunction(()=>document.querySelector('#coach-auth-status').textContent.includes('did not finish'));
+    await openSettings(b,'account');await b.locator('#btn-coach-logout').click();await b.waitForFunction(()=>document.querySelector('#coach-auth-status').textContent.includes('did not finish'));
     assert(await b.evaluate(()=>!!coachAuthUser),'retained SDK session is reported as still signed in');
     await b.evaluate(()=>{coachDbClient.auth.signOut=window.fixtureSignOut;delete window.fixtureSignOut;});
     await b.locator('#btn-coach-logout').click();await b.waitForFunction(()=>!coachAuthUser);

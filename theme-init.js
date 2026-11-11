@@ -1,5 +1,5 @@
 // Applies the saved colour and board themes before the first paint, so the
-// page never flashes the wrong theme. app.js owns the settings controls.
+// page never flashes the wrong theme. src/views/shell.js owns the settings controls.
 (function () {
   var root = document.documentElement;
   try {

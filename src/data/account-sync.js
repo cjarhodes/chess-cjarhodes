@@ -1,6 +1,7 @@
 // Optional Supabase account: sign-in, storage fallback and game/insight sync.
-// Classic script loaded before app.js (see index.html); its top-level
-// declarations are shared globals, as they were inside app.js.
+// Classic script loaded before the view scripts in src/views/ (see
+// index.html); its top-level declarations are shared globals, as they were
+// inside app.js.
 
 // ─────────────────────────────────────────────
 // ACCOUNT SYNC — optional Supabase-backed coach history
@@ -133,7 +134,7 @@ function coachAccountSyncStatus() {
 }
 
 function setCoachAuthStatus(msg) {
-  $('#coach-auth-status').text(msg || '');
+  byId('coach-auth-status').textContent = msg || '';
 }
 
 function setCoachDbStatus(msg) {
@@ -156,30 +157,30 @@ function renderCoachAuth() {
   const configured = isSupabaseConfigured();
   // Signing in hides the phone backup reminder (backup-nudge.js).
   if (window.BackupNudge && window.BackupNudge.refresh) window.BackupNudge.refresh(false);
-  $('#coach-auth-local').toggle(!configured);
-  $('#coach-auth-form').toggle(configured && !coachAuthUser);
-  $('#coach-auth-session').toggle(configured && !!coachAuthUser);
+  toggleEl(byId('coach-auth-local'), !configured);
+  toggleEl(byId('coach-auth-form'), configured && !coachAuthUser);
+  toggleEl(byId('coach-auth-session'), configured && !!coachAuthUser);
   if (!configured) {
     coachAuthPhase = 'local';
     setCoachAuthStatus('Add Supabase config to enable account history.');
-    $('#coach-memory-status').text('Progress is saved on this browser. Account sync is not configured.');
+    byId('coach-memory-status').textContent = 'Progress is saved on this browser. Account sync is not configured.';
     return;
   }
   if (coachAuthUser) {
     coachAuthPhase = 'signed-in';
-    $('#coach-auth-user').text(coachAuthUser.email || coachAuthUser.id);
+    byId('coach-auth-user').textContent = coachAuthUser.email || coachAuthUser.id;
     setCoachAuthStatus(coachDbStatus || 'Account sync on.');
-    $('#coach-memory-status').text(coachRemoteInsightsLoaded
+    byId('coach-memory-status').textContent = coachRemoteInsightsLoaded
       ? 'Account history loaded. Saved-session status is shown below.'
-      : 'Progress is saved here. Account history has not finished syncing.');
+      : 'Progress is saved here. Account history has not finished syncing.';
   } else {
     const pendingEmail = pendingCoachAuthEmail();
-    $('#btn-coach-login').text(coachEmailCodeEnabled() ? 'Email me a code' : 'Send link');
-    $('#coach-auth-code-form').toggle(coachEmailCodeEnabled() && !!pendingEmail);
-    if (pendingEmail && !$('#coach-auth-email').val()) $('#coach-auth-email').val(pendingEmail);
+    byId('btn-coach-login').textContent = coachEmailCodeEnabled() ? 'Email me a code' : 'Send link';
+    toggleEl(byId('coach-auth-code-form'), coachEmailCodeEnabled() && !!pendingEmail);
+    if (pendingEmail && !byId('coach-auth-email').value) byId('coach-auth-email').value = pendingEmail;
     if (coachAuthPhase !== 'sending' && coachAuthPhase !== 'callback') coachAuthPhase = 'signed-out';
     setCoachAuthStatus(coachDbStatus === 'loading' ? 'Connecting...' : (coachDbStatus || 'Sign in to sync games.'));
-    $('#coach-memory-status').text('Progress is saved on this browser. Sign in to sync it across browsers.');
+    byId('coach-memory-status').textContent = 'Progress is saved on this browser. Sign in to sync it across browsers.';
   }
 }
 
@@ -285,7 +286,7 @@ async function initCoachDb() {
     } catch (err) {
       coachAuthPhase = 'error';
       coachDbStatus = 'Account sync unavailable. Your local session is kept; reload to reconnect.';
-      $('#btn-coach-reconnect').show();
+      showEl(byId('btn-coach-reconnect'));
       setCoachAuthStatus((err && err.message) || coachDbStatus);
     }
   })();
@@ -306,7 +307,7 @@ async function sendCoachLoginLink() {
     await coachSync.init();
   }
   if (!coachDbClient || coachAuthPhase === 'sending') return;
-  const email = ($('#coach-auth-email').val() || '').trim();
+  const email = (byId('coach-auth-email').value || '').trim();
   if (!email) {
     setCoachAuthStatus('Enter an email address.');
     return;
@@ -315,7 +316,7 @@ async function sendCoachLoginLink() {
   setCoachAuthStatus(coachEmailCodeEnabled() ? 'Sending code...' : 'Sending link...');
   coachAuthPhase = 'sending';
   const redirectTo = location.origin + location.pathname + '?view=coach';
-  $('#btn-coach-login').prop('disabled', true);
+  byId('btn-coach-login').disabled = true;
   let result;
   try {
     result = await coachDbClient.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
@@ -323,7 +324,7 @@ async function sendCoachLoginLink() {
     coachAuthPhase = 'error';
     setCoachAuthStatus('The link could not be sent. Reconnect and try again.');
     return;
-  } finally { $('#btn-coach-login').prop('disabled', false); }
+  } finally { byId('btn-coach-login').disabled = false; }
   const { error } = result;
   if (error) {
     coachAuthPhase = 'error';
@@ -333,8 +334,10 @@ async function sendCoachLoginLink() {
   coachAuthPhase = 'link-sent';
   setPendingCoachAuthEmail(email);
   if (coachEmailCodeEnabled()) {
-    $('#coach-auth-code-form').show();
-    $('#coach-auth-code').val('').trigger('focus');
+    showEl(byId('coach-auth-code-form'));
+    const code = byId('coach-auth-code');
+    code.value = '';
+    code.focus();
     coachDbStatus = 'Code sent to ' + email + '. Enter it here, or open the link in that email in this browser.';
   } else {
     coachDbStatus = 'Link sent to ' + email + '. Open it in this browser to finish signing in.';
@@ -351,27 +354,27 @@ async function verifyCoachLoginCode() {
     setCoachAuthStatus('Code sign-in is not enabled for this project yet. Use the emailed link.');
     return;
   }
-  const email = (($('#coach-auth-email').val() || '').trim()) || pendingCoachAuthEmail();
-  const code = ($('#coach-auth-code').val() || '').replace(/\D/g, '');
+  const email = ((byId('coach-auth-email').value || '').trim()) || pendingCoachAuthEmail();
+  const code = (byId('coach-auth-code').value || '').replace(/\D/g, '');
   if (!email) {
     setCoachAuthStatus('Enter the email address you requested the code with.');
-    $('#coach-auth-email').trigger('focus');
+    byId('coach-auth-email').focus();
     return;
   }
   if (code.length < COACH_EMAIL_CODE_MIN || code.length > COACH_EMAIL_CODE_MAX) {
     setCoachAuthStatus('Enter the code from the sign-in email.');
-    $('#coach-auth-code').trigger('focus');
+    byId('coach-auth-code').focus();
     return;
   }
   setCoachAuthStatus('Checking code...');
   const { error } = await coachDbClient.auth.verifyOtp({ email, token: code, type: 'email' });
   if (error) {
     setCoachAuthStatus('That code is invalid or has expired. Send a new link for a fresh code.');
-    $('#coach-auth-code').trigger('focus');
+    byId('coach-auth-code').focus();
     return;
   }
   setPendingCoachAuthEmail('');
-  $('#coach-auth-code').val('');
+  byId('coach-auth-code').value = '';
   setCoachAuthStatus('Signed in.');
 }
 
@@ -386,7 +389,7 @@ async function signOutCoach() {
     clearTimeout(growthRemoteSync.timer);
     growthRemoteSync.timer = null;
   }
-  $('#btn-coach-logout').prop('disabled', true);
+  byId('btn-coach-logout').disabled = true;
   let result;
   try {
     result = await Promise.race([
@@ -394,7 +397,7 @@ async function signOutCoach() {
       new Promise(resolve => setTimeout(() => resolve({ error: new Error('Sign-out timed out') }), 8000))
     ]);
   } catch (error) { result = { error }; }
-  finally { $('#btn-coach-logout').prop('disabled', false); }
+  finally { byId('btn-coach-logout').disabled = false; }
   if (result.error) {
     // This SDK can clear its local session even if the server rejects logout.
     // Reconcile the real session before describing the result to the user.

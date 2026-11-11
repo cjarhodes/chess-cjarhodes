@@ -189,7 +189,7 @@
     const row = strength.closest('.strength-row') || strength;
     row.parentNode.insertBefore(wrap, row.previousElementSibling && row.previousElementSibling.classList.contains('play-divider') ? row.previousElementSibling : row);
     const slider = document.getElementById('coach-strength');
-    // After app.js has read the new level, whichever listener runs first.
+    // After the Coach view has read the new level, whichever listener runs first.
     if (slider) slider.addEventListener('input', () => setTimeout(render, 0));
     // Adaptive play changes the level without an input event.
     const value = document.getElementById('coach-strength-value');

@@ -1,5 +1,6 @@
 // Keyboard shortcut sheet: press ? anywhere (outside a text field) to see the
 // shortcuts for the current view. Esc or the close button returns focus.
+// "," opens (and closes) Settings (src/ui/settings.js) the same way.
 (function() {
   'use strict';
   const SHEETS = {
@@ -16,7 +17,7 @@
       rows: [['H', 'Hint (counts as a miss)'], ['S', 'Show the solution'], ['R', 'Retry the puzzle, unrated'], ['N', 'Next puzzle'], ['F', 'Flip the board']]
     }
   };
-  const GLOBAL = [['?', 'Show this list'], ['Esc', 'Close a dialog or leave a text field']];
+  const GLOBAL = [['?', 'Show this list'], [',', 'Open Settings'], ['Esc', 'Close a dialog or leave a text field']];
   let dialog = null;
   let returnFocus = null;
 
@@ -83,17 +84,27 @@
     returnFocus = null;
   }
 
+  const visible = id => { const el = document.getElementById(id); return el && el.offsetParent !== null; };
   function blocked() {
-    const visible = id => { const el = document.getElementById(id); return el && el.offsetParent !== null; };
     return visible('summary-overlay') || visible('promotion-picker');
   }
+  const settingsOpen = () => !!(window.SettingsSheet && window.SettingsSheet.isOpen());
 
-  // Capture phase so the view handlers never see the ?.
+  // Capture phase so the view handlers never see the ? or the comma.
   document.addEventListener('keydown', e => {
-    if (e.key !== '?' || e.metaKey || e.ctrlKey || e.altKey) return;
+    if ((e.key !== '?' && e.key !== ',') || e.metaKey || e.ctrlKey || e.altKey) return;
     const tag = (e.target.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
     if (blocked()) return;
+    if (e.key === ',') {
+      // Not over another dialog (this sheet or the game viewer).
+      if (!window.SettingsSheet || (dialog && !dialog.hidden) || visible('game-viewer')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      window.SettingsSheet.toggle();
+      return;
+    }
+    if (settingsOpen()) return;
     e.preventDefault();
     e.stopPropagation();
     if (dialog && !dialog.hidden) close(); else open();

@@ -737,8 +737,9 @@ async page => {
   assert(await page.locator('#daily-sprint-focus-title').textContent() === 'Focus · Build your baseline', 'clean first visit did not explain how adaptation begins');
   assert(await page.locator('#daily-sprint-progress-label').textContent() === '0 of 10 moves', 'clean first visit did not show the sprint target');
   const firstVisitSprintBox = await page.locator('#coach-daily-plan').boundingBox();
-  const firstVisitAccountBox = await page.locator('#coach-auth-card').boundingBox();
-  assert(firstVisitSprintBox && firstVisitAccountBox && firstVisitSprintBox.y < firstVisitAccountBox.y, 'mobile first visit did not show the Daily Sprint before optional account setup');
+  // Account setup sits behind Settings; its way in from the Coach rail comes after the sprint.
+  const firstVisitAccountBox = await page.locator('#btn-coach-settings').boundingBox();
+  assert(firstVisitSprintBox && firstVisitAccountBox && firstVisitSprintBox.y < firstVisitAccountBox.y, 'first visit did not show the Daily Sprint before optional account setup');
   await openRailGroup('group-position');
   await page.locator('#coach-fen').fill('7k/8/5KQ1/8/8/8/8/8 w - - 0 1');
   await page.locator('#coach-game-options').evaluate(el => { el.open = true; });

@@ -2,7 +2,7 @@
 
 A static, single-page chess training app served at
 [chess.cjarhodes.com](https://chess.cjarhodes.com). No build step, no
-backend required — `index.html` and `app.js` run entirely in the browser,
+backend required — `index.html` and the scripts under `src/` run entirely in the browser,
 with vendored copies of every third-party library.
 
 ## Modes
@@ -64,8 +64,9 @@ pieces, forks, pins, king safety, endgames and so on), it also offers
 
 Shortcuts in Puzzles: `H` hint, `S` solution, `R` retry, `F` flip, `N` next.
 Press `?` anywhere (or the **?** button in the header) for the shortcuts of
-the current view; in Coach, `←`/`→` step through the game, `Home` goes to the
-start and `End` back to the live position (`shortcuts.js`).
+the current view, and `,` (or the gear) for Settings; in Coach, `←`/`→` step
+through the game, `Home` goes to the start and `End` back to the live position
+(`shortcuts.js`).
 Logic lives in `puzzles-core.js` (tested in Node by
 `scripts/validate-puzzles.js`, which also replays every shipped puzzle);
 `puzzles.js` owns the view; `scripts/verify-puzzle-journeys.js` drives it in
@@ -99,8 +100,8 @@ a move-quality badge on the square your reviewed move landed on (it stays
 there after the reply while your piece does), a green arrow for the engine's
 choice when stepping back to a move that wasn't among its best, the next move
 of a **Show why** line, and an evaluation bar beside the board (dimmed when it
-is from before the latest move). Drills hide all of it. **Appearance &
-sounds → Arrows, move badges and evaluation bar** turns it off
+is from before the latest move). Drills hide all of it. **Settings →
+Appearance → Arrows, move badges and evaluation bar** turns it off
 (`ui:board-feedback`). `board-overlay.js` draws on any board from
 `src/ui/board.js`; `coach-overlay.js` decides what Coach shows.
 
@@ -202,7 +203,7 @@ its badge, and mistakes show the engine's choice as an arrow. On an inaccuracy, 
 the engine's choice is accepted, and so is any of its top three moves it rates
 within half a pawn of it; **Show answer** draws the engine's move. Copy the PGN
 or delete the game there. The archive is included in training
-backups (Training data → Export), and importing merges games by id. Signed
+backups (Settings → Training data → Export backup), and importing merges games by id. Signed
 in, each game is also kept in the account (`coach_archive_games`), so another
 browser, or one that cleared its storage, gets the list back on the next
 sync; a deleted game stays deleted everywhere. The live game is never touched
@@ -229,7 +230,8 @@ and repertoire evidence; the final game's review is shown in Coach. Cancelling
 discards the staged batch rather than saving a partially analysed history.
 
 Account continuity keeps each browser's session in its own account checkpoint.
-In **Account**, choose **Continue saved session** to continue a separate copy;
+In **Settings → Account**, choose **Continue saved session** to continue a separate copy
+(the sheet closes to show the board);
 the source browser is unchanged, and **Return to previous session** keeps the
 board you displaced recoverable. Copies are unrated and do not add inherited
 reviews to lifetime game totals. New moves still receive normal coaching.
@@ -238,12 +240,44 @@ history; importing offers the saved board separately. Offline move reviews and
 takebacks retry when you reconnect or choose **Sync now**. **Sign out here**
 affects this browser's session. See [the account continuity audit](docs/account-continuity-loop.md).
 
+## Settings and navigation
+
+**Settings** (the gear in the app bar, `,`, or **Settings** at the foot of
+Coach's left rail) is one sheet with three sections: **Appearance** (theme:
+match device, light or dark, `ui:theme`, applied before paint by
+`theme-init.js`; board colours; move sounds; arrows, badges and the
+evaluation bar, `ui:board-feedback`), **Account** (sign-in, sync, saved
+sessions) and **Training data** (export and import a backup, and when this
+browser last exported one). It is a modal dialog: a centred card from 760px
+and a bottom sheet on phones; focus moves in and stays in until Escape, the
+close button or a press outside closes it, and then returns to where Settings
+was opened from. The controls are the ones Coach's rail used to hold, moved
+with their ids (`src/ui/settings.js`). The phone backup reminder's **Sign in
+to sync** opens Settings → Account with the email field ready.
+
+**Addresses and history** (`src/ui/router.js`): the address bar says where
+you are, and Back and Forward move between places without reloading. A new
+view, opening, line, Library mode (Study, Quiz, Explore) or Puzzles mode, and
+opening Settings, are history entries; stepping through a line or switching
+Settings section only rewrites the current address, and closing Settings goes
+back to the entry underneath. Old links keep working: `?view=coach`,
+`?view=puzzles&mode=rush`, `?opening=italian&mode=quiz`,
+`?opening=italian&line=…&move=3`, `?view=library&mode=explore`,
+`?mode=explore`, and a bare `/` (Coach). `&settings=appearance|account|data`
+opens Settings at that section. A magic-link sign-in fragment is never
+dropped or copied into another history entry before the account client has
+read it. `scripts/validate-router.js` tests the address rules in Node;
+`scripts/verify-behaviour-units.js` drives Back and Forward in the browser.
+
 ## Stack
 
-- `index.html` + `styles.css` + `app.js` (runtime wiring, views and event handlers) + `src/`
-  (engine, opponent, classification, tactics, opening book, spaced repetition,
-  persistence, account and practice sync, insights, practice, daily plan,
-  summary, sounds and Explore, as plain scripts loaded before `app.js`)
+- `index.html` + `styles.css` + `src/` (engine, opponent, classification,
+  tactics, opening book, spaced repetition, persistence, account and practice
+  sync, insights, practice, daily plan, summary, sounds, router, Settings and
+  Explore, then the views in `src/views/`: `shell.js` for view switching, the
+  route and shared UI, `library.js`, `coach.js`, `coach-review.js`,
+  `coach-practice.js`, and `app.js` (the startup file: event binding and boot, loaded after the views); all plain
+  scripts sharing globals, which replaced the old 4,000-line `app.js`)
   + `openings.js` (opening content data)
   + `opening-transfer.js` (Library-to-game exercises and reviews)
   + `learning-transfer.js` (different-position checks and follow-up observations)
@@ -256,7 +290,6 @@ affects this browser's session. See [the account continuity audit](docs/account-
   - `chess.js` 0.10.3
   - `cm-chessboard` 8.15.4 (ES modules, loaded by `src/ui/board-module.js`;
     pieces: the cburnett sprite built by `scripts/build-piece-sprite.js`)
-  - `jQuery` 3.6.0 (app code still uses it; the board no longer needs it)
   - `@supabase/supabase-js` 2.114.0
   - Stockfish (WASM build: `stockfish.js` + `stockfish.wasm`)
 - Lichess Opening Explorer API for Explore mode
@@ -287,10 +320,10 @@ Then open `http://127.0.0.1:4173/`.
 
 ## Validation
 
-Run before committing any change to `app.js` or `index.html`:
+Run before committing any change to `src/` or `index.html`:
 
 ```sh
-for f in app.js src/*/*.js; do node --check "$f" || exit 1; done
+for f in src/*/*.js; do node --check "$f" || exit 1; done
 for f in scripts/validate-*.js; do node "$f" || exit 1; done
 ```
 
@@ -359,8 +392,9 @@ deploy (usually live within ~30 seconds). Security headers (CSP,
 
 ## Workflow
 
-1. Edit `index.html`, `app.js`, or the relevant vendored/config file.
-2. Run `node --check` on `app.js` and `src/*/*.js`, and every `scripts/validate-*.js`
+1. Edit `index.html`, the relevant `src/` file (views are in `src/views/`), or the
+   relevant vendored/config file.
+2. Run `node --check` on `src/*/*.js`, and every `scripts/validate-*.js`
    validator.
 3. Run `scripts/verify-browser.sh` for the repeatable smoke coverage.
 4. For schema changes, add a Supabase migration and run a local reset

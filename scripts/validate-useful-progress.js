@@ -3,6 +3,7 @@
 // Exercise the actual evidence calculations and recommendation routing with
 // controlled histories. No engine, network, account, or browser is required.
 const fs = require('fs');
+const { domStub } = require('./lib/dom-stub');
 const path = require('path');
 const vm = require('vm');
 const { Chess } = require('../vendor/chess.js/chess-0.10.3.min.js');
@@ -40,7 +41,7 @@ const context = {
   practiceProgressTotals: () => ({ attempts: context.testEvents.length }),
   dailySprintToday: () => context.testDay,
   loadInsights: () => ({ entries: context.testEntries }),
-  $: () => {}, window: {}
+  ...domStub(), window: {}
 };
 vm.createContext(context);
 vm.runInContext(metadata + '\n' + [

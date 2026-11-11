@@ -17,7 +17,7 @@ async browserPage => {
   for(const[width,height]of[[1280,800],[1440,900],[1920,1080]]){
    await page.setViewportSize({width,height});
    if(workspace!=='summary')await page.waitForFunction(workspace=>{const area=document.querySelector(workspace==='library'?'#library-view .board-area':'.coach-board-area'),b=document.getElementById(workspace==='library'?'myBoard':'coachBoard').getBoundingClientRect();return area.scrollHeight<=area.clientHeight+2&&Math.abs(b.width-b.height)<8;},workspace,{timeout:15000});
-   await page.waitForFunction(()=>!jQuery(':animated').length);await frame();
+   await frame();
    const m=await page.evaluate(workspace=>{
     const rect=s=>document.querySelector(s).getBoundingClientRect().toJSON();
     if(workspace==='summary')return{width:innerWidth,height:innerHeight,documentWidth:document.documentElement.scrollWidth,card:rect('.summary-card'),action:rect('.summary-actions'),takeaway:document.getElementById('summary-takeaway').checkVisibility()?rect('#summary-takeaway'):null,primary:[...document.querySelectorAll('.summary-actions .primary')].filter(e=>e.checkVisibility()).map(e=>e.id)};

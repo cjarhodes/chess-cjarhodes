@@ -1,6 +1,7 @@
 // Lifetime Coach statistics, rolled up once per completed game.
-// Classic script loaded before app.js (see index.html); its top-level
-// declarations are shared globals, as they were inside app.js.
+// Classic script loaded before the view scripts in src/views/ (see
+// index.html); its top-level declarations are shared globals, as they were
+// inside app.js.
 
 // ─────────────────────────────────────────────
 // LIFETIME STATS — accumulate across games in this browser
@@ -101,12 +102,12 @@ function registerRestoredLifetimeRollup() {
 }
 function renderLifetime() {
   const lt = loadLifetime();
-  const $sec = $('#lifetime-section');
-  if (lt.games === 0) { $sec.hide(); return; }
-  $sec.show();
-  $('#lifetime-games').text(lt.games);
-  $('#lifetime-moves').text(lt.moves);
+  const section = byId('lifetime-section');
+  if (lt.games === 0) { hideEl(section); return; }
+  showEl(section);
+  byId('lifetime-games').textContent = lt.games;
+  byId('lifetime-moves').textContent = lt.moves;
   const acc = lt.moves > 0 ? Math.round(lt.accuracySum / lt.moves) : null;
-  $('#lifetime-accuracy').text(acc === null ? '—' : acc + '%');
-  $('#lifetime-blunders').text(lt.blunders);
+  byId('lifetime-accuracy').textContent = acc === null ? '—' : acc + '%';
+  byId('lifetime-blunders').textContent = lt.blunders;
 }

@@ -183,24 +183,16 @@
     renderLastBackup();
   }
 
+  // Settings → Account, with the email field ready. Settings opens over
+  // whatever is on screen, so a game or drill in progress is left alone.
   function signIn() {
-    if (document.querySelector('#coach-view.practice-active')) {
-      setStatus('Finish or exit the drill first, then sign in under Account in Coach.');
+    const sheet = root.SettingsSheet;
+    if (!sheet || !sheet.open('account', { focus: 'coach-auth-email', returnFocus: document.getElementById('btn-backup-nudge-signin') })) {
+      setStatus('Open Settings → Account to sign in.');
       return;
     }
-    if (typeof switchView === 'function' && typeof appView !== 'undefined' && appView !== 'coach') switchView('coach');
-    const group = document.getElementById('group-account');
-    if (group) group.open = true;
     const input = document.getElementById('coach-auth-email');
-    if (!input || !input.offsetParent) {
-      setStatus('Open Account in Coach to sign in.');
-      return;
-    }
-    // After the view switch has scrolled to the top.
-    requestAnimationFrame(() => {
-      input.scrollIntoView({ block: 'center' });
-      input.focus({ preventScroll: true });
-    });
+    if (!input || !input.getClientRects().length) setStatus('Sign-in is not available right now. Open Settings → Account to try again.');
   }
 
   function backUp() {
@@ -208,7 +200,7 @@
     const result = exportTrainingBackupNow();
     if (result && result.ok) {
       document.getElementById('btn-backup-nudge-backup').hidden = true;
-      setStatus('Backup downloaded. Import backup in Coach, under Training data, brings it back.');
+      setStatus('Backup downloaded. Import backup in Settings → Training data brings it back.');
       const close = document.getElementById('btn-backup-nudge-dismiss');
       close.textContent = 'Close';
       close.focus();
@@ -248,9 +240,9 @@
   }
 
   Object.assign(api, { refresh, recordBackup, lastBackupAt, progress });
-  // jQuery runs ready handlers in the order they were added, so this runs
-  // after app.js has started the account check.
-  if (root.jQuery) root.jQuery(init);
+  // onReady (src/ui/dom.js) runs handlers in the order they were added, so
+  // this runs after app.js has started the account check.
+  if (typeof onReady === 'function') onReady(init);
   else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })(typeof window !== 'undefined' ? window : globalThis);

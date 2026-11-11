@@ -1,6 +1,7 @@
 // Post-game summary: accuracy, phases, eval chart and key moments.
-// Classic script loaded before app.js (see index.html); its top-level
-// declarations are shared globals, as they were inside app.js.
+// Classic script loaded before the view scripts in src/views/ (see
+// index.html); its top-level declarations are shared globals, as they were
+// inside app.js.
 
 // ─────────────────────────────────────────────
 // POST-GAME SUMMARY
@@ -175,12 +176,12 @@ function renderLiveEvalChart(reviews) {
 function updateLiveEvalChart() {
   const html = renderLiveEvalChart(coachReviewLog || []);
   if (!html) {
-    $('#liveeval-section').hide();
-    $('#liveeval-chart').empty();
+    hideEl(byId('liveeval-section'));
+    byId('liveeval-chart').replaceChildren();
     return;
   }
-  $('#liveeval-chart').html(html);
-  $('#liveeval-section').show();
+  byId('liveeval-chart').innerHTML = html;
+  showEl(byId('liveeval-section'));
 }
 
 // Human-readable coaching takeaway inferred from pattern in reviews.
@@ -224,10 +225,10 @@ function showPostGameSummary(endMsg) {
   coachLastEndMsg = endMsg;
   if (typeof GameArchive !== 'undefined') GameArchive.record(endMsg);
   // Status-line pulse handed the baton to the overlay — remove it so reopens don't pulse again.
-  $('#coach-status').removeClass('status-ended');
+  byId('coach-status').classList.remove('status-ended');
   // Refresh the "Open review" button visibility now that we have an end message.
   updateCoachControlsState();
-  $('#summary-title').text(endMsg);
+  byId('summary-title').textContent = endMsg;
 
   // Subtitle: opponent level + user color context
   const eloEl = document.getElementById('coach-strength-value');
@@ -238,18 +239,20 @@ function showPostGameSummary(endMsg) {
   const personaName = typeof OpponentPersonas !== 'undefined' ? OpponentPersonas.displayName() : null;
   if (elo) subtitleParts.push(personaName ? `vs ${personaName} (${elo})` : `vs Opponent ${elo}`);
   if (subtitleParts.length) {
-    $('#summary-subtitle').text(subtitleParts.join(' · ')).show();
+    const subtitle = byId('summary-subtitle');
+    subtitle.textContent = subtitleParts.join(' · ');
+    showEl(subtitle);
   } else {
-    $('#summary-subtitle').hide();
+    hideEl(byId('summary-subtitle'));
   }
 
   // Headline metrics
   const total = coachStats.moves;
   const pct = accuracyFromTallies(coachStats, total);
-  $('#summary-accuracy').text(pct === null ? '—' : pct + '%');
-  $('#summary-moves').text(total);
+  byId('summary-accuracy').textContent = pct === null ? '—' : pct + '%';
+  byId('summary-moves').textContent = total;
   const acpl = computeACPL(coachReviewLog);
-  $('#summary-acpl').text(acpl === null ? '—' : acpl);
+  byId('summary-acpl').textContent = acpl === null ? '—' : acpl;
 
   // Classification distribution bar + legend
   const tiers = ['best', 'excellent', 'good', 'inaccuracy', 'mistake', 'blunder'];
@@ -257,30 +260,33 @@ function showPostGameSummary(endMsg) {
     best: 'Best', excellent: 'Excellent', good: 'Good',
     inaccuracy: 'Inaccuracy', mistake: 'Mistake', blunder: 'Blunder'
   };
-  const $bar = $('#summary-tier-bar').empty();
-  const $leg = $('#summary-tier-legend').empty();
+  const bar = byId('summary-tier-bar');
+  const legend = byId('summary-tier-legend');
+  bar.replaceChildren();
+  legend.replaceChildren();
   if (total > 0) {
     for (const t of tiers) {
       const n = coachStats[t] || 0;
       if (n > 0) {
         const wPct = (n / total) * 100;
-        $bar.append(`<div class="tier-bar-seg ${t}" style="width:${wPct.toFixed(2)}%" title="${tierLabel[t]}: ${n}"></div>`);
+        bar.insertAdjacentHTML('beforeend', `<div class="tier-bar-seg ${t}" style="width:${wPct.toFixed(2)}%" title="${tierLabel[t]}: ${n}"></div>`);
       }
       // Legend always shows even zero counts so users can see "no blunders".
-      $leg.append(
+      legend.insertAdjacentHTML('beforeend',
         `<span class="tier-legend-item"><span class="swatch ${t}"></span>${tierLabel[t]} <span class="count">${n}</span></span>`
       );
     }
-    $('#summary-tier-section').show();
+    showEl(byId('summary-tier-section'));
   } else {
     // No moves scored — hide the whole section rather than show an empty bar.
-    $('#summary-tier-section').hide();
+    hideEl(byId('summary-tier-section'));
   }
 
   // Phase breakdown
   const phases = phaseBreakdown(coachReviewLog);
   const anyPhase = phases.opening.moves + phases.middlegame.moves + phases.endgame.moves > 0;
-  const $phaseGrid = $('#summary-phase-grid').empty();
+  const phaseGrid = byId('summary-phase-grid');
+  phaseGrid.replaceChildren();
   if (anyPhase) {
     const rows = [
       ['Opening', phases.opening, '(moves 1–12)'],
@@ -290,24 +296,24 @@ function showPostGameSummary(endMsg) {
     for (const [name, data, range] of rows) {
       const acc = data.pct === null ? '—' : `${data.pct}%`;
       const moves = data.moves === 0 ? '—' : `${data.moves} move${data.moves === 1 ? '' : 's'}`;
-      $phaseGrid.append(
+      phaseGrid.insertAdjacentHTML('beforeend',
         `<span class="phase-name">${name} <span style="color:var(--text-3);font-size:var(--text-xs)">${range}</span></span>` +
         `<span class="phase-acc">${acc}</span>` +
         `<span class="phase-count">${moves}</span>`
       );
     }
-    $('#summary-phase-section').show();
+    showEl(byId('summary-phase-section'));
   } else {
-    $('#summary-phase-section').hide();
+    hideEl(byId('summary-phase-section'));
   }
 
   // Eval chart — need ≥ 2 scored points
   const chartHtml = renderEvalChart(coachReviewLog);
   if (chartHtml) {
-    $('#summary-eval-chart').html(chartHtml);
-    $('#summary-eval-section').show();
+    byId('summary-eval-chart').innerHTML = chartHtml;
+    showEl(byId('summary-eval-section'));
   } else {
-    $('#summary-eval-section').hide();
+    hideEl(byId('summary-eval-section'));
   }
 
   // Opening — identify based on full history
@@ -319,16 +325,14 @@ function showPostGameSummary(endMsg) {
       const lineText = info.exact
         ? `Stayed in theory through move ${mNum}.`
         : `Left book after move ${mNum}.`;
-      $('#summary-opening-line').html(
-        `<span class="eco">${escapeHtml(info.match.eco)}</span>` +
-        `<strong>${escapeHtml(info.match.name)}</strong> — ${escapeHtml(lineText)}`
-      );
-      $('#summary-opening-section').show();
+      byId('summary-opening-line').innerHTML = `<span class="eco">${escapeHtml(info.match.eco)}</span>` +
+        `<strong>${escapeHtml(info.match.name)}</strong> — ${escapeHtml(lineText)}`;
+      showEl(byId('summary-opening-section'));
     } else {
-      $('#summary-opening-section').hide();
+      hideEl(byId('summary-opening-section'));
     }
   } else {
-    $('#summary-opening-section').hide();
+    hideEl(byId('summary-opening-section'));
   }
 
   // Critical moments — top 3 worst non-best moves, threshold loss ≥ 30cp
@@ -336,7 +340,8 @@ function showPostGameSummary(endMsg) {
     .filter(r => r.tier && r.tier !== 'unknown' && r.tier !== 'best' && (r.loss || 0) >= 30)
     .sort((a, b) => (b.loss || 0) - (a.loss || 0))
     .slice(0, 3);
-  const $crit = $('#summary-critical-list').empty();
+  const critList = byId('summary-critical-list');
+  critList.replaceChildren();
   if (critical.length) {
     for (const r of critical) {
       const ref = formatMoveRef(r);
@@ -351,11 +356,11 @@ function showPostGameSummary(endMsg) {
         `<span class="moment-num">${escapeHtml(ref)}</span>` +
         `<span class="moment-desc">${escapeHtml(desc)}</span>` +
         `<span class="moment-loss">−${lossPawns}</span>`;
-      $crit.append(row);
+      critList.append(row);
     }
-    $('#summary-critical-section').show();
+    showEl(byId('summary-critical-section'));
   } else {
-    $('#summary-critical-section').hide();
+    hideEl(byId('summary-critical-section'));
   }
 
   // Best moments — top 3 'best'-tier or 'excellent'-tier moves spaced through the game
@@ -364,7 +369,8 @@ function showPostGameSummary(endMsg) {
   const bestMoves = coachReviewLog
     .filter(r => r.tier === 'best' || r.tier === 'excellent')
     .slice(0, 3);
-  const $best = $('#summary-best-list').empty();
+  const bestList = byId('summary-best-list');
+  bestList.replaceChildren();
   if (bestMoves.length) {
     for (const r of bestMoves) {
       const ref = formatMoveRef(r);
@@ -379,34 +385,36 @@ function showPostGameSummary(endMsg) {
         `<span class="moment-num">${escapeHtml(ref)}</span>` +
         `<span class="moment-desc">${escapeHtml(desc)}</span>` +
         `<span class="moment-loss" style="color:var(--mq-best)">✓</span>`;
-      $best.append(row);
+      bestList.append(row);
     }
-    $('#summary-best-section').show();
+    showEl(byId('summary-best-section'));
   } else {
-    $('#summary-best-section').hide();
+    hideEl(byId('summary-best-section'));
   }
 
   // Takeaway
   const takeaway = coachingTakeaway(coachReviewLog, phases);
   if (takeaway) {
-    $('#summary-takeaway-text').text(takeaway);
-    $('#summary-takeaway').show();
+    byId('summary-takeaway-text').textContent = takeaway;
+    showEl(byId('summary-takeaway'));
   } else {
-    $('#summary-takeaway').hide();
+    hideEl(byId('summary-takeaway'));
   }
 
   summaryPracticeItems = orderedPracticeRunItems(currentGameDuePracticeItems());
   const dueCount = summaryPracticeItems.length;
-  $('#btn-summary-practice')
-    .text(dueCount === 1 ? 'Practice this mistake' : `Practice ${dueCount} positions`)
-    .toggle(dueCount > 0)
-    .toggleClass('primary', dueCount > 0);
+  const practiceBtn = byId('btn-summary-practice');
+  practiceBtn.textContent = dueCount === 1 ? 'Practice this mistake' : `Practice ${dueCount} positions`;
+  toggleEl(practiceBtn, dueCount > 0);
+  practiceBtn.classList.toggle('primary', dueCount > 0);
 
-  $('#btn-summary-newgame').toggleClass('primary', dueCount === 0);
+  byId('btn-summary-newgame').classList.toggle('primary', dueCount === 0);
   summaryReturnFocus = document.activeElement;
-  $('#summary-overlay').css('display', 'flex').attr('aria-hidden', 'false');
+  const overlay = byId('summary-overlay');
+  overlay.style.display = 'flex';
+  overlay.setAttribute('aria-hidden', 'false');
   if (typeof renderOpeningTransferSummary === 'function') renderOpeningTransferSummary();
   // Scroll to top when reopening on a new game
-  $('.summary-card, .summary-body').scrollTop(0);
-  $('.summary-card').trigger('focus');
+  qsa('.summary-card, .summary-body').forEach(el => { el.scrollTop = 0; });
+  qsa('.summary-card').forEach(el => el.focus());
 }

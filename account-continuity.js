@@ -124,7 +124,7 @@ function recoverContinuityWrites() {
     if (raw) restoreContinuityJournal(JSON.parse(raw));
     return true;
   } catch (error) {
-    $('#account-checkpoint-status').text('Import recovery is paused because browser storage is unavailable. Your previous data is retained. Free space, then reload.');
+    byId('account-checkpoint-status').textContent = 'Import recovery is paused because browser storage is unavailable. Your previous data is retained. Free space, then reload.';
     return false;
   }
 }
@@ -159,13 +159,15 @@ function renderAccountCheckpoint() {
   const signedIn = hasCoachDbSession();
   const imported = storedAccountCheckpoint(ACCOUNT_CHECKPOINT_KEY);
   const candidate = imported || (accountCheckpoint.owner === coachMemoryOwnerId() ? accountCheckpoint.candidate : null);
-  $('#btn-account-resume').prop('hidden', !candidate).text(imported ? 'Continue session from backup' : 'Continue saved session');
-  $('#btn-account-previous').prop('hidden', !storedAccountCheckpoint(ACCOUNT_PREVIOUS_KEY));
+  const resume = byId('btn-account-resume');
+  resume.hidden = !candidate;
+  resume.textContent = imported ? 'Continue session from backup' : 'Continue saved session';
+  byId('btn-account-previous').hidden = !storedAccountCheckpoint(ACCOUNT_PREVIOUS_KEY);
   let message = accountCheckpoint.owner === coachMemoryOwnerId() ? accountCheckpoint.message : '';
   if (!message) message = signedIn ? 'Checking saved sessions…' : 'Sessions are saved here. Sign in or export a backup to continue elsewhere.';
   if (imported) message = 'Backup ready. Continue a separate copy; your current session will be kept below.';
   else if (candidate) message += ' Continue a separate copy; the original browser keeps its session.';
-  $('#account-checkpoint-status').text(message);
+  byId('account-checkpoint-status').textContent = message;
 }
 
 function handleAccountCheckpointError(error, owner = coachMemoryOwnerId()) {
@@ -348,16 +350,28 @@ function continueAccountCheckpoint(source, opts = {}) {
   renderAccountCheckpoint();
 }
 
-$(function initAccountContinuity() {
-  $('#btn-account-resume').on('click', () => {
-    try {
-      const imported = storedAccountCheckpoint(ACCOUNT_CHECKPOINT_KEY);
-      continueAccountCheckpoint(imported || accountCheckpoint.candidate, { imported: !!imported });
-    } catch (error) { $('#account-checkpoint-status').text(error.message); }
+// The buttons sit in Settings → Account. Continuing closes the sheet so the
+// board shows the session; if it cannot continue, the sheet comes back with
+// the reason.
+function continueFromSettings(source, opts) {
+  const sheet = window.SettingsSheet;
+  const section = sheet && sheet.isOpen() ? sheet.section() : null;
+  if (section) sheet.close({ stay: true });
+  try {
+    continueAccountCheckpoint(source(), opts);
+  } catch (error) {
+    byId('account-checkpoint-status').textContent = error.message;
+    if (section) sheet.open(section);
+  }
+}
+
+onReady(function initAccountContinuity() {
+  on(byId('btn-account-resume'), 'click', () => {
+    const imported = storedAccountCheckpoint(ACCOUNT_CHECKPOINT_KEY);
+    continueFromSettings(() => imported || accountCheckpoint.candidate, { imported: !!imported });
   });
-  $('#btn-account-previous').on('click', () => {
-    try { continueAccountCheckpoint(storedAccountCheckpoint(ACCOUNT_PREVIOUS_KEY)); }
-    catch (error) { $('#account-checkpoint-status').text(error.message); }
+  on(byId('btn-account-previous'), 'click', () => {
+    continueFromSettings(() => storedAccountCheckpoint(ACCOUNT_PREVIOUS_KEY));
   });
   window.addEventListener('online', () => {
     refreshAccountCheckpoints().then(() => flushPendingAccountReviews()).then(() => refreshRemoteInsights({ silent: true })).catch(handleAccountCheckpointError);

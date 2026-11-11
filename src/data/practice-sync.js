@@ -1,6 +1,7 @@
 // Account sync for practice attempts and daily sessions.
-// Classic script loaded before app.js (see index.html); its top-level
-// declarations are shared globals, as they were inside app.js.
+// Classic script loaded before the view scripts in src/views/ (see
+// index.html); its top-level declarations are shared globals, as they were
+// inside app.js.
 
 function queueRemotePracticeProgressSync(event) {
   if (!hasCoachDbSession() || !event) return;

@@ -1,6 +1,7 @@
 // Explore mode: Lichess token handling and the opening explorer API.
-// Classic script loaded before app.js (see index.html); its top-level
-// declarations are shared globals, as they were inside app.js.
+// Classic script loaded before the view scripts in src/views/ (see
+// index.html); its top-level declarations are shared globals, as they were
+// inside app.js.
 
 // ─────────────────────────────────────────────
 // EXPLORE MODE — LICHESS TOKEN + API
@@ -25,17 +26,40 @@ function clearLichessToken() {
 
 function showExploreTokenState() {
   if (getLichessToken()) {
-    $('#explore-token-setup').hide();
-    $('#explore-continuations').show().css('display', 'flex');
+    hideEl(byId('explore-token-setup'));
+    const continuations = byId('explore-continuations');
+    showEl(continuations);
+    continuations.style.display = 'flex';
   } else {
-    $('#explore-continuations').hide();
-    $('#explore-token-setup').show();
+    hideEl(byId('explore-continuations'));
+    showEl(byId('explore-token-setup'));
   }
 }
 
 // Lichess answers 429 when a client sends too many requests and asks it to
 // wait a minute; that is not a connection problem.
 const LICHESS_RATE_LIMIT_MESSAGE = 'Lichess is limiting requests right now. Wait a minute, then try again.';
+
+// GET a Lichess explorer endpoint with the player's token. Resolves with the
+// parsed JSON. Rejects with an error whose status is the HTTP status (0 when
+// the request never got an answer; a 2xx status when the body was not JSON).
+async function lichessExplorerGet(url, params, token) {
+  const fail = status => Object.assign(new Error('Lichess explorer request failed'), { status });
+  let response;
+  try {
+    response = await fetch(url + '?' + new URLSearchParams(params), {
+      headers: { 'Accept': 'application/json, text/javascript, */*; q=0.01', 'Authorization': 'Bearer ' + token }
+    });
+  } catch (e) {
+    throw fail(0);
+  }
+  if (!response.ok) throw fail(response.status);
+  try {
+    return await response.json();
+  } catch (e) {
+    throw fail(response.status);
+  }
+}
 
 function exploreCacheKey(db, fen) {
   return db + '|' + fen;
@@ -77,54 +101,45 @@ function fetchExploreData() {
   const endpoint = db === 'masters'
     ? 'https://explorer.lichess.ovh/masters'
     : 'https://explorer.lichess.ovh/lichess';
-  $('#continuations-list').html('<div class="explore-loading">Fetching data…</div>');
-  $.ajax({
-    url: endpoint,
-    data: { fen: fen, topGames: 0, recentGames: 0 },
-    dataType: 'json',
-    headers: { 'Authorization': 'Bearer ' + token },
-    success: function(data) {
-      if (requestId !== exploreRequestId || !exploreMode || !exploreGame ||
-          exploreGame.fen() !== fen || currentDb !== db) {
-        return;
-      }
-      setCachedExploreData(cacheKey, data);
-      renderContinuations(data);
-    },
-    error: function(xhr) {
-      if (requestId !== exploreRequestId || !exploreMode || !exploreGame ||
-          exploreGame.fen() !== fen || currentDb !== db) {
-        return;
-      }
-      if (xhr.status === 401) {
-        clearLichessToken();
-        exploreCache.clear();
-        showExploreTokenState();
-        $('#token-error').text('Token invalid or expired — please reconnect.').show();
-      } else if (xhr.status === 429) {
-        $('#continuations-list').empty().append($('<div class="explore-empty"></div>').text(LICHESS_RATE_LIMIT_MESSAGE));
-      } else {
-        $('#continuations-list').html('<div class="explore-empty">Could not reach Lichess. Check your connection.</div>');
-      }
+  byId('continuations-list').innerHTML = '<div class="explore-loading">Fetching data…</div>';
+  const stale = () => requestId !== exploreRequestId || !exploreMode || !exploreGame ||
+    exploreGame.fen() !== fen || currentDb !== db;
+  lichessExplorerGet(endpoint, { fen: fen, topGames: 0, recentGames: 0 }, token).then(data => {
+    if (stale()) return;
+    setCachedExploreData(cacheKey, data);
+    renderContinuations(data);
+  }, error => {
+    if (stale()) return;
+    if (error.status === 401) {
+      clearLichessToken();
+      exploreCache.clear();
+      showExploreTokenState();
+      const tokenError = byId('token-error');
+      tokenError.textContent = 'Token invalid or expired — please reconnect.';
+      showEl(tokenError);
+    } else if (error.status === 429) {
+      byId('continuations-list').replaceChildren(makeEl('div', 'explore-empty', LICHESS_RATE_LIMIT_MESSAGE));
+    } else {
+      byId('continuations-list').innerHTML = '<div class="explore-empty">Could not reach Lichess. Check your connection.</div>';
     }
   });
 }
 
 function renderContinuations(data, opts) {
-  const list = $('#continuations-list');
+  const list = byId('continuations-list');
   const totalPos = (Number(data.white) || 0) + (Number(data.draws) || 0) + (Number(data.black) || 0);
 
   if (!data.moves || data.moves.length === 0) {
     const msg = totalPos === 0
       ? 'No games found for this position.'
       : `${formatNum(totalPos)} total games — no further continuations recorded.`;
-    list.html(`<div class="explore-empty">${msg}</div>`);
+    list.innerHTML = `<div class="explore-empty">${msg}</div>`;
     return;
   }
 
-  list.empty();
+  list.replaceChildren();
   const cacheNote = opts && opts.cached ? ' · cached' : '';
-  list.append($('<div class="explore-total"></div>').text(`${formatNum(totalPos)} games from this position${cacheNote}`));
+  list.append(makeEl('div', 'explore-total', `${formatNum(totalPos)} games from this position${cacheNote}`));
   data.moves.slice(0, 8).forEach(function(m) {
     const white = Number(m.white) || 0;
     const draws = Number(m.draws) || 0;
@@ -135,23 +150,23 @@ function renderContinuations(data, opts) {
     const dPct = Math.round(draws / total * 100);
     const bPct = 100 - wPct - dPct;
     const san = String(m.san || '');
-    const $bar = $('<div class="cont-bar"></div>')
-      .append($('<div class="cont-bar-w"></div>').css('width', wPct + '%'))
-      .append($('<div class="cont-bar-d"></div>').css('width', dPct + '%'))
-      .append($('<div class="cont-bar-b"></div>').css('width', bPct + '%'));
-    const $row = $('<div class="continuation-row"></div>')
-      .attr('data-san', san)
-      .append($('<div class="cont-move"></div>').text(san))
-      .append($('<div class="cont-bar-wrap"></div>')
-        .append($bar)
-        .append($('<div class="cont-pct"></div>').text(`${wPct}% · ${dPct}% · ${bPct}%`)))
-      .append($('<div class="cont-games"></div>').text(formatNum(total)));
-    list.append($row);
+    const bar = makeEl('div', 'cont-bar');
+    [['cont-bar-w', wPct], ['cont-bar-d', dPct], ['cont-bar-b', bPct]].forEach(([className, pct]) => {
+      const segment = makeEl('div', className);
+      segment.style.width = pct + '%';
+      bar.append(segment);
+    });
+    const barWrap = makeEl('div', 'cont-bar-wrap');
+    barWrap.append(bar, makeEl('div', 'cont-pct', `${wPct}% · ${dPct}% · ${bPct}%`));
+    const row = makeEl('div', 'continuation-row');
+    row.setAttribute('data-san', san);
+    row.append(makeEl('div', 'cont-move', san), barWrap, makeEl('div', 'cont-games', formatNum(total)));
+    list.append(row);
   });
 
   // Click a continuation to play it
-  list.find('.continuation-row').on('click', function() {
-    const san = $(this).attr('data-san');
+  on(qsa('.continuation-row', list), 'click', function() {
+    const san = this.getAttribute('data-san');
     if (exploreGame.move(san)) {
       board.position(exploreGame.fen());
       librarySyncLastMove(exploreGame);
