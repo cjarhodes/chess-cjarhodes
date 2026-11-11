@@ -348,16 +348,28 @@ function continueAccountCheckpoint(source, opts = {}) {
   renderAccountCheckpoint();
 }
 
+// The buttons sit in Settings → Account. Continuing closes the sheet so the
+// board shows the session; if it cannot continue, the sheet comes back with
+// the reason.
+function continueFromSettings(source, opts) {
+  const sheet = window.SettingsSheet;
+  const section = sheet && sheet.isOpen() ? sheet.section() : null;
+  if (section) sheet.close({ stay: true });
+  try {
+    continueAccountCheckpoint(source(), opts);
+  } catch (error) {
+    $('#account-checkpoint-status').text(error.message);
+    if (section) sheet.open(section);
+  }
+}
+
 $(function initAccountContinuity() {
   $('#btn-account-resume').on('click', () => {
-    try {
-      const imported = storedAccountCheckpoint(ACCOUNT_CHECKPOINT_KEY);
-      continueAccountCheckpoint(imported || accountCheckpoint.candidate, { imported: !!imported });
-    } catch (error) { $('#account-checkpoint-status').text(error.message); }
+    const imported = storedAccountCheckpoint(ACCOUNT_CHECKPOINT_KEY);
+    continueFromSettings(() => imported || accountCheckpoint.candidate, { imported: !!imported });
   });
   $('#btn-account-previous').on('click', () => {
-    try { continueAccountCheckpoint(storedAccountCheckpoint(ACCOUNT_PREVIOUS_KEY)); }
-    catch (error) { $('#account-checkpoint-status').text(error.message); }
+    continueFromSettings(() => storedAccountCheckpoint(ACCOUNT_PREVIOUS_KEY));
   });
   window.addEventListener('online', () => {
     refreshAccountCheckpoints().then(() => flushPendingAccountReviews()).then(() => refreshRemoteInsights({ silent: true })).catch(handleAccountCheckpointError);

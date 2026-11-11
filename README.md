@@ -62,8 +62,9 @@ pieces, forks, pins, king safety, endgames and so on), it also offers
 
 Shortcuts in Puzzles: `H` hint, `S` solution, `R` retry, `F` flip, `N` next.
 Press `?` anywhere (or the **?** button in the header) for the shortcuts of
-the current view; in Coach, `←`/`→` step through the game, `Home` goes to the
-start and `End` back to the live position (`shortcuts.js`).
+the current view, and `,` (or the gear) for Settings; in Coach, `←`/`→` step
+through the game, `Home` goes to the start and `End` back to the live position
+(`shortcuts.js`).
 Logic lives in `puzzles-core.js` (tested in Node by
 `scripts/validate-puzzles.js`, which also replays every shipped puzzle);
 `puzzles.js` owns the view; `scripts/verify-puzzle-journeys.js` drives it in
@@ -97,8 +98,8 @@ a move-quality badge on the square your reviewed move landed on (it stays
 there after the reply while your piece does), a green arrow for the engine's
 choice when stepping back to a move that wasn't among its best, the next move
 of a **Show why** line, and an evaluation bar beside the board (dimmed when it
-is from before the latest move). Drills hide all of it. **Appearance &
-sounds → Arrows, move badges and evaluation bar** turns it off
+is from before the latest move). Drills hide all of it. **Settings →
+Appearance → Arrows, move badges and evaluation bar** turns it off
 (`ui:board-feedback`). `board-overlay.js` draws on any board from
 `src/ui/board.js`; `coach-overlay.js` decides what Coach shows.
 
@@ -200,7 +201,7 @@ its badge, and mistakes show the engine's choice as an arrow. On an inaccuracy, 
 the engine's choice is accepted, and so is any of its top three moves it rates
 within half a pawn of it; **Show answer** draws the engine's move. Copy the PGN
 or delete the game there. The archive is included in training
-backups (Training data → Export), and importing merges games by id. The live
+backups (Settings → Training data → Export backup), and importing merges games by id. The live
 game is never touched (`game-archive.js`).
 
 **Import by username** (Import games → From Chess.com or Lichess) lists your
@@ -224,7 +225,8 @@ and repertoire evidence; the final game's review is shown in Coach. Cancelling
 discards the staged batch rather than saving a partially analysed history.
 
 Account continuity keeps each browser's session in its own account checkpoint.
-In **Account**, choose **Continue saved session** to continue a separate copy;
+In **Settings → Account**, choose **Continue saved session** to continue a separate copy
+(the sheet closes to show the board);
 the source browser is unchanged, and **Return to previous session** keeps the
 board you displaced recoverable. Copies are unrated and do not add inherited
 reviews to lifetime game totals. New moves still receive normal coaching.
@@ -232,6 +234,35 @@ Backups include live boards, interrupted practice, opening context, and training
 history; importing offers the saved board separately. Offline move reviews and
 takebacks retry when you reconnect or choose **Sync now**. **Sign out here**
 affects this browser's session. See [the account continuity audit](docs/account-continuity-loop.md).
+
+## Settings and navigation
+
+**Settings** (the gear in the app bar, `,`, or **Settings** at the foot of
+Coach's left rail) is one sheet with three sections: **Appearance** (theme:
+match device, light or dark, `ui:theme`, applied before paint by
+`theme-init.js`; board colours; move sounds; arrows, badges and the
+evaluation bar, `ui:board-feedback`), **Account** (sign-in, sync, saved
+sessions) and **Training data** (export and import a backup, and when this
+browser last exported one). It is a modal dialog: a centred card from 760px
+and a bottom sheet on phones; focus moves in and stays in until Escape, the
+close button or a press outside closes it, and then returns to where Settings
+was opened from. The controls are the ones Coach's rail used to hold, moved
+with their ids (`src/ui/settings.js`). The phone backup reminder's **Sign in
+to sync** opens Settings → Account with the email field ready.
+
+**Addresses and history** (`src/ui/router.js`): the address bar says where
+you are, and Back and Forward move between places without reloading. A new
+view, opening, line, Library mode (Study, Quiz, Explore) or Puzzles mode, and
+opening Settings, are history entries; stepping through a line or switching
+Settings section only rewrites the current address, and closing Settings goes
+back to the entry underneath. Old links keep working: `?view=coach`,
+`?view=puzzles&mode=rush`, `?opening=italian&mode=quiz`,
+`?opening=italian&line=…&move=3`, `?view=library&mode=explore`,
+`?mode=explore`, and a bare `/` (Coach). `&settings=appearance|account|data`
+opens Settings at that section. A magic-link sign-in fragment is never
+dropped or copied into another history entry before the account client has
+read it. `scripts/validate-router.js` tests the address rules in Node;
+`scripts/verify-behaviour-units.js` drives Back and Forward in the browser.
 
 ## Stack
 
