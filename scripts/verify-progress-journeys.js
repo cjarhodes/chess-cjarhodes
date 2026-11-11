@@ -26,7 +26,6 @@ async page => {
    assert(measured.board.bottom<=height&&measured.board.x>=0&&measured.board.right<=width,'clipped board in '+name+' at '+width);
    assert(measured.next.bottom<=height&&measured.next.y>=0,'next action below the fold in '+name+' at '+width);
    assert(measured.primary.length===1&&measured.primary[0]==='btn-progress-next','Progress lacks one dominant next action in '+name);
-   await page.waitForFunction(()=>!jQuery(':animated').length);
    await page.screenshot({path:'output/playwright/progress-'+name+'-'+width+'.png',animations:'disabled'});
    checks.push({name,width,height,boardSize:measured.board.width,boardBottom:measured.board.bottom,nextBottom:measured.next.bottom,overflow:measured.documentWidth-width,primary:measured.primary[0]});
   }

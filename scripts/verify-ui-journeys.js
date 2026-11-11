@@ -26,7 +26,6 @@ async page => {
    assert(measured.primary.length<=1,'competing primary actions in '+name);
    assert(measured.primary.every(a=>!a.disabled),'primary action is disabled in '+name);
    if(['ready','user-turn','review','practice','practice-complete','ended','complete'].includes(measured.state))assert(measured.primary.length===1||measured.boardPrimary,'no clear action in '+name);
-   await page.waitForFunction(()=>!jQuery(':animated').length);
    await page.screenshot({path:'output/playwright/ui-'+name+'-'+width+'.png',animations:'disabled'});
    checks.push({name,...measured});
   }

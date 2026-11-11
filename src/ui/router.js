@@ -15,7 +15,7 @@
 // History: a change of view, opening, line or mode, or opening Settings, is a
 // new history entry; anything else (a study move, another Settings section,
 // closing Settings) rewrites the current one. Back and Forward hand the
-// route to the app (app.js restoreRoute) without a reload.
+// route to the app (restoreRoute in src/views/shell.js) without a reload.
 //
 // parseRoute, routeSearch, routeKey and routeHistoryAction are pure, so
 // scripts/validate-router.js runs them in Node.

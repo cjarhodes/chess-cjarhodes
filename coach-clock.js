@@ -1,7 +1,7 @@
 // Coach clocks: an optional time control for Coach games (untimed stays the
 // default). Each side's clock sits on its bar beside the board; the side to
 // move is charged, increments follow each move, and running out ends the
-// game through app.js's coachFinishGame. Clocks pause while Coach grades a
+// game through coachFinishGame (src/views/coach.js). Clocks pause while Coach grades a
 // move, while Show why is open and while Coach is not on screen, since this
 // is training, not a tournament.
 // The rules live in clock-core.js; this file only watches the live game.

@@ -332,17 +332,40 @@ function downloadTrainingBackup() {
   return Object.keys(payload.data).length;
 }
 
+// Status lines: show message and swap classes (error / success) on element id.
+function setStatusLine(id, addClasses, removeClasses, message) {
+  const el = byId(id);
+  if (removeClasses) el.classList.remove(...removeClasses.split(' '));
+  if (addClasses) el.classList.add(...addClasses.split(' '));
+  el.textContent = message;
+}
+
+// A Progress list entry: a bold title over a line of detail.
+function makeTitledItem(className, title, detail) {
+  const item = makeEl('div', className);
+  item.append(makeEl('strong', '', title), makeEl('span', '', detail));
+  return item;
+}
+
+// A small row button (Study, Add, Repair, Train…).
+function makeRowButton(text, onClick) {
+  const button = makeEl('button', 'movelist-copy', text);
+  button.type = 'button';
+  on(button, 'click', onClick);
+  return button;
+}
+
 // Download a backup and remember when (backup-nudge.js shows the date and
 // stops reminding for a week). Used by Export backup and the phone reminder.
 function exportTrainingBackupNow() {
   try {
     const count = downloadTrainingBackup();
-    $('#training-data-status').removeClass('error').addClass('success').text(`Backup downloaded with ${count} local data set${count === 1 ? "" : "s"}.`);
+    setStatusLine('training-data-status', 'success', 'error', `Backup downloaded with ${count} local data set${count === 1 ? "" : "s"}.`);
     if (window.BackupNudge && window.BackupNudge.recordBackup) window.BackupNudge.recordBackup();
     return { ok: true, count };
   } catch (error) {
     const message = (error && error.message) || 'Backup could not be created in this browser.';
-    $('#training-data-status').removeClass('success').addClass('error').text(message);
+    setStatusLine('training-data-status', 'error', 'success', message);
     return { ok: false, message };
   }
 }
@@ -844,25 +867,27 @@ function recordRepertoirePracticeResult(item, clean, revealed) {
 function renderRepertoireUI() {
   const ids = repertoireIds();
   const selected = new Set(ids);
-  $('.opening-btn').each(function() {
-    $(this).toggleClass('in-repertoire', selected.has($(this).data('id')));
+  qsa('.opening-btn').forEach(btn => {
+    btn.classList.toggle('in-repertoire', selected.has(btn.dataset.id));
   });
-  const $section = $('#repertoire-section').empty();
+  const section = byId('repertoire-section');
+  section.replaceChildren();
   if (ids.length) {
-    $section.append('<div class="library-label">My Repertoire</div>');
+    section.append(makeEl('div', 'library-label', 'My Repertoire'));
     ids.map(id => OPENINGS.find(opening => opening.id === id)).filter(Boolean).forEach(opening => {
-      const $button = $('<button class="opening-btn in-repertoire" type="button"></button>')
-        .attr({ 'data-id': opening.id, 'data-cat': opening.category })
-        .text(opening.name + ' ');
-      $button.append($('<span class="eco"></span>').text(opening.eco || ''));
-      $button.on('click', () => loadOpening(opening.id));
-      $section.append($button);
+      const button = makeEl('button', 'opening-btn in-repertoire', opening.name + ' ');
+      button.type = 'button';
+      button.setAttribute('data-id', opening.id);
+      button.setAttribute('data-cat', opening.category);
+      button.append(makeEl('span', 'eco', opening.eco || ''));
+      on(button, 'click', () => loadOpening(opening.id));
+      section.append(button);
     });
   }
   const activeId = currentOpening && currentOpening.id;
-  $('#btn-repertoire-toggle')
-    .text(activeId && selected.has(activeId) ? '★ In my repertoire' : '☆ Add to my repertoire')
-    .prop('disabled', !activeId);
+  const toggle = byId('btn-repertoire-toggle');
+  toggle.textContent = activeId && selected.has(activeId) ? '★ In my repertoire' : '☆ Add to my repertoire';
+  toggle.disabled = !activeId;
 }
 
 function repertoireRepairItem(repair) {
@@ -878,9 +903,10 @@ function repertoireRepairItem(repair) {
 }
 
 function renderPersonalRepertoire() {
-  const $summary = $('#personal-repertoire-summary');
-  const $list = $('#personal-repertoire-list').empty();
-  if (!$summary.length || !$list.length) return;
+  const summary = byId('personal-repertoire-summary');
+  const list = byId('personal-repertoire-list');
+  if (list) list.replaceChildren();
+  if (!summary || !list) return;
   const state = loadGrowthState();
   const selected = new Set(state.repertoire.ids);
   const observed = state.repertoire.observed.slice().sort((a, b) =>
@@ -896,47 +922,50 @@ function renderPersonalRepertoire() {
   const comparisonText = latestComparison
     ? ` Last import: ${latestComparison.bookCoverage}% book coverage, ${latestComparison.deviations} deviation${latestComparison.deviations === 1 ? '' : 's'} and ${latestComparison.mistakes} repair${latestComparison.mistakes === 1 ? '' : 's'}.`
     : '';
-  $summary.text(observed.length
+  summary.textContent = (observed.length
     ? `${observed.length} opening${observed.length === 1 ? '' : 's'} found across ${gameCount} imported game${gameCount === 1 ? '' : 's'}. ${repairCount ? `${repairCount} repair position${repairCount === 1 ? '' : 's'} ready.` : 'Import more games to find repair opportunities.'}${comparisonText}`
     : 'Import your games to see the openings you actually play and the positions worth repairing.');
   if (!observed.length) return;
   observed.forEach(item => {
     const key = item.openingId || `name:${item.name}`;
     const repairs = repairsByKey[key] || [];
-    const $row = $('<div class="repertoire-observed-row"></div>');
+    const row = makeEl('div', 'repertoire-observed-row');
     const side = item.side === 'black' ? 'Black' : 'White';
     const deviations = item.deviations ? ` · ${item.deviations} out-of-book` : '';
     const confidence = Number.isFinite(item.confidence) ? item.confidence : repertoireConfidence(item);
     const focus = state.repertoire.focusKey === item.openingId;
-    $row.append($('<div class="repertoire-observed-copy"></div>').append(
-      $('<strong></strong>').text(item.name + (item.eco ? ` · ${item.eco}` : '')),
-      $('<span></span>').text(`${side} · ${item.games} game${item.games === 1 ? '' : 's'} · ${item.moves} reviewed moves${deviations} · ${repertoireConfidenceLabel(confidence)} ${confidence}%`)
+    row.append(makeTitledItem('repertoire-observed-copy',
+      item.name + (item.eco ? ` · ${item.eco}` : ''),
+      `${side} · ${item.games} game${item.games === 1 ? '' : 's'} · ${item.moves} reviewed moves${deviations} · ${repertoireConfidenceLabel(confidence)} ${confidence}%`
     ));
-    const $actions = $('<div class="repertoire-observed-actions"></div>');
+    const actions = makeEl('div', 'repertoire-observed-actions');
     if (item.openingId) {
-      $('<button type="button" class="movelist-copy">Study</button>').on('click', () => loadOpening(item.openingId)).appendTo($actions);
+      actions.append(makeRowButton('Study', () => loadOpening(item.openingId)));
       if (!selected.has(item.openingId)) {
-        $('<button type="button" class="movelist-copy">Add</button>').on('click', () => toggleRepertoireOpening(item.openingId)).appendTo($actions);
+        actions.append(makeRowButton('Add', () => toggleRepertoireOpening(item.openingId)));
       }
-      $('<button type="button" class="movelist-copy"></button>').text(focus ? 'Focused' : 'Focus').prop('disabled', focus).on('click', () => setRepertoireFocus(item.openingId)).appendTo($actions);
+      const focusButton = makeRowButton(focus ? 'Focused' : 'Focus', () => setRepertoireFocus(item.openingId));
+      focusButton.disabled = focus;
+      actions.append(focusButton);
     }
     if (repairs.length) {
-      $('<button type="button" class="movelist-copy"></button>').text(`Repair ${repairs.length}`).on('click', () => {
+      actions.append(makeRowButton(`Repair ${repairs.length}`, () => {
         const items = repairs.map(repertoireRepairItem).filter(Boolean);
         if (!items.length) return;
         switchView('coach');
         startCoachPracticeSession(items, items[0]);
-      }).appendTo($actions);
+      }));
     }
-    $row.append($actions);
-    $list.append($row);
+    row.append(actions);
+    list.append(row);
   });
 }
 
 function renderOpeningBridgeTrack() {
-  const $section = $('#opening-bridge-section');
-  const $list = $('#opening-bridge-list').empty();
-  if (!$section.length || !$list.length) return;
+  const section = byId('opening-bridge-section');
+  const list = byId('opening-bridge-list');
+  if (list) list.replaceChildren();
+  if (!section || !list) return;
   const state = loadGrowthState();
   const chosen = [];
   const ids = state.repertoire.ids.slice();
@@ -951,18 +980,13 @@ function renderOpeningBridgeTrack() {
     const item = openingBridgeItem(opening);
     if (!item) return;
     const record = typeof practiceRecordFor === 'function' ? practiceRecordFor(item) : null;
-    const $row = $('<div class="opening-bridge-row"></div>');
-    $row.append($('<div class="opening-bridge-copy"></div>').append(
-      $('<strong></strong>').text(item.meta.title),
-      $('<span></span>').text(`${item.meta.practice} ${record ? ` ${practiceSolveSummary(practiceSolveCounts(item, record))}` : ' Not rehearsed yet.'}`)
-    ));
-    $('<button type="button" class="movelist-copy"></button>')
-      .text(record && record.correct ? 'Review' : 'Rehearse')
-      .on('click', () => { switchView('coach'); startCoachPractice(item); })
-      .appendTo($row);
-    $list.append($row);
+    const row = makeEl('div', 'opening-bridge-row');
+    row.append(makeTitledItem('opening-bridge-copy', item.meta.title,
+      `${item.meta.practice} ${record ? ` ${practiceSolveSummary(practiceSolveCounts(item, record))}` : ' Not rehearsed yet.'}`));
+    row.append(makeRowButton(record && record.correct ? 'Review' : 'Rehearse', () => { switchView('coach'); startCoachPractice(item); }));
+    list.append(row);
   });
-  $section.toggle($list.children().length > 0);
+  toggleEl(section, list.children.length > 0);
 }
 
 // Opening names only mean something from the normal start position; a game
@@ -1165,9 +1189,9 @@ function recordRatedCoachResult(endReason) {
 
 function renderPlayerProfileStatus(profile = playerProfile()) {
   const confidence = playerRatingConfidence(profile);
-  $('#player-profile-status').text(profile.onboarded || profile.ratingGames
+  byId('player-profile-status').textContent = profile.onboarded || profile.ratingGames
     ? `Player estimate ${Math.round(profile.ratingEstimate)} ±${Math.round(profile.ratingDeviation)} · ${confidence} · ${profile.ratingGames} rated game${profile.ratingGames === 1 ? '' : 's'}.`
-    : 'Set a starting estimate; completed standard games will calibrate it.');
+    : 'Set a starting estimate; completed standard games will calibrate it.';
 }
 
 function renderAutoDifficultyNote(profile = playerProfile()) {
@@ -1185,9 +1209,9 @@ function renderAutoDifficultyNote(profile = playerProfile()) {
       : challenge.adjustment > 0
         ? ` Recent accuracy is ${challenge.accuracy}%, above the ${CHALLENGE_MIN_ACCURACY}–${CHALLENGE_MAX_ACCURACY}% learning band, so the next opponent rises by ${challenge.adjustment} points.`
         : ` Recent accuracy is ${challenge.accuracy}%, inside the ${CHALLENGE_MIN_ACCURACY}–${CHALLENGE_MAX_ACCURACY}% learning band.`;
-  $('#coach-auto-elo-note').text(profile.autoElo
+  byId('coach-auto-elo-note').textContent = profile.autoElo
     ? `${uncertainty}. Next opponent target: ${recommended}, based on ${evidence}.${challengeNote}`
-    : `${uncertainty}. Automatic adjustment is off; current evidence-based target: ${recommended}.`);
+    : `${uncertainty}. Automatic adjustment is off; current evidence-based target: ${recommended}.`;
 }
 
 function personalizeAdaptivePlan(plan) {
@@ -1225,14 +1249,14 @@ function personalizeAdaptivePlan(plan) {
 
 function applyAdaptiveCoachElo() {
   const profile = playerProfile();
-  $('#coach-auto-elo').prop('checked', profile.autoElo);
+  byId('coach-auto-elo').checked = profile.autoElo;
   const recommended = recommendedCoachElo();
   renderAutoDifficultyNote(profile);
   if (!profile.autoElo) return coachEngineElo;
   coachEngineElo = recommended;
-  $('#coach-strength').val(recommended);
-  $('#coach-strength-value').text(recommended);
-  $('#coach-strength-tier').text(strengthTierLabel(recommended));
+  byId('coach-strength').value = recommended;
+  byId('coach-strength-value').textContent = recommended;
+  byId('coach-strength-tier').textContent = strengthTierLabel(recommended);
   return recommended;
 }
 
@@ -1315,11 +1339,11 @@ function progressRecommendation(entries, now = Date.now()) {
 }
 
 function renderProgressRecommendation(recommendation) {
-  $('#progress-next-label').text(recommendation.optional ? 'Optional next focus' : 'Work on next');
-  $('#progress-next-title').text(recommendation.title);
-  $('#progress-next-reason').text(recommendation.reason);
-  $('#progress-next-cue').text(recommendation.cue);
-  $('#btn-progress-next').text(recommendation.label);
+  byId('progress-next-label').textContent = recommendation.optional ? 'Optional next focus' : 'Work on next';
+  byId('progress-next-title').textContent = recommendation.title;
+  byId('progress-next-reason').textContent = recommendation.reason;
+  byId('progress-next-cue').textContent = recommendation.cue;
+  byId('btn-progress-next').textContent = recommendation.label;
 }
 
 function runProgressRecommendation() {
@@ -1329,7 +1353,7 @@ function runProgressRecommendation() {
   const next = progressRecommendation(currentInsightEntries());
   if (coachThinking || importedGameAnalysisActive) return;
   if (next.action === 'daily') {
-    $('#btn-coach-next-action').trigger('click');
+    byId('btn-coach-next-action').click();
   } else if (next.action === 'continue') {
     if (coachIsReviewing()) coachGotoLive();
     showCoachPanel('game');
@@ -1353,17 +1377,13 @@ function renderWeeklyReview(entriesOverride) {
   const assisted = attempts.filter(event => event.correct && event.revealed).length;
   const misses = attempts.filter(event => !event.correct).length;
   const measurement = recommendation.measurement;
-  const $list = $('#weekly-review-list').empty();
-  $list.append($('<div class="weekly-item"></div>').append(
-    $('<strong></strong>').text('Activity · last 7 days'),
-    $('<span></span>').text(`${completed.length} completed session${completed.length === 1 ? '' : 's'}, ${recent.length} reviewed move${recent.length === 1 ? '' : 's'}, ${attempts.length} practice attempt${attempts.length === 1 ? '' : 's'}.`)
-  ));
-  $list.append($('<div class="weekly-item"></div>').append(
-    $('<strong></strong>').text('Practice · last 7 days'),
-    $('<span></span>').text(attempts.length
-      ? `${unassisted} unassisted correct, ${assisted} completed with a hint or answer, ${misses} missed attempts. Retries count as separate attempts.`
-      : 'No attempts yet. Rehearse a saved position, then use the same cue in play.')
-  ));
+  const list = byId('weekly-review-list');
+  list.replaceChildren();
+  list.append(makeTitledItem('weekly-item', 'Activity · last 7 days',
+    `${completed.length} completed session${completed.length === 1 ? '' : 's'}, ${recent.length} reviewed move${recent.length === 1 ? '' : 's'}, ${attempts.length} practice attempt${attempts.length === 1 ? '' : 's'}.`));
+  list.append(makeTitledItem('weekly-item', 'Practice · last 7 days', attempts.length
+    ? `${unassisted} unassisted correct, ${assisted} completed with a hint or answer, ${misses} missed attempts. Retries count as separate attempts.`
+    : 'No attempts yet. Rehearse a saved position, then use the same cue in play.'));
   let comparison = recommendation.focusTag
     ? 'Complete an unassisted practice attempt after at least 30 reviewed moves to start a comparison.'
     : 'Build a reviewed-move baseline. Once Coach identifies a focus, rehearse it and look for the same pattern in later reviews.';
@@ -1380,10 +1400,8 @@ function renderWeeklyReview(entriesOverride) {
     }
     comparison += ` Checkpoint: ${new Date(measurement.anchor).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}.`;
   }
-  $list.append($('<div class="weekly-item"></div>').append(
-    $('<strong></strong>').text(recommendation.focusTag ? `After practice · ${recommendation.title}` : 'After practice · build evidence'),
-    $('<span></span>').text(comparison)
-  ));
+  list.append(makeTitledItem('weekly-item',
+    recommendation.focusTag ? `After practice · ${recommendation.title}` : 'After practice · build evidence', comparison));
   if (typeof renderOpeningTransferHistory === 'function') renderOpeningTransferHistory();
   if (typeof renderLearningTransferProgress === 'function') renderLearningTransferProgress();
   renderCoachPresentation();
@@ -1424,7 +1442,8 @@ function endgamePracticeItem(lesson) {
 }
 
 function renderEndgameTrack() {
-  const $list = $('#endgame-track-list').empty();
+  const list = byId('endgame-track-list');
+  list.replaceChildren();
   let complete = 0;
   ENDGAME_LESSONS.forEach(lesson => {
     const item = endgamePracticeItem(lesson);
@@ -1435,29 +1454,26 @@ function renderEndgameTrack() {
     const done = counts.clean > 0;
     const helpedOnly = !done && counts.assisted > 0;
     if (done) complete += 1;
-    const $row = $('<div class="endgame-item"></div>').toggleClass('is-complete', done);
-    const $copy = $('<div></div>').append(
-      $('<strong></strong>').text((done ? '✓ ' : '') + lesson.title),
-      $('<span></span>').text(helpedOnly ? `${lesson.detail} Solved with help so far.` : lesson.detail)
-    );
-    const $button = $('<button class="movelist-copy" type="button"></button>')
-      .text(done ? 'Review' : helpedOnly ? 'Try unaided' : 'Train')
-      .on('click', () => {
-        switchView('coach');
-        startCoachPractice(item);
-      });
-    $row.append($copy, $button);
-    $list.append($row);
+    const row = makeEl('div', 'endgame-item');
+    row.classList.toggle('is-complete', done);
+    const copy = makeTitledItem('', (done ? '✓ ' : '') + lesson.title,
+      helpedOnly ? `${lesson.detail} Solved with help so far.` : lesson.detail);
+    const button = makeRowButton(done ? 'Review' : helpedOnly ? 'Try unaided' : 'Train', () => {
+      switchView('coach');
+      startCoachPractice(item);
+    });
+    row.append(copy, button);
+    list.append(row);
   });
-  $('#endgame-track-progress').text(`${complete}/${ENDGAME_LESSONS.length}`);
+  byId('endgame-track-progress').textContent = `${complete}/${ENDGAME_LESSONS.length}`;
 }
 
 function hydrateGrowthUI() {
   const profile = playerProfile();
-  $('#player-rating').val(profile.rating);
-  $('#player-minutes').val(profile.minutes);
-  $('#player-goal').val(profile.goal);
-  $('#player-style').val(profile.sessionStyle || 'balanced');
+  byId('player-rating').value = profile.rating;
+  byId('player-minutes').value = profile.minutes;
+  byId('player-goal').value = profile.goal;
+  byId('player-style').value = profile.sessionStyle || 'balanced';
   renderPlayerProfileStatus(profile);
   renderRepertoireUI();
   applyAdaptiveCoachElo();
@@ -1563,12 +1579,12 @@ function importRunOwnsBoard(run) {
 
 async function analyseImportedPgn() {
   if (typeof coachOpeningTransfer !== 'undefined' && coachOpeningTransfer) {
-    $('#game-inbox-status').addClass('error').text('Return from the current opening session before importing another game.');
+    setStatusLine('game-inbox-status', 'error', '', 'Return from the current opening session before importing another game.');
     return;
   }
   if (importedGameAnalysisActive) return;
-  const pgn = ($('#game-inbox-pgn').val() || '').trim();
-  const side = $('#game-inbox-side').val() === 'black' ? 'black' : 'white';
+  const pgn = (byId('game-inbox-pgn').value || '').trim();
+  const side = byId('game-inbox-side').value === 'black' ? 'black' : 'white';
   const sourceGames = splitPgnGames(pgn);
   const parseResults = sourceGames.map((gamePgn, sourceIndex) => {
     const game = new Chess();
@@ -1586,7 +1602,7 @@ async function analyseImportedPgn() {
   const parsedGames = parsedEntries.map(result => result.game);
   const skippedGames = parseResults.length - parsedEntries.length;
   if (!parsedEntries.length) {
-    $('#game-inbox-status').addClass('error').removeClass('success').text(
+    setStatusLine('game-inbox-status', 'error', 'success',
       `No complete games could be read${skippedGames ? `; ${skippedGames} skipped as invalid` : ''}. Paste one or more complete games and try again.`
     );
     return;
@@ -1603,7 +1619,7 @@ async function analyseImportedPgn() {
   });
   const targets = collectImportedTargets(parsedEntries, side, gameMetadata);
   if (!targets.length) {
-    $('#game-inbox-status').addClass('error').text('No moves were found for the selected side.');
+    setStatusLine('game-inbox-status', 'error', '', 'No moves were found for the selected side.');
     return;
   }
 
@@ -1621,12 +1637,13 @@ async function analyseImportedPgn() {
     originalCoachPgn: coachGame && typeof coachGame.pgn === 'function' ? coachGame.pgn() : ''
   };
   importedAnalysisRun = run;
-  $('#btn-analyse-pgn').prop('disabled', true);
-  const $cancel = $('#' + IMPORT_CANCEL_BUTTON_ID);
-  $cancel.show().prop('disabled', false);
+  byId('btn-analyse-pgn').disabled = true;
+  const cancel = byId(IMPORT_CANCEL_BUTTON_ID);
+  showEl(cancel);
+  cancel.disabled = false;
   const gameSummary = `${parsedGames.length} valid game${parsedGames.length === 1 ? '' : 's'}${skippedGames ? `; ${skippedGames} invalid game${skippedGames === 1 ? '' : 's'} skipped` : ''}`;
-  $('#game-inbox-status').removeClass('error success').text(`Preparing Stockfish to review ${targets.length} moves from ${gameSummary}…`);
-  $('#game-inbox-progress').css('width', '2%');
+  setStatusLine('game-inbox-status', '', 'error success', `Preparing Stockfish to review ${targets.length} moves from ${gameSummary}…`);
+  byId('game-inbox-progress').style.width = '2%';
   // Stage the complete batch before touching the visible Coach game. This
   // preserves an existing game when the user cancels or starts another one.
   const generation = run.generation;
@@ -1642,8 +1659,8 @@ async function analyseImportedPgn() {
         throw createAbortError('Import review cancelled.');
       }
       const target = targets[i];
-      $('#game-inbox-status').text(`Reviewing move ${i + 1} of ${targets.length} (${gameSummary})…`);
-      $('#game-inbox-progress').css('width', `${Math.round(i / targets.length * 100)}%`);
+      byId('game-inbox-status').textContent = `Reviewing move ${i + 1} of ${targets.length} (${gameSummary})…`;
+      byId('game-inbox-progress').style.width = `${Math.round(i / targets.length * 100)}%`;
       const result = await classifyMove(target.fenBefore, target.userUci, target.fenAfter);
       if (run.cancelled || importedAnalysisRun !== run || generation !== coachGameGeneration || !importRunOwnsBoard(run)) {
         throw createAbortError('Import review cancelled.');
@@ -1659,7 +1676,7 @@ async function analyseImportedPgn() {
         stagedInsightEntries.push(insightEntryFromReview(review));
       }
       run.completed = i + 1;
-      $('#game-inbox-progress').css('width', `${Math.round(run.completed / targets.length * 100)}%`);
+      byId('game-inbox-progress').style.width = `${Math.round(run.completed / targets.length * 100)}%`;
       // Yield between engine jobs so the cancel control can be handled even on
       // a large import. Only one classifyMove is in flight at a time.
       await new Promise(resolve => setTimeout(resolve, 0));
@@ -1722,7 +1739,7 @@ async function analyseImportedPgn() {
     CoachController.setPhase('ended');
     coachBoardFlipped = side === 'black';
     createCoachBoard(coachGame.fen(), coachBoardFlipped ? 'black' : 'white');
-    $('#coach-view').addClass('game-active');
+    byId('coach-view').classList.add('game-active');
     updateMoveList();
     updateOpeningLabel();
     updateCoachSummary();
@@ -1732,13 +1749,13 @@ async function analyseImportedPgn() {
     rollGameIntoLifetime();
     coachSync.saveGame('Imported game reviewed').catch(handleCoachDbError);
     showPostGameSummary('Imported game reviewed');
-    $('#game-inbox-status').addClass('success').text(`${targets.length} move${targets.length === 1 ? '' : 's'} reviewed from ${gameSummary}. Showing the last game in Coach; all valid games contributed to Insights and the practice queue.`);
+    setStatusLine('game-inbox-status', 'success', '', `${targets.length} move${targets.length === 1 ? '' : 's'} reviewed from ${gameSummary}. Showing the last game in Coach; all valid games contributed to Insights and the practice queue.`);
   } catch (error) {
     if (run.cancelled) {
-      $('#game-inbox-progress').css('width', `${Math.round(run.completed / Math.max(1, run.total) * 100)}%`);
-      $('#game-inbox-status').addClass('error').removeClass('success').text(`Import cancelled after ${run.completed} of ${run.total} moves. No complete batch was saved.`);
+      byId('game-inbox-progress').style.width = `${Math.round(run.completed / Math.max(1, run.total) * 100)}%`;
+      setStatusLine('game-inbox-status', 'error', 'success', `Import cancelled after ${run.completed} of ${run.total} moves. No complete batch was saved.`);
     } else if (generation === coachGameGeneration && importedAnalysisRun === run) {
-      $('#game-inbox-status').addClass('error').removeClass('success').text((error && error.message) || 'The imported games could not be analysed.');
+      setStatusLine('game-inbox-status', 'error', 'success', (error && error.message) || 'The imported games could not be analysed.');
     } else {
       // A new game reset the generation while this batch was waiting. Leave
       // the new game's status untouched and discard the stale staged batch.
@@ -1747,8 +1764,9 @@ async function analyseImportedPgn() {
     if (importedAnalysisRun === run) importedAnalysisRun = null;
     importedGameAnalysisActive = false;
     renderCoachPresentation();
-    $('#btn-analyse-pgn').prop('disabled', false);
-    $cancel.prop('disabled', true).hide();
+    byId('btn-analyse-pgn').disabled = false;
+    cancel.disabled = true;
+    hideEl(cancel);
   }
 }
 
@@ -1760,75 +1778,75 @@ function cancelImportedPgnAnalysis() {
   // leave its newer engine request alone and let the generation fence discard
   // this stale import.
   if (run.generation === coachGameGeneration) engineClient.cancel('Imported game analysis cancelled by the user.');
-  $('#game-inbox-status').removeClass('success').text(`Cancelling after ${run.completed} of ${run.total} moves…`);
+  setStatusLine('game-inbox-status', '', 'success', `Cancelling after ${run.completed} of ${run.total} moves…`);
   return true;
 }
 
 function initGrowthFeatures() {
   hydrateGrowthUI();
-  $('#btn-progress-next').on('click', runProgressRecommendation);
-  $('#btn-repertoire-toggle').on('click', () => {
+  on(byId('btn-progress-next'), 'click', runProgressRecommendation);
+  on(byId('btn-repertoire-toggle'), 'click', () => {
     if (currentOpening) toggleRepertoireOpening(currentOpening.id);
   });
-  $('#player-profile-form').on('submit', event => {
+  on(byId('player-profile-form'), 'submit', event => {
     event.preventDefault();
     const result = savePlayerProfile({
-      rating: Number($('#player-rating').val()),
-      minutes: Number($('#player-minutes').val()),
-      goal: $('#player-goal').val(),
-      sessionStyle: $('#player-style').val(),
-      autoElo: $('#coach-auto-elo').prop('checked')
+      rating: Number(byId('player-rating').value),
+      minutes: Number(byId('player-minutes').value),
+      goal: byId('player-goal').value,
+      sessionStyle: byId('player-style').value,
+      autoElo: byId('coach-auto-elo').checked
     });
     if (!result.ok) {
-      $('#player-profile-status').addClass('error').text('Profile could not be saved in this browser.');
+      setStatusLine('player-profile-status', 'error', '', 'Profile could not be saved in this browser.');
       return;
     }
     const profile = result.state.profile;
-    $('#player-profile-status').removeClass('error').addClass('success').text(
+    setStatusLine('player-profile-status', 'success', 'error',
       `Profile saved. Player estimate ${Math.round(profile.ratingEstimate)} ±${Math.round(profile.ratingDeviation)} · ${playerRatingConfidence(profile)}.`
     );
     applyAdaptiveCoachElo();
     renderInsights();
     renderWeeklyReview();
   });
-  $('#coach-auto-elo').on('change', function() {
+  on(byId('coach-auto-elo'), 'change', function() {
     const profile = playerProfile();
-    savePlayerProfile({ autoElo: $(this).prop('checked'), rating: profile.rating, minutes: profile.minutes, goal: profile.goal, sessionStyle: profile.sessionStyle });
+    savePlayerProfile({ autoElo: this.checked, rating: profile.rating, minutes: profile.minutes, goal: profile.goal, sessionStyle: profile.sessionStyle });
     applyAdaptiveCoachElo();
   });
-  $('#coach-strength').on('input', () => {
-    if (!$('#coach-auto-elo').prop('checked')) return;
-    $('#coach-auto-elo').prop('checked', false);
+  on(byId('coach-strength'), 'input', () => {
+    if (!byId('coach-auto-elo').checked) return;
+    byId('coach-auto-elo').checked = false;
     const profile = playerProfile();
     savePlayerProfile({ autoElo: false, rating: profile.rating, minutes: profile.minutes, goal: profile.goal, sessionStyle: profile.sessionStyle });
     applyAdaptiveCoachElo();
   });
-  $('#game-inbox-file').on('change', async function() {
+  on(byId('game-inbox-file'), 'change', async function() {
     const file = this.files && this.files[0];
     if (!file) return;
     if (file.size > 1024 * 1024) {
-      $('#game-inbox-status').addClass('error').text('Choose a PGN smaller than 1 MB.');
+      setStatusLine('game-inbox-status', 'error', '', 'Choose a PGN smaller than 1 MB.');
       return;
     }
-    $('#game-inbox-pgn').val(await file.text());
-    $('#game-inbox-status').removeClass('error').text(`${file.name} loaded. Choose your side, then analyse.`);
+    byId('game-inbox-pgn').value = await file.text();
+    setStatusLine('game-inbox-status', '', 'error', `${file.name} loaded. Choose your side, then analyse.`);
   });
-  $('#btn-analyse-pgn').on('click', () => analyseImportedPgn());
-  $('#' + IMPORT_CANCEL_BUTTON_ID).on('click', () => cancelImportedPgnAnalysis());
-  $('#btn-export-training-data').on('click', () => exportTrainingBackupNow());
-  $('#btn-import-training-data').on('click', () => $('#training-data-file').trigger('click'));
-  $('#training-data-file').on('change', async function() {
+  on(byId('btn-analyse-pgn'), 'click', () => analyseImportedPgn());
+  on(byId(IMPORT_CANCEL_BUTTON_ID), 'click', () => cancelImportedPgnAnalysis());
+  on(byId('btn-export-training-data'), 'click', () => exportTrainingBackupNow());
+  on(byId('btn-import-training-data'), 'click', () => byId('training-data-file').click());
+  on(byId('training-data-file'), 'change', async function() {
     const file = this.files && this.files[0];
     if (!file) return;
     try {
       const count = await importTrainingBackupFile(file);
-      $('#training-data-status').removeClass('error').addClass('success').text(`Merged ${count} data set${count === 1 ? "" : "s"}. Your existing progress was kept.`);
+      setStatusLine('training-data-status', 'success', 'error', `Merged ${count} data set${count === 1 ? "" : "s"}. Your existing progress was kept.`);
     } catch (error) {
-      $('#training-data-status').removeClass('success').addClass('error').text((error && error.message) || 'That backup could not be imported.');
+      setStatusLine('training-data-status', 'error', 'success', (error && error.message) || 'That backup could not be imported.');
     } finally {
       this.value = '';
     }
   });
 }
 
-$(initGrowthFeatures);
+onReady(initGrowthFeatures);

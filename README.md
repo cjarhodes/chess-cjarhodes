@@ -2,7 +2,7 @@
 
 A static, single-page chess training app served at
 [chess.cjarhodes.com](https://chess.cjarhodes.com). No build step, no
-backend required — `index.html` and `app.js` run entirely in the browser,
+backend required — `index.html` and the scripts under `src/` run entirely in the browser,
 with vendored copies of every third-party library.
 
 ## Modes
@@ -266,10 +266,13 @@ read it. `scripts/validate-router.js` tests the address rules in Node;
 
 ## Stack
 
-- `index.html` + `styles.css` + `app.js` (runtime wiring, views and event handlers) + `src/`
-  (engine, opponent, classification, tactics, opening book, spaced repetition,
-  persistence, account and practice sync, insights, practice, daily plan,
-  summary, sounds and Explore, as plain scripts loaded before `app.js`)
+- `index.html` + `styles.css` + `src/` (engine, opponent, classification,
+  tactics, opening book, spaced repetition, persistence, account and practice
+  sync, insights, practice, daily plan, summary, sounds, router, Settings and
+  Explore, then the views in `src/views/`: `shell.js` for view switching, the
+  route and shared UI, `library.js`, `coach.js`, `coach-review.js`,
+  `coach-practice.js`, and `app.js` (the startup file: event binding and boot, loaded after the views); all plain
+  scripts sharing globals, which replaced the old 4,000-line `app.js`)
   + `openings.js` (opening content data)
   + `opening-transfer.js` (Library-to-game exercises and reviews)
   + `learning-transfer.js` (different-position checks and follow-up observations)
@@ -282,7 +285,6 @@ read it. `scripts/validate-router.js` tests the address rules in Node;
   - `chess.js` 0.10.3
   - `cm-chessboard` 8.15.4 (ES modules, loaded by `src/ui/board-module.js`;
     pieces: the cburnett sprite built by `scripts/build-piece-sprite.js`)
-  - `jQuery` 3.6.0 (app code still uses it; the board no longer needs it)
   - `@supabase/supabase-js` 2.114.0
   - Stockfish (WASM build: `stockfish.js` + `stockfish.wasm`)
 - Lichess Opening Explorer API for Explore mode
@@ -313,10 +315,10 @@ Then open `http://127.0.0.1:4173/`.
 
 ## Validation
 
-Run before committing any change to `app.js` or `index.html`:
+Run before committing any change to `src/` or `index.html`:
 
 ```sh
-for f in app.js src/*/*.js; do node --check "$f" || exit 1; done
+for f in src/*/*.js; do node --check "$f" || exit 1; done
 for f in scripts/validate-*.js; do node "$f" || exit 1; done
 ```
 
@@ -385,8 +387,9 @@ deploy (usually live within ~30 seconds). Security headers (CSP,
 
 ## Workflow
 
-1. Edit `index.html`, `app.js`, or the relevant vendored/config file.
-2. Run `node --check` on `app.js` and `src/*/*.js`, and every `scripts/validate-*.js`
+1. Edit `index.html`, the relevant `src/` file (views are in `src/views/`), or the
+   relevant vendored/config file.
+2. Run `node --check` on `src/*/*.js`, and every `scripts/validate-*.js`
    validator.
 3. Run `scripts/verify-browser.sh` for the repeatable smoke coverage.
 4. For schema changes, add a Supabase migration and run a local reset

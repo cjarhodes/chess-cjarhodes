@@ -156,16 +156,16 @@ async page => {
       let resolveScan;
       window.detectMateThreat = () => new Promise(resolve => { resolveScan = resolve; });
       await showThreats();
-      const staticText = $('#threats-list').text();
+      const staticText = document.getElementById('threats-list').textContent;
       if (!staticText.trim()) problems.push('static threats were not rendered before the mate scan finished');
       threatRequestId++;
       resolveScan({ status: 'ok', mateIn: 1 });
       await tick();
-      if ($('#threats-list').text() !== staticText) problems.push('a stale mate scan changed the threat panel');
+      if (document.getElementById('threats-list').textContent !== staticText) problems.push('a stale mate scan changed the threat panel');
       window.detectMateThreat = () => Promise.resolve({ status: 'unavailable' });
       await showThreats();
       await tick();
-      if (!/unavailable/i.test($('#threats-list').text())) problems.push('mate-scan failure was not shown');
+      if (!/unavailable/i.test(document.getElementById('threats-list').textContent)) problems.push('mate-scan failure was not shown');
     } finally {
       window.detectMateThreat = realDetect;
     }
@@ -183,7 +183,7 @@ async page => {
       ['e4', 'e5', 'd4', 'Bb4+'].forEach(san => coachGame.move(san));
       await showThreats();
       await new Promise(resolve => setTimeout(resolve, 20));
-      const text = $('#threats-list').text();
+      const text = document.getElementById('threats-list').textContent;
       if (/King/.test(text) || /No immediate threats/.test(text)) problems.push('the panel misdescribed a check: ' + text);
       if (!/in check/i.test(text)) problems.push('the panel did not say the king is in check: ' + text);
       if (asked.length) problems.push('the mate scan sent a position with the side not to move in check');
@@ -442,7 +442,7 @@ async page => {
     const problems = [];
     const saved = { client: coachDbClient, user: coachAuthUser, load: coachSync.loadInsights, save: coachSync.saveGame, flush: window.flushAccountCheckpoint };
     const run = async () => {
-      $('#btn-coach-sync').trigger('click');
+      document.getElementById('btn-coach-sync').click();
       await new Promise(resolve => setTimeout(resolve, 50));
       return coachDbStatus;
     };
@@ -743,8 +743,8 @@ async page => {
     if (!(await page.evaluate(gameId => !!loadLifetime().rollups[gameId], id))) problems.push('finished game was not rolled into lifetime stats');
     const rowsAreButtons = await page.evaluate(() => [...document.querySelectorAll('.moment-row')].every(row => row.tagName === 'BUTTON'));
     if (!rowsAreButtons) problems.push('post-game moment rows are not buttons');
-    await page.evaluate(() => { if (typeof closeCoachSummary === 'function') closeCoachSummary(); $('#coach-summary-overlay, #summary-overlay').hide(); });
-    await page.evaluate(() => $('#btn-coach-takeback').prop('disabled', false).trigger('click'));
+    await page.evaluate(() => { if (typeof closeCoachSummary === 'function') closeCoachSummary(); document.querySelectorAll('#coach-summary-overlay, #summary-overlay').forEach(el => { el.style.display = 'none'; }); });
+    await page.evaluate(() => { const b = document.getElementById('btn-coach-takeback'); b.disabled = false; b.click(); });
     await page.waitForFunction(() => !coachLifetimeRolledForThisGame, null, { timeout: 30000 }).catch(() => problems.push('take-back left the game counted as finished'));
     if (await page.evaluate(gameId => !!loadLifetime().rollups[gameId], id)) problems.push('lifetime rollup survived the take-back');
     return problems;
@@ -753,7 +753,7 @@ async page => {
   await check('a take-back makes the game unrated but never erases a rated result', async () => {
     const problems = [];
     const rating = () => page.evaluate(() => { const p = loadGrowthState().profile; return { estimate: p.ratingEstimate, games: p.ratingGames, ids: p.ratingHistory.map(h => h.gameId) }; });
-    const hideSummary = () => page.evaluate(() => { if (typeof closeCoachSummary === 'function') closeCoachSummary(); $('#coach-summary-overlay, #summary-overlay').hide(); });
+    const hideSummary = () => page.evaluate(() => { if (typeof closeCoachSummary === 'function') closeCoachSummary(); document.querySelectorAll('#coach-summary-overlay, #summary-overlay').forEach(el => { el.style.display = 'none'; }); });
     const playOne = async () => {
       await playMove('e4');
       await page.waitForFunction(() => coachGame.history().length >= 2 && !coachThinking, null, { timeout: 60000 });
@@ -766,23 +766,23 @@ async page => {
     await newGame();
     const before = await rating();
     const id = await playOne();
-    await page.evaluate(() => $('#btn-coach-resign').trigger('click'));
+    await page.evaluate(() => document.getElementById('btn-coach-resign').click());
     await page.waitForFunction(gameId => loadGrowthState().profile.ratingHistory.some(h => h.gameId === gameId), id, { timeout: 10000 })
       .catch(() => problems.push('a standard finished game was not rated'));
     await hideSummary();
-    await page.evaluate(() => $('#btn-coach-takeback').prop('disabled', false).trigger('click'));
+    await page.evaluate(() => { const b = document.getElementById('btn-coach-takeback'); b.disabled = false; b.click(); });
     const kept = await rating();
     if (kept.games !== before.games + 1 || !kept.ids.includes(id)) problems.push('taking back a rated result should keep its rating: ' + JSON.stringify({ before, kept }));
     if (!/unrated/.test(await page.locator('#coach-status').textContent())) problems.push('the status should say a game with a take-back is unrated');
     // A take-back mid-game survives a reload and keeps the finished game unrated.
     await newGame();
     await playOne();
-    await page.evaluate(() => $('#btn-coach-takeback').prop('disabled', false).trigger('click'));
+    await page.evaluate(() => { const b = document.getElementById('btn-coach-takeback'); b.disabled = false; b.click(); });
     await page.reload();
     await page.waitForFunction(() => typeof coachGameActive !== 'undefined' && coachGame && coachGameActive && !coachThinking, null, { timeout: 60000 });
     const id2 = await playOne();
     const midBefore = await rating();
-    await page.evaluate(() => $('#btn-coach-resign').trigger('click'));
+    await page.evaluate(() => document.getElementById('btn-coach-resign').click());
     await page.waitForFunction(() => !coachGameActive, null, { timeout: 10000 });
     const eligibility = await page.evaluate(() => ratedCoachEligibility(coachLastEndMsg));
     if (eligibility.eligible || eligibility.reason !== 'take-back used') problems.push('a game with a take-back should be unrated because of it: ' + JSON.stringify(eligibility));
@@ -796,10 +796,10 @@ async page => {
     const problems = [];
     const pgn = '[Event "Club"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 *';
     const paste = text => page.evaluate(async text => {
-      $('#game-inbox-side').val('white');
-      $('#game-inbox-pgn').val(text);
+      document.getElementById('game-inbox-side').value = 'white';
+      document.getElementById('game-inbox-pgn').value = text;
       await analyseImportedPgn();
-      return $('#game-inbox-status').text();
+      return document.getElementById('game-inbox-status').textContent;
     }, text);
     await freshCoach();
     // Signed in: the shown game's moves sync to the account and must not be
@@ -829,8 +829,8 @@ async page => {
         window.ensureRemoteCoachGame = async () => 'remote-import-game';
         window.syncRemoteLearningArtifacts = async () => {};
         window.updateRemoteCoachGame = async () => {};
-        $('#game-inbox-side').val('white');
-        $('#game-inbox-pgn').val(pgn);
+        document.getElementById('game-inbox-side').value = 'white';
+        document.getElementById('game-inbox-pgn').value = pgn;
         await analyseImportedPgn();
         const deadline = Date.now() + 15000;
         while (Date.now() < deadline && coachRemoteInsightEntries.length < 3) await new Promise(resolve => setTimeout(resolve, 100));
@@ -925,13 +925,13 @@ async page => {
       };
       const paste = async () => {
         const before = moves.length;
-        $('#game-inbox-side').val('white');
-        $('#game-inbox-pgn').val(pgn);
+        document.getElementById('game-inbox-side').value = 'white';
+        document.getElementById('game-inbox-pgn').value = pgn;
         await analyseImportedPgn();
         const deadline = Date.now() + 15000;
         while (Date.now() < deadline && moves.length < before + 3) await new Promise(resolve => setTimeout(resolve, 100));
         await new Promise(resolve => setTimeout(resolve, 300));
-        return { remoteGameId: coachRemoteGameId, status: $('#game-inbox-status').text() };
+        return { remoteGameId: coachRemoteGameId, status: document.getElementById('game-inbox-status').textContent };
       };
       try {
         coachDbClient = fakeClient;
@@ -1093,7 +1093,7 @@ async page => {
       Storage.prototype.setItem = realSet;
     }
     if (!direct || direct.ok !== false) problems.push('saveSR did not report the storage failure');
-    if (!/could not be saved/.test($('#feedback-bar').text())) problems.push('quiz did not warn that progress was not saved');
+    if (!/could not be saved/.test(document.getElementById('feedback-bar').textContent)) problems.push('quiz did not warn that progress was not saved');
     return problems;
   }));
 
@@ -1103,7 +1103,7 @@ async page => {
       Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: () => Promise.reject(new Error('denied')) } });
     });
     await page.locator('#btn-share').click();
-    await page.waitForFunction(() => /unavailable/i.test($('#btn-share').text()), null, { timeout: 5000 })
+    await page.waitForFunction(() => /unavailable/i.test(document.getElementById('btn-share').textContent), null, { timeout: 5000 })
       .catch(() => problems.push('share button did not report the clipboard failure'));
     return problems;
   });
@@ -1117,22 +1117,22 @@ async page => {
     await page.waitForFunction(() => currentOpening && currentOpening.id === 'italian');
     if (await page.evaluate(() => localStorage.getItem(LICHESS_TOKEN_KEY)) !== null) problems.push('legacy localStorage token was not cleared on load');
     await page.locator('#btn-explore').click();
-    await page.evaluate(() => { $('#lichess-token-input').val(''); $('#lichess-token-form').trigger('submit'); });
-    if (!/Paste a Lichess token first/.test(await page.evaluate(() => $('#token-error').is(':visible') ? $('#token-error').text() : ''))) problems.push('empty submit gave no feedback');
+    await page.evaluate(() => { document.getElementById('lichess-token-input').value = ''; document.getElementById('lichess-token-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+    if (!/Paste a Lichess token first/.test(await page.evaluate(() => { const el = document.getElementById('token-error'); return el.getClientRects().length ? el.textContent : ''; }))) problems.push('empty submit gave no feedback');
     await page.evaluate(value => {
-      window.__realAjax = $.ajax;
-      $.ajax = options => {
-        const isTokenCheck = options && options.data && options.data.topGames === 0;
-        if (isTokenCheck && options.success) setTimeout(() => options.success({ moves: [], white: 0, draws: 0, black: 0 }), 0);
-        return { abort() {} };
+      window.__realFetch = window.fetch;
+      window.fetch = (url, init) => {
+        const isExplorer = String(url).startsWith('https://explorer.lichess.ovh/') && new URL(url).searchParams.get('topGames') === '0';
+        if (!isExplorer) return window.__realFetch(url, init);
+        return Promise.resolve(new Response(JSON.stringify({ moves: [], white: 0, draws: 0, black: 0 }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
       };
-      $('#lichess-token-input').val(value);
-      $('#lichess-token-form').trigger('submit');
+      document.getElementById('lichess-token-input').value = value;
+      document.getElementById('lichess-token-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     }, token);
     await page.waitForFunction(() => sessionStorage.getItem(LICHESS_TOKEN_KEY), null, { timeout: 5000 }).catch(() => problems.push('valid token was not kept for the session'));
     const leaked = await page.evaluate(value => Object.keys(localStorage).some(k => localStorage.getItem(k) && localStorage.getItem(k).includes(value)), token);
     if (leaked) problems.push('token was written to localStorage');
-    await page.evaluate(() => { $.ajax = window.__realAjax; sessionStorage.removeItem(LICHESS_TOKEN_KEY); });
+    await page.evaluate(() => { window.fetch = window.__realFetch; sessionStorage.removeItem(LICHESS_TOKEN_KEY); });
     return problems;
   });
 
@@ -2475,7 +2475,7 @@ async page => {
     } finally {
       await page.evaluate(() => { engineClient.evaluate = window.__realEvaluate; });
     }
-    await page.evaluate(() => $('#btn-coach-takeback').prop('disabled', false).trigger('click'));
+    await page.evaluate(() => { const b = document.getElementById('btn-coach-takeback'); b.disabled = false; b.click(); });
     const after = await page.evaluate(() => ({ moves: coachStats.moves, accuracy: accuracyFromTallies(coachStats, coachStats.moves) }));
     if (after.moves !== scored) problems.push(`take-back of an unscored move changed the scored count from ${scored} to ${after.moves}`);
     if (after.accuracy !== null && after.accuracy > 100) problems.push('accuracy rose past 100%: ' + after.accuracy);
@@ -2503,11 +2503,11 @@ async page => {
     try {
       await page.waitForFunction(() => coachPracticeSession && coachPracticeSession.analysisReady, null, { timeout: 30000 });
       await playMove('d4');
-      await page.waitForFunction(() => !coachPracticeSession.grading && /could not verify/.test($('#coach-practice-status').text()), null, { timeout: 30000 })
+      await page.waitForFunction(() => !coachPracticeSession.grading && /could not verify/.test(document.getElementById('coach-practice-status').textContent), null, { timeout: 30000 })
         .catch(() => problems.push('setup: the first attempt should be ungraded while the engine is down'));
       if (await page.evaluate(() => window.__practiceSearches) > 2) problems.push('a failed retry analysed again in a loop');
       await playMove('d4');
-      await page.waitForFunction(() => !coachPracticeSession.grading && !/could not verify|Checking/.test($('#coach-practice-status').text()), null, { timeout: 60000 })
+      await page.waitForFunction(() => !coachPracticeSession.grading && !/could not verify|Checking/.test(document.getElementById('coach-practice-status').textContent), null, { timeout: 60000 })
         .catch(() => problems.push('the second attempt was not graded: analysis was never retried'));
       if (await page.evaluate(() => window.__practiceSearches) < 3) problems.push('the practice position was not analysed again on the next attempt');
     } finally {
@@ -2574,11 +2574,11 @@ async page => {
       saveDailySprintHistory(history);
     });
     await page.goto(base + '/?view=coach');
-    await page.waitForFunction(() => typeof dailySprintToday === 'function' && $('#coach-daily-plan-title').text().trim().length > 0);
+    await page.waitForFunction(() => typeof dailySprintToday === 'function' && document.getElementById('coach-daily-plan-title').textContent.trim().length > 0);
     const shown = await page.evaluate(() => ({
-      title: $('#coach-daily-plan-title').text(),
-      detail: $('#coach-daily-plan-detail').text(),
-      streak: $('#daily-sprint-streak').text(),
+      title: document.getElementById('coach-daily-plan-title').textContent,
+      detail: document.getElementById('coach-daily-plan-detail').textContent,
+      streak: document.getElementById('daily-sprint-streak').textContent,
       today: dailySprintToday(),
       days: Object.values(loadDailySprintHistory().days).map(day => ({ phase: day.phase, done: !!day.completedAt }))
     }));
@@ -2663,7 +2663,7 @@ async page => {
     const problems = [];
     await page.goto(base + '/?opening=italian&mode=quiz');
     await page.waitForFunction(() => quizMode && currentOpening && currentOpening.id === 'italian');
-    await page.evaluate(() => $('.opening-btn[data-id="sicilian"]').first().trigger('click'));
+    await page.evaluate(() => document.querySelector('.opening-btn[data-id="sicilian"]').click());
     await page.waitForFunction(() => currentOpening.id === 'sicilian' && game.history().length >= 1, null, { timeout: 3000 }).catch(() => {});
     const state = await page.evaluate(() => ({ quizMode, orientation: board.orientation(), history: game.history(), idx: currentMoveIdx }));
     if (!state.quizMode || state.orientation !== 'black' || state.history.join(' ') !== 'e4' || state.idx !== 0) problems.push('the Sicilian quiz should face Black with 1.e4 played: ' + JSON.stringify(state));
@@ -2699,15 +2699,17 @@ async page => {
     await page.goto(base + '/?opening=italian&mode=explore');
     await page.waitForFunction(() => exploreMode && exploreGame);
     await page.evaluate(() => {
-      window.__realAjax = $.ajax;
-      $.ajax = options => { setTimeout(() => options.error && options.error({ status: 429 }), 0); return { abort() {} }; };
+      window.__realFetch = window.fetch;
+      window.fetch = (url, init) => String(url).startsWith('https://explorer.lichess.ovh/')
+        ? Promise.resolve(new Response('{}', { status: 429 }))
+        : window.__realFetch(url, init);
       exploreCache.clear();
       fetchExploreData();
     });
-    await page.waitForFunction(() => !/Fetching/.test($('#continuations-list').text()), null, { timeout: 3000 }).catch(() => {});
-    const text = await page.evaluate(() => $('#continuations-list').text());
+    await page.waitForFunction(() => !/Fetching/.test(document.getElementById('continuations-list').textContent), null, { timeout: 3000 }).catch(() => {});
+    const text = await page.evaluate(() => document.getElementById('continuations-list').textContent);
     if (!/limiting requests/.test(text) || /Could not reach/.test(text)) problems.push('a 429 was shown as: ' + text);
-    await page.evaluate(() => { $.ajax = window.__realAjax; sessionStorage.removeItem(LICHESS_TOKEN_KEY); });
+    await page.evaluate(() => { window.fetch = window.__realFetch; sessionStorage.removeItem(LICHESS_TOKEN_KEY); });
     return problems;
   });
 
@@ -2720,7 +2722,7 @@ async page => {
       coachOpeningTransfer = null;
       coachReviewCursor = null;
       updateOpeningLabel();
-      const text = $('#coach-opening-name').text();
+      const text = document.getElementById('coach-opening-name').textContent;
       if (!/out of book after move 5$/.test(text)) problems.push('5.Nc3 is a book move, so the label should say move 5: ' + text);
     } finally {
       coachGame = saved.game; coachOpeningTransfer = saved.transfer; coachReviewCursor = saved.cursor;
@@ -3473,8 +3475,8 @@ async page => {
         if (group) group.open = true;
         // Off (the shipped default): the link is sent and no code field appears.
         setConfig(Object.assign({}, saved.config, { emailCodeEnabled: false }));
-        $('#coach-auth-code-form').hide();
-        $('#coach-auth-email').val('player@example.com');
+        document.getElementById('coach-auth-code-form').style.display = 'none';
+        document.getElementById('coach-auth-email').value = 'player@example.com';
         await submit('coach-auth-email-form');
         if (codeShown()) problems.push('with codes off, the code field appeared');
         if (!/Open it in this browser to finish/.test(status())) problems.push('with codes off, the status should point to the link: ' + status());
@@ -3483,16 +3485,16 @@ async page => {
         await submit('coach-auth-email-form');
         if (!codeShown()) problems.push('with codes on, the code field did not appear after sending');
         if (document.activeElement !== document.getElementById('coach-auth-code')) problems.push('the code field did not take focus');
-        $('#coach-auth-code').val('123');
+        document.getElementById('coach-auth-code').value = '123';
         await submit('coach-auth-code-form');
         if (status() !== 'Enter the 6-digit code from the sign-in email.' || calls.some(c => c[0] === 'verify')) problems.push('a short code was sent or not refused: ' + status());
         // Codes are often pasted with a space ("111 111"); the space is ignored.
-        $('#coach-auth-code').val('111 111');
+        document.getElementById('coach-auth-code').value = '111 111';
         await submit('coach-auth-code-form');
         if (!/invalid or has expired/.test(status())) problems.push('a wrong code was not refused: ' + status());
         const wrong = calls.filter(c => c[0] === 'verify').pop();
         if (!wrong || wrong[1].token !== '111111') problems.push('a code pasted with a space was not sent as six digits: ' + JSON.stringify(wrong));
-        $('#coach-auth-code').val('424 242');
+        document.getElementById('coach-auth-code').value = '424 242';
         await submit('coach-auth-code-form');
         const last = calls.filter(c => c[0] === 'verify').pop();
         if (!last || last[1].email !== 'player@example.com' || last[1].token !== '424242' || last[1].type !== 'email') problems.push('verifyOtp got the wrong arguments: ' + JSON.stringify(last));
@@ -3501,11 +3503,40 @@ async page => {
         coachDbClient = saved.client;
         if (saved.descriptor) Object.defineProperty(window, 'COACH_SUPABASE_CONFIG', saved.descriptor);
         else delete window.COACH_SUPABASE_CONFIG;
-        $('#coach-auth-code-form').hide();
+        document.getElementById('coach-auth-code-form').style.display = 'none';
         if (window.SettingsSheet && SettingsSheet.isOpen()) SettingsSheet.close();
       }
       return problems;
     });
+  });
+
+  await check('a rejected Lichess token keeps the token field and says why', async () => {
+    const problems = [];
+    await page.goto(base + '/?opening=italian&mode=explore');
+    await page.waitForFunction(() => typeof exploreMode !== 'undefined' && exploreMode && !!document.getElementById('lichess-token-form'));
+    await page.evaluate(() => {
+      sessionStorage.removeItem(LICHESS_TOKEN_KEY);
+      showExploreTokenState();
+      window.__realFetch = window.fetch;
+      window.fetch = async () => new Response('{}', { status: 401, headers: { 'Content-Type': 'application/json' } });
+    });
+    try {
+      await page.evaluate(() => {
+        document.getElementById('lichess-token-input').value = 'lip_wrong';
+        document.getElementById('lichess-token-form').requestSubmit();
+      });
+      await page.waitForFunction(() => /Invalid token/.test(document.getElementById('token-error').textContent), null, { timeout: 5000 })
+        .catch(() => problems.push('a 401 did not say the token is invalid: ' + document.getElementById('token-error')));
+      const form = await page.evaluate(() => ({
+        input: !!document.getElementById('lichess-token-input'),
+        button: (document.getElementById('btn-save-token') || {}).textContent || null,
+        disabled: !!(document.getElementById('btn-save-token') || {}).disabled
+      }));
+      if (!form.input || form.button !== 'Connect' || form.disabled) problems.push('after a rejected token the form lost its field or button: ' + JSON.stringify(form));
+    } finally {
+      await page.evaluate(() => { window.fetch = window.__realFetch; });
+    }
+    return problems;
   });
 
   if (pageErrors.length) failures.push('page errors: ' + pageErrors.join(' | '));

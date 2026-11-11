@@ -2,8 +2,8 @@
 // sits behind a gear"). One modal dialog, opened from the app-bar gear, the
 // "," shortcut (shortcuts.js), any [data-settings-open] control, or a
 // ?settings=<section> link. It holds the controls that used to sit in Coach's
-// left rail, moved there in index.html with their ids, so app.js, growth.js,
-// coach-overlay.js and backup-nudge.js bind them exactly as before:
+// left rail, moved there in index.html with their ids, so src/views/,
+// growth.js, coach-overlay.js and backup-nudge.js bind them exactly as before:
 //   appearance  colour theme, board colours, move sounds, board feedback
 //   account     sign-in and sync (#coach-auth-card)
 //   data        backup export / import and "Last backed up" (#training-data-card)

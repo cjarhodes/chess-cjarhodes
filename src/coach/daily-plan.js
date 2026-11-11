@@ -1,6 +1,7 @@
 // Adaptive daily session: practice progress storage, focus choice and plan state.
-// Classic script loaded before app.js (see index.html); its top-level
-// declarations are shared globals, as they were inside app.js.
+// Classic script loaded before the view scripts in src/views/ (see
+// index.html); its top-level declarations are shared globals, as they were
+// inside app.js.
 
 const PRACTICE_PROGRESS_KEY = 'coach:practice:v2';
 const LEGACY_PRACTICE_PROGRESS_KEY = 'coach:practice:v1';
@@ -599,9 +600,9 @@ function setDailySprintProgress(completed, target, unit) {
   const safeTarget = Math.max(1, target || 1);
   const safeCompleted = Math.max(0, Math.min(safeTarget, completed || 0));
   const percent = Math.round(safeCompleted / safeTarget * 100);
-  $('#daily-sprint-progress-label').text(`${safeCompleted} of ${safeTarget} ${unit}${safeTarget === 1 ? '' : 's'}`);
-  $('#daily-sprint-progress-percent').text(`${percent}%`);
-  $('#daily-sprint-fill').css('width', `${percent}%`);
+  byId('daily-sprint-progress-label').textContent = `${safeCompleted} of ${safeTarget} ${unit}${safeTarget === 1 ? '' : 's'}`;
+  byId('daily-sprint-progress-percent').textContent = `${percent}%`;
+  byId('daily-sprint-fill').style.width = `${percent}%`;
 }
 
 function dailySprintProgressUnit(day) {
@@ -612,8 +613,8 @@ function dailySprintProgressUnit(day) {
 function renderDailySprintChrome(day) {
   const history = loadDailySprintHistory();
   const streak = dailySprintStreak(history);
-  $('#daily-sprint-streak').text(streak ? `${streak}-day streak` : 'Start a streak');
-  $('#coach-daily-plan').toggleClass('is-complete', !!(day && day.completedAt));
+  byId('daily-sprint-streak').textContent = streak ? `${streak}-day streak` : 'Start a streak';
+  byId('coach-daily-plan').classList.toggle('is-complete', !!(day && day.completedAt));
   const focus = day && day.focus
     ? { title: day.focus, cue: day.focusCue, reason: day.focusReason }
     : renderedAdaptivePlan && { title: renderedAdaptivePlan.focus, cue: renderedAdaptivePlan.cue, reason: renderedAdaptivePlan.reason };
@@ -625,15 +626,15 @@ function renderDailySprintChrome(day) {
   const repertoire = renderedAdaptivePlan && renderedAdaptivePlan.repertoireFocus
     ? ` Repertoire focus: ${renderedAdaptivePlan.repertoireFocus}.`
     : '';
-  $('#daily-sprint-focus-title').text(focus ? `Focus · ${focus.title}` : '');
-  $('#daily-sprint-focus-cue').text(focus ? focus.cue : '');
-  $('#daily-sprint-focus-detail').text(focus ? `${focus.reason} ${style}${repertoire}${day && day.recoveryNote ? ' ' + day.recoveryNote : ''}` : '');
+  byId('daily-sprint-focus-title').textContent = focus ? `Focus · ${focus.title}` : '';
+  byId('daily-sprint-focus-cue').textContent = focus ? focus.cue : '';
+  byId('daily-sprint-focus-detail').textContent = focus ? `${focus.reason} ${style}${repertoire}${day && day.recoveryNote ? ' ' + day.recoveryNote : ''}` : '';
   const hasFocus = !!(day ? day.focusTag : renderedAdaptivePlan && renderedAdaptivePlan.focusTag);
-  $('#daily-sprint-focus').toggle(!!focus && hasFocus);
+  toggleEl(byId('daily-sprint-focus'), !!focus && hasFocus);
   renderCoachPresentation();
-  $('#daily-sprint-takeaway')
-    .text(day && day.takeaway ? day.takeaway : '')
-    .toggle(!!(day && day.completedAt && day.takeaway));
+  const takeaway = byId('daily-sprint-takeaway');
+  takeaway.textContent = day && day.takeaway ? day.takeaway : '';
+  toggleEl(takeaway, !!(day && day.completedAt && day.takeaway));
 }
 
 function formatPracticeDue(record) {

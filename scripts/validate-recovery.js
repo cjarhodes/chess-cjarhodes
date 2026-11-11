@@ -23,7 +23,7 @@ function findFunctionStart(name) {
     const index = app.indexOf(marker);
     if (index !== -1) return index + 1;
   }
-  throw new Error(`Could not locate function ${name} in app.js`);
+  throw new Error(`Could not locate function ${name} in the app source`);
 }
 
 function findMatchingBrace(source, openBrace) {
@@ -46,7 +46,7 @@ function findMatchingBrace(source, openBrace) {
     if (c === '{') depth += 1;
     if (c === '}' && --depth === 0) return i;
   }
-  throw new Error('Unmatched function brace in app.js');
+  throw new Error('Unmatched function brace in the app source');
 }
 
 function extractFunction(name) {

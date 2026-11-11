@@ -1,6 +1,7 @@
 // Move sounds, synthesised with Web Audio (no audio files).
-// Classic script loaded before app.js (see index.html); its top-level
-// declarations are shared globals, as they were inside app.js.
+// Classic script loaded before the view scripts in src/views/ (see
+// index.html); its top-level declarations are shared globals, as they were
+// inside app.js.
 
 // ─────────────────────────────────────────────
 // MOVE SOUNDS (Web Audio synthesized — no binary assets)

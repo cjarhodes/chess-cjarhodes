@@ -240,9 +240,9 @@
   }
 
   Object.assign(api, { refresh, recordBackup, lastBackupAt, progress });
-  // jQuery runs ready handlers in the order they were added, so this runs
-  // after app.js has started the account check.
-  if (root.jQuery) root.jQuery(init);
+  // onReady (src/ui/dom.js) runs handlers in the order they were added, so
+  // this runs after app.js has started the account check.
+  if (typeof onReady === 'function') onReady(init);
   else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })(typeof window !== 'undefined' ? window : globalThis);

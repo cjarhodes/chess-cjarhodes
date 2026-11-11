@@ -132,7 +132,7 @@ async browserPage => {
   const capture=async(page,name)=>{
     await openSettings(page,'account');
     for(const [width,height] of [[1280,800],[1440,900],[1920,1080]]){
-      await page.setViewportSize({width,height});await page.locator('#account-recovery').scrollIntoViewIfNeeded();await page.waitForFunction(()=>!jQuery(':animated').length);
+      await page.setViewportSize({width,height});await page.locator('#account-recovery').scrollIntoViewIfNeeded();
       await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
       const metrics=await page.evaluate(()=>{const b=document.querySelector('#coachBoard').getBoundingClientRect();return {width:innerWidth,height:innerHeight,documentWidth:document.documentElement.scrollWidth,boardBottom:b.bottom,boardWidth:b.width,boardRight:b.right};});
       assert(metrics.documentWidth<=width&&metrics.boardBottom<=height&&metrics.boardRight<=width&&metrics.boardWidth>=320,name+' fits '+width);
