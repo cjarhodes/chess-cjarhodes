@@ -271,8 +271,8 @@ read it. `scripts/validate-router.js` tests the address rules in Node;
   sync, insights, practice, daily plan, summary, sounds, router, Settings and
   Explore, then the views in `src/views/`: `shell.js` for view switching, the
   route and shared UI, `library.js`, `coach.js`, `coach-review.js`,
-  `coach-practice.js`, and `boot.js` for event binding and startup; all plain
-  scripts sharing globals, which replaced `app.js`)
+  `coach-practice.js`, and `app.js` (the startup file: event binding and boot, loaded after the views); all plain
+  scripts sharing globals, which replaced the old 4,000-line `app.js`)
   + `openings.js` (opening content data)
   + `opening-transfer.js` (Library-to-game exercises and reviews)
   + `learning-transfer.js` (different-position checks and follow-up observations)

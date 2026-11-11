@@ -2,7 +2,7 @@
 // board (#myBoard), line selection, quiz auto-play and mistake review,
 // move list, explanations, key ideas and feedback. The Library SR maths
 // is in src/core/library-sr.js and Explore data in src/library/explore.js;
-// event binding is in src/views/boot.js.
+// event binding is in app.js.
 // Classic script (see index.html): its top-level declarations are shared
 // globals with src/, the other view scripts, growth.js and the feature
 // modules, as they were inside app.js. Nothing here runs at load except

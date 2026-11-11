@@ -241,7 +241,7 @@
 
   Object.assign(api, { refresh, recordBackup, lastBackupAt, progress });
   // onReady (src/ui/dom.js) runs handlers in the order they were added, so
-  // this runs after src/views/boot.js has started the account check.
+  // this runs after app.js has started the account check.
   if (typeof onReady === 'function') onReady(init);
   else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();

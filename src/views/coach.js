@@ -3,7 +3,7 @@
 // over, New Game, the Coach board (#coachBoard), control enabled-state,
 // the right-rail panel tabs and the summary overlay. Move review and
 // history are in coach-review.js, practice drills in coach-practice.js;
-// event binding is in src/views/boot.js.
+// event binding is in app.js.
 // Classic script (see index.html): its top-level declarations are shared
 // globals with src/, the other view scripts, growth.js and the feature
 // modules, as they were inside app.js. Nothing here runs at load except

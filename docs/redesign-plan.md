@@ -10,9 +10,9 @@ the *Phase 2 outcome* in [behaviour-checklist.md](behaviour-checklist.md).
 Phase 4a done: `app.js` is 4,009 lines (from 9,148); core logic lives in
 `src/` as plain scripts, with `scripts/validate-core.js` unit-testing
 `src/core/`. Phase 4b (FSRS) is deferred: see decision 3 in §6.
-Phase 6, 9 November 2026: `app.js` is gone. Its code moved unchanged into
+Phase 6, 9 November 2026: the 4,000-line `app.js` is split. Its code moved unchanged into
 classic scripts under `src/views/` (`shell.js`, `library.js`, `coach.js`,
-`coach-review.js`, `coach-practice.js`, `boot.js`); see the Phase 6 row.
+`coach-review.js`, `coach-practice.js`, with event binding and startup in a small `app.js`); see the Phase 6 row.
 Phase 5 done, 8 November 2026, except a real-phone check: every board runs
 on cm-chessboard behind `src/ui/board.js`; see the Phase 5 row in §5. jQuery
 is gone (9 November 2026): app code uses DOM APIs and the helpers in
