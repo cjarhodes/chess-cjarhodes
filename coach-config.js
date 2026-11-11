@@ -5,8 +5,9 @@
 window.COACH_SUPABASE_CONFIG = {
   url: 'https://szbrgdmjsgrybptznogb.supabase.co',
   publishableKey: 'sb_publishable_zB-penByBUcM8PX9q4CdpQ_8Bjz25Pe',
-  // Sign in with the code from the email (the link in it still works). Needs
-  // the Magic Link email template to include {{ .Token }}; see
-  // SUPABASE_SETUP.md. Set to false to go back to link-only sign-in.
-  emailCodeEnabled: true
+  // Set to true only after the Magic Link email template includes {{ .Token }}.
+  // Supabase keeps templates read-only until the project has custom SMTP (see
+  // SUPABASE_SETUP.md). Until then sign-in is by link only and the code field
+  // stays hidden.
+  emailCodeEnabled: false
 };

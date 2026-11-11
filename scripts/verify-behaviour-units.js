@@ -3121,15 +3121,14 @@ async page => {
         document.getElementById('coach-auth-form').style.display = '';
         const group = document.getElementById('coach-auth-form').closest('details');
         if (group) group.open = true;
-        // Off: the link is sent and no code field appears.
+        // Off (the shipped default): the link is sent and no code field appears.
         setConfig(Object.assign({}, saved.config, { emailCodeEnabled: false }));
         $('#coach-auth-code-form').hide();
         $('#coach-auth-email').val('player@example.com');
         await submit('coach-auth-email-form');
         if (codeShown()) problems.push('with codes off, the code field appeared');
         if (!/Open it in this browser to finish/.test(status())) problems.push('with codes off, the status should point to the link: ' + status());
-        // On (the shipped default): the code field appears, takes focus, and
-        // only the right code signs in.
+        // On: the code field appears, takes focus, and only the right code signs in.
         setConfig(Object.assign({}, saved.config, { emailCodeEnabled: true }));
         await submit('coach-auth-email-form');
         if (!/^Code sent to player@example\.com\. Enter it here/.test(status())) problems.push('with codes on, the status should ask for the code: ' + status());

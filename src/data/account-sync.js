@@ -14,10 +14,12 @@ function supabaseRuntimeConfig() {
   };
 }
 
-// Code sign-in: the email carries a one-time code ({{ .Token }} in the
-// project's Magic Link template) as well as the link, and the code is typed
-// into the tab that asked for it, so it works whichever browser the mail app
-// opens links in. Supabase sends 6 digits by default; projects can set up to 8.
+// Code sign-in (off until enabled in coach-config.js): the email carries a
+// one-time code ({{ .Token }} in the project's Magic Link template) as well as
+// the link, and the code is typed into the tab that asked for it, so it works
+// whichever browser the mail app opens links in. Supabase keeps templates
+// read-only until the project has custom SMTP. It sends 6 digits by default;
+// projects can set up to 8.
 const COACH_EMAIL_CODE_MIN = 6;
 const COACH_EMAIL_CODE_MAX = 8;
 
